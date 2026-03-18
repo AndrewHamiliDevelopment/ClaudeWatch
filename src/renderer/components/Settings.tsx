@@ -1,6 +1,8 @@
-import { Bell, BellOff, Volume2, Moon, Sun, Monitor, Power } from 'lucide-react'
+import { Bell, Moon, Sun, Monitor, Power, Download, RefreshCw, CheckCircle } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { useSettings } from '../hooks/useSettings'
+import { useUpdater } from '../hooks/useUpdater'
+import type { UpdateStatus } from '../lib/types'
 
 const pollingOptions = [
   { value: 1000, label: '1s' },
@@ -145,6 +147,21 @@ export function Settings() {
           Notifications
         </h3>
 
+        <SettingRow
+          label="On Task Complete"
+          description="Notify when a task finishes (active → idle)"
+        >
+          <ToggleSwitch
+            checked={settings.notifications.onTaskComplete}
+            onChange={(val) =>
+              updateSettings({
+                notifications: { ...settings.notifications, onTaskComplete: val }
+              })
+            }
+            label="Notify on task complete"
+          />
+        </SettingRow>
+
         <SettingRow label="On Idle" description="Notify when an instance becomes idle">
           <ToggleSwitch
             checked={settings.notifications.onIdle}
@@ -178,6 +195,18 @@ export function Settings() {
               })
             }
             label="Notify on error"
+          />
+        </SettingRow>
+
+        <SettingRow label="Ping Sound" description="Play a chime sound on task complete">
+          <ToggleSwitch
+            checked={settings.notifications.pingSound}
+            onChange={(val) =>
+              updateSettings({
+                notifications: { ...settings.notifications, pingSound: val }
+              })
+            }
+            label="Ping sound"
           />
         </SettingRow>
 
@@ -260,6 +289,123 @@ export function Settings() {
           />
         </SettingRow>
       </section>
+
+      {/* Updates */}
+      <UpdatesSection />
     </div>
+  )
+}
+
+function statusLabel(status: UpdateStatus): string {
+  switch (status) {
+    case 'idle':
+      return 'Up to date'
+    case 'checking':
+      return 'Checking for updates...'
+    case 'available':
+      return 'Update available'
+    case 'not-available':
+      return 'You\u2019re on the latest version'
+    case 'downloading':
+      return 'Downloading update...'
+    case 'downloaded':
+      return 'Update ready to install'
+    case 'error':
+      return 'Update check failed'
+  }
+}
+
+function UpdatesSection() {
+  const { status, updateInfo, progress, error, checkForUpdates, downloadUpdate, installUpdate } =
+    useUpdater()
+
+  return (
+    <section className="card p-4" aria-labelledby="updates-heading">
+      <h3
+        id="updates-heading"
+        className="mb-3 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-text-secondary"
+      >
+        <Download className="h-3.5 w-3.5" aria-hidden="true" />
+        Updates
+      </h3>
+
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-text-primary">
+              {statusLabel(status)}
+              {updateInfo && status === 'available' && (
+                <span className="ml-1.5 text-xs text-accent">v{updateInfo.version}</span>
+              )}
+            </p>
+            {error && <p className="mt-0.5 text-xs text-red-400">{error}</p>}
+          </div>
+
+          <div className="shrink-0">
+            {(status === 'idle' || status === 'not-available' || status === 'error') && (
+              <button
+                type="button"
+                onClick={checkForUpdates}
+                className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium text-text-secondary hover:bg-surface-hover transition-colors"
+                aria-label="Check for updates"
+              >
+                <RefreshCw className="h-3 w-3" aria-hidden="true" />
+                Check
+              </button>
+            )}
+
+            {status === 'checking' && (
+              <RefreshCw
+                className="h-3.5 w-3.5 animate-spin text-text-secondary"
+                aria-hidden="true"
+              />
+            )}
+
+            {status === 'available' && (
+              <button
+                type="button"
+                onClick={downloadUpdate}
+                className="inline-flex items-center gap-1.5 rounded-md bg-accent/15 px-2.5 py-1 text-xs font-medium text-accent hover:bg-accent/25 transition-colors"
+                aria-label="Download update"
+              >
+                <Download className="h-3 w-3" aria-hidden="true" />
+                Download
+              </button>
+            )}
+
+            {status === 'downloaded' && (
+              <button
+                type="button"
+                onClick={installUpdate}
+                className="inline-flex items-center gap-1.5 rounded-md bg-accent/15 px-2.5 py-1 text-xs font-medium text-accent hover:bg-accent/25 transition-colors"
+                aria-label="Install update and restart"
+              >
+                <CheckCircle className="h-3 w-3" aria-hidden="true" />
+                Install & Restart
+              </button>
+            )}
+          </div>
+        </div>
+
+        {status === 'downloading' && progress && (
+          <div className="space-y-1">
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-border">
+              <div
+                className="h-full rounded-full bg-accent transition-all duration-300"
+                style={{ width: `${Math.min(100, Math.round(progress.percent))}%` }}
+                role="progressbar"
+                aria-valuenow={Math.round(progress.percent)}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-label="Download progress"
+              />
+            </div>
+            <p className="text-right text-[10px] tabular-nums text-text-secondary">
+              {Math.round(progress.percent)}%
+            </p>
+          </div>
+        )}
+      </div>
+    </section>
   )
 }
