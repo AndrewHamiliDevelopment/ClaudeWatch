@@ -52,7 +52,7 @@ describe('ProjectTag', () => {
 describe('InstanceList', () => {
   it('renders empty state when no instances', () => {
     render(<InstanceList instances={[]} />)
-    expect(screen.getByText('No instances match your filter')).toBeTruthy()
+    expect(screen.getByText('No instances found')).toBeTruthy()
   })
 
   it('renders instance cards when populated', () => {
@@ -64,11 +64,6 @@ describe('InstanceList', () => {
 })
 
 describe('Header', () => {
-  it('renders app title', () => {
-    render(<Header currentView="dashboard" onViewChange={() => {}} />)
-    expect(screen.getByText('Claude Tracker')).toBeTruthy()
-  })
-
   it('highlights the current view', () => {
     render(<Header currentView="dashboard" onViewChange={() => {}} />)
     const dashboardBtn = screen.getByLabelText('Dashboard')

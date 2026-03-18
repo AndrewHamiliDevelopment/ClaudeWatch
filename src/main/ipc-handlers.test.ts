@@ -70,7 +70,8 @@ describe('setupIpcHandlers', () => {
         'history:get',
         'history:clear',
         'app:open-dashboard',
-        'app:quit'
+        'app:quit',
+        'terminal:open'
       ]
 
       for (const channel of expectedChannels) {
