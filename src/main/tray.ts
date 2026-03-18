@@ -20,6 +20,7 @@ interface TrayManagerOptions {
 const STATUS_EMOJI: Record<ClaudeInstance['status'], string> = {
   active: '\uD83D\uDFE2',
   idle: '\uD83D\uDFE1',
+  stale: '\u26AA',
   exited: '\uD83D\uDD34'
 }
 
@@ -34,7 +35,14 @@ export class TrayManager {
   private onCheckForUpdates?: () => void
   private preloadPath: string
   private instances: ClaudeInstance[] = []
-  private stats: InstanceUpdate['stats'] = { total: 0, active: 0, idle: 0, exited: 0 }
+  private stats: InstanceUpdate['stats'] = {
+    total: 0,
+    active: 0,
+    idle: 0,
+    stale: 0,
+    exited: 0,
+    recentlyCompleted: 0
+  }
   private promoStatus: PromoStatus | null = null
 
   constructor(options: TrayManagerOptions) {
