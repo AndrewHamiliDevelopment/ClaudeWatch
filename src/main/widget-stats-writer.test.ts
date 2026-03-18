@@ -4,6 +4,7 @@ import type { ClaudeInstance, InstanceUpdate } from '../renderer/lib/types'
 import { readFile, rm, access } from 'fs/promises'
 import { join } from 'path'
 import { tmpdir } from 'os'
+import { execFile } from 'child_process'
 
 // Use a temp directory for tests instead of real App Group container
 const TEST_CONTAINER = join(tmpdir(), 'claudewatch-test-widget')
@@ -13,6 +14,19 @@ vi.mock('os', async () => {
   return {
     ...actual,
     homedir: vi.fn(() => join(tmpdir(), 'claudewatch-test-home'))
+  }
+})
+
+vi.mock('child_process', async () => {
+  const actual = await vi.importActual<typeof import('child_process')>('child_process')
+  return {
+    ...actual,
+    execFile: vi.fn(
+      (_cmd: string, _args: string[], _opts: unknown, cb?: (err: Error | null) => void) => {
+        if (cb) cb(null)
+        return { unref: vi.fn() }
+      }
+    )
   }
 })
 
@@ -184,6 +198,64 @@ describe('WidgetStatsWriter', () => {
     it('should not throw if container already exists', async () => {
       await writer.ensureContainer()
       await expect(writer.ensureContainer()).resolves.not.toThrow()
+    })
+  })
+
+  describe('writeToUserDefaults()', () => {
+    beforeEach(() => {
+      vi.mocked(execFile).mockClear()
+    })
+
+    it('should call defaults write after file write', async () => {
+      const instances = [makeInstance()]
+      const stats = makeStats({ total: 1, active: 1, idle: 0 })
+
+      await writer.write(instances, stats)
+
+      expect(execFile).toHaveBeenCalledTimes(1)
+      const [cmd, args] = vi.mocked(execFile).mock.calls[0] as [string, string[], unknown, unknown]
+      expect(cmd).toBe('defaults')
+      expect(args[0]).toBe('write')
+      expect(args[1]).toBe('group.com.zkidzdev.claudewatch')
+      expect(args[2]).toBe('statsJson')
+      expect(args[3]).toBe('-string')
+      // The 5th arg should be the JSON string
+      const jsonArg = args[4]
+      const parsed = JSON.parse(jsonArg)
+      expect(parsed.stats.total).toBe(1)
+    })
+
+    it('should not break file write if defaults write fails', async () => {
+      vi.mocked(execFile).mockImplementation(
+        (_cmd: string, _args: string[], _opts: unknown, cb?: (err: Error | null) => void) => {
+          if (cb) cb(new Error('defaults command not found'))
+          return { unref: vi.fn() } as unknown as ReturnType<typeof execFile>
+        }
+      )
+
+      const instances = [makeInstance()]
+      const stats = makeStats({ total: 1, active: 1, idle: 0 })
+
+      // write() should still succeed (no thrown error)
+      await expect(writer.write(instances, stats)).resolves.not.toThrow()
+
+      // File should still be written
+      const content = await readFile(writer.getStatsPath(), 'utf-8')
+      const payload = JSON.parse(content)
+      expect(payload.stats.total).toBe(1)
+    })
+
+    it('should handle JSON with special characters', () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const jsonWithQuotes = '{"project":"it\'s a test","status":"active"}'
+
+      writer.writeToUserDefaults(jsonWithQuotes)
+
+      expect(execFile).toHaveBeenCalledTimes(1)
+      const [, args] = vi.mocked(execFile).mock.calls[0] as [string, string[], unknown, unknown]
+      // execFile passes args as array elements, no shell escaping needed
+      expect(args[4]).toBe(jsonWithQuotes)
+      warnSpy.mockRestore()
     })
   })
 })
