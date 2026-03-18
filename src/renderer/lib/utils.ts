@@ -58,3 +58,22 @@ export function timeAgo(date: Date): string {
 export function cn(...classes: (string | undefined | null | false)[]): string {
   return classes.filter(Boolean).join(' ')
 }
+
+export function formatCompactNumber(n: number): string {
+  if (n < 1_000) return String(n)
+  if (n < 1_000_000) return `${(n / 1_000).toFixed(1).replace(/\.0$/, '')}K`
+  if (n < 1_000_000_000) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`
+  return `${(n / 1_000_000_000).toFixed(1).replace(/\.0$/, '')}B`
+}
+
+export function formatCurrency(n: number): string {
+  return `$${n.toFixed(2)}`
+}
+
+export function formatCountdown(seconds: number): string {
+  if (seconds <= 0) return '0m'
+  const h = Math.floor(seconds / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  if (h > 0) return `${h}h ${m}m`
+  return `${m}m`
+}

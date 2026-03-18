@@ -36,7 +36,7 @@ const mockUpdate: InstanceUpdate = {
       projectName: 'projects/done'
     })
   ],
-  stats: { total: 3, active: 1, idle: 1, exited: 1 }
+  stats: { total: 3, active: 1, idle: 1, exited: 1, recentlyCompleted: 0 }
 }
 
 describe('useInstances', () => {
@@ -92,7 +92,7 @@ describe('useInstances', () => {
 
     const newUpdate: InstanceUpdate = {
       instances: [mockInstance({ pid: 1111, status: 'active' })],
-      stats: { total: 1, active: 1, idle: 0, exited: 0 }
+      stats: { total: 1, active: 1, idle: 0, exited: 0, recentlyCompleted: 0 }
     }
 
     const callback = (window.api.onInstancesUpdate as ReturnType<typeof vi.fn>).mock.calls[0][0]
@@ -170,6 +170,80 @@ describe('useInstances', () => {
     expect(result.current.filteredInstances.length).toBe(3)
   })
 
+  describe('groupedInstances', () => {
+    it('groups active instances as inProgress', async () => {
+      const { result } = renderHook(() => useInstances())
+
+      await waitFor(() => {
+        expect(result.current.instances.length).toBe(3)
+      })
+
+      expect(result.current.groupedInstances.inProgress.length).toBe(1)
+      expect(result.current.groupedInstances.inProgress[0].status).toBe('active')
+    })
+
+    it('groups idle instances without lastBecameIdleAt as waiting', async () => {
+      const { result } = renderHook(() => useInstances())
+
+      await waitFor(() => {
+        expect(result.current.instances.length).toBe(3)
+      })
+
+      // The idle instance has no lastBecameIdleAt, so it goes to waiting
+      const waitingIdle = result.current.groupedInstances.waiting.filter((i) => i.status === 'idle')
+      expect(waitingIdle.length).toBe(1)
+    })
+
+    it('groups idle instances with recent lastBecameIdleAt as recentlyCompleted', async () => {
+      const recentUpdate: InstanceUpdate = {
+        instances: [
+          mockInstance({
+            pid: 2222,
+            status: 'idle',
+            lastBecameIdleAt: new Date() // just now
+          })
+        ],
+        stats: { total: 1, active: 0, idle: 1, exited: 0, recentlyCompleted: 1 }
+      }
+
+      ;(window.api.getInstances as ReturnType<typeof vi.fn>).mockResolvedValue(recentUpdate)
+
+      const { result } = renderHook(() => useInstances())
+
+      await waitFor(() => {
+        expect(result.current.instances.length).toBe(1)
+      })
+
+      expect(result.current.groupedInstances.recentlyCompleted.length).toBe(1)
+      expect(result.current.groupedInstances.waiting.length).toBe(0)
+    })
+
+    it('groups idle instances with old lastBecameIdleAt as waiting', async () => {
+      const oldDate = new Date(Date.now() - 15 * 60 * 1000) // 15 minutes ago
+      const oldUpdate: InstanceUpdate = {
+        instances: [
+          mockInstance({
+            pid: 3333,
+            status: 'idle',
+            lastBecameIdleAt: oldDate
+          })
+        ],
+        stats: { total: 1, active: 0, idle: 1, exited: 0, recentlyCompleted: 0 }
+      }
+
+      ;(window.api.getInstances as ReturnType<typeof vi.fn>).mockResolvedValue(oldUpdate)
+
+      const { result } = renderHook(() => useInstances())
+
+      await waitFor(() => {
+        expect(result.current.instances.length).toBe(1)
+      })
+
+      expect(result.current.groupedInstances.recentlyCompleted.length).toBe(0)
+      expect(result.current.groupedInstances.waiting.length).toBe(1)
+    })
+  })
+
   it('handles missing window.api gracefully', async () => {
     // @ts-expect-error -- cleanup
     delete window.api
@@ -181,7 +255,8 @@ describe('useInstances', () => {
       total: 0,
       active: 0,
       idle: 0,
-      exited: 0
+      exited: 0,
+      recentlyCompleted: 0
     })
   })
 })

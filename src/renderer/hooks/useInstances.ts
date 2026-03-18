@@ -3,6 +3,14 @@ import type { ClaudeInstance, InstanceUpdate } from '../lib/types'
 
 export type StatusFilter = 'all' | 'active' | 'idle' | 'exited'
 
+const RECENT_WINDOW_MS = 10 * 60 * 1000 // 10 minutes
+
+export interface GroupedInstances {
+  recentlyCompleted: ClaudeInstance[]
+  inProgress: ClaudeInstance[]
+  waiting: ClaudeInstance[]
+}
+
 interface UseInstancesReturn {
   instances: ClaudeInstance[]
   stats: InstanceUpdate['stats']
@@ -11,13 +19,15 @@ interface UseInstancesReturn {
   searchQuery: string
   setSearchQuery: (query: string) => void
   filteredInstances: ClaudeInstance[]
+  groupedInstances: GroupedInstances
 }
 
 const emptyStats: InstanceUpdate['stats'] = {
   total: 0,
   active: 0,
   idle: 0,
-  exited: 0
+  exited: 0,
+  recentlyCompleted: 0
 }
 
 export function useInstances(): UseInstancesReturn {
@@ -70,6 +80,30 @@ export function useInstances(): UseInstancesReturn {
     return result
   }, [instances, filter, searchQuery])
 
+  const groupedInstances = useMemo((): GroupedInstances => {
+    const now = Date.now()
+
+    const recentlyCompleted: ClaudeInstance[] = []
+    const inProgress: ClaudeInstance[] = []
+    const waiting: ClaudeInstance[] = []
+
+    for (const inst of filteredInstances) {
+      if (inst.status === 'active') {
+        inProgress.push(inst)
+      } else if (
+        inst.status === 'idle' &&
+        inst.lastBecameIdleAt &&
+        now - new Date(inst.lastBecameIdleAt).getTime() < RECENT_WINDOW_MS
+      ) {
+        recentlyCompleted.push(inst)
+      } else {
+        waiting.push(inst)
+      }
+    }
+
+    return { recentlyCompleted, inProgress, waiting }
+  }, [filteredInstances])
+
   return {
     instances,
     stats,
@@ -77,6 +111,7 @@ export function useInstances(): UseInstancesReturn {
     setFilter,
     searchQuery,
     setSearchQuery,
-    filteredInstances
+    filteredInstances,
+    groupedInstances
   }
 }
