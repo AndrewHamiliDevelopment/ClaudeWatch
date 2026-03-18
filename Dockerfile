@@ -9,6 +9,7 @@ FROM node:22-bookworm-slim AS builder
 #   - libgtk-3-0 + friends → native node module compilation against Electron headers
 #   - libx11-xcb1, etc.    → Electron sandbox dependencies needed at build time
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
     fakeroot \
     dpkg-dev \
     rpm \
