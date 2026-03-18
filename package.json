@@ -20,9 +20,9 @@
     "lint": "eslint . --ext .ts,.tsx",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
     "typecheck": "tsc --noEmit",
-    "release:patch": "npm version patch --no-git-tag-version && npm run publish:mac",
-    "release:minor": "npm version minor --no-git-tag-version && npm run publish:mac",
-    "release:major": "npm version major --no-git-tag-version && npm run publish:mac"
+    "release:patch": "npm version patch && git push && git push --tags",
+    "release:minor": "npm version minor && git push && git push --tags",
+    "release:major": "npm version major && git push && git push --tags"
   },
   "keywords": [
     "electron",
