@@ -18,6 +18,7 @@ let trayManager: TrayManager | null = null
 let tracker: SessionTracker | null = null
 
 function createWindow(store: SettingsStore): BrowserWindow {
+  const isMac = process.platform === 'darwin'
   const win = new BrowserWindow({
     width: 900,
     height: 700,
@@ -26,10 +27,12 @@ function createWindow(store: SettingsStore): BrowserWindow {
     show: false,
     frame: false,
     transparent: true,
-    vibrancy: 'under-window',
-    visualEffectState: 'active',
-    titleBarStyle: 'hiddenInset',
-    trafficLightPosition: { x: 15, y: 15 },
+    ...(isMac && {
+      vibrancy: 'under-window' as const,
+      visualEffectState: 'active' as const,
+      titleBarStyle: 'hiddenInset' as const,
+      trafficLightPosition: { x: 15, y: 15 }
+    }),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,

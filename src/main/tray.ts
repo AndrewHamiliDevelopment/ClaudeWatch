@@ -77,6 +77,7 @@ export class TrayManager {
   }
 
   private createPopover(): void {
+    const isMac = process.platform === 'darwin'
     this.popover = new BrowserWindow({
       width: POPOVER_WIDTH,
       height: POPOVER_HEIGHT,
@@ -89,9 +90,11 @@ export class TrayManager {
       fullscreenable: false,
       skipTaskbar: true,
       transparent: true,
-      vibrancy: 'popover',
-      visualEffectState: 'active',
-      roundedCorners: true,
+      ...(isMac && {
+        vibrancy: 'popover' as const,
+        visualEffectState: 'active' as const,
+        roundedCorners: true
+      }),
       webPreferences: {
         preload: this.preloadPath,
         sandbox: false,
