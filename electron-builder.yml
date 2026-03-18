@@ -16,6 +16,9 @@ mac:
     - target: dmg
       arch:
         - universal
+    - target: zip
+      arch:
+        - universal
   entitlementsInherit: build/entitlements.mac.plist
   extraFiles:
     - from: build/widget/ClaudeWatchWidgetExtension.appex
@@ -40,3 +43,4 @@ publish:
   provider: github
   owner: theangeloumali
   repo: ClaudeWatch
+  releaseType: release
