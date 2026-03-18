@@ -1,4 +1,4 @@
-import { readFile } from 'fs/promises'
+import { readFile, readdir } from 'fs/promises'
 import { homedir } from 'os'
 import { join } from 'path'
 import { BrowserWindow } from 'electron'
@@ -33,7 +33,16 @@ const EMPTY_STATS: UsageStats = {
   totalCostUSD: 0,
   modelUsage: [],
   dataAvailable: false,
-  lastUpdated: null
+  lastUpdated: null,
+  weeklyTokens: 0,
+  weeklyTokenTarget: 5_000_000
+}
+
+interface SessionUsageFile {
+  tokens?: number
+  messages?: number
+  started?: string
+  last_update?: string
 }
 
 export class UsageStatsReader {
@@ -41,10 +50,17 @@ export class UsageStatsReader {
   private interval: NodeJS.Timeout | null = null
   private lastData: UsageStats | null = null
   private filePath: string
+  private cachePath: string
+  private weeklyTokenTarget = 5_000_000
 
   constructor(getWindows: (() => BrowserWindow | null)[]) {
     this.getWindows = getWindows
     this.filePath = join(homedir(), '.claude.json')
+    this.cachePath = join(homedir(), '.claude', 'cache')
+  }
+
+  setWeeklyTokenTarget(target: number): void {
+    this.weeklyTokenTarget = target
   }
 
   async read(): Promise<UsageStats> {
@@ -62,9 +78,52 @@ export class UsageStatsReader {
       stats = { ...EMPTY_STATS }
     }
 
+    // Read weekly tokens from session-usage files
+    stats.weeklyTokens = await this.readWeeklyTokens()
+    stats.weeklyTokenTarget = this.weeklyTokenTarget
+
     this.lastData = stats
     this.send(stats)
     return stats
+  }
+
+  async readWeeklyTokens(): Promise<number> {
+    try {
+      const files = await readdir(this.cachePath)
+      const sessionFiles = files.filter(
+        (f) => f.startsWith('session-usage-ppid-') && f.endsWith('.json')
+      )
+
+      // Calculate start of current week (Monday 00:00 local time)
+      const now = new Date()
+      const dayOfWeek = now.getDay()
+      const mondayOffset = dayOfWeek === 0 ? 6 : dayOfWeek - 1
+      const weekStart = new Date(now)
+      weekStart.setDate(now.getDate() - mondayOffset)
+      weekStart.setHours(0, 0, 0, 0)
+      const weekStartMs = weekStart.getTime()
+
+      let totalTokens = 0
+
+      for (const file of sessionFiles) {
+        try {
+          const raw = await readFile(join(this.cachePath, file), 'utf-8')
+          const session: SessionUsageFile = JSON.parse(raw)
+
+          // Check if session's last_update falls within current week
+          const lastUpdate = session.last_update ? new Date(session.last_update).getTime() : 0
+          if (lastUpdate >= weekStartMs && session.tokens) {
+            totalTokens += session.tokens
+          }
+        } catch {
+          // Skip malformed files
+        }
+      }
+
+      return totalTokens
+    } catch {
+      return 0
+    }
   }
 
   getLastData(): UsageStats | null {
@@ -136,7 +195,9 @@ export class UsageStatsReader {
       totalCostUSD,
       modelUsage,
       dataAvailable: true,
-      lastUpdated: new Date().toISOString()
+      lastUpdated: new Date().toISOString(),
+      weeklyTokens: 0,
+      weeklyTokenTarget: this.weeklyTokenTarget
     }
   }
 

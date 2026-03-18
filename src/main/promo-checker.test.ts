@@ -23,8 +23,8 @@ describe('PromoChecker', () => {
   })
 
   it('returns promoActive=true during promo period', () => {
-    // Wednesday March 18, 2026 10:00 ET = 14:00 UTC
-    vi.setSystemTime(new Date('2026-03-18T14:00:00Z'))
+    // Wednesday March 18, 2026 10:00 PHT = 02:00 UTC
+    vi.setSystemTime(new Date('2026-03-18T02:00:00Z'))
     const checker = new PromoChecker([])
     const status = checker.check()
 
@@ -33,8 +33,8 @@ describe('PromoChecker', () => {
   })
 
   it('returns promoActive=false after promo period', () => {
-    // March 28, 2026 — after promo
-    vi.setSystemTime(new Date('2026-03-28T14:00:00Z'))
+    // March 28, 2026 — after promo (10:00 PHT = 02:00 UTC)
+    vi.setSystemTime(new Date('2026-03-28T02:00:00Z'))
     const checker = new PromoChecker([])
     const status = checker.check()
 
@@ -43,7 +43,8 @@ describe('PromoChecker', () => {
   })
 
   it('returns promoActive=false before promo period', () => {
-    vi.setSystemTime(new Date('2026-03-12T14:00:00Z'))
+    // March 12, 2026 — before promo (10:00 PHT = 02:00 UTC)
+    vi.setSystemTime(new Date('2026-03-12T02:00:00Z'))
     const checker = new PromoChecker([])
     const status = checker.check()
 
@@ -51,9 +52,9 @@ describe('PromoChecker', () => {
     expect(status.is2x).toBe(false)
   })
 
-  it('returns is2x=true during weekday 2x window (8 AM–2 PM ET)', () => {
-    // Wednesday March 18, 2026 10:00 ET = 15:00 UTC
-    vi.setSystemTime(new Date('2026-03-18T15:00:00Z'))
+  it('returns is2x=true during weekday 2x window (2 AM – 8 PM PHT)', () => {
+    // Wednesday March 18, 2026 10:00 PHT = 02:00 UTC
+    vi.setSystemTime(new Date('2026-03-18T02:00:00Z'))
     const checker = new PromoChecker([])
     const status = checker.check()
 
@@ -63,9 +64,9 @@ describe('PromoChecker', () => {
     expect(status.currentWindowEnd).toBeTruthy()
   })
 
-  it('returns is2x=false during weekday outside 2x window', () => {
-    // Wednesday March 18, 2026 15:00 ET = 19:00 UTC (after 2 PM ET)
-    vi.setSystemTime(new Date('2026-03-18T19:00:00Z'))
+  it('returns is2x=false during weekday outside 2x window (after 8 PM PHT)', () => {
+    // Wednesday March 18, 2026 21:00 PHT = 13:00 UTC
+    vi.setSystemTime(new Date('2026-03-18T13:00:00Z'))
     const checker = new PromoChecker([])
     const status = checker.check()
 
@@ -75,8 +76,8 @@ describe('PromoChecker', () => {
   })
 
   it('returns is2x=true all day on weekends', () => {
-    // Saturday March 14, 2026 20:00 ET = Sunday March 15, 2026 01:00 UTC
-    vi.setSystemTime(new Date('2026-03-15T01:00:00Z'))
+    // Saturday March 14, 2026 15:00 PHT = 07:00 UTC
+    vi.setSystemTime(new Date('2026-03-14T07:00:00Z'))
     const checker = new PromoChecker([])
     const status = checker.check()
 
@@ -85,8 +86,8 @@ describe('PromoChecker', () => {
   })
 
   it('returns is2x=true on Sunday', () => {
-    // Sunday March 15, 2026 14:00 ET = 18:00 UTC
-    vi.setSystemTime(new Date('2026-03-15T18:00:00Z'))
+    // Sunday March 15, 2026 14:00 PHT = 06:00 UTC
+    vi.setSystemTime(new Date('2026-03-15T06:00:00Z'))
     const checker = new PromoChecker([])
     const status = checker.check()
 
@@ -94,35 +95,46 @@ describe('PromoChecker', () => {
     expect(status.isWeekend).toBe(true)
   })
 
-  it('edge: exactly 8 AM ET on weekday is 2x', () => {
-    // Wednesday March 18, 2026 08:00 ET = 12:00 UTC
-    vi.setSystemTime(new Date('2026-03-18T12:00:00Z'))
+  it('edge: exactly 2 AM PHT on weekday is 2x', () => {
+    // Wednesday March 18, 2026 02:00 PHT = 17:00 March 17 UTC (PHT = UTC+8, so 02:00 PHT = 18:00 prev day UTC)
+    vi.setSystemTime(new Date('2026-03-17T18:00:00Z'))
     const checker = new PromoChecker([])
     const status = checker.check()
 
     expect(status.is2x).toBe(true)
   })
 
-  it('edge: exactly 2 PM ET (14:00) on weekday is NOT 2x', () => {
-    // Wednesday March 18, 2026 14:00 ET = 18:00 UTC
-    vi.setSystemTime(new Date('2026-03-18T18:00:00Z'))
+  it('edge: exactly 8 PM PHT (20:00) on weekday is NOT 2x', () => {
+    // Wednesday March 18, 2026 20:00 PHT = 12:00 UTC
+    vi.setSystemTime(new Date('2026-03-18T12:00:00Z'))
     const checker = new PromoChecker([])
     const status = checker.check()
 
     expect(status.is2x).toBe(false)
   })
 
-  it('calculates expiresInSeconds correctly during weekday 2x', () => {
-    // Wednesday March 18, 2026 12:00 ET = 16:00 UTC → 2 hours until 2 PM ET
-    vi.setSystemTime(new Date('2026-03-18T16:00:00Z'))
+  it('returns is2x=false before 2 AM PHT on weekday', () => {
+    // Wednesday March 18, 2026 01:00 PHT = 17:00 March 17 UTC
+    vi.setSystemTime(new Date('2026-03-17T17:00:00Z'))
     const checker = new PromoChecker([])
     const status = checker.check()
 
-    expect(status.expiresInSeconds).toBe(2 * 3600) // 2 hours
+    // 01:00 PHT is before 2 AM window
+    expect(status.is2x).toBe(false)
+    expect(status.nextWindowStart).toBeTruthy()
+  })
+
+  it('calculates expiresInSeconds correctly during weekday 2x', () => {
+    // Wednesday March 18, 2026 10:00 PHT = 02:00 UTC → 10 hours until 8 PM PHT
+    vi.setSystemTime(new Date('2026-03-18T02:00:00Z'))
+    const checker = new PromoChecker([])
+    const status = checker.check()
+
+    expect(status.expiresInSeconds).toBe(10 * 3600) // 10 hours
   })
 
   it('getLastData returns last check result', () => {
-    vi.setSystemTime(new Date('2026-03-18T15:00:00Z'))
+    vi.setSystemTime(new Date('2026-03-18T02:00:00Z'))
     const checker = new PromoChecker([])
     checker.check()
 
@@ -137,7 +149,7 @@ describe('PromoChecker', () => {
   })
 
   it('broadcasts to windows on check', () => {
-    vi.setSystemTime(new Date('2026-03-18T15:00:00Z'))
+    vi.setSystemTime(new Date('2026-03-18T02:00:00Z'))
     const win = makeMockWindow()
     const checker = new PromoChecker([() => win as unknown as Electron.BrowserWindow])
     checker.check()
@@ -151,7 +163,7 @@ describe('PromoChecker', () => {
   })
 
   it('skips destroyed windows', () => {
-    vi.setSystemTime(new Date('2026-03-18T15:00:00Z'))
+    vi.setSystemTime(new Date('2026-03-18T02:00:00Z'))
     const destroyed = makeMockWindow(true)
     const live = makeMockWindow(false)
     const checker = new PromoChecker([
@@ -165,7 +177,7 @@ describe('PromoChecker', () => {
   })
 
   it('skips null windows', () => {
-    vi.setSystemTime(new Date('2026-03-18T15:00:00Z'))
+    vi.setSystemTime(new Date('2026-03-18T02:00:00Z'))
     const live = makeMockWindow(false)
     const checker = new PromoChecker([() => null, () => live as unknown as Electron.BrowserWindow])
     checker.check()
@@ -174,7 +186,7 @@ describe('PromoChecker', () => {
   })
 
   it('startPolling checks periodically', () => {
-    vi.setSystemTime(new Date('2026-03-18T15:00:00Z'))
+    vi.setSystemTime(new Date('2026-03-18T02:00:00Z'))
     const win = makeMockWindow()
     const checker = new PromoChecker([() => win as unknown as Electron.BrowserWindow])
     checker.startPolling(60_000)
