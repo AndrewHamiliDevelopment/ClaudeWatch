@@ -1,12 +1,6 @@
-import ElectronStore from 'electron-store'
+import Store from 'electron-store'
 import type { AppSettings, SessionHistoryEntry } from '../renderer/lib/types'
 import { DEFAULT_SETTINGS } from '../renderer/lib/types'
-
-// electron-store v10 uses ESM default export; handle both CJS and ESM resolution
-const Store =
-  typeof (ElectronStore as unknown as { default?: typeof ElectronStore }).default === 'function'
-    ? (ElectronStore as unknown as { default: typeof ElectronStore }).default
-    : ElectronStore
 
 export class SettingsStore {
   private store: InstanceType<typeof Store>

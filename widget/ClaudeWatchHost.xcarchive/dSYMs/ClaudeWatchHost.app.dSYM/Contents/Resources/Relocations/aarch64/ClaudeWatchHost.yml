@@ -1,0 +1,26 @@
+---
+triple:          'arm64-apple-darwin'
+binary-path:     '/Users/angelo/Library/Developer/Xcode/DerivedData/ClaudeWatchWidget-bcdprafaohcyolbjlnbqzmuustrl/Build/Intermediates.noindex/ArchiveIntermediates/ClaudeWatchHost/InstallationBuildProductsLocation/Applications/ClaudeWatchHost.app/Contents/MacOS/ClaudeWatchHost'
+relocations:
+  - { offset: 0xAFEB6, size: 0x8, addend: 0x0, symName: '_$s15ClaudeWatchHost0abC3AppVAC7SwiftUI0D0AAWl', symObjAddr: 0x82C, symBinAddr: 0x100001624, symSize: 0x40 }
+  - { offset: 0xAFECA, size: 0x8, addend: 0x0, symName: '_$s15ClaudeWatchHost0abC3AppVMa', symObjAddr: 0x86C, symBinAddr: 0x100001664, symSize: 0x10 }
+  - { offset: 0xAFEDE, size: 0x8, addend: 0x0, symName: '_$s15ClaudeWatchHost0abC3AppV7SwiftUI0D0AA4BodyAdEP_AD5ScenePWT', symObjAddr: 0x87C, symBinAddr: 0x100001674, symSize: 0x10 }
+  - { offset: 0xAFEF2, size: 0x8, addend: 0x0, symName: ___swift_instantiateConcreteTypeFromMangledNameV2, symObjAddr: 0x88C, symBinAddr: 0x100001684, symSize: 0x50 }
+  - { offset: 0xAFF06, size: 0x8, addend: 0x0, symName: '_$s7SwiftUI15ModifiedContentVyACyAA6VStackVyAA9TupleViewVyACyACyAA5ImageVAA30_EnvironmentKeyWritingModifierVyAA4FontVSgGGAA016_ForegroundStyleL0VyAA017HierarchicalShapeO0VGG_AA4TextVACyAxKyAA0R9AlignmentOGGtGGAA14_PaddingLayoutVGAA06_FrameU0VGACyxq_GAA0G0A2AA10_RzAA0gL0R_rlWl', symObjAddr: 0x8DC, symBinAddr: 0x1000016D4, symSize: 0x78 }
+  - { offset: 0xAFF1A, size: 0x8, addend: 0x0, symName: ___swift_instantiateConcreteTypeFromMangledNameAbstractV2, symObjAddr: 0x954, symBinAddr: 0x10000174C, symSize: 0x54 }
+  - { offset: 0xAFF2E, size: 0x8, addend: 0x0, symName: '_$s7SwiftUI15ModifiedContentVyAA6VStackVyAA9TupleViewVyACyACyAA5ImageVAA30_EnvironmentKeyWritingModifierVyAA4FontVSgGGAA016_ForegroundStyleL0VyAA017HierarchicalShapeO0VGG_AA4TextVACyAxKyAA0R9AlignmentOGGtGGAA14_PaddingLayoutVGACyxq_GAA0G0A2AA7_RzAA0gL0R_rlWl', symObjAddr: 0x9A8, symBinAddr: 0x1000017A0, symSize: 0x98 }
+  - { offset: 0xAFF42, size: 0x8, addend: 0x0, symName: '_$s7SwiftUI9TupleViewVyAA15ModifiedContentVyAEyAA5ImageVAA30_EnvironmentKeyWritingModifierVyAA4FontVSgGGAA016_ForegroundStyleK0VyAA017HierarchicalShapeN0VGG_AA4TextVAEyAvIyAA0Q9AlignmentOGGtGWOc', symObjAddr: 0xA84, symBinAddr: 0x10000187C, symSize: 0x50 }
+  - { offset: 0xAFF56, size: 0x8, addend: 0x0, symName: '_$s7SwiftUI17EnvironmentValuesV4fontAA4FontVSgvpACTKq', symObjAddr: 0xB14, symBinAddr: 0x10000190C, symSize: 0x28 }
+  - { offset: 0xAFF6E, size: 0x8, addend: 0x0, symName: '_$s7SwiftUI17EnvironmentValuesV4fontAA4FontVSgvpACTkq', symObjAddr: 0xB3C, symBinAddr: 0x100001934, symSize: 0x28 }
+  - { offset: 0xAFF86, size: 0x8, addend: 0x0, symName: '_$s7SwiftUI4TextV7StorageOWOe', symObjAddr: 0xB64, symBinAddr: 0x10000195C, symSize: 0x10 }
+  - { offset: 0xAFF9A, size: 0x8, addend: 0x0, symName: '_$s7SwiftUI22HierarchicalShapeStyleVAcA0dE0AAWl', symObjAddr: 0xB74, symBinAddr: 0x10000196C, symSize: 0x40 }
+  - { offset: 0xAFFAE, size: 0x8, addend: 0x0, symName: '_$s7SwiftUI17EnvironmentValuesV22multilineTextAlignmentAA0fG0OvpACTKq', symObjAddr: 0xBB4, symBinAddr: 0x1000019AC, symSize: 0x28 }
+  - { offset: 0xAFFC6, size: 0x8, addend: 0x0, symName: '_$s7SwiftUI17EnvironmentValuesV22multilineTextAlignmentAA0fG0OvpACTkq', symObjAddr: 0xBDC, symBinAddr: 0x1000019D4, symSize: 0x24 }
+  - { offset: 0xAFFDE, size: 0x8, addend: 0x0, symName: '_$s7SwiftUI4TextV7StorageOWOy', symObjAddr: 0xC00, symBinAddr: 0x1000019F8, symSize: 0x10 }
+  - { offset: 0xAFFFA, size: 0x8, addend: 0x0, symName: '_$s15ClaudeWatchHost0abC3AppV4bodyQrvg', symObjAddr: 0x0, symBinAddr: 0x100000DF8, symSize: 0x268 }
+  - { offset: 0xB0030, size: 0x8, addend: 0x0, symName: '_$s15ClaudeWatchHost0abC3AppV4bodyQrvg7SwiftUI4ViewPAEE5frame5width6height9alignmentQr12CoreGraphics7CGFloatVSg_AoE9AlignmentVtFQOyAgEE7paddingyQrANFQOyAE6VStackVyAE05TupleH0VyAgEE15foregroundStyleyQrqd__AE05ShapeU0Rd__lFQOyAgEE4fontyQrAE4FontVSgFQOyAE5ImageV_Qo__AE012HierarchicalvU0VQo__AE4TextVAgEE013multilineTextP0yQrAE04TextP0OFQOyA8__Qo_tGG_Qo__Qo_ycfU_', symObjAddr: 0x268, symBinAddr: 0x100001060, symSize: 0x1B4 }
+  - { offset: 0xB0169, size: 0x8, addend: 0x0, symName: '_$s15ClaudeWatchHost0abC3AppV4bodyQrvg7SwiftUI4ViewPAEE5frame5width6height9alignmentQr12CoreGraphics7CGFloatVSg_AoE9AlignmentVtFQOyAgEE7paddingyQrANFQOyAE6VStackVyAE05TupleH0VyAgEE15foregroundStyleyQrqd__AE05ShapeU0Rd__lFQOyAgEE4fontyQrAE4FontVSgFQOyAE5ImageV_Qo__AE012HierarchicalvU0VQo__AE4TextVAgEE013multilineTextP0yQrAE04TextP0OFQOyA8__Qo_tGG_Qo__Qo_ycfU_A13_yXEfU_', symObjAddr: 0x41C, symBinAddr: 0x100001214, symSize: 0x3D4 }
+  - { offset: 0xB05CB, size: 0x8, addend: 0x0, symName: '_$s15ClaudeWatchHost0abC3AppV7SwiftUI0D0AadEP4body4BodyQzvgTW', symObjAddr: 0x7F0, symBinAddr: 0x1000015E8, symSize: 0x4 }
+  - { offset: 0xB05E6, size: 0x8, addend: 0x0, symName: '_$s15ClaudeWatchHost0abC3AppV7SwiftUI0D0AadEPxycfCTW', symObjAddr: 0x7F4, symBinAddr: 0x1000015EC, symSize: 0x4 }
+  - { offset: 0xB060F, size: 0x8, addend: 0x0, symName: _main, symObjAddr: 0x7F8, symBinAddr: 0x1000015F0, symSize: 0x34 }
+...

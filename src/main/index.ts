@@ -7,6 +7,7 @@ import { SettingsStore } from './store'
 import { TrayManager } from './tray'
 import { NotificationManager } from './notifications'
 import { setupIpcHandlers, forwardUpdatesToRenderer } from './ipc-handlers'
+import { createWidgetStatsWriter } from './widget-stats-writer'
 
 let mainWindow: BrowserWindow | null = null
 let trayManager: TrayManager | null = null
@@ -98,8 +99,18 @@ app.whenReady().then(() => {
     () => trayManager?.getPopoverWindow() ?? null
   )
 
+  // Initialize macOS widget stats writer (writes stats.json to App Group container)
+  const widgetWriter = createWidgetStatsWriter()
+  if (widgetWriter) {
+    widgetWriter.ensureContainer().catch(() => {})
+  }
+
   tracker.on('update', (data) => {
     trayManager?.update(data.instances, data.stats)
+    // Write stats for macOS WidgetKit widget
+    widgetWriter?.write(data.instances, data.stats).catch(() => {
+      // Silently ignore widget write errors — widget is optional
+    })
   })
 
   // Wire notification events

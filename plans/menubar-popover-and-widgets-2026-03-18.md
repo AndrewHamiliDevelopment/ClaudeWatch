@@ -1,7 +1,7 @@
-# MacClaudeTracker — Menu Bar Popover + macOS Widget Roadmap
+# ClaudeWatch — Menu Bar Popover + macOS Widget Roadmap
 
 > **Date**: 2026-03-18
-> **Status**: Popover implementing now, Widgets planned
+> **Status**: Popover done, Widgets implemented (code signing pending for distribution)
 
 ---
 

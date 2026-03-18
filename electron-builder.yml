@@ -1,4 +1,4 @@
-appId: com.zkidz.claudewatch
+appId: com.zkidzdev.claudewatch
 productName: ClaudeWatch
 directories:
   buildResources: build
@@ -16,6 +16,9 @@ mac:
       arch:
         - universal
   entitlementsInherit: build/entitlements.mac.plist
+  extraFiles:
+    - from: build/widget/ClaudeWatchWidgetExtension.appex
+      to: PlugIns/ClaudeWatchWidgetExtension.appex
 win:
   artifactName: '${name}-${version}-setup.${ext}'
   target:
