@@ -20,6 +20,7 @@ mac:
       arch:
         - universal
   entitlementsInherit: build/entitlements.mac.plist
+  notarize: true
   extraFiles:
     - from: build/widget/ClaudeWatchWidgetExtension.appex
       to: PlugIns/ClaudeWatchWidgetExtension.appex

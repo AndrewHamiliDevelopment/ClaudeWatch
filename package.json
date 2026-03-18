@@ -11,8 +11,6 @@
     "postinstall": "electron-builder install-app-deps",
     "build:widget": "bash scripts/build-widget.sh",
     "build:mac": "npm run build && npm run build:widget && electron-builder --mac",
-    "publish:mac": "npm run build:mac -- --publish always",
-    "publish:mac:only": "electron-builder --mac --publish always --prepackaged dist/mac-universal/ClaudeWatch.app",
     "build:win": "npm run build && electron-builder --win",
     "build:linux": "npm run build && electron-builder --linux",
     "test": "vitest run",
@@ -20,9 +18,10 @@
     "lint": "eslint . --ext .ts,.tsx",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
     "typecheck": "tsc --noEmit",
-    "release:patch": "npm version patch && git push && git push --tags",
-    "release:minor": "npm version minor && git push && git push --tags",
-    "release:major": "npm version major && git push && git push --tags"
+    "publish:local": "npm run build && npm run build:widget && CSC_IDENTITY_AUTO_DISCOVERY=true electron-builder --mac --publish always",
+    "release:patch": "npm version patch && npm run publish:local",
+    "release:minor": "npm version minor && npm run publish:local",
+    "release:major": "npm version major && npm run publish:local"
   },
   "keywords": [
     "electron",

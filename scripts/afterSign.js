@@ -24,8 +24,8 @@ function findSigningIdentity() {
     const output = result.stdout || ''
     const lines = output.split('\n')
 
-    // Prefer "Apple Development" first, then "Developer ID Application"
-    for (const preferred of ['Apple Development', 'Developer ID Application']) {
+    // Prefer "Developer ID Application" first (needed for distribution), then "Apple Development"
+    for (const preferred of ['Developer ID Application', 'Apple Development']) {
       for (const line of lines) {
         if (line.includes(preferred) && !line.includes('CSSMERR_TP_CERT_REVOKED')) {
           const hashMatch = line.match(/([0-9A-F]{40})/)
