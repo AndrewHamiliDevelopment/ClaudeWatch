@@ -1,0 +1,11 @@
+node_modules/
+out/
+dist/
+*.dmg
+*.exe
+*.AppImage
+.env
+.env.local
+.DS_Store
+*.log
+coverage/

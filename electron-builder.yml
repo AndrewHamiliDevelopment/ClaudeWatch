@@ -1,0 +1,32 @@
+appId: com.zkidz.claude-tracker
+productName: Claude Tracker
+directories:
+  buildResources: build
+  output: dist
+files:
+  - '!**/.vscode/*'
+  - '!src/*'
+  - '!electron.vite.config.*'
+  - '!{.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc,tsconfig*.json,vitest.config.*}'
+  - '!{*.md,*.txt}'
+mac:
+  artifactName: '${name}-${version}-${arch}.${ext}'
+  target:
+    - target: dmg
+      arch:
+        - universal
+  entitlementsInherit: build/entitlements.mac.plist
+win:
+  artifactName: '${name}-${version}-setup.${ext}'
+  target:
+    - target: nsis
+      arch:
+        - x64
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+linux:
+  artifactName: '${name}-${version}-${arch}.${ext}'
+  target:
+    - AppImage
+  category: Utility
