@@ -84,6 +84,18 @@ describe('SettingsStore', () => {
     })
   })
 
+  describe('settings migration for new notification fields', () => {
+    it('should provide default onTaskComplete when missing from stored settings', () => {
+      const settings = store.getSettings()
+      expect(settings.notifications.onTaskComplete).toBe(true)
+    })
+
+    it('should provide default pingSound when missing from stored settings', () => {
+      const settings = store.getSettings()
+      expect(settings.notifications.pingSound).toBe(true)
+    })
+  })
+
   describe('getHistory()', () => {
     it('should return empty array when no history exists', () => {
       expect(store.getHistory()).toEqual([])

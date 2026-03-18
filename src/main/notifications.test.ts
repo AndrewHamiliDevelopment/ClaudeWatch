@@ -60,6 +60,80 @@ describe('NotificationManager', () => {
     manager = new NotificationManager(() => settings)
   })
 
+  describe('notifyTaskComplete', () => {
+    it('should show notification when onTaskComplete is enabled', () => {
+      settings.notifications.onTaskComplete = true
+      settings.notifications.doNotDisturb = false
+
+      manager.notifyTaskComplete(makeInstance({ projectName: 'cool-app', elapsedTime: '00:10:00' }))
+
+      expect(MockNotification).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: expect.stringContaining('Task complete'),
+          body: expect.stringContaining('cool-app')
+        })
+      )
+      expect(mockShow).toHaveBeenCalled()
+    })
+
+    it('should always use silent: true (sound handled by SoundPlayer)', () => {
+      settings.notifications.onTaskComplete = true
+      settings.notifications.doNotDisturb = false
+      settings.notifications.sound = true
+
+      manager.notifyTaskComplete(makeInstance())
+
+      expect(MockNotification).toHaveBeenCalledWith(
+        expect.objectContaining({
+          silent: true
+        })
+      )
+    })
+
+    it('should NOT show notification when onTaskComplete is disabled', () => {
+      settings.notifications.onTaskComplete = false
+      manager.notifyTaskComplete(makeInstance())
+      expect(MockNotification).not.toHaveBeenCalled()
+    })
+
+    it('should NOT show notification when doNotDisturb is enabled', () => {
+      settings.notifications.onTaskComplete = true
+      settings.notifications.doNotDisturb = true
+      manager.notifyTaskComplete(makeInstance())
+      expect(MockNotification).not.toHaveBeenCalled()
+    })
+
+    it('should include elapsed time in notification body', () => {
+      settings.notifications.onTaskComplete = true
+      settings.notifications.doNotDisturb = false
+
+      manager.notifyTaskComplete(makeInstance({ elapsedTime: '01:23:45' }))
+
+      expect(MockNotification).toHaveBeenCalledWith(
+        expect.objectContaining({
+          body: expect.stringContaining('01:23:45')
+        })
+      )
+    })
+  })
+
+  describe('task complete vs idle deduplication', () => {
+    it('notifyTaskComplete and notifyIdle are independent methods', () => {
+      // Both can be called, but the main process logic should only call one
+      settings.notifications.onTaskComplete = true
+      settings.notifications.onIdle = true
+      settings.notifications.doNotDisturb = false
+
+      manager.notifyTaskComplete(makeInstance())
+      expect(mockShow).toHaveBeenCalledTimes(1)
+
+      vi.clearAllMocks()
+
+      manager.notifyIdle(makeInstance())
+      expect(mockShow).toHaveBeenCalledTimes(1)
+    })
+  })
+
   describe('notifyIdle', () => {
     it('should show notification when onIdle is enabled', () => {
       settings.notifications.onIdle = true

@@ -9,6 +9,20 @@ export class NotificationManager {
     this.getSettings = settingsGetter
   }
 
+  notifyTaskComplete(instance: ClaudeInstance): void {
+    const settings = this.getSettings()
+    if (!settings.notifications.onTaskComplete || settings.notifications.doNotDisturb) {
+      return
+    }
+
+    const notification = new Notification({
+      title: '\u2705 Task complete',
+      body: `${instance.projectName} \u2014 ran for ${instance.elapsedTime}`,
+      silent: true // Always silent — we handle sound separately via SoundPlayer
+    })
+    notification.show()
+  }
+
   notifyIdle(instance: ClaudeInstance): void {
     const settings = this.getSettings()
     if (!settings.notifications.onIdle || settings.notifications.doNotDisturb) {

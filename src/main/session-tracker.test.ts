@@ -226,6 +226,156 @@ describe('SessionTracker', () => {
     })
   })
 
+  describe('lastBecameIdleAt metadata', () => {
+    it('should stamp lastBecameIdleAt when active → idle', async () => {
+      const handler = vi.fn()
+      tracker.on('instance-status-changed', handler)
+
+      const activeInstance = makeInstance({ pid: 850, status: 'active' })
+      monitor._setPollResult([activeInstance])
+
+      tracker.start(1000)
+      await vi.advanceTimersByTimeAsync(1000)
+
+      // Now goes idle
+      const idleInstance = makeInstance({ pid: 850, status: 'idle' })
+      monitor._setPollResult([idleInstance])
+      await vi.advanceTimersByTimeAsync(1000)
+
+      expect(handler).toHaveBeenCalledTimes(1)
+      const changedInstance = handler.mock.calls[0][0].instance
+      expect(changedInstance.lastBecameIdleAt).toBeInstanceOf(Date)
+    })
+
+    it('should preserve lastBecameIdleAt across polls while idle', async () => {
+      const activeInstance = makeInstance({ pid: 860, status: 'active' })
+      monitor._setPollResult([activeInstance])
+
+      tracker.start(1000)
+      await vi.advanceTimersByTimeAsync(1000)
+
+      // Go idle
+      const idleInstance = makeInstance({ pid: 860, status: 'idle' })
+      monitor._setPollResult([idleInstance])
+      await vi.advanceTimersByTimeAsync(1000)
+
+      const firstIdleAt = tracker.getInstances()[0].lastBecameIdleAt
+
+      // Another poll while still idle
+      const stillIdle = makeInstance({ pid: 860, status: 'idle' })
+      monitor._setPollResult([stillIdle])
+      await vi.advanceTimersByTimeAsync(1000)
+
+      const preserved = tracker.getInstances()[0].lastBecameIdleAt
+      expect(preserved).toEqual(firstIdleAt)
+    })
+
+    it('should clear lastBecameIdleAt when instance goes back to active', async () => {
+      const activeInstance = makeInstance({ pid: 870, status: 'active' })
+      monitor._setPollResult([activeInstance])
+
+      tracker.start(1000)
+      await vi.advanceTimersByTimeAsync(1000)
+
+      // Go idle
+      monitor._setPollResult([makeInstance({ pid: 870, status: 'idle' })])
+      await vi.advanceTimersByTimeAsync(1000)
+
+      expect(tracker.getInstances()[0].lastBecameIdleAt).toBeDefined()
+
+      // Go back to active
+      monitor._setPollResult([makeInstance({ pid: 870, status: 'active' })])
+      await vi.advanceTimersByTimeAsync(1000)
+
+      expect(tracker.getInstances()[0].lastBecameIdleAt).toBeUndefined()
+    })
+
+    it('should fire status-changed on each active→idle transition (rapid flapping)', async () => {
+      const handler = vi.fn()
+      tracker.on('instance-status-changed', handler)
+
+      tracker.start(1000)
+
+      // active
+      monitor._setPollResult([makeInstance({ pid: 880, status: 'active' })])
+      await vi.advanceTimersByTimeAsync(1000)
+
+      // idle (1st)
+      monitor._setPollResult([makeInstance({ pid: 880, status: 'idle' })])
+      await vi.advanceTimersByTimeAsync(1000)
+
+      // active again
+      monitor._setPollResult([makeInstance({ pid: 880, status: 'active' })])
+      await vi.advanceTimersByTimeAsync(1000)
+
+      // idle (2nd)
+      monitor._setPollResult([makeInstance({ pid: 880, status: 'idle' })])
+      await vi.advanceTimersByTimeAsync(1000)
+
+      const taskCompletes = handler.mock.calls.filter(
+        (c) => c[0].previousStatus === 'active' && c[0].instance.status === 'idle'
+      )
+      expect(taskCompletes).toHaveLength(2)
+    })
+
+    it('should NOT stamp lastBecameIdleAt for instance that starts idle', async () => {
+      const idleInstance = makeInstance({ pid: 890, status: 'idle' })
+      monitor._setPollResult([idleInstance])
+
+      tracker.start(1000)
+      await vi.advanceTimersByTimeAsync(1000)
+
+      expect(tracker.getInstances()[0].lastBecameIdleAt).toBeUndefined()
+    })
+  })
+
+  describe('recentlyCompleted stats', () => {
+    it('should count recently completed instances in stats', async () => {
+      const activeInstance = makeInstance({ pid: 900, status: 'active' })
+      monitor._setPollResult([activeInstance])
+
+      tracker.start(1000)
+      await vi.advanceTimersByTimeAsync(1000)
+
+      // Go idle (task complete)
+      monitor._setPollResult([makeInstance({ pid: 900, status: 'idle' })])
+      await vi.advanceTimersByTimeAsync(1000)
+
+      const stats = tracker.getStats()
+      expect(stats.recentlyCompleted).toBe(1)
+    })
+
+    it('should not count instances idle without lastBecameIdleAt', async () => {
+      // Instance that starts idle (no transition)
+      monitor._setPollResult([makeInstance({ pid: 910, status: 'idle' })])
+
+      tracker.start(1000)
+      await vi.advanceTimersByTimeAsync(1000)
+
+      const stats = tracker.getStats()
+      expect(stats.recentlyCompleted).toBe(0)
+    })
+
+    it('should expire recentlyCompleted after 10 minutes', async () => {
+      const activeInstance = makeInstance({ pid: 920, status: 'active' })
+      monitor._setPollResult([activeInstance])
+
+      tracker.start(1000)
+      await vi.advanceTimersByTimeAsync(1000)
+
+      // Go idle
+      monitor._setPollResult([makeInstance({ pid: 920, status: 'idle' })])
+      await vi.advanceTimersByTimeAsync(1000)
+
+      expect(tracker.getStats().recentlyCompleted).toBe(1)
+
+      // Advance 11 minutes
+      await vi.advanceTimersByTimeAsync(11 * 60 * 1000)
+
+      expect(tracker.getStats().recentlyCompleted).toBe(0)
+    })
+  })
+
   describe('history limits', () => {
     it('should respect maxHistoryEntries', async () => {
       // maxHistoryEntries is 5

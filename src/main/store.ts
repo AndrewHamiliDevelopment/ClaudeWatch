@@ -16,7 +16,15 @@ export class SettingsStore {
   }
 
   getSettings(): AppSettings {
-    return this.store.get('settings', DEFAULT_SETTINGS) as AppSettings
+    const stored = this.store.get('settings', DEFAULT_SETTINGS) as AppSettings
+    // Ensure new notification fields exist for users upgrading from older versions
+    if (stored.notifications.onTaskComplete === undefined) {
+      stored.notifications.onTaskComplete = DEFAULT_SETTINGS.notifications.onTaskComplete
+    }
+    if (stored.notifications.pingSound === undefined) {
+      stored.notifications.pingSound = DEFAULT_SETTINGS.notifications.pingSound
+    }
+    return stored
   }
 
   setSettings(partial: Partial<AppSettings>): AppSettings {
