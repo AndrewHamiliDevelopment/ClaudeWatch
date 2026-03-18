@@ -9,6 +9,7 @@ files:
   - '!electron.vite.config.*'
   - '!{.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc,tsconfig*.json,vitest.config.*}'
   - '!{*.md,*.txt}'
+afterPack: scripts/afterSign.js
 mac:
   artifactName: '${name}-${version}-${arch}.${ext}'
   target:
@@ -16,10 +17,11 @@ mac:
       arch:
         - universal
   entitlementsInherit: build/entitlements.mac.plist
-  x64ArchFiles: Contents/PlugIns/**/*
   extraFiles:
     - from: build/widget/ClaudeWatchWidgetExtension.appex
       to: PlugIns/ClaudeWatchWidgetExtension.appex
+    - from: resources/sounds
+      to: sounds
 win:
   artifactName: '${name}-${version}-setup.${ext}'
   target:
@@ -34,3 +36,7 @@ linux:
   target:
     - AppImage
   category: Utility
+publish:
+  provider: github
+  owner: theangeloumali
+  repo: ClaudeWatch

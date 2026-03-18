@@ -12,13 +12,18 @@
     "build:widget": "bash scripts/build-widget.sh",
     "build:mac": "npm run build && npm run build:widget && electron-builder --mac",
     "build:mac:signed": "npm run build && SIGN=true UNIVERSAL=true npm run build:widget && electron-builder --mac",
+    "publish:mac": "npm run build:mac -- --publish always",
+    "publish:mac:only": "electron-builder --mac --publish always --prepackaged dist/mac-universal/ClaudeWatch.app",
     "build:win": "npm run build && electron-builder --win",
     "build:linux": "npm run build && electron-builder --linux",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint . --ext .ts,.tsx",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "release:patch": "npm version patch && git push --follow-tags",
+    "release:minor": "npm version minor && git push --follow-tags",
+    "release:major": "npm version major && git push --follow-tags"
   },
   "keywords": [
     "electron",

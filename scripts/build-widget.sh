@@ -29,29 +29,19 @@ BUILD_ARGS=(
   -destination "platform=macOS"
 )
 
-if [ "$SIGN" = "true" ]; then
-  echo "    Code signing enabled (Team ID: $TEAM_ID)"
-  BUILD_ARGS+=(
-    -allowProvisioningUpdates
-    "DEVELOPMENT_TEAM=$TEAM_ID"
-    "CODE_SIGN_STYLE=Automatic"
-  )
-else
-  echo "    Code signing disabled (dev build)"
-  BUILD_ARGS+=(
-    "CODE_SIGNING_REQUIRED=NO"
-    "CODE_SIGNING_ALLOWED=NO"
-    "CODE_SIGN_IDENTITY=-"
-  )
-fi
+# Always build unsigned — electron-builder handles signing for the final bundle.
+# The .appex gets re-signed with its own entitlements via afterPack hook.
+echo "    Building unsigned (electron-builder will sign the final bundle)"
+BUILD_ARGS+=(
+  "CODE_SIGNING_REQUIRED=NO"
+  "CODE_SIGNING_ALLOWED=NO"
+  "CODE_SIGN_IDENTITY=-"
+)
 
-# Build universal binary if requested
-if [ "${UNIVERSAL:-false}" = "true" ]; then
-  echo "    Building universal binary (arm64 + x86_64)"
-  BUILD_ARGS+=("ONLY_ACTIVE_ARCH=NO")
-else
-  BUILD_ARGS+=("ONLY_ACTIVE_ARCH=YES")
-fi
+# Always build universal binary — electron-builder creates a universal app
+# and needs both arm64 + x86_64 slices for the lipo merge step
+echo "    Building universal binary (arm64 + x86_64)"
+BUILD_ARGS+=("ONLY_ACTIVE_ARCH=NO")
 
 xcodebuild "${BUILD_ARGS[@]}" 2>&1 | tail -5
 
