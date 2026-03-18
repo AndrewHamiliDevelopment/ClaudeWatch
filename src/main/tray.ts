@@ -3,6 +3,7 @@ import {
   BrowserWindow,
   Menu,
   nativeImage,
+  type NativeImage,
   screen,
   MenuItemConstructorOptions
 } from 'electron'
@@ -55,9 +56,9 @@ export class TrayManager {
   }
 
   private createTray(): void {
-    const icon = nativeImage.createEmpty()
+    const icon = this.buildTrayImage(0, false)
     this.tray = new Tray(icon)
-    this.tray.setTitle('\u25CF 0')
+    this.tray.setTitle('\u25CB 0')
     this.tray.setToolTip('ClaudeWatch')
 
     // Hover → show popover
@@ -74,6 +75,31 @@ export class TrayManager {
     this.tray.on('right-click', () => {
       this.showContextMenu()
     })
+  }
+
+  private buildTrayImage(activeCount: number, is2x: boolean): NativeImage {
+    const size = 18
+    const ringStroke = is2x ? 2.3 : 1.9
+
+    const content =
+      activeCount > 0
+        ? '<circle cx="9" cy="9" r="5" fill="black" />'
+        : `<circle cx="9" cy="9" r="5" fill="none" stroke="black" stroke-width="${ringStroke}" /><rect x="6.4" y="8.2" width="5.2" height="1.6" rx="0.8" fill="black" />`
+
+    const boostBadge = is2x
+      ? '<path d="M13.8 2.4L11.5 6h2l-1.1 3.6 3.1-4.1h-2.1l0.4-3.1z" fill="black" />'
+      : ''
+
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 18 18">${content}${boostBadge}</svg>`
+    const image = nativeImage.createFromDataURL(
+      `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`
+    )
+
+    if (process.platform === 'darwin') {
+      image.setTemplateImage(true)
+    }
+
+    return image
   }
 
   private createPopover(): void {
@@ -233,8 +259,15 @@ export class TrayManager {
   private updateTrayTitle(): void {
     if (!this.tray) return
 
+    this.tray.setImage(this.buildTrayImage(this.stats.active, Boolean(this.promoStatus?.is2x)))
+
     const prefix = this.promoStatus?.is2x ? '2x ' : ''
-    this.tray.setTitle(`${prefix}\u25CF ${this.stats.active}`)
+    if (this.stats.active > 0) {
+      this.tray.setTitle(`${prefix}\u25CF ${this.stats.active}`)
+      return
+    }
+
+    this.tray.setTitle(`${prefix}\u25CB 0`)
   }
 
   getPopoverWindow(): BrowserWindow | null {
