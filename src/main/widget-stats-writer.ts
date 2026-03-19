@@ -6,6 +6,20 @@ import type { ClaudeInstance, InstanceUpdate, UsageStats, PromoStatus } from '..
 
 const APP_GROUP_ID = 'group.com.zkidzdev.claudewatch'
 
+/**
+ * Known widget extension bundle IDs whose sandbox containers need stats.json.
+ * When macOS sandboxes a WidgetKit extension, it redirects ALL file reads through
+ * ~/Library/Containers/{bundleID}/Data/. So the widget's Strategy 3 (manual path)
+ * looks at ~/Library/Containers/{bundleID}/Data/Library/Group Containers/{groupID}/stats.json
+ * instead of ~/Library/Group Containers/{groupID}/stats.json.
+ *
+ * We write stats.json into each sandbox container so the widget can find it.
+ */
+const WIDGET_BUNDLE_IDS = [
+  'com.zkidzdev.claudewatch.widget',
+  'com.zkidzdev.claudewatch.host.widget'
+]
+
 export interface WidgetInstanceData {
   pid: number
   projectName: string
@@ -48,6 +62,10 @@ export class WidgetStatsWriter {
   private containerPath: string
   private statsPath: string
   private containerReady = false
+  private writeChain: Promise<void> = Promise.resolve()
+  private tempFileCounter = 0
+  private lastReloadTime = 0
+  private static readonly RELOAD_THROTTLE_MS = 10_000 // Throttle to at most once per 10s
 
   constructor() {
     this.containerPath = join(homedir(), 'Library/Group Containers', APP_GROUP_ID)
@@ -78,85 +96,138 @@ export class WidgetStatsWriter {
     usageStats?: UsageStats | null,
     promoStatus?: PromoStatus | null
   ): Promise<void> {
-    await this.ensureContainer()
+    this.writeChain = this.writeChain
+      .catch(() => undefined)
+      .then(async () => {
+        await this.ensureContainer()
 
-    const usage: WidgetUsageData | null = usageStats?.dataAvailable
-      ? {
-          totalCostUSD: usageStats.totalCostUSD,
-          totalInputTokens: usageStats.totalInputTokens,
-          totalOutputTokens: usageStats.totalOutputTokens,
-          totalCacheReadTokens: usageStats.totalCacheReadTokens,
-          dataAvailable: true
+        const usage: WidgetUsageData | null = usageStats?.dataAvailable
+          ? {
+              totalCostUSD: usageStats.totalCostUSD,
+              totalInputTokens: usageStats.totalInputTokens,
+              totalOutputTokens: usageStats.totalOutputTokens,
+              totalCacheReadTokens: usageStats.totalCacheReadTokens,
+              dataAvailable: true
+            }
+          : null
+
+        const promo: WidgetPromoData | null = promoStatus?.promoActive
+          ? {
+              is2x: promoStatus.is2x,
+              promoActive: promoStatus.promoActive,
+              expiresInSeconds: promoStatus.expiresInSeconds,
+              promoPeriod: promoStatus.promoPeriod
+            }
+          : null
+
+        const payload: WidgetStatsPayload = {
+          updatedAt: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
+          stats: {
+            total: stats.total,
+            active: stats.active,
+            idle: stats.idle,
+            stale: stats.stale,
+            exited: stats.exited
+          },
+          instances: instances
+            .filter((i) => i.status !== 'exited')
+            .sort((a, b) => {
+              // Active first, then idle
+              if (a.status === 'active' && b.status !== 'active') return -1
+              if (a.status !== 'active' && b.status === 'active') return 1
+              return 0
+            })
+            .map((i) => ({
+              pid: i.pid,
+              projectName: i.projectName,
+              status: i.status,
+              cpuPercent: i.cpuPercent,
+              memPercent: i.memPercent,
+              elapsedSeconds: i.elapsedSeconds
+            })),
+          usage,
+          promo
         }
-      : null
 
-    const promo: WidgetPromoData | null = promoStatus?.promoActive
-      ? {
-          is2x: promoStatus.is2x,
-          promoActive: promoStatus.promoActive,
-          expiresInSeconds: promoStatus.expiresInSeconds,
-          promoPeriod: promoStatus.promoPeriod
-        }
-      : null
+        const tmpPath = join(
+          this.containerPath,
+          `.stats-${process.pid}-${this.tempFileCounter++}.tmp`
+        )
+        const jsonString = JSON.stringify(payload, null, 2)
+        await writeFile(tmpPath, jsonString, 'utf-8')
+        await rename(tmpPath, this.statsPath)
 
-    const payload: WidgetStatsPayload = {
-      updatedAt: new Date().toISOString(),
-      stats: {
-        total: stats.total,
-        active: stats.active,
-        idle: stats.idle,
-        stale: stats.stale,
-        exited: stats.exited
-      },
-      instances: instances
-        .filter((i) => i.status !== 'exited')
-        .sort((a, b) => {
-          // Active first, then idle
-          if (a.status === 'active' && b.status !== 'active') return -1
-          if (a.status !== 'active' && b.status === 'active') return 1
-          return 0
-        })
-        .map((i) => ({
-          pid: i.pid,
-          projectName: i.projectName,
-          status: i.status,
-          cpuPercent: i.cpuPercent,
-          memPercent: i.memPercent,
-          elapsedSeconds: i.elapsedSeconds
-        })),
-      usage,
-      promo
-    }
+        // Replicate stats.json into each known widget extension's sandbox container.
+        // Sandboxed WidgetKit extensions can only read files inside their own container,
+        // so we write directly to ~/Library/Containers/{bundleID}/Data/Library/Group Containers/{groupID}/
+        await this.replicateToSandboxContainers(jsonString)
 
-    // Atomic write: temp file in same directory to avoid cross-filesystem rename failures
-    const tmpPath = join(this.containerPath, `.stats-${process.pid}.tmp`)
-    const jsonString = JSON.stringify(payload, null, 2)
-    await writeFile(tmpPath, jsonString, 'utf-8')
-    await rename(tmpPath, this.statsPath)
+        // Signal WidgetKit to reload timelines via the host app
+        this.triggerWidgetReload()
+      })
 
-    // Also write to UserDefaults shared suite as a fallback for sandboxed widget
-    this.writeToUserDefaults(jsonString)
+    return this.writeChain
   }
 
   /**
-   * Write JSON payload to UserDefaults shared suite via `defaults write`.
-   * Fire-and-forget — failures are logged but don't block the file write.
-   * Uses execFile (not exec) to avoid shell injection.
+   * Signal the ClaudeWatchHost app to call WidgetCenter.shared.reloadAllTimelines().
+   * Throttled to avoid hammering WidgetKit — at most once per 10 seconds.
+   * Fire-and-forget — failures are silently ignored.
    */
-  writeToUserDefaults(jsonString: string): void {
-    const child = execFile(
-      'defaults',
-      ['write', APP_GROUP_ID, 'statsJson', '-string', jsonString],
-      { timeout: 5000 },
-      (error) => {
-        if (error) {
-          console.warn('[WidgetStatsWriter] defaults write failed:', error.message)
+  private triggerWidgetReload(): void {
+    const now = Date.now()
+    if (now - this.lastReloadTime < WidgetStatsWriter.RELOAD_THROTTLE_MS) return
+    this.lastReloadTime = now
+
+    // Launch the host app in background with --reload-widget argument.
+    // `open -g` opens without bringing to foreground, `--args` passes CLI arguments.
+    execFile(
+      'open',
+      ['-g', '-b', 'com.zkidzdev.claudewatch.host', '--args', '--reload-widget'],
+      (err) => {
+        // Silently ignore — host app may not be installed
+        if (err) {
+          // Not fatal — widget will still refresh on its 1-minute timeline
         }
       }
     )
+  }
 
-    // Ensure child process doesn't prevent app exit
-    child.unref?.()
+  /**
+   * Write stats.json into each known widget extension's sandbox container.
+   *
+   * When macOS sandboxes a WidgetKit extension, ALL file system access is redirected
+   * through ~/Library/Containers/{bundleID}/Data/. So when the widget calls
+   * FileManager.homeDirectoryForCurrentUser, it gets:
+   *   ~/Library/Containers/com.zkidzdev.claudewatch.widget/Data/
+   * And its Strategy 3 (manual path) resolves to:
+   *   ~/Library/Containers/{bundleID}/Data/Library/Group Containers/{groupID}/stats.json
+   *
+   * The Electron app (not sandboxed) can write to these paths directly.
+   * Fire-and-forget — failures don't block the primary write.
+   */
+  private async replicateToSandboxContainers(jsonString: string): Promise<void> {
+    const containersDir = join(homedir(), 'Library', 'Containers')
+
+    for (const bundleId of WIDGET_BUNDLE_IDS) {
+      const sandboxGroupDir = join(
+        containersDir,
+        bundleId,
+        'Data',
+        'Library',
+        'Group Containers',
+        APP_GROUP_ID
+      )
+      try {
+        await mkdir(sandboxGroupDir, { recursive: true })
+        const statsPath = join(sandboxGroupDir, 'stats.json')
+        const tmpPath = join(sandboxGroupDir, `.stats-replica-${process.pid}.tmp`)
+        await writeFile(tmpPath, jsonString, 'utf-8')
+        await rename(tmpPath, statsPath)
+      } catch {
+        // Sandbox container may not exist (widget not installed) — non-fatal
+      }
+    }
   }
 }
 

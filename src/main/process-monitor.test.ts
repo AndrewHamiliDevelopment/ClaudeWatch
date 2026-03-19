@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { ProcessMonitor } from './process-monitor'
+import { ProcessMonitor, detectSessionType } from './process-monitor'
 
 // We mock child_process used by platform detectors
 vi.mock('child_process', () => ({
@@ -247,6 +247,25 @@ describe('ProcessMonitor', () => {
     })
   })
 
+  describe('default threshold', () => {
+    it('should treat 2.0% CPU as idle with default threshold (3.0%)', async () => {
+      const psLine = '10010 S     2.0  1.0       01:00 ttys001  /usr/local/bin/claude'
+      let callCount = 0
+      mockExecFile.mockImplementation(((_bin: string, _args: unknown, cb: unknown) => {
+        callCount++
+        if (callCount === 1) {
+          ;(cb as Function)(null, `${PS_HEADER}\n${psLine}\n`, '')
+        } else {
+          ;(cb as Function)(null, 'p10010\nn/tmp\n', '')
+        }
+      }) as typeof execFile)
+
+      const monitor = new ProcessMonitor()
+      const instances = await monitor.poll()
+      expect(instances[0].status).toBe('idle')
+    })
+  })
+
   describe('flag parsing', () => {
     it('should parse --resume with session ID', async () => {
       const psLine =
@@ -302,5 +321,84 @@ describe('ProcessMonitor', () => {
       expect(instances[0].flags).toEqual([])
       expect(instances[0].sessionId).toBeUndefined()
     })
+  })
+})
+
+describe('terminal enrichment', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('should enrich poll results with terminalApp and terminalType from resolver', async () => {
+    let callCount = 0
+    mockExecFile.mockImplementation(((_bin: string, _args: unknown, cb: unknown) => {
+      callCount++
+      if (callCount === 1) {
+        ;(cb as Function)(null, `${PS_HEADER}\n${PS_LINE_ACTIVE}\n`, '')
+      } else {
+        ;(cb as Function)(null, LSOF_OUTPUT_12345, '')
+      }
+    }) as typeof execFile)
+
+    const mockResolver = {
+      resolve: vi.fn().mockResolvedValue({
+        terminalApp: 'iTerm2',
+        terminalType: 'iterm2'
+      })
+    }
+
+    const monitor = new ProcessMonitor({ terminalResolver: mockResolver as any })
+    const instances = await monitor.poll()
+
+    expect(instances).toHaveLength(1)
+    expect(mockResolver.resolve).toHaveBeenCalledWith(12345)
+    expect(instances[0].terminalApp).toBe('iTerm2')
+    expect(instances[0].terminalType).toBe('iterm2')
+  })
+
+  it('should leave terminalApp and terminalType undefined when no resolver is provided', async () => {
+    let callCount = 0
+    mockExecFile.mockImplementation(((_bin: string, _args: unknown, cb: unknown) => {
+      callCount++
+      if (callCount === 1) {
+        ;(cb as Function)(null, `${PS_HEADER}\n${PS_LINE_ACTIVE}\n`, '')
+      } else {
+        ;(cb as Function)(null, LSOF_OUTPUT_12345, '')
+      }
+    }) as typeof execFile)
+
+    const monitor = new ProcessMonitor()
+    const instances = await monitor.poll()
+
+    expect(instances).toHaveLength(1)
+    expect(instances[0].terminalApp).toBeUndefined()
+    expect(instances[0].terminalType).toBeUndefined()
+  })
+})
+
+describe('detectSessionType', () => {
+  it('should detect a normal CLI session', () => {
+    const command = '/usr/local/bin/claude --resume abc123'
+    const flags = ['--resume']
+    expect(detectSessionType(command, flags)).toBe('cli')
+  })
+
+  it('should detect a VS Code extension session', () => {
+    const command =
+      '/usr/local/bin/claude --output-format stream-json --permission-prompt-tool stdio'
+    const flags = ['--output-format', '--permission-prompt-tool']
+    expect(detectSessionType(command, flags)).toBe('vscode')
+  })
+
+  it('should detect a subagent session', () => {
+    const command = '/usr/local/bin/claude --output-format stream-json'
+    const flags = ['--output-format']
+    expect(detectSessionType(command, flags)).toBe('subagent')
+  })
+
+  it('should default to cli when no distinguishing flags are present', () => {
+    const command = '/usr/local/bin/claude'
+    const flags: string[] = []
+    expect(detectSessionType(command, flags)).toBe('cli')
   })
 })

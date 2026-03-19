@@ -262,6 +262,19 @@ describe('UsageStatsReader', () => {
     expect(win.webContents.send).toHaveBeenCalledTimes(2)
   })
 
+  it('notifies update listeners after a successful read', async () => {
+    mockReadFile.mockResolvedValue(JSON.stringify(validClaudeJson))
+
+    const reader = new UsageStatsReader([])
+    const listener = vi.fn()
+    reader.onUpdate(listener)
+
+    await reader.read()
+
+    expect(listener).toHaveBeenCalledTimes(1)
+    expect(listener).toHaveBeenCalledWith(expect.objectContaining({ dataAvailable: true }))
+  })
+
   it('handles projects with missing lastModelUsage gracefully', async () => {
     const data = {
       projects: {

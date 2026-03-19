@@ -19,11 +19,13 @@ mac:
     - target: zip
       arch:
         - universal
+  entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
   notarize: true
   extraFiles:
     - from: build/widget/ClaudeWatchWidgetExtension.appex
       to: PlugIns/ClaudeWatchWidgetExtension.appex
+  extraResources:
     - from: resources/sounds
       to: sounds
 win:

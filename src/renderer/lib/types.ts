@@ -1,3 +1,27 @@
+export type TerminalType =
+  | 'terminal-app'
+  | 'iterm2'
+  | 'warp'
+  | 'alacritty'
+  | 'kitty'
+  | 'wezterm'
+  | 'hyper'
+  | 'ghostty'
+  | 'vscode'
+  | 'cursor'
+  | 'tmux'
+  | 'screen'
+  | 'unknown'
+
+export type SessionType = 'cli' | 'vscode' | 'subagent'
+
+export interface TerminalInfo {
+  terminalApp: string
+  terminalType: TerminalType
+  terminalPid: number
+  multiplexer?: 'tmux' | 'screen'
+}
+
 export interface ClaudeInstance {
   pid: number
   tty: string
@@ -14,6 +38,9 @@ export interface ClaudeInstance {
   lastStatusChange?: Date
   lastBecameIdleAt?: Date
   lastActiveAt?: Date
+  terminalApp?: string
+  terminalType?: TerminalType
+  sessionType?: SessionType
 }
 
 export interface SessionHistoryEntry {
@@ -25,6 +52,9 @@ export interface SessionHistoryEntry {
   endedAt: Date
   durationSeconds: number
   flags: string[]
+  terminalApp?: string
+  terminalType?: TerminalType
+  sessionType?: SessionType
 }
 
 export interface AppSettings {
@@ -49,7 +79,7 @@ export interface AppSettings {
 
 export const DEFAULT_SETTINGS: AppSettings = {
   pollingIntervalMs: 3000,
-  cpuIdleThreshold: 1.0,
+  cpuIdleThreshold: 3.0,
   launchAtLogin: false,
   minimizeToTray: true,
   notifications: {

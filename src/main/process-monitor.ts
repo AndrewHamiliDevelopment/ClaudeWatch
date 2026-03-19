@@ -1,4 +1,4 @@
-import type { ClaudeInstance } from '../renderer/lib/types'
+import type { ClaudeInstance, SessionType } from '../renderer/lib/types'
 import { parseElapsedTime, getProjectName } from '../renderer/lib/utils'
 import type { PlatformDetector, RawProcessInfo } from './platform/darwin'
 import { DarwinDetector } from './platform/darwin'
@@ -66,13 +66,33 @@ export function getPlatformDetector(): PlatformDetector {
   return new DarwinDetector()
 }
 
+export function detectSessionType(command: string, flags: string[]): SessionType {
+  const hasOutputFormat = flags.includes('--output-format')
+  const hasPermPrompt = flags.includes('--permission-prompt-tool')
+  const hasStreamJson = command.includes('stream-json')
+
+  // VS Code extension: --output-format stream-json --permission-prompt-tool stdio
+  if (hasOutputFormat && hasPermPrompt && hasStreamJson) return 'vscode'
+
+  // Subagent: --output-format stream-json but no --permission-prompt-tool
+  if (hasOutputFormat && hasStreamJson && !hasPermPrompt) return 'subagent'
+
+  return 'cli'
+}
+
 export class ProcessMonitor {
   private detector: PlatformDetector
   private cpuIdleThreshold: number
+  private terminalResolver?: TerminalResolver
 
-  constructor(options?: { cpuIdleThreshold?: number; detector?: PlatformDetector }) {
-    this.cpuIdleThreshold = options?.cpuIdleThreshold ?? 1.0
+  constructor(options?: {
+    cpuIdleThreshold?: number
+    detector?: PlatformDetector
+    terminalResolver?: TerminalResolver
+  }) {
+    this.cpuIdleThreshold = options?.cpuIdleThreshold ?? 3.0
     this.detector = options?.detector ?? getPlatformDetector()
+    this.terminalResolver = options?.terminalResolver
   }
 
   async poll(): Promise<ClaudeInstance[]> {
@@ -109,8 +129,19 @@ export class ProcessMonitor {
         projectName,
         flags,
         sessionId,
-        startedAt: new Date(Date.now() - elapsedSeconds * 1000)
+        startedAt: new Date(Date.now() - elapsedSeconds * 1000),
+        sessionType: detectSessionType(proc.command, flags)
       })
+    }
+
+    if (this.terminalResolver) {
+      await Promise.all(
+        instances.map(async (instance) => {
+          const info = await this.terminalResolver!.resolve(instance.pid)
+          instance.terminalApp = info.terminalApp
+          instance.terminalType = info.terminalType
+        })
+      )
     }
 
     return instances

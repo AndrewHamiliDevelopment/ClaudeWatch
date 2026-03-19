@@ -35,10 +35,10 @@ export function InstanceCard({ instance }: InstanceCardProps) {
     }
   }, [instance.elapsedSeconds, instance.status, instance.pid])
 
-  const handleOpenWarp = (e: React.MouseEvent) => {
+  const handleOpenTerminal = (e: React.MouseEvent) => {
     e.stopPropagation()
     if (typeof window !== 'undefined' && window.api?.openTerminal) {
-      window.api.openTerminal(instance.projectPath)
+      window.api.openTerminal(instance.projectPath, instance.terminalType)
     }
   }
 
@@ -106,7 +106,7 @@ export function InstanceCard({ instance }: InstanceCardProps) {
               <span>PID: {instance.pid}</span>
             </div>
             <div>
-              <span>TTY: {instance.tty}</span>
+              <span>Terminal: {instance.terminalApp ?? instance.tty}</span>
             </div>
             {instance.sessionId && (
               <div className="truncate">
@@ -114,18 +114,25 @@ export function InstanceCard({ instance }: InstanceCardProps) {
               </div>
             )}
           </div>
+          {instance.sessionType && instance.sessionType !== 'cli' && (
+            <div className="mt-1">
+              <span className="inline-flex items-center rounded-full bg-accent/10 px-2 py-0.5 text-xs font-medium text-accent">
+                {instance.sessionType}
+              </span>
+            </div>
+          )}
           {instance.flags.length > 0 && (
             <div className="mt-2 text-text-tertiary">Flags: {instance.flags.join(' ')}</div>
           )}
           <div className="mt-3 flex justify-end">
             <button
               type="button"
-              onClick={handleOpenWarp}
+              onClick={handleOpenTerminal}
               className="inline-flex items-center gap-1.5 rounded-md bg-accent/10 px-3 py-1.5 text-xs font-medium text-accent transition-colors hover:bg-accent/20"
-              aria-label="Open in Warp terminal"
+              aria-label={`Open in ${instance.terminalApp ?? 'Terminal'}`}
             >
               <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-              Open in Warp
+              Open in {instance.terminalApp ?? 'Terminal'}
             </button>
           </div>
         </div>

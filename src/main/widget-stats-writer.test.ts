@@ -4,7 +4,6 @@ import type { ClaudeInstance, InstanceUpdate } from '../renderer/lib/types'
 import { readFile, rm, access } from 'fs/promises'
 import { join } from 'path'
 import { tmpdir } from 'os'
-import { execFile } from 'child_process'
 
 // Use a temp directory for tests instead of real App Group container
 const TEST_CONTAINER = join(tmpdir(), 'claudewatch-test-widget')
@@ -14,19 +13,6 @@ vi.mock('os', async () => {
   return {
     ...actual,
     homedir: vi.fn(() => join(tmpdir(), 'claudewatch-test-home'))
-  }
-})
-
-vi.mock('child_process', async () => {
-  const actual = await vi.importActual<typeof import('child_process')>('child_process')
-  return {
-    ...actual,
-    execFile: vi.fn(
-      (_cmd: string, _args: string[], _opts: unknown, cb?: (err: Error | null) => void) => {
-        if (cb) cb(null)
-        return { unref: vi.fn() }
-      }
-    )
   }
 })
 
@@ -52,7 +38,9 @@ function makeStats(overrides: Partial<InstanceUpdate['stats']> = {}): InstanceUp
     total: 3,
     active: 2,
     idle: 1,
+    stale: 0,
     exited: 0,
+    recentlyCompleted: 0,
     ...overrides
   }
 }
@@ -84,8 +72,9 @@ describe('WidgetStatsWriter', () => {
       const payload = JSON.parse(content)
 
       expect(payload.updatedAt).toBeDefined()
-      expect(new Date(payload.updatedAt).toISOString()).toBe(payload.updatedAt)
-      expect(payload.stats).toEqual({ total: 1, active: 1, idle: 0, exited: 0 })
+      expect(Number.isNaN(Date.parse(payload.updatedAt))).toBe(false)
+      expect(payload.updatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/)
+      expect(payload.stats).toEqual({ total: 1, active: 1, idle: 0, stale: 0, exited: 0 })
       expect(payload.instances).toHaveLength(1)
       expect(payload.instances[0]).toEqual({
         pid: 1234,
@@ -201,61 +190,44 @@ describe('WidgetStatsWriter', () => {
     })
   })
 
-  describe('writeToUserDefaults()', () => {
-    beforeEach(() => {
-      vi.mocked(execFile).mockClear()
-    })
-
-    it('should call defaults write after file write', async () => {
+  describe('sandbox container replication', () => {
+    it('should replicate stats.json to known widget sandbox containers', async () => {
       const instances = [makeInstance()]
       const stats = makeStats({ total: 1, active: 1, idle: 0 })
 
       await writer.write(instances, stats)
 
-      expect(execFile).toHaveBeenCalledTimes(1)
-      const [cmd, args] = vi.mocked(execFile).mock.calls[0] as [string, string[], unknown, unknown]
-      expect(cmd).toBe('defaults')
-      expect(args[0]).toBe('write')
-      expect(args[1]).toBe('group.com.zkidzdev.claudewatch')
-      expect(args[2]).toBe('statsJson')
-      expect(args[3]).toBe('-string')
-      // The 5th arg should be the JSON string
-      const jsonArg = args[4]
-      const parsed = JSON.parse(jsonArg)
-      expect(parsed.stats.total).toBe(1)
-    })
-
-    it('should not break file write if defaults write fails', async () => {
-      vi.mocked(execFile).mockImplementation(
-        (_cmd: string, _args: string[], _opts: unknown, cb?: (err: Error | null) => void) => {
-          if (cb) cb(new Error('defaults command not found'))
-          return { unref: vi.fn() } as unknown as ReturnType<typeof execFile>
-        }
+      // Check that stats.json was written to the sandbox container paths
+      const { homedir } = await import('os')
+      const home = homedir()
+      const sandboxPath = join(
+        home,
+        'Library',
+        'Containers',
+        'com.zkidzdev.claudewatch.widget',
+        'Data',
+        'Library',
+        'Group Containers',
+        'group.com.zkidzdev.claudewatch',
+        'stats.json'
       )
 
-      const instances = [makeInstance()]
-      const stats = makeStats({ total: 1, active: 1, idle: 0 })
-
-      // write() should still succeed (no thrown error)
-      await expect(writer.write(instances, stats)).resolves.not.toThrow()
-
-      // File should still be written
-      const content = await readFile(writer.getStatsPath(), 'utf-8')
+      const content = await readFile(sandboxPath, 'utf-8')
       const payload = JSON.parse(content)
       expect(payload.stats.total).toBe(1)
     })
 
-    it('should handle JSON with special characters', () => {
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-      const jsonWithQuotes = '{"project":"it\'s a test","status":"active"}'
+    it('should not block primary write if sandbox replication fails', async () => {
+      const instances = [makeInstance()]
+      const stats = makeStats({ total: 1, active: 1, idle: 0 })
 
-      writer.writeToUserDefaults(jsonWithQuotes)
+      // write() should succeed even if sandbox containers don't exist
+      await expect(writer.write(instances, stats)).resolves.not.toThrow()
 
-      expect(execFile).toHaveBeenCalledTimes(1)
-      const [, args] = vi.mocked(execFile).mock.calls[0] as [string, string[], unknown, unknown]
-      // execFile passes args as array elements, no shell escaping needed
-      expect(args[4]).toBe(jsonWithQuotes)
-      warnSpy.mockRestore()
+      // Primary file should still be written
+      const content = await readFile(writer.getStatsPath(), 'utf-8')
+      const payload = JSON.parse(content)
+      expect(payload.stats.total).toBe(1)
     })
   })
 })

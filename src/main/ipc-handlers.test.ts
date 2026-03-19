@@ -19,6 +19,10 @@ vi.mock('electron', () => ({
   BrowserWindow: vi.fn()
 }))
 
+vi.mock('./terminal-opener', () => ({
+  openTerminal: vi.fn().mockReturnValue({ success: true })
+}))
+
 import { setupIpcHandlers, forwardUpdatesToRenderer } from './ipc-handlers'
 import type { SessionTracker } from './session-tracker'
 import type { SettingsStore } from './store'
@@ -255,6 +259,29 @@ describe('setupIpcHandlers', () => {
 
       expect(promoChecker.getLastData).toHaveBeenCalledOnce()
       expect(result).toEqual(expect.objectContaining({ is2x: true, promoActive: true }))
+    })
+  })
+
+  describe('terminal:open', () => {
+    it('should return { success: false } for empty string path', () => {
+      const fakeEvent = {} as Electron.IpcMainInvokeEvent
+      const result = handlers['terminal:open'](fakeEvent, '')
+
+      expect(result).toEqual({ success: false })
+    })
+
+    it('should return { success: false } for relative path', () => {
+      const fakeEvent = {} as Electron.IpcMainInvokeEvent
+      const result = handlers['terminal:open'](fakeEvent, 'relative/path')
+
+      expect(result).toEqual({ success: false })
+    })
+
+    it('should return { success: false } for undefined/null path', () => {
+      const fakeEvent = {} as Electron.IpcMainInvokeEvent
+
+      expect(handlers['terminal:open'](fakeEvent, undefined)).toEqual({ success: false })
+      expect(handlers['terminal:open'](fakeEvent, null)).toEqual({ success: false })
     })
   })
 })

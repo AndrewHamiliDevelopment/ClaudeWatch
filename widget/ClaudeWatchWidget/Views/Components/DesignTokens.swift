@@ -1,4 +1,5 @@
 import SwiftUI
+import WidgetKit
 
 /// Design tokens matching the ClaudeWatch dark glassmorphism aesthetic.
 /// Translated from tailwind.config.ts color values.
@@ -31,5 +32,27 @@ enum WidgetColors {
         case "idle": return statusIdle
         default: return statusExited
         }
+    }
+
+    // MARK: - Rendering-mode-aware colors for widget focus/accent state
+
+    static func textPrimary(for mode: WidgetRenderingMode) -> Color {
+        mode == .accented ? .white : textPrimary
+    }
+
+    static func textSecondary(for mode: WidgetRenderingMode) -> Color {
+        mode == .accented ? .white.opacity(0.7) : textSecondary
+    }
+
+    static func textTertiary(for mode: WidgetRenderingMode) -> Color {
+        mode == .accented ? .white.opacity(0.5) : textTertiary
+    }
+
+    static func surfaceRaised(for mode: WidgetRenderingMode) -> Color {
+        mode == .accented ? .white.opacity(0.15) : surfaceRaised
+    }
+
+    static func statusColor(for status: String, mode: WidgetRenderingMode) -> Color {
+        mode == .accented ? .white : statusColor(for: status)
     }
 }

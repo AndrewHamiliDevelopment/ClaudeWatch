@@ -22,6 +22,9 @@ export default function App() {
         {currentView === 'history' && <SessionHistory />}
         {currentView === 'settings' && <Settings />}
       </main>
+      <footer className="shrink-0 border-t border-border py-1.5 text-center">
+        <span className="text-[10px] text-text-tertiary">by ZKidz Dev</span>
+      </footer>
     </div>
   )
 }
