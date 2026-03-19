@@ -7,6 +7,7 @@
 ## Table of Contents
 
 1. [Overview](#overview)
+   - [Screenshots](#screenshots)
 2. [Prerequisites](#prerequisites)
 3. [Quick Start](#quick-start)
 4. [Development Setup](#development-setup)
@@ -37,6 +38,20 @@ ClaudeWatch is a cross-platform desktop application that detects and monitors ru
 - **Session history** tracking completed Claude sessions
 - **Configurable notifications** for idle and exited instances
 - **Dark-themed UI** built with Tailwind CSS and Lucide icons
+
+### Screenshots
+
+**Dashboard** — Live stats, usage metrics, and instance list with filters:
+
+![Dashboard](docs/plans/ss-1.png)
+
+**Tray Popover** — Compact menu bar view with recent sessions:
+
+![Tray Popover](docs/plans/ss-2.png)
+
+**Error Dialog** — Native error reporting for main process exceptions:
+
+![Error Dialog](docs/plans/ss-3.png)
 
 ### How It Works
 
