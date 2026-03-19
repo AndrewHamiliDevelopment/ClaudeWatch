@@ -49,6 +49,7 @@ export class UsageStatsReader {
   private getWindows: (() => BrowserWindow | null)[]
   private interval: NodeJS.Timeout | null = null
   private lastData: UsageStats | null = null
+  private listeners = new Set<(data: UsageStats) => void>()
   private filePath: string
   private cachePath: string
   private weeklyTokenTarget = 5_000_000
@@ -130,6 +131,13 @@ export class UsageStatsReader {
     return this.lastData
   }
 
+  onUpdate(listener: (data: UsageStats) => void): () => void {
+    this.listeners.add(listener)
+    return () => {
+      this.listeners.delete(listener)
+    }
+  }
+
   startPolling(intervalMs = 30_000): void {
     this.read()
     this.interval = setInterval(() => this.read(), intervalMs)
@@ -202,6 +210,10 @@ export class UsageStatsReader {
   }
 
   private send(data: UsageStats): void {
+    for (const listener of this.listeners) {
+      listener(data)
+    }
+
     for (const getWin of this.getWindows) {
       const win = getWin()
       if (win && !win.isDestroyed()) {
