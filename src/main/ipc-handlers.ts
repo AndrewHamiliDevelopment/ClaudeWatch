@@ -1,5 +1,5 @@
 import { ipcMain, BrowserWindow, app } from 'electron'
-import { execFile } from 'child_process'
+import { openTerminal } from './terminal-opener'
 import type { SessionTracker } from './session-tracker'
 import type { SettingsStore } from './store'
 import type { AutoUpdaterManager } from './auto-updater'
@@ -123,46 +123,18 @@ export function setupIpcHandlers(options: IpcHandlerOptions): void {
     return promoChecker?.getLastData() ?? null
   })
 
-  ipcMain.handle('terminal:open', (_event: Electron.IpcMainInvokeEvent, projectPath: string) => {
-    // Try to find an existing Warp window/tab whose title contains the project path.
-    // If found, focus it. Otherwise, open a new tab and cd to the project directory.
-    // Escape backslashes and double quotes for safe AppleScript string embedding.
-    const escaped = projectPath.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
-
-    const script = `
-      tell application "Warp"
-        activate
-      end tell
-
-      delay 0.3
-
-      tell application "System Events"
-        tell process "Warp"
-          set found to false
-          repeat with w in windows
-            set winName to name of w
-            if winName contains "${escaped}" then
-              perform action "AXRaise" of w
-              set found to true
-              exit repeat
-            end if
-          end repeat
-          if not found then
-            -- Open a new tab and cd to the project path
-            keystroke "t" using command down
-            delay 0.3
-            keystroke "cd \\"${escaped}\\"" & return
-          end if
-        end tell
-      end tell
-    `
-
-    return new Promise<{ success: boolean }>((resolve) => {
-      execFile('osascript', ['-e', script], { timeout: 10_000 }, (error) => {
-        resolve({ success: !error })
-      })
-    })
-  })
+  ipcMain.handle(
+    'terminal:open',
+    (_event: Electron.IpcMainInvokeEvent, projectPath: string, terminalType?: string) => {
+      if (!projectPath || typeof projectPath !== 'string' || !projectPath.startsWith('/')) {
+        return { success: false }
+      }
+      return openTerminal(
+        projectPath,
+        terminalType as import('../renderer/lib/types').TerminalType | undefined
+      )
+    }
+  )
 }
 
 export function forwardUpdatesToRenderer(

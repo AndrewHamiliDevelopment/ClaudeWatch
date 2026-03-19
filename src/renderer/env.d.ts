@@ -8,7 +8,7 @@ interface ElectronAPI {
   clearHistory: () => Promise<void>
   openDashboard: () => Promise<void>
   quit: () => Promise<void>
-  openTerminal: (path: string) => Promise<{ success: boolean }>
+  openTerminal: (path: string, terminalType?: string) => Promise<{ success: boolean }>
   onInstancesUpdate: (callback: (data: import('./lib/types').InstanceUpdate) => void) => () => void
   checkForUpdates: () => Promise<void>
   downloadUpdate: () => Promise<void>
