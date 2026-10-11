@@ -38,7 +38,17 @@ it('reads complete session metadata beyond 64 KB and bounds oversized headers', 
 it('refuses to open credential stores, whatever a caller asks for', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'bridge-guard-'))
   directories.push(directory)
-  for (const name of ['.credentials.json', 'auth.json', 'orca-runtime.json', '42.key']) {
+  for (const name of [
+    '.credentials.json',
+    'auth.json',
+    'orca-runtime.json',
+    '42.key',
+    'work-auth.json',
+    '.orca-managed-claude-auth',
+    'orca-e2ee-keypair.json',
+    'orca-secret-protection.json',
+    'Cookies'
+  ]) {
     const path = join(directory, name)
     await writeFile(path, 'DO_NOT_READ')
     await expect(systemIo.readText(path)).rejects.toThrow('forbidden')

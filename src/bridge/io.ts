@@ -82,7 +82,8 @@ async function readFrom(path: string, offset: number, maxBytes: number): Promise
 
 // Enforced here, at the only door to the disk and to subprocesses, so no source can
 // reach a credential store or a shell by mistake.
-const CREDENTIAL_STORE = /(^|\/)(\.credentials\.json|auth\.json|orca-runtime\.json)$|\.key$/i
+const CREDENTIAL_STORE =
+  /(^|\/)(\.credentials\.json|[\w.-]*auth\.json|\.orca-managed-claude-auth|orca-(runtime|e2ee-keypair|secret-protection)\.json|Cookies)$|\.key$/i
 // The app-bundle copy, which the main process runs too; Homebrew's is only a symlink to it.
 export const ORCA_CLI = '/Applications/Orca.app/Contents/Resources/bin/orca'
 const PROGRAMS = new Set(['/bin/ps', '/usr/sbin/lsof', ORCA_CLI])
