@@ -115,6 +115,10 @@ const pairwise = (
   cacheRead: combine(a.cacheRead, b.cacheRead)
 })
 
+// A Codex session can be resumed long after it went quiet, and forgetting its total would
+// count the whole of it again.
+const CODEX_RETENTION_MS = 30 * 24 * 60 * 60 * 1000
+
 // A Codex session names its account and keeps one running total, so its growth since the
 // highest total already counted goes to that account, exactly. True when the ledger changed.
 export function countCodexSessions(
@@ -123,13 +127,16 @@ export function countCodexSessions(
   now: number
 ): boolean {
   let hasChanged = false
+  // A thread begun before this could hold tokens the ledger never saw being spent.
+  const watchedSinceMs = Math.max(state.trackingSinceMs, now - CODEX_RETENTION_MS)
   for (const session of sessions) {
     if (session.provider !== 'codex' || !session.usage) continue
     const total = session.usage.own
+    // By the thread's own age, not its process's: a resumed thread runs in a new process and
+    // still carries its whole history. One of unknown age starts from what it already spent.
+    const isWholeThreadWatched = (session.threadStartedAtMs ?? -Infinity) >= watchedSinceMs
     const counted =
-      state.codexSessions.get(session.key)?.counts ??
-      // A session older than tracking starts from what it had already spent.
-      (session.startedAtMs < state.trackingSinceMs ? total : zeroCounts())
+      state.codexSessions.get(session.key)?.counts ?? (isWholeThreadWatched ? zeroCounts() : total)
     const added = pairwise(total, counted, (current, before) => Math.max(0, current - before))
     const hasGrown = Object.values(added).some((amount) => amount > 0)
     if (!hasGrown && state.codexSessions.has(session.key)) continue
@@ -153,10 +160,6 @@ export function countCodexSessions(
   }
   return hasChanged
 }
-
-// A Codex session can be resumed long after it went quiet, and forgetting its total would
-// count the whole of it again.
-const CODEX_RETENTION_MS = 30 * 24 * 60 * 60 * 1000
 
 export function prune(state: LedgerState, now: number): void {
   for (const [id, atMs] of state.files) {

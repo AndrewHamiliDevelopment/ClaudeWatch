@@ -49,19 +49,30 @@ describe('what the Office is given', () => {
         key: ADA,
         provider: 'claude',
         label: "a…'s Organization",
-        plan: 'default_claude_max_20x',
+        plan: 'Max 20x',
         isActive: true
       },
       {
         key: GRACE,
         provider: 'claude',
         label: 'g… (work)',
-        plan: 'default_claude_max_20x',
+        plan: 'Max 20x',
         isActive: false
       },
       { key: CODEX, provider: 'codex', label: 'Codex account cccc', plan: null, isActive: true }
     ])
     expect(JSON.stringify(accounts)).not.toMatch(/@|example|org-ada/)
+  })
+
+  it('names a plan in plain words, and a plan it does not know by a tidied form of its id', () => {
+    const plans = officeAccounts(
+      ledger(
+        record(ADA, { plan: 'default_claude_max_5x' }),
+        record(GRACE, { plan: 'default_raven' }),
+        record(CODEX, { plan: null })
+      )
+    ).map((account) => account.plan)
+    expect(plans).toEqual(['Max 5x', 'Raven', null])
   })
 
   it('prefers the name the owner gave over the organisation', () => {
@@ -196,5 +207,28 @@ describe('what the dashboard is given', () => {
       sources: ['default-login'],
       label: "a…'s Organization"
     })
+  })
+})
+
+describe('what the dashboard is told about a limit', () => {
+  it('names the model family a window covers in plain words, and keeps the plan’s name', () => {
+    const state = ledger(record(ADA))
+    const window = {
+      windowMinutes: 10080,
+      usedPercent: 12,
+      resetsAtMs: null,
+      source: 'orca-cache' as const,
+      fetchedAtMs: NOW
+    }
+    state.limits.set(ADA, [
+      { ...window, scope: null },
+      { ...window, scope: 'fableWeekly' }
+    ])
+    const view = toAccountsState(state, NOW)
+    if (view.status !== 'on') throw new Error('expected a watching state')
+    expect(view.accounts[0].plan).toBe('Max 20x')
+    expect(view.accounts[0].limits.map((limit) => limit.scope)).toEqual([null, 'Fable'])
+    // The ledger itself keeps what Orca said.
+    expect(state.limits.get(ADA)?.[1].scope).toBe('fableWeekly')
   })
 })

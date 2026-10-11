@@ -138,6 +138,7 @@ describe('Codex sessions', () => {
     key: 'codex:c',
     provider: 'codex',
     startedAtMs: at(9, 30),
+    threadStartedAtMs: at(9, 30),
     accountKey: codexKey,
     accountConfidence: 'exact',
     usage:
@@ -171,11 +172,20 @@ describe('Codex sessions', () => {
     expect(held(state)).toEqual([[codexKey, 'exact', 50]])
   })
 
-  it('starts a session that is older than tracking from what it had already spent', () => {
-    const state = emptyLedger(at(9))
-    const older = { startedAtMs: at(8) }
-    countCodexSessions(state, [codex(900, older)], at(10))
-    countCodexSessions(state, [codex(905, older)], at(10, 1))
+  it.each([
+    ['began before tracking and was resumed in a new process', { threadStartedAtMs: at(8) }],
+    ['does not say when it began', { threadStartedAtMs: undefined }],
+    [
+      'began longer ago than a counted total is remembered',
+      { threadStartedAtMs: at(9, 30) - 31 * 24 * 60 * 60 * 1000 }
+    ]
+  ])('starts a thread that %s from what it had already spent', (_case, thread) => {
+    // Tracking began long enough ago that only the thread's own age decides.
+    const state = emptyLedger(at(9) - 60 * 24 * 60 * 60 * 1000)
+    if (thread.threadStartedAtMs === at(8)) state.trackingSinceMs = at(9)
+    // The process is new either way: it started after tracking did.
+    countCodexSessions(state, [codex(900, thread)], at(10))
+    countCodexSessions(state, [codex(905, thread)], at(10, 1))
     expect(held(state)).toEqual([[codexKey, 'exact', 5]])
   })
 

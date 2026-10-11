@@ -65,7 +65,7 @@ export interface AccountRef {
   key: string
   provider: ProviderId
   label: string
-  plan: string | null
+  plan: string | null // display words ("Max 20x"), not the provider's tier id
   isActive: boolean
 }
 

@@ -11,6 +11,7 @@ import type {
   OfficeSnapshot,
   SessionRef
 } from '../../shared/office/types'
+import { limitScopeName, planName } from './display-names'
 import { type AccountRecord, dayKey, type LedgerState, type UsageBucket } from './ledger-state'
 
 const EMAIL = /[\w.+-]+@[\w-]+(\.[\w-]+)+/g
@@ -39,7 +40,7 @@ function toAccountRef(state: LedgerState, account: AccountRecord): AccountRef {
     key: account.key,
     provider: account.provider,
     label: accountLabel(account),
-    plan: account.plan,
+    plan: account.plan === null ? null : planName(account.plan),
     isActive: account.key === activeClaudeKey(state) || account.key === state.codexDefaultKey
   }
 }
@@ -142,7 +143,10 @@ export function toAccountsState(state: LedgerState, now: number): AccountsState 
           inferred: tally?.usage.inferred ?? zeroWindows()
         },
         projects: toProjects(state, tally),
-        limits: state.limits.get(account.key) ?? []
+        limits: (state.limits.get(account.key) ?? []).map((limit) => ({
+          ...limit,
+          scope: limit.scope === null ? null : limitScopeName(limit.scope)
+        }))
       }
     }),
     unattributed: {

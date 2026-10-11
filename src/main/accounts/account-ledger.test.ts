@@ -149,6 +149,7 @@ describe('while accounts are watched', () => {
       key: 'codex:c',
       provider: 'codex',
       startedAtMs: START + 1,
+      threadStartedAtMs: START + 1,
       accountKey: codexKey,
       accountConfidence: 'exact',
       usage: {

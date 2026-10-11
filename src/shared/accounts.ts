@@ -35,7 +35,8 @@ export interface ProjectUsage {
 // One limit window as last read; `fetchedAtMs` is its age, and a missing window is unknown.
 export interface AccountLimit {
   windowMinutes: number
-  // Set when the window covers one model family only.
+  // Set when the window covers one model family only. Display words in a view ("Fable");
+  // the source's own name ("fableWeekly") inside the ledger.
   scope: string | null
   usedPercent: number
   resetsAtMs: number | null
