@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { AccountsView } from './components/accounts/AccountsView'
 import { Header, type ViewType } from './components/Header'
 import { Dashboard } from './components/Dashboard'
 import { ModelsView } from './components/ModelsView'
@@ -26,6 +27,7 @@ export default function App() {
       <Header currentView={currentView} onViewChange={setCurrentView} />
       <main id="main" tabIndex={-1} className="no-drag min-h-0 flex-1 overflow-hidden outline-none">
         {currentView === 'dashboard' && <Dashboard />}
+        {currentView === 'accounts' && <AccountsView />}
         {currentView === 'history' && <SessionHistory />}
         {currentView === 'models' && <ModelsView />}
         {currentView === 'settings' && <Settings />}

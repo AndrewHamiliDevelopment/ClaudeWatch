@@ -1,7 +1,7 @@
 import { Lamp } from 'lucide-react'
 import { cn } from '../lib/utils'
 
-export type ViewType = 'dashboard' | 'history' | 'models' | 'settings'
+export type ViewType = 'dashboard' | 'accounts' | 'history' | 'models' | 'settings'
 
 interface HeaderProps {
   currentView: ViewType
@@ -10,6 +10,7 @@ interface HeaderProps {
 
 const pages: { view: ViewType; label: string }[] = [
   { view: 'dashboard', label: 'Dashboard' },
+  { view: 'accounts', label: 'Accounts' },
   { view: 'history', label: 'History' },
   { view: 'models', label: 'Models' },
   { view: 'settings', label: 'Settings' }
