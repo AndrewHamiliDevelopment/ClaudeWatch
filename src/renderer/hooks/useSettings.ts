@@ -31,8 +31,10 @@ export function useSettings(): UseSettingsReturn {
   }, [])
 
   const updateSettings = useCallback(async (partial: Partial<AppSettings>) => {
-    const updated = await deckApi()?.setSettings(partial)
-    if (!updated) return
+    const api = deckApi()
+    if (!api) return
+
+    const updated = await api.setSettings(partial)
     setSettings(updated)
   }, [])
 
