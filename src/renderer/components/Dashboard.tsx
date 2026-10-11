@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Search } from 'lucide-react'
+import { useAccounts } from '../hooks/useAccounts'
 import { usePromoStatus } from '../hooks/usePromoStatus'
 import { useRateLimits } from '../hooks/useRateLimits'
 import { useSquads } from '../hooks/useSquads'
@@ -7,6 +8,7 @@ import { useUsage } from '../hooks/useUsage'
 import { filterSquads } from '../deck/roster'
 import type { PromoStatus } from '../lib/types'
 import { formatCountdown } from '../lib/utils'
+import { accountTokenRows } from './accounts/account-view'
 import { PLATE_TITLE_CLASS } from './deck/deck-styles'
 import { GaugeWall } from './GaugeWall'
 import { NeedsYouLane } from './NeedsYouLane'
@@ -18,10 +20,12 @@ export function Dashboard() {
   const { usage } = useUsage()
   const { promo } = usePromoStatus()
   const { rateLimits } = useRateLimits()
+  const { accounts } = useAccounts()
   const [searchQuery, setSearchQuery] = useState('')
 
   const visibleSquads = filterSquads(squads, searchQuery)
   const hasNoMatch = squads.length > 0 && visibleSquads.length === 0
+  const accountTokens = accounts.status === 'on' ? accountTokenRows(accounts) : []
 
   return (
     <div className="no-drag flex h-full min-h-0 flex-col overflow-hidden">
@@ -72,7 +76,12 @@ export function Dashboard() {
         </div>
 
         <aside className="min-h-0 overflow-y-auto" aria-label="Instruments">
-          <GaugeWall squads={squads} usage={usage} rateLimits={rateLimits} />
+          <GaugeWall
+            squads={squads}
+            usage={usage}
+            rateLimits={rateLimits}
+            accountTokens={accountTokens}
+          />
         </aside>
       </div>
     </div>

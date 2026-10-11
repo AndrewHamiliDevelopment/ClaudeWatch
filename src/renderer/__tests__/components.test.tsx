@@ -3,10 +3,10 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import { Header } from '../components/Header'
 
 describe('Header', () => {
-  it('offers every page, Models included', () => {
+  it('offers every page, Accounts and Models included', () => {
     render(<Header currentView="dashboard" onViewChange={() => {}} />)
     const pages = screen.getAllByRole('button').map((button) => button.textContent)
-    expect(pages).toEqual(['Dashboard', 'History', 'Models', 'Settings'])
+    expect(pages).toEqual(['Dashboard', 'Accounts', 'History', 'Models', 'Settings'])
   })
 
   it('highlights the current view', () => {

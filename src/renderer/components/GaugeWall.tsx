@@ -9,7 +9,6 @@ import { Plate } from './deck/Plate'
 import { SegmentedMeter } from './deck/SegmentedMeter'
 import { LimitsPanel } from './LimitsPanel'
 
-// dead-code-allowed: plan Phase 7 (accounts) builds these rows for `accountTokens` 2026-11-30
 export interface LedgerRow {
   key: string
   name: string
@@ -20,7 +19,7 @@ interface GaugeWallProps {
   squads: readonly Squad[]
   usage: UsageStats | null
   rateLimits: RateLimits | null
-  // Tokens per account: no source reports them yet, so this ledger stays hidden until one does.
+  // Today's tokens per account; empty unless there are accounts to compare.
   accountTokens?: readonly LedgerRow[]
 }
 
@@ -36,7 +35,7 @@ export function GaugeWall({ squads, usage, rateLimits, accountTokens = [] }: Gau
     <Plate faceClassName="flex flex-col gap-2.5 px-3.5 pb-4 pt-3">
       <OfficeEntry squads={squads} />
       <TokenLedger title="Tokens by project" note="live sessions" rows={projectTokens} />
-      <TokenLedger title="Tokens by account" note="live sessions" rows={accountTokens} />
+      <TokenLedger title="Tokens by account" note="today" rows={accountTokens} />
       <LimitsPanel usage={usage} rateLimits={rateLimits} />
     </Plate>
   )

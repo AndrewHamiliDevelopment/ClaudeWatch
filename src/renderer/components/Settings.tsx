@@ -89,6 +89,17 @@ export function Settings() {
               onChange={(staleThresholdMinutes) => updateSettings({ staleThresholdMinutes })}
             />
           </SettingRow>
+
+          <SettingRow
+            label="Watch accounts"
+            description="Reads account names and plans to count tokens per account. Never credentials."
+          >
+            <ToggleSwitch
+              checked={settings.watchAccounts}
+              onChange={(watchAccounts) => updateSettings({ watchAccounts })}
+              label="Watch accounts"
+            />
+          </SettingRow>
         </SettingsSection>
 
         <NotificationSettings

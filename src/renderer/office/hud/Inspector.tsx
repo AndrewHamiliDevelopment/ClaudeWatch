@@ -1,6 +1,12 @@
 import { SquareTerminal, X } from 'lucide-react'
 import type { ReactNode } from 'react'
-import type { AgentView, SessionHost, SessionRef, SubagentRef } from '../../../shared/office/types'
+import type {
+  AccountRef,
+  AgentView,
+  SessionHost,
+  SessionRef,
+  SubagentRef
+} from '../../../shared/office/types'
 import {
   BUTTON_PRIMARY_COMPACT_CLASS,
   BUTTON_QUIET_COMPACT_CLASS,
@@ -12,7 +18,7 @@ import { formatElapsedTime } from '../../lib/utils'
 import { isTeammate, reachTarget } from '../logic/interactions'
 import { PROVIDER_LABEL } from '../office-palette'
 import type { RosterEntry } from '../themes/violet-court/cast'
-import { agentStateMark } from './agent-facts'
+import { accountText, agentStateMark } from './agent-facts'
 import { Fact } from './Fact'
 import { KBD_INK_CLASS } from './hud-styles'
 import { MemberTokenFacts, SessionTokenFacts } from './TokenFacts'
@@ -22,6 +28,8 @@ interface InspectorProps {
   session: SessionRef | undefined
   // Set when the agent is a subagent or teammate of `session`.
   member: SubagentRef | undefined
+  // The snapshot's accounts; the row is left out until the session's account is among them.
+  accounts?: readonly AccountRef[]
   // Who the agent plays in its office's theme, where that theme has a cast.
   character: RosterEntry | null
   nowMs: number
@@ -48,6 +56,7 @@ export function Inspector({
   agent,
   session,
   member,
+  accounts,
   character,
   nowMs,
   canFly,
@@ -57,6 +66,7 @@ export function Inspector({
   children
 }: InspectorProps) {
   const mark = agentStateMark(agent)
+  const account = accountText(session, accounts)
   const startedAtMs = member?.startedAtMs ?? session?.startedAtMs
   const elapsedSeconds =
     startedAtMs === undefined ? 0 : Math.max(0, Math.floor((nowMs - startedAtMs) / 1000))
@@ -86,6 +96,7 @@ export function Inspector({
         <dl className="grid grid-cols-[auto_1fr] items-baseline gap-x-3 gap-y-1">
           <Fact term="Project" value={session?.projectLabel ?? 'Unknown'} />
           <Fact term="Provider" value={PROVIDER_LABEL[agent.provider]} />
+          {account && <Fact term="Account" value={account} />}
           {member && <Fact term="Agent type" value={member.type} />}
           <Fact term="Activity" value={agent.activity} />
           {!agent.isSubagent && <Fact term="Tool" value={session?.currentTool?.name ?? 'None'} />}

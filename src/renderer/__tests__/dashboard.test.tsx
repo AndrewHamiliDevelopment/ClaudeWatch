@@ -4,6 +4,11 @@ import App from '../App'
 import { Dashboard } from '../components/Dashboard'
 import { ModelsView } from '../components/ModelsView'
 import { DEFAULT_SETTINGS, type InstanceUpdate, type UsageStats } from '../lib/types'
+import {
+  accountsFixture,
+  brassHarbor,
+  lanternWorks
+} from '../components/accounts/__tests__/fixtures'
 import { mockApi } from './api-mock'
 import { instanceFixture, NOW_MS, sessionFixture } from './fixtures'
 
@@ -110,6 +115,28 @@ describe('Dashboard', () => {
 
     expect(screen.getByText('No agent matches “nobody-by-this-name”.')).toBeInTheDocument()
   })
+
+  it('compares today’s tokens across accounts when there is more than one', async () => {
+    const accounts = accountsFixture({ accounts: [lanternWorks, brassHarbor] })
+    window.api = apiWith({ getAccounts: vi.fn().mockResolvedValue(accounts) })
+    render(<Dashboard />)
+
+    const ledger = await screen.findByRole('region', { name: 'Tokens by account' })
+    expect(ledger).toHaveTextContent('today, 2K')
+    expect(
+      within(ledger).getByRole('meter', { name: 'Brass Harbor share of tokens' })
+    ).toHaveAttribute('aria-valuenow', '100')
+    expect(ledger).not.toHaveTextContent('@')
+  })
+
+  it('has no account ledger for a single account', async () => {
+    const accounts = accountsFixture({ accounts: [brassHarbor] })
+    window.api = apiWith({ getAccounts: vi.fn().mockResolvedValue(accounts) })
+    render(<Dashboard />)
+    await screen.findByRole('region', { name: 'ClaudeWatch' })
+
+    expect(screen.queryByRole('region', { name: 'Tokens by account' })).not.toBeInTheDocument()
+  })
 })
 
 describe('ModelsView', () => {
@@ -141,8 +168,11 @@ describe('App shell', () => {
     })
   })
 
-  it('reaches Models, History and Settings from the title bar', async () => {
+  it('reaches Accounts, Models, History and Settings from the title bar', async () => {
     render(<App />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Accounts' }))
+    expect(await screen.findByRole('heading', { level: 1, name: 'Accounts' })).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Models' }))
     expect(await screen.findByRole('heading', { level: 1, name: 'Models' })).toBeInTheDocument()
