@@ -6,14 +6,12 @@ export function WorldView({
   floor,
   theme,
   floors,
-  band,
-  onFocusFloor
+  band
 }: {
   floor: FloorGeometry
   theme: OfficeTheme
   floors: readonly TowerFloor[]
   band: ZoomBand
-  onFocusFloor: (floorId: string) => void
 }) {
   const { District, Hangar, Tower } = theme.world
   return (
@@ -22,7 +20,7 @@ export function WorldView({
       <Hangar floor={floor} />
       {band === 'building' && (
         <group position={[floor.width / 2 + 7, 0, -floor.depth / 2 - 8]}>
-          <Tower floors={floors} onFocusFloor={onFocusFloor} />
+          <Tower floors={floors} />
         </group>
       )}
     </group>

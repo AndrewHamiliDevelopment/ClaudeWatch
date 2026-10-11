@@ -1,6 +1,6 @@
 import { Canvas } from '@react-three/fiber'
-import { useState } from 'react'
-import type { AgentView } from '../../../shared/office/types'
+import { useMemo, useState } from 'react'
+import type { AgentView, SessionRef } from '../../../shared/office/types'
 import type { FrameMetrics } from '../frame-metrics'
 import { usePrefersReducedMotion } from '../hooks'
 import { BAND_ZOOM, ISO_POLAR, ISO_START_AZIMUTH, type ZoomBand } from '../logic/camera-bands'
@@ -16,12 +16,14 @@ import { FrameGovernor, MetricsProbe } from './RenderLoop'
 import { Robot } from './Robot'
 import { BatchedScene } from './BatchedScene'
 import { WorldView } from './WorldView'
+import { ZonePickers } from './ZonePickers'
 import type { OfficeTheme, TowerFloor } from '../themes/types'
 
 interface OfficeSceneProps {
   theme: OfficeTheme
   floors: readonly TowerFloor[]
-  onFocusFloor: (floorId: string) => void
+  sessions: readonly SessionRef[]
+  onFlyToZone: (zoneId: string) => void
   floor: FloorGeometry
   agents: readonly AgentView[]
   cards: readonly NameCard[]
@@ -49,6 +51,10 @@ export default function OfficeScene(props: OfficeSceneProps) {
   const isReducedMotion = usePrefersReducedMotion()
   const [band, setBand] = useState<ZoomBand>('floor')
   const [anchors] = useState<CardAnchors>(() => new Map())
+  const liveSessionKeys = useMemo(
+    () => new Set(props.sessions.map((session) => session.key)),
+    [props.sessions]
+  )
   return (
     <div
       className="absolute inset-0"
@@ -95,18 +101,14 @@ export default function OfficeScene(props: OfficeSceneProps) {
             />
           ))}
         </BatchedScene>
-        <WorldView
-          theme={props.theme}
-          floor={props.floor}
-          floors={props.floors}
-          band={band}
-          onFocusFloor={props.onFocusFloor}
-        />
+        <WorldView theme={props.theme} floor={props.floor} floors={props.floors} band={band} />
+        <ZonePickers floor={props.floor} onFly={props.onFlyToZone} />
         <CardProjector cards={props.cards} anchors={anchors} />
         <CameraRig
           floorCount={props.floors.length}
           floor={props.floor}
           agents={props.agents}
+          liveSessionKeys={liveSessionKeys}
           selectedAgentKey={props.selectedAgentKey}
           request={props.cameraRequest}
           isReducedMotion={isReducedMotion}

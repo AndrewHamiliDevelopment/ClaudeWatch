@@ -21,7 +21,9 @@ describe('theme registry', () => {
         'Desk',
         'RoomDressing',
         'Elevator',
-        'RoomSign'
+        'RoomSign',
+        'CompanyZone',
+        'ProjectOffice'
       ]) {
         expect(typeof Reflect.get(theme.kit, key)).toBe('function')
       }

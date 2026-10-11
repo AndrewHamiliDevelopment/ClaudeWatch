@@ -1,23 +1,23 @@
 import { cn } from '../../lib/utils'
-import type { ListFloor } from '../logic/floor-model'
+import type { CompanyListEntry } from '../logic/zone-model'
 import { gemFor } from '../logic/status-gem'
 import { PROVIDER_LABEL } from '../office-palette'
 import { FOCUS_RING_CLASS, PANEL_CLASS } from './hud-styles'
 import { StateChip } from './StateChip'
 
 interface ListViewProps {
-  tree: readonly ListFloor[]
+  companies: readonly CompanyListEntry[]
   selectedAgentKey: string | null
   onSelectAgent: (agentKey: string) => void
 }
 
 const CELL_CLASS = 'px-3 py-1.5 text-left align-middle'
 
-export function ListView({ tree, selectedAgentKey, onSelectAgent }: ListViewProps) {
+export function ListView({ companies, selectedAgentKey, onSelectAgent }: ListViewProps) {
   return (
     <div className={cn(PANEL_CLASS, 'h-full overflow-auto')}>
       <table className="w-full border-collapse text-body">
-        <caption className="sr-only">Agents by floor and room</caption>
+        <caption className="sr-only">Agents by company and project</caption>
         <thead className="sticky top-0 bg-surface-raised text-caption text-text-secondary">
           <tr>
             <th scope="col" className={CELL_CLASS}>
@@ -34,29 +34,28 @@ export function ListView({ tree, selectedAgentKey, onSelectAgent }: ListViewProp
             </th>
           </tr>
         </thead>
-        {tree.map((floor, index) => (
-          <tbody key={floor.floorId} className="border-t border-border">
+        {companies.map((company) => (
+          <tbody key={company.companyKey} className="border-t border-border">
             <tr>
               <th
                 scope="rowgroup"
                 colSpan={4}
                 className={cn(CELL_CLASS, 'pt-3 text-heading text-text-primary')}
               >
-                <span className="mr-2 font-mono text-text-secondary">{index + 1}</span>
-                {floor.label}
+                {company.label}
               </th>
             </tr>
-            {floor.rooms.map((room) => [
-              <tr key={room.roomId}>
+            {company.projects.map((project) => [
+              <tr key={project.projectKey}>
                 <th
                   scope="row"
                   colSpan={4}
                   className={cn(CELL_CLASS, 'pl-8 font-normal text-text-secondary')}
                 >
-                  › {room.label}
+                  › {project.label}
                 </th>
               </tr>,
-              ...room.agents.map((agent) => {
+              ...project.agents.map((agent) => {
                 const gem = gemFor(agent)
                 const isSelected = agent.agentKey === selectedAgentKey
                 return (

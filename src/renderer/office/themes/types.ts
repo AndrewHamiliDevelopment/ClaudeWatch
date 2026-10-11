@@ -1,7 +1,7 @@
 import type { ComponentType, RefObject } from 'react'
 import type { Group, Mesh, MeshStandardMaterial } from 'three'
 import type { AgentView, ProviderId } from '../../../shared/office/types'
-import type { FloorGeometry, RoomGeometry } from '../scene-model'
+import type { FloorGeometry, RoomGeometry, ZoneGeometry } from '../scene-model'
 import type { DeskSlot, WallsMode } from '../logic/room-layout'
 
 export interface ThemePalette {
@@ -59,6 +59,9 @@ export interface WallsProps extends FloorProps {
 export interface RoomProps {
   room: RoomGeometry
 }
+export interface ZoneProps {
+  zone: ZoneGeometry
+}
 export interface DeskProps extends RoomProps {
   slot: DeskSlot
 }
@@ -69,6 +72,7 @@ export interface TowerFloor {
   attentionCount: number
 }
 export interface TowerProps {
+  // Unused by the office since the one-floor model; the Tower is a landmark only.
   onFocusFloor?: (floorId: string) => void
   floors: readonly TowerFloor[]
 }
@@ -87,6 +91,9 @@ export interface OfficeTheme {
     RoomDressing: ComponentType<RoomProps>
     Elevator: ComponentType<FloorProps>
     RoomSign: ComponentType<RoomProps>
+    // Offices within offices: a company's fenced grounds and a project's walled office.
+    CompanyZone: ComponentType<ZoneProps>
+    ProjectOffice: ComponentType<ZoneProps>
   }
   world: {
     District: ComponentType<FloorProps>

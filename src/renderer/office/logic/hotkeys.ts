@@ -6,8 +6,7 @@ export type OfficeCommand =
   | { type: 'next-attention' }
   | { type: 'toggle-list' }
   | { type: 'cycle-theme' }
-  | { type: 'floor-step'; delta: -1 | 1 }
-  | { type: 'floor-number'; number: number }
+  | { type: 'company-number'; number: number }
   | { type: 'rotate'; direction: -1 | 1 }
   | { type: 'zoom'; direction: ZoomDirection }
   | { type: 'fly-to-selected' }
@@ -27,8 +26,6 @@ const FIXED_COMMANDS: Record<string, OfficeCommand> = {
   n: { type: 'next-attention' },
   l: { type: 'toggle-list' },
   t: { type: 'cycle-theme' },
-  '[': { type: 'floor-step', delta: -1 },
-  ']': { type: 'floor-step', delta: 1 },
   q: { type: 'rotate', direction: -1 },
   e: { type: 'rotate', direction: 1 },
   '-': { type: 'zoom', direction: 'out' },
@@ -39,7 +36,7 @@ const FIXED_COMMANDS: Record<string, OfficeCommand> = {
 export function commandForKey(input: KeyInput): OfficeCommand | null {
   if (input.hasModifier || input.isTargetEditable) return null
   if (input.key === 'Enter') return input.isTargetInteractive ? null : { type: 'fly-to-selected' }
-  if (/^[1-9]$/.test(input.key)) return { type: 'floor-number', number: Number(input.key) }
+  if (/^[1-9]$/.test(input.key)) return { type: 'company-number', number: Number(input.key) }
   return FIXED_COMMANDS[input.key.toLowerCase()] ?? null
 }
 

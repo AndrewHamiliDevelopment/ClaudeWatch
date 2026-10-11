@@ -18,12 +18,12 @@ describe('commandForKey', () => {
     expect(commandForKey(key('End'))).toEqual({ type: 'walls', mode: 'down' })
   })
 
-  it('maps queue, list, floors and rotation keys', () => {
+  it('maps queue, list, company and rotation keys', () => {
     expect(commandForKey(key('n'))).toEqual({ type: 'next-attention' })
     expect(commandForKey(key('L'))).toEqual({ type: 'toggle-list' })
-    expect(commandForKey(key('['))).toEqual({ type: 'floor-step', delta: -1 })
-    expect(commandForKey(key(']'))).toEqual({ type: 'floor-step', delta: 1 })
-    expect(commandForKey(key('3'))).toEqual({ type: 'floor-number', number: 3 })
+    expect(commandForKey(key('['))).toBeNull()
+    expect(commandForKey(key(']'))).toBeNull()
+    expect(commandForKey(key('3'))).toEqual({ type: 'company-number', number: 3 })
     expect(commandForKey(key('q'))).toEqual({ type: 'rotate', direction: -1 })
     expect(commandForKey(key('e'))).toEqual({ type: 'rotate', direction: 1 })
   })

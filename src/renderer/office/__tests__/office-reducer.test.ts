@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { INITIAL_OFFICE_STATE, officeReducer, type OfficeState } from '../logic/office-reducer'
-import { makeAgent, makeFloor, makeFrame, makeRoom, makeSession } from './fixtures'
+import { makeAgent, makeFloor, makeFrame, makeRoom, makeSession, makeZone } from './fixtures'
 
 const frame = makeFrame({
   floors: [
@@ -52,19 +52,38 @@ describe('officeReducer', () => {
     expect(second.selectedAgentKey).toBe('c')
   })
 
-  it('changes floor by step and by number, clamped to the building', () => {
-    const state = withFrame()
-    expect(officeReducer(state, { type: 'floor-stepped', delta: -1 }).focusedFloorId).toBe('f1')
-    expect(officeReducer(state, { type: 'floor-stepped', delta: 1 }).focusedFloorId).toBe('f2')
-    expect(officeReducer(state, { type: 'floor-numbered', number: 1 }).focusedFloorId).toBe('f1')
-    expect(officeReducer(state, { type: 'floor-numbered', number: 9 }).focusedFloorId).toBe('f2')
+  it('flies to a zone by id, and number keys to companies in floor order', () => {
+    const zoned = officeReducer(INITIAL_OFFICE_STATE, {
+      type: 'frame-received',
+      frame: makeFrame({
+        floors: [
+          makeFloor({
+            floorId: 'one',
+            zones: [
+              makeZone({ id: 'c-1', kind: 'company' }),
+              makeZone({ id: 'c-2', kind: 'company' })
+            ]
+          })
+        ]
+      })
+    })
+    expect(officeReducer(zoned, { type: 'zone-flown', zoneId: 'p-9' }).cameraRequest).toMatchObject(
+      {
+        kind: 'zone',
+        zoneId: 'p-9'
+      }
+    )
+    expect(
+      officeReducer(zoned, { type: 'company-numbered', number: 2 }).cameraRequest
+    ).toMatchObject({
+      kind: 'zone',
+      zoneId: 'c-2'
+    })
+    expect(officeReducer(zoned, { type: 'company-numbered', number: 5 }).cameraRequest).toBeNull()
   })
 
-  it('clears a selection whose agent left the floor or the frame', () => {
+  it('clears a selection whose agent left the frame', () => {
     const selected = officeReducer(withFrame(), { type: 'agent-selected', agentKey: 'b' })
-    expect(
-      officeReducer(selected, { type: 'floor-selected', floorId: 'f1' }).selectedAgentKey
-    ).toBeNull()
     const emptied = officeReducer(selected, { type: 'frame-received', frame: makeFrame() })
     expect(emptied.selectedAgentKey).toBeNull()
     expect(emptied.focusedFloorId).toBeNull()

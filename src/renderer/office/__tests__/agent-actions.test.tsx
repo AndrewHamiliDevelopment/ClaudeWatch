@@ -90,7 +90,7 @@ function setup(overrides: Partial<OfficeFeed> = {}) {
 }
 
 function selectAgent(name: string): HTMLElement {
-  const table = screen.getByRole('table', { name: /agents by floor and room/i })
+  const table = screen.getByRole('table', { name: /agents by company and project/i })
   fireEvent.click(within(table).getByRole('button', { name: new RegExp(`^${name}`) }))
   return screen.getByRole('complementary', { name: 'Agent details' })
 }
@@ -253,19 +253,19 @@ describe('peek', () => {
 })
 
 describe('new agent', () => {
-  it('starts a Claude agent on the floor’s project, without the plate suffix', async () => {
+  it('starts a Claude agent in the project from its Offices row', async () => {
     const { feed } = setup()
-    const elevator = screen.getByRole('navigation', { name: 'Floors' })
-    fireEvent.click(within(elevator).getByRole('button', { name: 'New agent on ClaudeWatch' }))
+    const elevator = screen.getByRole('navigation', { name: 'Offices' })
+    fireEvent.click(within(elevator).getByRole('button', { name: 'New agent in Project' }))
     fireEvent.click(within(elevator).getByRole('button', { name: 'Start Claude agent' }))
-    expect(feed.start).toHaveBeenCalledWith('p_abc', 'claude')
+    expect(feed.start).toHaveBeenCalledWith('p_1', 'claude')
     expect(await within(elevator).findByText(/Starting a Claude agent/)).toBeInTheDocument()
   })
 
   it('shows why a start failed', async () => {
     setup({ start: vi.fn(async () => ({ success: false, reason: 'orca-unavailable' as const })) })
-    const elevator = screen.getByRole('navigation', { name: 'Floors' })
-    fireEvent.click(within(elevator).getByRole('button', { name: 'New agent on ClaudeWatch' }))
+    const elevator = screen.getByRole('navigation', { name: 'Offices' })
+    fireEvent.click(within(elevator).getByRole('button', { name: 'New agent in Project' }))
     fireEvent.click(within(elevator).getByRole('button', { name: 'Start Codex agent' }))
     expect(
       await within(elevator).findByText("Orca isn't responding. Check that it's running.")

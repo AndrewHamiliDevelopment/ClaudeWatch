@@ -5,8 +5,7 @@ import {
   canTalk,
   failureMessage,
   MAX_MESSAGE_CHARS,
-  messageProblem,
-  projectKeyForFloor
+  messageProblem
 } from '../logic/interactions'
 import { INITIAL_OFFICE_STATE, officeReducer } from '../logic/office-reducer'
 import { makeAgent, makeFloor, makeFrame, makeRoom, makeSession } from './fixtures'
@@ -60,13 +59,6 @@ describe('messageProblem', () => {
     expect(messageProblem('   ')).toBe('invalid-input')
     expect(messageProblem('x'.repeat(MAX_MESSAGE_CHARS + 1))).toBe('invalid-input')
     expect(messageProblem('ship it')).toBeNull()
-  })
-})
-
-describe('projectKeyForFloor', () => {
-  it('drops the plate suffix from overflow floors', () => {
-    expect(projectKeyForFloor('p_abc~2')).toBe('p_abc')
-    expect(projectKeyForFloor('p_abc')).toBe('p_abc')
   })
 })
 

@@ -1,5 +1,9 @@
 import type { RoomGeometry } from '../scene-model'
 
+// Any centred rectangle with a door: rooms, and company or project zones.
+export type DooredRect = Pick<RoomGeometry, 'x' | 'z' | 'width' | 'depth' | 'door'>
+type WalledRect = DooredRect & Pick<RoomGeometry, 'id'>
+
 export type WallSide = 'north' | 'south' | 'east' | 'west'
 export type WallsMode = 'up' | 'cutaway' | 'down'
 
@@ -38,7 +42,7 @@ const SIDE_NORMAL: Record<WallSide, { x: number; z: number }> = {
   west: { x: -1, z: 0 }
 }
 
-export function doorSide(room: RoomGeometry): WallSide {
+export function doorSide(room: DooredRect): WallSide {
   const distances: Record<WallSide, number> = {
     north: Math.abs(room.door.z - (room.z - room.depth / 2)),
     south: Math.abs(room.door.z - (room.z + room.depth / 2)),
@@ -51,7 +55,7 @@ export function doorSide(room: RoomGeometry): WallSide {
 }
 
 // Room-local frame: `back` points from the door into the room, `across` is perpendicular.
-function roomAxes(room: RoomGeometry): {
+function roomAxes(room: DooredRect): {
   back: { x: number; z: number }
   across: { x: number; z: number }
   span: number
@@ -98,7 +102,7 @@ export function deskSlots(room: RoomGeometry): DeskSlot[] {
 const SIGN_WALL_OFFSET = 0.1
 
 // The sign hangs just outside the door wall; rotationY turns its face toward the corridor.
-export function doorSignPlacement(room: RoomGeometry): { x: number; z: number; rotationY: number } {
+export function doorSignPlacement(room: DooredRect): { x: number; z: number; rotationY: number } {
   const outward = SIDE_NORMAL[doorSide(room)]
   return {
     x: room.door.x + outward.x * SIGN_WALL_OFFSET,
@@ -107,7 +111,7 @@ export function doorSignPlacement(room: RoomGeometry): { x: number; z: number; r
   }
 }
 
-function sideSegment(room: RoomGeometry, side: WallSide, from: number, to: number): WallSegment {
+function sideSegment(room: WalledRect, side: WallSide, from: number, to: number): WallSegment {
   const normal = SIDE_NORMAL[side]
   const isAlongX = normal.z !== 0
   const middle = (from + to) / 2
@@ -121,7 +125,7 @@ function sideSegment(room: RoomGeometry, side: WallSide, from: number, to: numbe
   }
 }
 
-export function roomWallSegments(room: RoomGeometry): WallSegment[] {
+export function roomWallSegments(room: WalledRect, doorWidth = DOOR_WIDTH): WallSegment[] {
   const withDoor = doorSide(room)
   return (Object.keys(SIDE_NORMAL) as WallSide[]).flatMap((side) => {
     const isAlongX = SIDE_NORMAL[side].z !== 0
@@ -130,8 +134,8 @@ export function roomWallSegments(room: RoomGeometry): WallSegment[] {
     if (side !== withDoor) return [sideSegment(room, side, start, end)]
     const doorCentre = isAlongX ? room.door.x : room.door.z
     return [
-      sideSegment(room, side, start, doorCentre - DOOR_WIDTH / 2),
-      sideSegment(room, side, doorCentre + DOOR_WIDTH / 2, end)
+      sideSegment(room, side, start, doorCentre - doorWidth / 2),
+      sideSegment(room, side, doorCentre + doorWidth / 2, end)
     ].filter((segment) => segment.length > 0.05)
   })
 }

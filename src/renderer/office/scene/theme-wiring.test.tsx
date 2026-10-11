@@ -9,7 +9,7 @@ import { ParkedFrames } from '../themes/ParkedFrames'
 import { ThemeTower } from '../themes/WorldArchitecture'
 import { themeForTeam } from '../themes/registry'
 import { BAND_ZOOM } from '../logic/camera-bands'
-import { makeAgent, makeFloor, makeRoom } from '../__tests__/fixtures'
+import { makeAgent, makeFloor, makeRoom, makeZone } from '../__tests__/fixtures'
 import type { RobotModelProps } from '../themes/types'
 
 vi.mock('react', async (original) => ({
@@ -60,7 +60,17 @@ it('delegates the live Robot model to the theme with provider skin and articulat
 
 it('renders every floor surface through the theme kit', () => {
   const theme = themeForTeam()
-  const floor = makeFloor({ floorId: 'p1', rooms: [makeRoom({ id: 'r1' })] })
+  const floor = makeFloor({
+    floorId: 'p1',
+    rooms: [makeRoom({ id: 'r1' })],
+    zones: [
+      makeZone({
+        id: 'c',
+        kind: 'company',
+        children: [makeZone({ id: 'p', kind: 'project', projectKey: 'p_1' })]
+      })
+    ]
+  })
   const nodes = elements(FloorView({ floor, theme, wallsMode: 'cutaway', isReducedMotion: true }))
   for (const Component of Object.values(theme.kit)) {
     expect(nodes.some((node) => node.type === Component)).toBe(true)
@@ -69,14 +79,16 @@ it('renders every floor surface through the theme kit', () => {
 
 it('renders District and Hangar at floor zoom, and adds Tower only at building zoom', () => {
   const theme = themeForTeam()
-  const props = { floor: makeFloor({ floorId: 'p1' }), theme, floors: [], onFocusFloor: vi.fn() }
+  const props = { floor: makeFloor({ floorId: 'p1' }), theme, floors: [] }
   const floorNodes = elements(WorldView({ ...props, band: 'floor' }))
   expect(floorNodes.some((node) => node.type === theme.world.District)).toBe(true)
   expect(floorNodes.some((node) => node.type === theme.world.Hangar)).toBe(true)
   expect(floorNodes.some((node) => node.type === theme.world.Tower)).toBe(false)
   const buildingNodes = elements(WorldView({ ...props, band: 'building' }))
   const tower = buildingNodes.find((node) => node.type === theme.world.Tower)
-  expect(tower?.props.onFocusFloor).toBe(props.onFocusFloor)
+  // One floor now: the Tower is a landmark and never switches floors.
+  expect(tower).toBeDefined()
+  expect(tower?.props.onFocusFloor).toBeUndefined()
 })
 
 it('clicking a labelled tower storey focuses that project without selecting an agent', () => {

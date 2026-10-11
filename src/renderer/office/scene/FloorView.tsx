@@ -13,10 +13,32 @@ export function FloorView({
   wallsMode: WallsMode
   isReducedMotion: boolean
 }) {
-  const { Floor, Walls, Doorway, Desk, RoomDressing, Elevator, RoomSign } = theme.kit
+  const {
+    Floor,
+    Walls,
+    Doorway,
+    Desk,
+    RoomDressing,
+    Elevator,
+    RoomSign,
+    CompanyZone,
+    ProjectOffice
+  } = theme.kit
   return (
     <group>
       <Floor floor={floor} />
+      {floor.zones
+        .filter((zone) => zone.kind === 'company')
+        .map((company) => (
+          <group key={company.id}>
+            <CompanyZone zone={company} />
+            {company.children
+              .filter((child) => child.kind === 'project')
+              .map((project) => (
+                <ProjectOffice key={project.id} zone={project} />
+              ))}
+          </group>
+        ))}
       <Walls floor={floor} mode={wallsMode} isReducedMotion={isReducedMotion} />
       {floor.rooms.map((room) => (
         <group key={room.id}>

@@ -73,7 +73,7 @@ export function AttentionRail({
                     <span className="min-w-0 truncate">{item.sessionName}</span>
                   </span>
                   <span className="text-caption text-text-secondary">
-                    {spec.label}, {item.projectLabel}, waiting {waitedFor}
+                    {spec.label}, {item.projectLabel} · {item.companyLabel}, waiting {waitedFor}
                   </span>
                 </button>
                 {reviewableKeys.has(item.sessionKey) && (

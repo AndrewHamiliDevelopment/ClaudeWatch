@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { OfficeApp } from '../OfficeApp'
-import { makeAgent, makeFloor, makeFrame } from './fixtures'
+import { makeAgent, makeFloor, makeFrame, makeRoom, makeSession, makeZone } from './fixtures'
 import type { OfficeFeed } from '../scene-model'
 import type { OfficeTheme, TowerFloor } from '../themes/types'
 
@@ -10,31 +10,44 @@ vi.mock('../scene/OfficeScene', () => ({
   default: ({
     theme,
     floors,
-    onFocusFloor
+    onFlyToZone
   }: {
     theme: OfficeTheme
     floors: TowerFloor[]
-    onFocusFloor: (floorId: string) => void
+    onFlyToZone: (zoneId: string) => void
   }) => (
     <div aria-label={`Scene theme ${theme.label}`}>
       {floors.map((floor) => (
-        <button key={floor.floorId} onClick={() => onFocusFloor(floor.floorId)}>
-          Storey {floor.label}: {floor.agentCount} agents, {floor.attentionCount} waiting
-        </button>
+        <span key={floor.floorId}>
+          Building {floor.label}: {floor.agentCount} agents, {floor.attentionCount} waiting
+        </span>
       ))}
+      <button onClick={() => onFlyToZone('p-forge')}>Double-click Forge</button>
     </div>
   )
 }))
 
 const frame = makeFrame({
   floors: [
-    makeFloor({ floorId: 'a', label: 'Atelier' }),
-    makeFloor({ floorId: 'b', label: 'Forge' })
+    makeFloor({
+      floorId: 'one',
+      label: 'Office',
+      rooms: [makeRoom({ id: 'r1', sessionKey: 'claude:b' })],
+      zones: [
+        makeZone({
+          id: 'c-guild',
+          kind: 'company',
+          label: 'Guild',
+          companyKey: 'c_test',
+          children: [
+            makeZone({ id: 'p-forge', kind: 'project', label: 'Forge', projectKey: 'p_1' })
+          ]
+        })
+      ]
+    })
   ],
-  agents: [
-    makeAgent({ agentKey: 'a1', floorId: 'a' }),
-    makeAgent({ agentKey: 'b1', floorId: 'b', attention: 'permission' })
-  ]
+  sessions: [makeSession({ key: 'claude:b', attention: 'permission' })],
+  agents: [makeAgent({ agentKey: 'b1', floorId: 'one', roomId: 'r1', attention: 'permission' })]
 })
 const feed: OfficeFeed = {
   subscribe: (listener) => {
@@ -49,10 +62,11 @@ const feed: OfficeFeed = {
 }
 beforeEach(() => localStorage.clear())
 
-it('passes theme selection and project counts to the live scene and focuses from the tower callback', async () => {
+it('passes theme selection and building totals to the scene and flies to zones from it', async () => {
   render(<OfficeApp feed={feed} />)
-  fireEvent.click(await screen.findByRole('button', { name: 'Storey Forge: 1 agents, 1 waiting' }))
-  expect(screen.getByRole('button', { name: /floor 2, Forge/i })).toHaveAttribute(
+  expect(await screen.findByText('Building Office: 1 agents, 1 waiting')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Double-click Forge' }))
+  expect(screen.getByRole('button', { name: /^Forge, 1 agent/ })).toHaveAttribute(
     'aria-current',
     'true'
   )

@@ -132,8 +132,7 @@ for (const theme of listThemes())
         floor,
         theme,
         band: 'building',
-        floors: [{ floorId: floor.floorId, label: floor.label, agentCount: 20, attentionCount: 2 }],
-        onFocusFloor: () => undefined
+        floors: [{ floorId: floor.floorId, label: floor.label, agentCount: 20, attentionCount: 2 }]
       })
     )
     // This upper bound includes every speech puff, thought dot and steam puff at once.

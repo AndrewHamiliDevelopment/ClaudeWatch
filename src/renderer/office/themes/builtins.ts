@@ -8,6 +8,7 @@ import { EdoDesk, EdoDoorway, EdoElevator, EdoRoomDressing, EdoRoomSign } from '
 import { EdoDistrict, EdoTower } from './EdoDistrict'
 import { EdoHangar } from './Hangar'
 import { BRASS, EDO } from './palettes'
+import { BrassCompanyZone, BrassProjectOffice, EdoCompanyZone, EdoProjectOffice } from './ZoneKits'
 import type { OfficeTheme } from './types'
 
 export const neoEdoSteam: OfficeTheme = {
@@ -29,7 +30,9 @@ export const neoEdoSteam: OfficeTheme = {
     Desk: EdoDesk,
     RoomDressing: EdoRoomDressing,
     Elevator: EdoElevator,
-    RoomSign: EdoRoomSign
+    RoomSign: EdoRoomSign,
+    CompanyZone: EdoCompanyZone,
+    ProjectOffice: EdoProjectOffice
   },
   world: { District: EdoDistrict, Hangar: EdoHangar, Tower: EdoTower }
 }
@@ -53,7 +56,9 @@ export const brassWorkshop: OfficeTheme = {
     Desk: brass.BrassDesk,
     RoomDressing: brass.BrassRoomDressing,
     Elevator: brass.BrassElevator,
-    RoomSign: brass.BrassRoomSign
+    RoomSign: brass.BrassRoomSign,
+    CompanyZone: BrassCompanyZone,
+    ProjectOffice: BrassProjectOffice
   },
   world: { District: brass.BrassDistrict, Hangar: brass.BrassHangar, Tower: brass.BrassTower }
 }

@@ -9,11 +9,14 @@ export type CameraRequest =
   | { kind: 'fly'; agentKey: string; nonce: number }
   | { kind: 'rotate'; direction: -1 | 1; nonce: number }
   | { kind: 'zoom'; direction: ZoomDirection; nonce: number }
+  | { kind: 'zone'; zoneId: string; nonce: number }
 
 export interface OfficeState {
   frame: OfficeFrame | null
   focusedFloorId: string | null
   selectedAgentKey: string | null
+  // The company or project zone the camera last flew to; the Offices panel marks it current.
+  focusedZoneId: string | null
   // The session whose permission prompt is open for review in the inspector.
   reviewingSessionKey: string | null
   wallsMode: WallsMode
@@ -24,9 +27,8 @@ export interface OfficeState {
 
 export type OfficeAction =
   | { type: 'frame-received'; frame: OfficeFrame }
-  | { type: 'floor-selected'; floorId: string }
-  | { type: 'floor-stepped'; delta: -1 | 1 }
-  | { type: 'floor-numbered'; number: number }
+  | { type: 'zone-flown'; zoneId: string }
+  | { type: 'company-numbered'; number: number }
   | { type: 'agent-selected'; agentKey: string | null }
   | { type: 'agent-flown'; agentKey: string }
   | { type: 'session-opened'; sessionKey: string }
@@ -44,6 +46,7 @@ export const INITIAL_OFFICE_STATE: OfficeState = {
   frame: null,
   focusedFloorId: null,
   selectedAgentKey: null,
+  focusedZoneId: null,
   reviewingSessionKey: null,
   wallsMode: 'cutaway',
   isListView: false,
@@ -59,16 +62,6 @@ function defaultFloorId(frame: OfficeFrame): string | null {
   const [head] = buildAttentionQueue(frame.sessions)
   const waiting = head ? mainAgentForSession(frame, head.sessionKey) : undefined
   return waiting?.floorId ?? frame.floors[0]?.floorId ?? null
-}
-
-function focusFloor(state: OfficeState, floorId: string | undefined): OfficeState {
-  if (!floorId || !state.frame) return state
-  const selected = state.frame.agents.find((agent) => agent.agentKey === state.selectedAgentKey)
-  return {
-    ...state,
-    focusedFloorId: floorId,
-    selectedAgentKey: selected?.floorId === floorId ? state.selectedAgentKey : null
-  }
 }
 
 function flyTo(state: OfficeState, agentKey: string): OfficeState {
@@ -102,23 +95,31 @@ function openNextAttention(state: OfficeState): OfficeState {
   return agent ? flyTo(state, agent.agentKey) : state
 }
 
-function floorAt(state: OfficeState, index: number): string | undefined {
-  const floors = state.frame?.floors ?? []
-  return floors[Math.min(Math.max(index, 0), floors.length - 1)]?.floorId
+function flyToZone(state: OfficeState, zoneId: string | undefined): OfficeState {
+  if (!zoneId) return state
+  return {
+    ...state,
+    focusedZoneId: zoneId,
+    cameraRequest: { kind: 'zone', zoneId, nonce: nextNonce(state) }
+  }
+}
+
+// Number keys jump to companies in floor order (1 = first company zone).
+function companyZoneAt(state: OfficeState, number: number): string | undefined {
+  const companies = (state.frame?.floors ?? [])
+    .flatMap((floor) => floor.zones)
+    .filter((zone) => zone.kind === 'company')
+  return companies[number - 1]?.id
 }
 
 export function officeReducer(state: OfficeState, action: OfficeAction): OfficeState {
   switch (action.type) {
     case 'frame-received':
       return receiveFrame(state, action.frame)
-    case 'floor-selected':
-      return focusFloor(state, action.floorId)
-    case 'floor-stepped': {
-      const index = state.frame?.floors.findIndex((floor) => floor.floorId === state.focusedFloorId)
-      return focusFloor(state, floorAt(state, (index ?? 0) + action.delta))
-    }
-    case 'floor-numbered':
-      return focusFloor(state, floorAt(state, action.number - 1))
+    case 'zone-flown':
+      return flyToZone(state, action.zoneId)
+    case 'company-numbered':
+      return flyToZone(state, companyZoneAt(state, action.number))
     case 'agent-selected':
       return {
         ...state,

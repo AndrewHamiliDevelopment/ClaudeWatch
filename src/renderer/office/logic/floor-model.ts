@@ -9,18 +9,6 @@ export interface FloorSummary {
   attentionCount: number
 }
 
-export interface ListRoom {
-  roomId: string
-  label: string
-  agents: AgentView[]
-}
-
-export interface ListFloor {
-  floorId: string
-  label: string
-  rooms: ListRoom[]
-}
-
 export function needsHuman(agent: Pick<AgentView, 'attention'>): boolean {
   return agent.attention === 'permission' || agent.attention === 'question'
 }
@@ -54,22 +42,4 @@ export function mainAgentForSession(frame: OfficeFrame, sessionKey: string): Age
   return frame.agents.find(
     (agent) => !agent.isSubagent && roomForAgent(frame, agent)?.sessionKey === sessionKey
   )
-}
-
-function mainAgentFirst(a: AgentView, b: AgentView): number {
-  return Number(a.isSubagent) - Number(b.isSubagent) || a.label.localeCompare(b.label)
-}
-
-export function buildListTree(frame: OfficeFrame): ListFloor[] {
-  return frame.floors.map((floor) => ({
-    floorId: floor.floorId,
-    label: floor.label,
-    rooms: floor.rooms.map((room) => ({
-      roomId: room.id,
-      label: room.label,
-      agents: frame.agents
-        .filter((agent) => agent.floorId === floor.floorId && agent.roomId === room.id)
-        .sort(mainAgentFirst)
-    }))
-  }))
 }

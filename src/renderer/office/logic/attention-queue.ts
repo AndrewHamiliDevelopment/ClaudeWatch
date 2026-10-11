@@ -5,6 +5,7 @@ export interface AttentionItem {
   attention: 'permission' | 'question'
   sessionName: string
   projectLabel: string
+  companyLabel: string
   sinceMs: number
 }
 
@@ -24,6 +25,7 @@ export function buildAttentionQueue(sessions: readonly SessionRef[]): AttentionI
       attention: session.attention,
       sessionName: session.name,
       projectLabel: session.projectLabel,
+      companyLabel: session.companyLabel,
       sinceMs: session.updatedAtMs
     }))
     .sort((a, b) => a.sinceMs - b.sinceMs || a.sessionKey.localeCompare(b.sessionKey))

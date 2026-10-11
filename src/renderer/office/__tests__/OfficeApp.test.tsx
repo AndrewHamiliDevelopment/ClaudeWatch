@@ -106,7 +106,7 @@ describe('OfficeApp', () => {
     render(<OfficeApp feed={feed} />)
     push(busyFrame)
     expect(screen.getByText(/3D view is unavailable/i)).toBeInTheDocument()
-    const table = screen.getByRole('table', { name: /agents by floor and room/i })
+    const table = screen.getByRole('table', { name: /agents by company and project/i })
     expect(within(table).getByRole('button', { name: /office renderer/i })).toBeInTheDocument()
     expect(within(table).getByRole('button', { name: /Explore/ })).toBeInTheDocument()
   })
@@ -122,18 +122,6 @@ describe('OfficeApp', () => {
     expect(screen.getByRole('status')).toHaveTextContent(
       /needs permission: PropApp › listing search/i
     )
-  })
-
-  it('switches floors from the elevator panel', () => {
-    const { feed, push } = controllableFeed()
-    render(<OfficeApp feed={feed} />)
-    push(busyFrame)
-    const elevator = screen.getByRole('navigation', { name: 'Floors' })
-    const claudeWatch = within(elevator).getByRole('button', {
-      name: /floor 1, ClaudeWatch, 2 agents/i
-    })
-    fireEvent.click(claudeWatch)
-    expect(claudeWatch).toHaveAttribute('aria-current', 'true')
   })
 
   it('opens the inspector for a selected agent and jumps to its terminal', () => {

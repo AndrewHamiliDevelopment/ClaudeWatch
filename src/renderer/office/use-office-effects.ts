@@ -20,10 +20,8 @@ function actionForCommand(command: Exclude<OfficeCommand, { type: 'cycle-theme' 
       return { type: 'next-attention' }
     case 'toggle-list':
       return { type: 'list-toggled' }
-    case 'floor-step':
-      return { type: 'floor-stepped', delta: command.delta }
-    case 'floor-number':
-      return { type: 'floor-numbered', number: command.number }
+    case 'company-number':
+      return { type: 'company-numbered', number: command.number }
     case 'rotate':
       return { type: 'camera-rotated', direction: command.direction }
     case 'zoom':

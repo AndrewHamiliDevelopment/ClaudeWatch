@@ -1,5 +1,5 @@
 import type { AgentView, SessionRef } from '../../../shared/office/types'
-import type { FloorGeometry, OfficeFrame, RoomGeometry } from '../scene-model'
+import type { FloorGeometry, OfficeFrame, RoomGeometry, ZoneGeometry } from '../scene-model'
 
 export function makeSession(overrides: Partial<SessionRef> & Pick<SessionRef, 'key'>): SessionRef {
   return {
@@ -54,6 +54,24 @@ export function makeFloor(
     rooms: [],
     zones: [],
     elevator: { x: -8, z: 0 },
+    ...overrides
+  }
+}
+
+export function makeZone(
+  overrides: Partial<ZoneGeometry> & Pick<ZoneGeometry, 'id' | 'kind'>
+): ZoneGeometry {
+  return {
+    label: overrides.id,
+    x: 0,
+    z: 0,
+    width: 6,
+    depth: 5,
+    door: null,
+    companyKey: null,
+    projectKey: null,
+    sessionKey: null,
+    children: [],
     ...overrides
   }
 }

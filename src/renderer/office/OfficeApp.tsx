@@ -1,24 +1,21 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useReducer, useState } from 'react'
 import { useNow, useOfficeTheme } from './hooks'
 import { buildAttentionQueue } from './logic/attention-queue'
-import {
-  buildListTree,
-  mainAgentForSession,
-  sessionForAgent,
-  summariseFloors
-} from './logic/floor-model'
-import { canRespond, projectKeyForFloor } from './logic/interactions'
+import { mainAgentForSession, sessionForAgent, summariseFloors } from './logic/floor-model'
+import { canRespond } from './logic/interactions'
 import { buildNameCards } from './logic/name-cards'
 import { INITIAL_OFFICE_STATE, officeReducer } from './logic/office-reducer'
+import { buildCompanyList, buildOfficesTree } from './logic/zone-model'
 import { createFrameMetrics } from './frame-metrics'
 import { AgentActions } from './hud/AgentActions'
 import { AttentionRail } from './hud/AttentionRail'
 import { BottomBar } from './hud/BottomBar'
-import { ElevatorPanel } from './hud/ElevatorPanel'
 import { EmptyState } from './hud/EmptyState'
+import { HealthBanner } from './hud/HealthBanner'
 import { Inspector } from './hud/Inspector'
 import { ListView } from './hud/ListView'
 import { MetricsOverlay } from './hud/MetricsOverlay'
+import { OfficesPanel } from './hud/OfficesPanel'
 import { SceneErrorBoundary } from './SceneErrorBoundary'
 import type { OfficeFeed } from './scene-model'
 import {
@@ -49,7 +46,10 @@ export function OfficeApp({ feed }: { feed: OfficeFeed }) {
   const frame = state.frame
   const queue = useMemo(() => buildAttentionQueue(frame?.sessions ?? []), [frame])
   const announcement = useAttentionAnnouncement(queue)
-  const floors = useMemo(() => (frame ? summariseFloors(frame) : []), [frame])
+  // The Tower stays as a landmark showing the building's totals; it no longer picks floors.
+  const towerFloors = useMemo(() => (frame ? summariseFloors(frame) : []), [frame])
+  const companies = useMemo(() => (frame ? buildOfficesTree(frame) : []), [frame])
+  const isConnecting = !frame || (!frame.connected && frame.sessions.length === 0)
   const focusedFloor = frame?.floors.find((floor) => floor.floorId === state.focusedFloorId)
   const selectedAgent = frame?.agents.find((agent) => agent.agentKey === state.selectedAgentKey)
   const selectedSession = frame && selectedAgent ? sessionForAgent(frame, selectedAgent) : undefined
@@ -73,6 +73,7 @@ export function OfficeApp({ feed }: { feed: OfficeFeed }) {
     []
   )
   const onSceneError = useCallback(() => setHasSceneFailed(true), [])
+  const flyToZone = useCallback((zoneId: string) => dispatch({ type: 'zone-flown', zoneId }), [])
   const openReview = useCallback(
     (sessionKey: string) => dispatch({ type: 'review-opened', sessionKey }),
     []
@@ -91,8 +92,9 @@ export function OfficeApp({ feed }: { feed: OfficeFeed }) {
           <Suspense fallback={null}>
             <OfficeScene
               theme={theme}
-              floors={floors}
-              onFocusFloor={(floorId) => dispatch({ type: 'floor-selected', floorId })}
+              floors={towerFloors}
+              sessions={frame.sessions}
+              onFlyToZone={flyToZone}
               floor={focusedFloor}
               agents={frame.agents.filter((agent) => agent.floorId === focusedFloor.floorId)}
               cards={buildNameCards(frame, focusedFloor.floorId, state.selectedAgentKey)}
@@ -121,6 +123,7 @@ export function OfficeApp({ feed }: { feed: OfficeFeed }) {
             reviewableKeys={reviewableKeys}
             onReview={openReview}
           />
+          {frame && <HealthBanner sources={frame.sources} />}
           {!is3DAvailable && (
             <p className="rounded-card border border-border bg-surface-raised px-3 py-2 text-body text-text-secondary">
               The 3D view is unavailable on this device, so the office is shown as a list.
@@ -129,16 +132,16 @@ export function OfficeApp({ feed }: { feed: OfficeFeed }) {
         </div>
 
         <div className="flex min-h-0 items-center justify-center md:row-span-1">
-          {frame && frame.agents.length === 0 ? (
+          {isConnecting || (frame && frame.sessions.length === 0) ? (
             <div className="pointer-events-auto">
-              <EmptyState />
+              <EmptyState isConnecting={isConnecting} />
             </div>
           ) : (
             isShowingList &&
             frame && (
               <div className="pointer-events-auto h-full w-full">
                 <ListView
-                  tree={buildListTree(frame)}
+                  companies={buildCompanyList(frame)}
                   selectedAgentKey={state.selectedAgentKey}
                   onSelectAgent={selectAgent}
                 />
@@ -148,11 +151,11 @@ export function OfficeApp({ feed }: { feed: OfficeFeed }) {
         </div>
 
         <div className="pointer-events-auto flex max-h-full min-h-0 flex-col gap-3 self-start overflow-y-auto">
-          <ElevatorPanel
-            floors={floors}
-            focusedFloorId={state.focusedFloorId}
-            onSelect={(floorId) => dispatch({ type: 'floor-selected', floorId })}
-            onStart={(floorId, provider) => feed.start(projectKeyForFloor(floorId), provider)}
+          <OfficesPanel
+            companies={companies}
+            focusedZoneId={state.focusedZoneId}
+            onFlyToZone={flyToZone}
+            onStart={(projectKey, provider) => feed.start(projectKey, provider)}
           />
           {selectedAgent && (
             <Inspector

@@ -1,7 +1,6 @@
 import type { InteractionFailure, SessionRef } from '../../../shared/office/types'
 
 export const MAX_MESSAGE_CHARS = 4000
-const PLATE_SEPARATOR = '~'
 
 type Reachable = Pick<SessionRef, 'host'>
 
@@ -39,9 +38,4 @@ export function failureMessage(reason: InteractionFailure | undefined): string {
 export function messageProblem(text: string): InteractionFailure | null {
   const trimmed = text.trim()
   return trimmed.length === 0 || trimmed.length > MAX_MESSAGE_CHARS ? 'invalid-input' : null
-}
-
-// Overflow floors of one project share its key with a `~plate` suffix.
-export function projectKeyForFloor(floorId: string): string {
-  return floorId.split(PLATE_SEPARATOR)[0]
 }
