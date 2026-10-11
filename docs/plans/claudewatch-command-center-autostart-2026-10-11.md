@@ -23,7 +23,7 @@ Tier T2 (score 8 capped by a single implementation slice; risk 3 because of inst
 
 - [x] Phase 1 — Open the Office on start: `openOfficeOnLaunch` setting, Settings toggle, startup hook (TDD)
 - [x] Phase 2 — Office window remembers its place, size and display (TDD)
-- [ ] Phase 3 — Gates, review, runtime smoke, push to PR #2
+- [x] Phase 3 — Gates, review, runtime smoke, push to PR #2
 - [ ] Phase 4 — Merge PR #2 to `main`, install on this Mac, turn both toggles on, verify at next start
 - [ ] Phase 5 — Signed release 1.3.0 published to GitHub Releases (blocked today, see Blocker)
 
