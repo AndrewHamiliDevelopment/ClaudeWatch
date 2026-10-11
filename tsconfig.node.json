@@ -25,6 +25,8 @@
     "src/renderer/lib/**/*",
     "src/bridge/**/*",
     "src/shared/**/*",
+    "src/office-host/**/*",
+    "src/office-web/**/*",
     "electron.vite.config.ts"
   ]
 }

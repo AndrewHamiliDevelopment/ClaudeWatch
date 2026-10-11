@@ -29,7 +29,9 @@
     "release:patch": "npm version patch && npm run publish:local",
     "release:minor": "npm version minor && npm run publish:local",
     "release:major": "npm version major && npm run publish:local",
-    "office:preview": "vite --config vite.office-preview.config.ts"
+    "office:preview": "vite --config vite.office-preview.config.ts",
+    "build:office-web": "vite build --config vite.office-server.config.ts && vite build --config vite.office-web.config.ts && node scripts/sync-office-to-framework.mjs out/office-web",
+    "sync:office": "node scripts/sync-office-to-framework.mjs"
   },
   "keywords": [
     "electron",
