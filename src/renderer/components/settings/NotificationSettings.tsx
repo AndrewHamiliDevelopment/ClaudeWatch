@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Bell, ExternalLink, TriangleAlert, X } from 'lucide-react'
+import { COOLDOWN_SECONDS_RANGE } from '../../../shared/settings-ranges'
 import type { AppSettings } from '../../lib/types'
 import { BUTTON_QUIET_COMPACT_CLASS, ICON_BUTTON_CLASS } from '../deck/deck-styles'
 import { RangeSetting, SettingRow, SettingsSection, ToggleSwitch } from './controls'
@@ -107,8 +108,8 @@ export function NotificationSettings({ notifications, onChange }: NotificationSe
       >
         <RangeSetting
           label="Notification cooldown in seconds"
-          min={10}
-          max={120}
+          min={COOLDOWN_SECONDS_RANGE[0]}
+          max={COOLDOWN_SECONDS_RANGE[1]}
           step={5}
           value={notifications.cooldownSeconds}
           valueText={`${notifications.cooldownSeconds}s`}

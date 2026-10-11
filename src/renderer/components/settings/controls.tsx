@@ -1,6 +1,7 @@
-import { useId, type ReactNode } from 'react'
+import { useId, useState, type ReactNode } from 'react'
+import { clamp, type Range } from '../../../shared/range'
 import { cn } from '../../lib/utils'
-import { PLATE_TITLE_CLASS } from '../deck/deck-styles'
+import { FIELD_CLASS, PLATE_TITLE_CLASS } from '../deck/deck-styles'
 import { Plate } from '../deck/Plate'
 
 interface ToggleSwitchProps {
@@ -98,6 +99,61 @@ export function RangeSetting({
         aria-valuetext={valueText}
       />
       <span className="w-12 text-right text-xs tabular-nums text-text-secondary">{valueText}</span>
+    </div>
+  )
+}
+
+interface NumberSettingProps {
+  label: string
+  name: string
+  value: number
+  range: Range
+  step: number
+  unit: string
+  onCommit: (value: number) => void
+}
+
+// Saves on blur or Enter, not per keystroke: a half-typed number would be pulled into range
+// and rewritten under the cursor.
+export function NumberSetting({
+  label,
+  name,
+  value,
+  range,
+  step,
+  unit,
+  onCommit
+}: NumberSettingProps) {
+  const [draft, setDraft] = useState<string | null>(null)
+
+  const commit = (): void => {
+    const typed = draft === null ? Number.NaN : parseInt(draft, 10)
+    setDraft(null)
+    if (Number.isNaN(typed)) return
+    const next = clamp(typed, range)
+    if (next !== value) onCommit(next)
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        type="number"
+        name={name}
+        autoComplete="off"
+        inputMode="numeric"
+        min={range[0]}
+        max={range[1]}
+        step={step}
+        value={draft ?? value}
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={commit}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') commit()
+        }}
+        className={`${FIELD_CLASS} h-8 w-28 px-2 text-right tabular-nums`}
+        aria-label={label}
+      />
+      <span className="text-xs text-text-secondary">{unit}</span>
     </div>
   )
 }

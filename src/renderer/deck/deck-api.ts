@@ -1,17 +1,7 @@
-import type { FocusResult, OfficeSnapshot } from '../../shared/office/types'
 import type { TerminalType } from '../lib/types'
 
-// Preload methods other builders are adding in this batch. Optional here so the dashboard
-// runs before they land; delete each line once `ElectronAPI` declares the method.
-interface PendingPreloadApi {
-  openOffice?: () => Promise<{ success: boolean }>
-  focusSession?: (pid: number) => Promise<FocusResult>
-  getOfficeSnapshot?: () => Promise<OfficeSnapshot | null>
-}
-
-export type DeckApi = Window['api'] & PendingPreloadApi
-
-export function deckApi(): DeckApi | undefined {
+// Absent when a component renders outside the app's windows (a plain browser preview).
+export function deckApi(): Window['api'] | undefined {
   return typeof window === 'undefined' ? undefined : window.api
 }
 
@@ -26,7 +16,7 @@ export interface JumpTarget {
 export async function jumpToAgent(target: JumpTarget): Promise<void> {
   const api = deckApi()
   if (!api) return
-  if (target.pid !== null && api.focusSession) {
+  if (target.pid !== null) {
     try {
       const focus = await api.focusSession(target.pid)
       if (focus?.success) return
@@ -38,5 +28,5 @@ export async function jumpToAgent(target: JumpTarget): Promise<void> {
 }
 
 export function openOffice(): void {
-  void deckApi()?.openOffice?.()
+  void deckApi()?.openOffice()
 }

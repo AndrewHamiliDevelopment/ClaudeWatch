@@ -1,6 +1,13 @@
 import { useSettings } from '../hooks/useSettings'
-import { FIELD_CLASS, SEGMENT_CLASS } from './deck/deck-styles'
-import { RangeSetting, SettingRow, SettingsSection, ToggleSwitch } from './settings/controls'
+import { SEGMENT_CLASS } from './deck/deck-styles'
+import { SETTING_RANGES } from '../../shared/settings-ranges'
+import {
+  NumberSetting,
+  RangeSetting,
+  SettingRow,
+  SettingsSection,
+  ToggleSwitch
+} from './settings/controls'
 import { NotificationSettings } from './settings/NotificationSettings'
 import { UpdatesSection } from './settings/UpdatesSection'
 
@@ -74,8 +81,8 @@ export function Settings() {
           >
             <RangeSetting
               label="Stale threshold in minutes"
-              min={5}
-              max={120}
+              min={SETTING_RANGES.staleThresholdMinutes[0]}
+              max={SETTING_RANGES.staleThresholdMinutes[1]}
               step={5}
               value={settings.staleThresholdMinutes}
               valueText={`${settings.staleThresholdMinutes}m`}
@@ -94,25 +101,15 @@ export function Settings() {
             label="Weekly token target"
             description={`Track usage against ${(settings.weeklyTokenTarget / TOKENS_PER_MILLION).toFixed(1)}M tokens a week`}
           >
-            <div className="flex items-center gap-2">
-              <input
-                type="number"
-                name="weekly-token-target"
-                autoComplete="off"
-                inputMode="numeric"
-                min={100000}
-                max={100000000}
-                step={500000}
-                value={settings.weeklyTokenTarget}
-                onChange={(event) => {
-                  const weeklyTokenTarget = parseInt(event.target.value, 10)
-                  if (!isNaN(weeklyTokenTarget)) updateSettings({ weeklyTokenTarget })
-                }}
-                className={`${FIELD_CLASS} h-8 w-28 px-2 text-right tabular-nums`}
-                aria-label="Weekly token target"
-              />
-              <span className="text-xs text-text-secondary">tokens</span>
-            </div>
+            <NumberSetting
+              label="Weekly token target"
+              name="weekly-token-target"
+              range={SETTING_RANGES.weeklyTokenTarget}
+              step={500000}
+              unit="tokens"
+              value={settings.weeklyTokenTarget}
+              onCommit={(weeklyTokenTarget) => updateSettings({ weeklyTokenTarget })}
+            />
           </SettingRow>
         </SettingsSection>
 
