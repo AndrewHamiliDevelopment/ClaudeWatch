@@ -56,6 +56,32 @@ describe('buildSquads', () => {
     expect(squads[0].crest).toBe('CW')
   })
 
+  it('gives two projects with the same initials different crests', () => {
+    const squads = buildSquads(
+      [
+        instanceFixture({ pid: 1 }),
+        instanceFixture({
+          pid: 2,
+          projectPath: '/Users/test/ZKidz/ClearSpent-Web',
+          projectName: 'ZKidz/ClearSpent-Web'
+        }),
+        instanceFixture({
+          pid: 3,
+          projectPath: '/Users/test/ZKidz/CrabWalk',
+          projectName: 'ZKidz/CrabWalk'
+        })
+      ],
+      null,
+      NOW_MS
+    )
+
+    expect(squads.map((squad) => [squad.name, squad.crest])).toEqual([
+      ['ClaudeWatch', 'CW'],
+      ['ClearSpent-Web', 'CS'],
+      ['CrabWalk', 'CR']
+    ])
+  })
+
   it('keeps one squad when only some agents of a project are in the office feed', () => {
     const squads = buildSquads(
       [instanceFixture({ pid: 1234 }), instanceFixture({ pid: 77 })],

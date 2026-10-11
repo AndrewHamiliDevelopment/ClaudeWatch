@@ -57,15 +57,33 @@ export function sessionTokens(usage: SessionUsage | null | undefined): number | 
   return sumCounts(usage.own) + sumCounts(usage.subagents)
 }
 
-export function crestFor(projectName: string): string {
+// Two-letter crests for a name, best first: outer initials, then the first letter with each
+// later word's initial, then with each later letter.
+function crestCandidates(projectName: string): string[] {
   const words = projectName
     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
     .split(/[^A-Za-z0-9]+/)
     .filter(Boolean)
-  if (words.length === 0) return '?'
-  const letters =
-    words.length === 1 ? words[0].slice(0, 2) : words[0][0] + words[words.length - 1][0]
-  return letters.toUpperCase()
+  if (words.length === 0) return ['?']
+  const first = words[0][0]
+  const laterInitials = words.slice(1).map((word) => word[0])
+  const laterLetters = [...words.join('').slice(1)]
+  const seconds = [...laterInitials.reverse(), ...laterLetters]
+  const crests = seconds.map((second) => (first + second).toUpperCase())
+  return crests.length > 0 ? [...new Set(crests)] : [first.toUpperCase()]
+}
+
+export function crestFor(projectName: string): string {
+  return crestCandidates(projectName)[0]
+}
+
+// In name order, so a crest does not change when the roster reorders around who needs you.
+function assignCrests(squads: readonly Squad[]): void {
+  const taken = new Set<string>()
+  for (const squad of [...squads].sort((a, b) => a.name.localeCompare(b.name))) {
+    squad.crest = crestCandidates(squad.name).find((crest) => !taken.has(crest)) ?? squad.crest
+    taken.add(squad.crest)
+  }
 }
 
 function stateOf(
@@ -152,6 +170,7 @@ export function buildSquads(
   }
 
   const squads = [...squadByKey.values()]
+  assignCrests(squads)
   for (const squad of squads) {
     squad.agents.sort(
       (a, b) =>
