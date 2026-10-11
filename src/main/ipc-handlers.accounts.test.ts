@@ -11,7 +11,7 @@ vi.mock('electron', () => ({
   shell: { openExternal: vi.fn() }
 }))
 vi.mock('./terminal-opener', () => ({ openTerminal: vi.fn() }))
-import { setupIpcHandlers } from './ipc-handlers'
+import { forwardAccountsToDashboard, setupIpcHandlers } from './ipc-handlers'
 
 const pageEvent = (page: string): unknown => ({
   senderFrame: { parent: null, url: pathToFileURL(join(__dirname, '../renderer', page)).href }
@@ -125,6 +125,27 @@ describe('the watchAccounts setting', () => {
     handlers['settings:set'](dashboard, { watchAccounts: true })
     expect(accounts.setWatching).toHaveBeenLastCalledWith(true)
   })
+
+  it.each([false, true, null])(
+    'pushes the state with its addresses to the one dashboard window, while it lives: destroyed %s',
+    (destroyed) => {
+      const send = vi.fn()
+      const window =
+        destroyed === null ? null : { isDestroyed: () => destroyed, webContents: { send } }
+      let publish = (_state: AccountsState): void => {}
+      forwardAccountsToDashboard(
+        {
+          onChange: (listener) => {
+            publish = listener
+            return () => {}
+          }
+        },
+        vi.fn(() => window) as () => Electron.BrowserWindow | null
+      )
+      publish(watching)
+      expect(send.mock.calls).toEqual(destroyed === false ? [['accounts:update', watching]] : [])
+    }
+  )
 
   it('leaves the ledger alone for another setting, or a value that is not yes or no', () => {
     handlers['settings:set'](dashboard, { minimizeToTray: false })

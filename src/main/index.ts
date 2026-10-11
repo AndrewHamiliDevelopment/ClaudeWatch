@@ -12,7 +12,11 @@ import { AutoUpdaterManager } from './auto-updater'
 import { UsageStatsReader } from './usage-stats'
 import { PromoChecker } from './promo-checker'
 import { RateLimitReader } from './rate-limit-reader'
-import { setupIpcHandlers, forwardUpdatesToRenderer } from './ipc-handlers'
+import {
+  forwardAccountsToDashboard,
+  forwardUpdatesToRenderer,
+  setupIpcHandlers
+} from './ipc-handlers'
 import { createWidgetStatsWriter } from './widget-stats-writer'
 import { SoundPlayer } from './sound-player'
 import { setupWidgetSync } from './widget-sync'
@@ -187,12 +191,7 @@ app.whenReady().then(() => {
     getTrayManager: () => trayManager,
     accounts
   })
-  accounts.onChange((state) => {
-    for (const getWindow of windowGetters) {
-      const window = getWindow()
-      if (window && !window.isDestroyed()) window.webContents.send('accounts:update', state)
-    }
-  })
+  forwardAccountsToDashboard(accounts, () => mainWindow)
 
   // Forward tracker updates to renderer windows (main + popover) and tray
   forwardUpdatesToRenderer(

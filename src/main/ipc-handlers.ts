@@ -275,6 +275,17 @@ export function setupIpcHandlers(options: IpcHandlerOptions): void {
   })
 }
 
+// The accounts state carries email addresses: it is pushed to the dashboard window and no other.
+export function forwardAccountsToDashboard(
+  accounts: Pick<AccountLedger, 'onChange'>,
+  getDashboard: () => BrowserWindow | null
+): void {
+  accounts.onChange((state) => {
+    const window = getDashboard()
+    if (window && !window.isDestroyed()) window.webContents.send('accounts:update', state)
+  })
+}
+
 export function forwardUpdatesToRenderer(
   tracker: Pick<SessionTracker, 'on'>,
   ...getWindows: (() => BrowserWindow | null)[]

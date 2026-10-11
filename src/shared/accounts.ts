@@ -58,7 +58,8 @@ export interface AccountSummary extends AccountRef {
 }
 
 export type AccountsState =
-  // `watchAccounts` is off: nothing is read, nothing is counted.
+  // `watchAccounts` is off: nothing is read, nothing is counted. The ledger file is kept, so
+  // switching it on again resumes.
   | { status: 'off' }
   | {
       status: 'on'
