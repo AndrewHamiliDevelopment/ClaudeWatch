@@ -148,6 +148,7 @@ export type InteractionFailure =
   | 'prompt-changed'
   | 'unsupported-provider'
   | 'invalid-input'
+  | 'not-permitted'
 
 export interface InteractionResult {
   success: boolean

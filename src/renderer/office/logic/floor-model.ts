@@ -1,4 +1,4 @@
-import type { AgentView, SessionRef } from '../../../shared/office/types'
+import type { AgentView, SessionRef, SubagentRef } from '../../../shared/office/types'
 import type { OfficeFrame, RoomGeometry } from '../scene-model'
 
 export interface FloorSummary {
@@ -40,6 +40,21 @@ function roomForAgent(frame: OfficeFrame, agent: AgentView): RoomGeometry | unde
   return frame.floors
     .find((floor) => floor.floorId === agent.floorId)
     ?.rooms.find((room) => room.id === agent.roomId)
+}
+
+// A theme picks an agent's character from the bay of its office; shared rooms have none.
+export function bayForAgent(frame: OfficeFrame, agent: AgentView): number {
+  return roomForAgent(frame, agent)?.bay ?? 0
+}
+
+// The subagent or teammate behind an agent keyed `${sessionKey}#${id}`; the lead has none.
+export function memberForAgent(
+  session: SessionRef | undefined,
+  agentKey: string
+): SubagentRef | undefined {
+  if (!session || !agentKey.startsWith(`${session.key}#`)) return undefined
+  const memberId = agentKey.slice(session.key.length + 1)
+  return session.subagents.find((member) => member.id === memberId)
 }
 
 export function sessionForAgent(frame: OfficeFrame, agent: AgentView): SessionRef | undefined {

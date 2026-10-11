@@ -216,15 +216,16 @@ describe('createWebBridge', () => {
       })
     })
 
-    it('fails plainly in a view-only Office, with nothing the page cannot show', async () => {
+    it('passes on a view-only refusal, so the Office can say the page is view-only', async () => {
       const refusal = (): Response => jsonReply({ success: false, reason: 'not-permitted' }, 403)
       fetchMock.mockImplementation(async () => refusal())
       const bridge = createWebBridge(TOKEN)
+      const refused = { success: false, reason: 'not-permitted' }
 
-      expect(await bridge.send('claude:s1', 'hi')).toEqual({ success: false })
-      expect(await bridge.respond('claude:s1', 'approve', 'f1')).toEqual({ success: false })
-      expect(await bridge.start('p_app', 'claude')).toEqual({ success: false })
-      expect(await bridge.peek('claude:s1')).toEqual({ success: false, lines: [] })
+      expect(await bridge.send('claude:s1', 'hi')).toEqual(refused)
+      expect(await bridge.respond('claude:s1', 'approve', 'f1')).toEqual(refused)
+      expect(await bridge.start('p_app', 'claude')).toEqual(refused)
+      expect(await bridge.peek('claude:s1')).toEqual({ ...refused, lines: [] })
     })
 
     it.each([

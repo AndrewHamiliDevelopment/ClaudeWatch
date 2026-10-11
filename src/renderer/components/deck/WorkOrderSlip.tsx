@@ -11,9 +11,24 @@ const SEAL_ICON: Record<WorkOrder['attention'], LucideIcon> = {
   question: CircleHelp
 }
 
+// The paper itself, shared with the Office HUD's work orders.
+export const SLIP_CLASS = 'on-paper rounded bg-paper text-ink shadow-slip'
+
+export function Seal({ attention }: { attention: WorkOrder['attention'] }) {
+  const SealIcon = SEAL_ICON[attention]
+  return (
+    <span
+      className="inline-grid size-[30px] shrink-0 -rotate-[4deg] place-items-center rounded-[5px] bg-seal text-paper"
+      aria-hidden="true"
+    >
+      <SealIcon className="size-4" strokeWidth={2.1} />
+    </span>
+  )
+}
+
 const CLOCK_INTERVAL_MS = 1000
 
-function WaitClock({ sinceMs, isTerse = false }: { sinceMs: number; isTerse?: boolean }) {
+export function WaitClock({ sinceMs, isTerse = false }: { sinceMs: number; isTerse?: boolean }) {
   const nowMs = useNow(CLOCK_INTERVAL_MS)
   const waitedSeconds = Math.max(0, Math.floor((nowMs - sinceMs) / 1000))
   return (
@@ -32,18 +47,17 @@ interface WorkOrderSlipProps {
 
 // Paper is reserved for "needs you": the seal icon and the words carry it without colour.
 export function WorkOrderSlip({ order, isCompact = false }: WorkOrderSlipProps) {
-  const SealIcon = SEAL_ICON[order.attention]
   const reason = GEM_SPECS[order.attention].label
   const action = WORK_ORDER_ACTION[order.attention]
 
   return (
-    <li className="on-paper flex items-center gap-2.5 rounded bg-paper px-2.5 py-2 text-ink shadow-slip motion-safe:animate-slip-drop">
-      <span
-        className="inline-grid size-[30px] shrink-0 -rotate-[4deg] place-items-center rounded-[5px] bg-seal text-paper"
-        aria-hidden="true"
-      >
-        <SealIcon className="size-4" strokeWidth={2.1} />
-      </span>
+    <li
+      className={cn(
+        SLIP_CLASS,
+        'flex items-center gap-2.5 px-2.5 py-2 motion-safe:animate-slip-drop'
+      )}
+    >
+      <Seal attention={order.attention} />
       <div className="min-w-0 flex-1">
         <h3 className="truncate text-body font-bold">{order.sessionName}</h3>
         <p className="truncate text-xs text-ink-soft">

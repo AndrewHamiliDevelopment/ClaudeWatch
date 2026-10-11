@@ -17,6 +17,8 @@ export const BUTTON_QUIET_COMPACT_CLASS = `${BUTTON_COMPACT} ${QUIET_SKIN}`
 
 // The one button that sits on paper.
 export const BUTTON_INK_CLASS = `${BUTTON_COMPACT} bg-ink text-paper hover:bg-ink/85`
+// Its second choice (Deny beside Approve): an ink outline, so the first still leads.
+export const BUTTON_INK_QUIET_CLASS = `${BUTTON_COMPACT} text-ink ring-1 ring-inset ring-ink hover:bg-ink/10`
 
 const ICON_BUTTON_BASE =
   'inline-grid shrink-0 place-items-center rounded-md text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary'

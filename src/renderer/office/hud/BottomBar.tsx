@@ -1,9 +1,12 @@
-import { RotateCcw, RotateCw } from 'lucide-react'
-import { cn } from '../../lib/utils'
+import { Maximize, RotateCcw, RotateCw, ZoomIn, ZoomOut, type LucideIcon } from 'lucide-react'
+import { Plate } from '../../components/deck/Plate'
+import type { ZoomDirection } from '../logic/camera-bands'
 import type { WallsMode } from '../logic/room-layout'
-import { FOCUS_RING_CLASS, HUD_BUTTON_CLASS, KBD_CLASS, PANEL_CLASS } from './hud-styles'
+import { BAR_BUTTON_CLASS, KBD_CLASS } from './hud-styles'
 
 interface BottomBarProps {
+  // The focused company or project whose theme T cycles; null cycles the office default.
+  themeScope: string | null
   themeLabel: string
   onCycleTheme: () => void
   wallsMode: WallsMode
@@ -14,6 +17,8 @@ interface BottomBarProps {
   onToggleList: () => void
   onToggleMetrics: () => void
   onRotate: (direction: -1 | 1) => void
+  onZoom: (direction: ZoomDirection) => void
+  onFit: () => void
 }
 
 const WALL_OPTIONS: readonly { mode: WallsMode; label: string; key: string }[] = [
@@ -21,12 +26,6 @@ const WALL_OPTIONS: readonly { mode: WallsMode; label: string; key: string }[] =
   { mode: 'cutaway', label: 'Cutaway', key: 'W' },
   { mode: 'down', label: 'Walls down', key: 'End' }
 ]
-
-// Same 90° snap as the Q and E keys; right-drag turns the map freely.
-const ROTATE_OPTIONS = [
-  { direction: -1, label: 'Rotate left', key: 'Q', Icon: RotateCcw },
-  { direction: 1, label: 'Rotate right', key: 'E', Icon: RotateCw }
-] as const
 
 function ToggleButton(props: {
   isPressed: boolean
@@ -41,12 +40,7 @@ function ToggleButton(props: {
       aria-pressed={props.isPressed}
       disabled={props.isDisabled}
       onClick={props.onClick}
-      className={cn(
-        HUD_BUTTON_CLASS,
-        FOCUS_RING_CLASS,
-        'flex items-center gap-1.5',
-        props.isPressed && 'bg-accent-subtle'
-      )}
+      className={BAR_BUTTON_CLASS}
     >
       {props.label}
       {props.shortcut && <kbd className={KBD_CLASS}>{props.shortcut}</kbd>}
@@ -54,10 +48,39 @@ function ToggleButton(props: {
   )
 }
 
+// A camera move the keyboard also makes: the icon is the label, the keycap shows the key.
+function CameraButton(props: {
+  label: string
+  shortcut: string
+  Icon: LucideIcon
+  isDisabled: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={props.label}
+      title={props.label}
+      aria-keyshortcuts={props.shortcut}
+      disabled={props.isDisabled}
+      onClick={props.onClick}
+      className={BAR_BUTTON_CLASS}
+    >
+      <props.Icon aria-hidden="true" className="size-3.5" />
+      <kbd className={KBD_CLASS}>{props.shortcut}</kbd>
+    </button>
+  )
+}
+
+function Divider() {
+  return <span aria-hidden="true" className="mx-1 h-5 w-px bg-border" />
+}
+
 export function BottomBar(props: BottomBarProps) {
   const isShowing3D = props.is3DAvailable && !props.isListView
+  const themeTitle = props.themeScope ? `${props.themeScope} theme` : 'Theme'
   return (
-    <div className={cn(PANEL_CLASS, 'flex flex-wrap items-center gap-1 p-1.5')}>
+    <Plate faceClassName="flex flex-wrap items-center gap-1 p-1.5">
       <div role="group" aria-label="Walls" className="flex gap-1">
         {WALL_OPTIONS.map((option) => (
           <ToggleButton
@@ -70,25 +93,46 @@ export function BottomBar(props: BottomBarProps) {
           />
         ))}
       </div>
-      <span aria-hidden="true" className="mx-1 h-5 w-px bg-border-strong" />
-      <div role="group" aria-label="Rotate the map" className="flex gap-1">
-        {ROTATE_OPTIONS.map((option) => (
-          <button
-            key={option.key}
-            type="button"
-            aria-label={option.label}
-            aria-keyshortcuts={option.key}
-            disabled={!isShowing3D}
-            onClick={() => props.onRotate(option.direction)}
-            className={cn(HUD_BUTTON_CLASS, FOCUS_RING_CLASS, 'flex items-center gap-1.5')}
-          >
-            <option.Icon aria-hidden="true" className="size-3.5" />
-            {option.label}
-            <kbd className={KBD_CLASS}>{option.key}</kbd>
-          </button>
-        ))}
+      <Divider />
+      {/* The same moves as the keys; right-drag turns the map freely and the wheel zooms. */}
+      <div role="group" aria-label="Camera" className="flex gap-1">
+        <CameraButton
+          label="Rotate left"
+          shortcut="Q"
+          Icon={RotateCcw}
+          isDisabled={!isShowing3D}
+          onClick={() => props.onRotate(-1)}
+        />
+        <CameraButton
+          label="Rotate right"
+          shortcut="E"
+          Icon={RotateCw}
+          isDisabled={!isShowing3D}
+          onClick={() => props.onRotate(1)}
+        />
+        <CameraButton
+          label="Zoom out"
+          shortcut="-"
+          Icon={ZoomOut}
+          isDisabled={!isShowing3D}
+          onClick={() => props.onZoom('out')}
+        />
+        <CameraButton
+          label="Zoom in"
+          shortcut="="
+          Icon={ZoomIn}
+          isDisabled={!isShowing3D}
+          onClick={() => props.onZoom('in')}
+        />
+        <CameraButton
+          label="Fit"
+          shortcut="0"
+          Icon={Maximize}
+          isDisabled={!isShowing3D}
+          onClick={props.onFit}
+        />
       </div>
-      <span aria-hidden="true" className="mx-1 h-5 w-px bg-border-strong" />
+      <Divider />
       <ToggleButton
         label="List view"
         shortcut="L"
@@ -96,12 +140,8 @@ export function BottomBar(props: BottomBarProps) {
         isDisabled={!props.is3DAvailable}
         onClick={props.onToggleList}
       />
-      <button
-        type="button"
-        onClick={props.onCycleTheme}
-        className={cn(HUD_BUTTON_CLASS, FOCUS_RING_CLASS, 'flex items-center gap-1.5')}
-      >
-        Theme: {props.themeLabel} <kbd className={KBD_CLASS}>T</kbd>
+      <button type="button" onClick={props.onCycleTheme} className={BAR_BUTTON_CLASS}>
+        {themeTitle}: {props.themeLabel} <kbd className={KBD_CLASS}>T</kbd>
       </button>
       <ToggleButton
         label="Metrics"
@@ -109,6 +149,6 @@ export function BottomBar(props: BottomBarProps) {
         isDisabled={!isShowing3D}
         onClick={props.onToggleMetrics}
       />
-    </div>
+    </Plate>
   )
 }

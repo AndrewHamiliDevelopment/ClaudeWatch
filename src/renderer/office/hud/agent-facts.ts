@@ -1,0 +1,48 @@
+import type { AgentView } from '../../../shared/office/types'
+import { sessionTokens, type AgentState } from '../../deck/roster'
+import { memberForAgent, sessionForAgent } from '../logic/floor-model'
+import { isTeammate, reachTarget } from '../logic/interactions'
+import { GEM_SPECS } from '../logic/status-gem'
+import type { OfficeFrame } from '../scene-model'
+import { memberTokens } from './tokens'
+
+type AgentKind = 'lead' | 'subagent' | 'teammate'
+
+export interface AgentFacts {
+  kind: AgentKind
+  tokens: number | null
+  // What Focus terminal is asked for: the agent's own pane, or its parent's for a subagent.
+  focusKey: string
+}
+
+// One lookup per frame, so a list row does not search the sessions for its agent.
+export function buildAgentFacts(frame: OfficeFrame): Map<string, AgentFacts> {
+  const facts = new Map<string, AgentFacts>()
+  for (const agent of frame.agents) {
+    const session = sessionForAgent(frame, agent)
+    const member = memberForAgent(session, agent.agentKey)
+    const memberCount = member ? memberTokens(member) : null
+    facts.set(agent.agentKey, {
+      kind: isTeammate(member) ? 'teammate' : agent.isSubagent ? 'subagent' : 'lead',
+      tokens: agent.isSubagent ? memberCount : sessionTokens(session?.usage),
+      focusKey: session ? reachTarget(session, member).key : agent.agentKey
+    })
+  }
+  return facts
+}
+
+// The Deck's state vocabulary, so an agent reads the same in the Office and on the dashboard.
+export function agentStateMark(agent: Pick<AgentView, 'attention' | 'activity'>): {
+  state: AgentState
+  detail: string | null
+} {
+  switch (agent.attention) {
+    case 'permission':
+    case 'question':
+      return { state: 'needs-you', detail: GEM_SPECS[agent.attention].label }
+    case 'none':
+      return { state: agent.activity === 'idle' ? 'idle' : 'working', detail: null }
+    default:
+      return { state: agent.attention, detail: null }
+  }
+}

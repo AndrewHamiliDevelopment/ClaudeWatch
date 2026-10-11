@@ -66,15 +66,19 @@ beforeEach(() => localStorage.clear())
 it('passes theme selection and building totals to the scene and flies to zones from it', async () => {
   render(<OfficeApp feed={feed} />)
   expect(await screen.findByText('Building Office: 1 agents, 1 waiting')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: /^Theme: Neo Edo Steam/ }))
+  expect(screen.getByLabelText('Scene theme Brass Workshop')).toBeInTheDocument()
+  expect(localStorage.getItem('claudewatch.office.theme')).toBe('brass-workshop')
+  // T walks the rest of the registry and wraps back to the first theme.
+  for (let press = 2; press <= listThemes().length; press++) fireEvent.keyDown(window, { key: 't' })
+  expect(screen.getByLabelText('Scene theme Neo Edo Steam')).toBeInTheDocument()
+  // Once a zone is focused the theme control belongs to it, and the office default stays put.
   fireEvent.click(screen.getByRole('button', { name: 'Double-click Forge' }))
   expect(screen.getByRole('button', { name: /^Forge, 1 agent/ })).toHaveAttribute(
     'aria-current',
     'true'
   )
-  fireEvent.click(screen.getByRole('button', { name: /Theme: Neo Edo Steam/ }))
-  expect(screen.getByLabelText('Scene theme Brass Workshop')).toBeInTheDocument()
-  expect(localStorage.getItem('claudewatch.office.theme')).toBe('brass-workshop')
-  // T walks the rest of the registry and wraps back to the first theme.
-  for (let press = 2; press <= listThemes().length; press++) fireEvent.keyDown(window, { key: 't' })
+  fireEvent.click(screen.getByRole('button', { name: /^Forge theme: Neo Edo Steam/ }))
+  expect(screen.getByRole('button', { name: /^Forge theme: Brass Workshop/ })).toBeInTheDocument()
   expect(screen.getByLabelText('Scene theme Neo Edo Steam')).toBeInTheDocument()
 })

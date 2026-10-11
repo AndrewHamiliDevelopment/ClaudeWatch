@@ -4,8 +4,10 @@ import {
   canRespond,
   canTalk,
   failureMessage,
+  focusMessage,
   MAX_MESSAGE_CHARS,
-  messageProblem
+  messageProblem,
+  reachTarget
 } from '../logic/interactions'
 import { INITIAL_OFFICE_STATE, officeReducer } from '../logic/office-reducer'
 import { makeAgent, makeFloor, makeFrame, makeRoom, makeSession } from './fixtures'
@@ -31,7 +33,7 @@ describe('availability', () => {
 describe('failureMessage', () => {
   it('has plain words for every failure', () => {
     expect(failureMessage('not-in-orca')).toBe(
-      'This agent runs in a plain terminal. Use Jump to terminal to reply there.'
+      'This agent runs in a plain terminal. Use Focus terminal to reply there.'
     )
     expect(failureMessage('orca-unavailable')).toBe(
       "Orca isn't responding. Check that it's running."
@@ -43,14 +45,74 @@ describe('failureMessage', () => {
       'No permission prompt is showing for this agent right now.'
     )
     expect(failureMessage('unsupported-provider')).toBe(
-      'Answering prompts from the office works for Claude agents. Jump to the terminal for Codex.'
+      'Answering prompts from the office works for Claude agents. Focus the terminal for Codex.'
     )
     expect(failureMessage('invalid-input')).toBe('Type a message first (up to 4000 characters).')
     expect(failureMessage('unknown-session')).toBe('This agent has left the office.')
+    expect(failureMessage('not-permitted')).toBe(
+      'This page is view-only. Start it with --interactive to act on agents.'
+    )
   })
 
   it('still says something when the reason is missing', () => {
     expect(failureMessage(undefined)).toMatch(/try again/i)
+  })
+})
+
+describe('reachTarget', () => {
+  const lead = makeSession({ key: 'claude:a', name: 'office renderer', host: 'terminal' })
+  const teammate = {
+    id: 't1',
+    type: 'lena',
+    name: 'lena-hud',
+    kind: 'teammate',
+    activity: 'editing',
+    orcaPaneKey: 'pane-2'
+  } as const
+
+  it('reaches a lead or one of its subagents through the lead terminal', () => {
+    expect(reachTarget(lead, undefined)).toEqual({
+      key: 'claude:a',
+      name: 'office renderer',
+      host: 'terminal'
+    })
+    expect(reachTarget(lead, { id: 's1', type: 'Explore', activity: 'idle' }).key).toBe('claude:a')
+  })
+
+  it('reaches a teammate through its own pane, under its own name', () => {
+    expect(reachTarget(lead, teammate)).toEqual({
+      key: 'claude:a#t1',
+      name: 'lena-hud',
+      host: 'orca'
+    })
+  })
+
+  it('falls back to the lead host for a teammate without a pane', () => {
+    expect(reachTarget(lead, { ...teammate, orcaPaneKey: null }).host).toBe('terminal')
+  })
+})
+
+describe('focusMessage', () => {
+  it('says nothing when the agent pane itself came forward', () => {
+    expect(focusMessage({ success: true, target: 'pane' })).toBe('')
+  })
+
+  it('says plainly when only Orca could be raised, with the reason', () => {
+    expect(focusMessage({ success: false, target: 'app', reason: 'terminal-not-found' })).toBe(
+      "Orca is in front, but not on this agent's pane. Couldn't find this agent's Orca pane. It may have closed."
+    )
+  })
+
+  it('says when a terminal was opened at the folder instead', () => {
+    expect(focusMessage({ success: true, target: 'terminal' })).toBe(
+      "Opened a terminal at this agent's folder."
+    )
+  })
+
+  it('explains a failure that raised nothing', () => {
+    expect(focusMessage({ success: false, reason: 'unknown-session' })).toBe(
+      'This agent has left the office.'
+    )
   })
 })
 

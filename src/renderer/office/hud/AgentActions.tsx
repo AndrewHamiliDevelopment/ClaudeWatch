@@ -1,33 +1,49 @@
 import type { SessionRef } from '../../../shared/office/types'
-import { canPeek, canRespond, canTalk, failureMessage } from '../logic/interactions'
+import {
+  canPeek,
+  canRespond,
+  canTalk,
+  failureMessage,
+  type ReachTarget
+} from '../logic/interactions'
 import type { OfficeFeed } from '../scene-model'
 import { PeekPanel } from './PeekPanel'
 import { PermissionPanel } from './PermissionPanel'
 import { TalkBox } from './TalkBox'
+import { WorkOrderNote } from './WorkOrderNote'
 
 interface AgentActionsProps {
   session: SessionRef
+  // The session itself, or the teammate selected within it.
+  target: ReachTarget
   feed: OfficeFeed
   isReviewing: boolean
+  onReview: () => void
   onReviewClose: () => void
-  onSent: (sessionKey: string) => void
+  onFocusTerminal: () => void
+  onSent: (agentKey: string) => void
 }
 
-// Talk, review and peek for the inspected agent, each shown only when the session can be reached.
+// The work order, talk, review and peek for the inspected agent, each shown only when it applies.
 export function AgentActions({
   session,
+  target,
   feed,
   isReviewing,
+  onReview,
   onReviewClose,
+  onFocusTerminal,
   onSent
 }: AgentActionsProps) {
-  if (!canTalk(session)) {
-    return <p className="text-caption text-text-secondary">{failureMessage('not-in-orca')}</p>
-  }
+  const isOwnSession = target.key === session.key
+  // Mounted while reviewing even after the prompt clears, so the panel itself closes the review.
+  const isReviewOpen =
+    isOwnSession && isReviewing && canRespond({ ...session, attention: 'permission' })
+  const { attention } = session
+  const waitingOn = attention === 'permission' || attention === 'question' ? attention : null
   return (
     <div className="flex flex-col gap-3">
-      {/* Mounted while reviewing even after the prompt clears, so the panel itself closes the review. */}
-      {isReviewing && canRespond({ ...session, attention: 'permission' }) && (
+      {isReviewOpen && (
         <PermissionPanel
           session={session}
           peek={feed.peek}
@@ -35,13 +51,20 @@ export function AgentActions({
           onClose={onReviewClose}
         />
       )}
-      <TalkBox
-        sessionKey={session.key}
-        sessionName={session.name}
-        send={feed.send}
-        onSent={onSent}
-      />
-      {canPeek(session) && <PeekPanel sessionKey={session.key} peek={feed.peek} />}
+      {isOwnSession && waitingOn && !isReviewOpen && (
+        <WorkOrderNote
+          attention={waitingOn}
+          sessionName={session.name}
+          sinceMs={session.updatedAtMs}
+          onAction={canRespond(session) ? onReview : onFocusTerminal}
+        />
+      )}
+      {canTalk(target) ? (
+        <TalkBox agentKey={target.key} agentName={target.name} send={feed.send} onSent={onSent} />
+      ) : (
+        <p className="text-xs text-text-secondary">{failureMessage('not-in-orca')}</p>
+      )}
+      {canPeek(target) && <PeekPanel agentKey={target.key} peek={feed.peek} />}
     </div>
   )
 }

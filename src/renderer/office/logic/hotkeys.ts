@@ -6,6 +6,7 @@ export type OfficeCommand =
   | { type: 'next-attention' }
   | { type: 'toggle-list' }
   | { type: 'cycle-theme' }
+  | { type: 'focus-terminal' }
   | { type: 'company-number'; number: number }
   | { type: 'rotate'; direction: -1 | 1 }
   | { type: 'zoom'; direction: ZoomDirection }
@@ -26,6 +27,7 @@ const FIXED_COMMANDS: Record<string, OfficeCommand> = {
   n: { type: 'next-attention' },
   l: { type: 'toggle-list' },
   t: { type: 'cycle-theme' },
+  f: { type: 'focus-terminal' },
   q: { type: 'rotate', direction: -1 },
   e: { type: 'rotate', direction: 1 },
   '-': { type: 'zoom', direction: 'out' },

@@ -16,6 +16,10 @@ export interface FixtureSession {
   offset: number
   attentionScript?: readonly AgentAttention[]
   subagentScript?: readonly number[]
+  // Agent-team members: each has a name, a process and a pane of its own.
+  teammates?: readonly { name: string; type: string }[]
+  // Arrives with `usage: null`, the way a session does before its transcript is read.
+  isUncounted?: boolean
 }
 
 export interface FixtureProject {
@@ -63,7 +67,11 @@ export const PROJECTS: readonly FixtureProject[] = [
         host: 'orca',
         period: 3,
         offset: 0,
-        subagentScript: [4, 3, 1, 0]
+        subagentScript: [2, 1, 1, 0],
+        teammates: [
+          { name: 'lena-office-hud', type: 'lena' },
+          { name: 'ravi-bridge-usage', type: 'ravi' }
+        ]
       },
       { name: 'bridge reducer', provider: 'codex', period: 4, offset: 2 },
       {
@@ -102,7 +110,7 @@ export const PROJECTS: readonly FixtureProject[] = [
         offset: 3,
         subagentScript: [1, 1, 2, 0]
       },
-      { name: 'map clustering', provider: 'codex', period: 2, offset: 0 },
+      { name: 'map clustering', provider: 'codex', period: 2, offset: 0, isUncounted: true },
       {
         name: 'agent dashboard',
         provider: 'claude',

@@ -28,6 +28,12 @@ describe('commandForKey', () => {
     expect(commandForKey(key('e'))).toEqual({ type: 'rotate', direction: 1 })
   })
 
+  it('focuses the selected agent terminal on F', () => {
+    expect(commandForKey(key('f'))).toEqual({ type: 'focus-terminal' })
+    expect(commandForKey(key('F'))).toEqual({ type: 'focus-terminal' })
+    expect(commandForKey(key('f', { isTargetEditable: true }))).toBeNull()
+  })
+
   it('gives the wheel zoom bands a keyboard alternative', () => {
     expect(commandForKey(key('-'))).toEqual({ type: 'zoom', direction: 'out' })
     expect(commandForKey(key('='))).toEqual({ type: 'zoom', direction: 'in' })

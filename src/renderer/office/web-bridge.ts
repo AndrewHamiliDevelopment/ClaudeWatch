@@ -22,7 +22,8 @@ const FAILURES: Record<InteractionFailure, true> = {
   'no-permission-prompt': true,
   'prompt-changed': true,
   'unsupported-provider': true,
-  'invalid-input': true
+  'invalid-input': true,
+  'not-permitted': true
 }
 const FOCUS_TARGETS = ['pane', 'app', 'terminal'] as const
 
@@ -60,8 +61,8 @@ const field = (reply: unknown, name: string): unknown =>
 const isFailure = (value: unknown): value is InteractionFailure =>
   typeof value === 'string' && Object.hasOwn(FAILURES, value)
 
-// A reason this page does not know (a view-only server's refusal) is dropped, so the Office
-// shows its general failure wording instead of nothing.
+// A reason this page does not know is dropped, so the Office shows its general failure
+// wording instead of nothing.
 function toResult(reply: unknown): InteractionResult {
   if (field(reply, 'success') === true) return { success: true }
   const reason = field(reply, 'reason')

@@ -1,5 +1,6 @@
 import type {
   AgentView,
+  FocusResult,
   InteractionResult,
   PeekResult,
   PermissionDecision,
@@ -78,6 +79,9 @@ export interface OfficeFrame {
 export interface OfficeFeed {
   subscribe(listener: (frame: OfficeFrame) => void): () => void
   jump(sessionKey: string): void
+  // `agentKey` is a session key, or `${sessionKey}#${memberId}` for a teammate. Optional until
+  // the live feed forwards it; the HUD reaches the bridge directly meanwhile.
+  focus?(agentKey: string): Promise<FocusResult>
   send(sessionKey: string, text: string): Promise<InteractionResult>
   respond(
     sessionKey: string,
