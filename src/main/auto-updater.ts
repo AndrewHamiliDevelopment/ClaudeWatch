@@ -55,12 +55,14 @@ export class AutoUpdaterManager {
     })
   }
 
+  // A failure also arrives as the 'error' event, which is what the windows are told; the
+  // returned promise is settled here so it is not an unhandled rejection as well.
   checkForUpdates(): void {
-    if (!is.dev) autoUpdater.checkForUpdates()
+    if (!is.dev) void Promise.resolve(autoUpdater.checkForUpdates()).catch(() => undefined)
   }
 
   downloadUpdate(): void {
-    if (!is.dev) autoUpdater.downloadUpdate()
+    if (!is.dev) void Promise.resolve(autoUpdater.downloadUpdate()).catch(() => undefined)
   }
 
   quitAndInstall(): void {

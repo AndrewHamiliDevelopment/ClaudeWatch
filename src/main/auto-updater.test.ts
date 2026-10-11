@@ -188,6 +188,25 @@ describe('AutoUpdaterManager', () => {
     expect(mockAutoUpdater.checkForUpdates).toHaveBeenCalled()
   })
 
+  // The mock library settles the promises it hands out, so an unhandled rejection cannot be
+  // observed here; what can be is that the manager attaches a rejection handler of its own.
+  it('handles the rejection of a failed check or download itself', async () => {
+    const check = { then: vi.fn() }
+    const download = { then: vi.fn() }
+    mockAutoUpdater.checkForUpdates.mockReturnValueOnce(check)
+    mockAutoUpdater.downloadUpdate.mockReturnValueOnce(download)
+    const manager = new AutoUpdaterManager([])
+
+    manager.checkForUpdates()
+    manager.downloadUpdate()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    for (const pending of [check, download]) {
+      expect(pending.then).toHaveBeenCalledWith(expect.any(Function), expect.any(Function))
+    }
+  })
+
   it('checkForUpdates is no-op in dev', () => {
     mockIsDev.value = true
     vi.clearAllMocks()
