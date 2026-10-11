@@ -1,18 +1,7 @@
 import { createElement, isValidElement, type ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
-import {
-  BoxGeometry,
-  CapsuleGeometry,
-  ConeGeometry,
-  CylinderGeometry,
-  IcosahedronGeometry,
-  PlaneGeometry,
-  RingGeometry,
-  SphereGeometry,
-  TorusGeometry,
-  Texture,
-  type BufferGeometry
-} from 'three'
+import { makeGeometry } from './geometry-audit.test-utils'
+import { Texture } from 'three'
 import { InstancedParts } from '../scene/InstancedParts'
 import { ThemePreviewContent } from './ThemePreview'
 import { listThemes } from './registry'
@@ -45,39 +34,7 @@ function expand(node: ReactNode): ReactNode {
 }
 
 function triangleCount(kind: string, args: readonly (number | undefined)[]): number {
-  const [a, b, c, d, e, f] = args
-  let geometry: BufferGeometry
-  switch (kind) {
-    case 'boxGeometry':
-      geometry = new BoxGeometry(a, b, c)
-      break
-    case 'sphereGeometry':
-      geometry = new SphereGeometry(a, b, c)
-      break
-    case 'cylinderGeometry':
-      geometry = new CylinderGeometry(a, b, c, d)
-      break
-    case 'capsuleGeometry':
-      geometry = new CapsuleGeometry(a, b, c, d)
-      break
-    case 'torusGeometry':
-      geometry = new TorusGeometry(a, b, c, d, e)
-      break
-    case 'coneGeometry':
-      geometry = new ConeGeometry(a, b, c)
-      break
-    case 'icosahedronGeometry':
-      geometry = new IcosahedronGeometry(a, b)
-      break
-    case 'planeGeometry':
-      geometry = new PlaneGeometry(a, b)
-      break
-    case 'ringGeometry':
-      geometry = new RingGeometry(a, b, c, d, e, f)
-      break
-    default:
-      throw new Error(`Uncounted geometry: ${kind}`)
-  }
+  const geometry = makeGeometry(kind, args)
   const triangles = (geometry.index?.count ?? geometry.attributes.position.count) / 3
   geometry.dispose()
   return triangles

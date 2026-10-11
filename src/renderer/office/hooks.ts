@@ -1,4 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+
+import { listThemes, themeForTeam } from './themes/registry'
 
 const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)'
 
@@ -23,4 +25,36 @@ export function useNow(intervalMs: number): number {
     return () => clearInterval(timer)
   }, [intervalMs])
   return now
+}
+
+const THEME_STORAGE_KEY = 'claudewatch.office.theme'
+
+export function useOfficeTheme() {
+  const [hasChosenTheme, setHasChosenTheme] = useState(false)
+  const [theme, setTheme] = useState(() => {
+    try {
+      const stored = localStorage.getItem(THEME_STORAGE_KEY)
+      return listThemes().find((candidate) => candidate.id === stored) ?? themeForTeam()
+    } catch {
+      return themeForTeam()
+    }
+  })
+  useEffect(() => {
+    if (!hasChosenTheme) return
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, theme.id)
+    } catch {
+      // A locked-down storage backend must not disable the office controls.
+    }
+  }, [theme.id, hasChosenTheme])
+  const cycleTheme = useCallback(() => {
+    setHasChosenTheme(true)
+    setTheme((current) => {
+      const themes = listThemes()
+      return themes[
+        (themes.findIndex((candidate) => candidate.id === current.id) + 1) % themes.length
+      ]
+    })
+  }, [])
+  return { theme, cycleTheme }
 }

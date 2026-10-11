@@ -65,9 +65,11 @@ export interface DeskProps extends RoomProps {
 export interface TowerFloor {
   floorId: string
   label: string
+  agentCount?: number
   attentionCount: number
 }
 export interface TowerProps {
+  onFocusFloor?: (floorId: string) => void
   floors: readonly TowerFloor[]
 }
 

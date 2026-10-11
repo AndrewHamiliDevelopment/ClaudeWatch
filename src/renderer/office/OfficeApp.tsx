@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useReducer, useState } from 'react'
-import { useNow } from './hooks'
+import { useNow, useOfficeTheme } from './hooks'
 import { buildAttentionQueue } from './logic/attention-queue'
 import {
   buildListTree,
@@ -28,7 +28,7 @@ import {
 } from './use-office-effects'
 import { canCreateWebGL2 } from './webgl-support'
 
-// three.js loads in its own chunk so the HUD paints before the scene is ready.
+// The scene component loads separately so the HUD can paint before Canvas mounts.
 const OfficeScene = lazy(() => import('./scene/OfficeScene'))
 const SPEECH_BUBBLE_MS = 1500
 
@@ -37,13 +37,14 @@ export function OfficeApp({ feed }: { feed: OfficeFeed }) {
   const [hasWebGL] = useState(canCreateWebGL2)
   const [hasSceneFailed, setHasSceneFailed] = useState(false)
   const [metrics] = useState(createFrameMetrics)
+  const { theme, cycleTheme } = useOfficeTheme()
   const nowMs = useNow(1000)
   const [speakingAgentKey, setSpeakingAgentKey] = useState<string | null>(null)
 
   const is3DAvailable = hasWebGL && !hasSceneFailed
   const isShowingList = state.isListView || !is3DAvailable
   useFeedSubscription(feed, dispatch)
-  useOfficeHotkeys(dispatch, !is3DAvailable)
+  useOfficeHotkeys(dispatch, !is3DAvailable, cycleTheme)
 
   const frame = state.frame
   const queue = useMemo(() => buildAttentionQueue(frame?.sessions ?? []), [frame])
@@ -89,6 +90,9 @@ export function OfficeApp({ feed }: { feed: OfficeFeed }) {
         <SceneErrorBoundary onError={onSceneError}>
           <Suspense fallback={null}>
             <OfficeScene
+              theme={theme}
+              floors={floors}
+              onFocusFloor={(floorId) => dispatch({ type: 'floor-selected', floorId })}
               floor={focusedFloor}
               agents={frame.agents.filter((agent) => agent.floorId === focusedFloor.floorId)}
               cards={buildNameCards(frame, focusedFloor.floorId, state.selectedAgentKey)}
@@ -176,6 +180,8 @@ export function OfficeApp({ feed }: { feed: OfficeFeed }) {
 
         <div className="pointer-events-auto justify-self-center md:col-span-3">
           <BottomBar
+            themeLabel={theme.label}
+            onCycleTheme={cycleTheme}
             wallsMode={state.wallsMode}
             isListView={state.isListView}
             is3DAvailable={is3DAvailable}

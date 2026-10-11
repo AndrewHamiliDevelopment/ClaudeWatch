@@ -1,9 +1,9 @@
 import { useMemo } from 'react'
 import { STEAM } from '../office-palette'
 import type { FloorGeometry } from '../scene-model'
-import type { InstancePlacement } from './instancing'
-import { InstancedParts, Matte } from './InstancedParts'
-import { signTexture } from './textures'
+import type { InstancePlacement } from '../scene/instancing'
+import { InstancedParts, Matte } from '../scene/InstancedParts'
+import { signTexture } from '../scene/textures'
 
 const CAGE = { size: 1.8, height: 2.4, bar: 0.035, barsPerSide: 4 }
 

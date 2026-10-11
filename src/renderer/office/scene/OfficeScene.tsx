@@ -14,8 +14,14 @@ import { FloorView } from './FloorView'
 import { CardProjector, NameCardLayer, type CardAnchors } from './NameCards'
 import { FrameGovernor, MetricsProbe } from './RenderLoop'
 import { Robot } from './Robot'
+import { BatchedScene } from './BatchedScene'
+import { WorldView } from './WorldView'
+import type { OfficeTheme, TowerFloor } from '../themes/types'
 
 interface OfficeSceneProps {
+  theme: OfficeTheme
+  floors: readonly TowerFloor[]
+  onFocusFloor: (floorId: string) => void
   floor: FloorGeometry
   agents: readonly AgentView[]
   cards: readonly NameCard[]
@@ -38,7 +44,7 @@ const INITIAL_CAMERA_POSITION: [number, number, number] = [
   CAMERA_DISTANCE * Math.sin(ISO_POLAR) * Math.cos(ISO_START_AZIMUTH)
 ]
 
-// Only the focused floor is 3D; other floors live in the elevator panel (research §11).
+// Other floors are storeys in the building overview; only the focused plate has agents.
 export default function OfficeScene(props: OfficeSceneProps) {
   const isReducedMotion = usePrefersReducedMotion()
   const [band, setBand] = useState<ZoomBand>('floor')
@@ -61,24 +67,44 @@ export default function OfficeScene(props: OfficeSceneProps) {
         <color attach="background" args={[SCENE_BACKGROUND]} />
         <hemisphereLight args={['#FFF3DD', '#3A3A40', 2.2]} />
         <directionalLight position={[10, 20, 6]} intensity={1.8} />
-        <FloorView
-          floor={props.floor}
-          wallsMode={props.wallsMode}
-          isReducedMotion={isReducedMotion}
-        />
-        {props.agents.map((agent) => (
-          <Robot
-            key={agent.agentKey}
-            agent={agent}
-            isSelected={agent.agentKey === props.selectedAgentKey}
-            isSpeaking={agent.agentKey === props.speakingAgentKey}
+        <BatchedScene
+          revision={JSON.stringify([
+            props.theme.id,
+            props.floor,
+            props.selectedAgentKey,
+            props.speakingAgentKey,
+            props.agents.map((agent) => [agent.agentKey, agent.provider, agent.isSubagent])
+          ])}
+        >
+          <FloorView
+            theme={props.theme}
+            floor={props.floor}
+            wallsMode={props.wallsMode}
             isReducedMotion={isReducedMotion}
-            onSelect={props.onSelectAgent}
-            onFly={props.onFlyToAgent}
           />
-        ))}
+          {props.agents.map((agent) => (
+            <Robot
+              key={agent.agentKey}
+              theme={props.theme}
+              agent={agent}
+              isSelected={agent.agentKey === props.selectedAgentKey}
+              isSpeaking={agent.agentKey === props.speakingAgentKey}
+              isReducedMotion={isReducedMotion}
+              onSelect={props.onSelectAgent}
+              onFly={props.onFlyToAgent}
+            />
+          ))}
+        </BatchedScene>
+        <WorldView
+          theme={props.theme}
+          floor={props.floor}
+          floors={props.floors}
+          band={band}
+          onFocusFloor={props.onFocusFloor}
+        />
         <CardProjector cards={props.cards} anchors={anchors} />
         <CameraRig
+          floorCount={props.floors.length}
           floor={props.floor}
           agents={props.agents}
           selectedAgentKey={props.selectedAgentKey}

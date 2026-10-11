@@ -5,6 +5,7 @@ export type OfficeCommand =
   | { type: 'walls'; mode: WallsMode }
   | { type: 'next-attention' }
   | { type: 'toggle-list' }
+  | { type: 'cycle-theme' }
   | { type: 'floor-step'; delta: -1 | 1 }
   | { type: 'floor-number'; number: number }
   | { type: 'rotate'; direction: -1 | 1 }
@@ -25,6 +26,7 @@ const FIXED_COMMANDS: Record<string, OfficeCommand> = {
   end: { type: 'walls', mode: 'down' },
   n: { type: 'next-attention' },
   l: { type: 'toggle-list' },
+  t: { type: 'cycle-theme' },
   '[': { type: 'floor-step', delta: -1 },
   ']': { type: 'floor-step', delta: 1 },
   q: { type: 'rotate', direction: -1 },
