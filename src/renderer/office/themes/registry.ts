@@ -1,5 +1,6 @@
 import { brassWorkshop, neoEdoSteam } from './builtins'
 import type { OfficeTheme } from './types'
+import { violetCourt } from './violet-court'
 
 export const DEFAULT_THEME_ID = 'neo-edo-steam'
 const themes = new Map<string, OfficeTheme>()
@@ -11,6 +12,7 @@ export function registerTheme(theme: OfficeTheme): void {
 
 registerTheme(neoEdoSteam)
 registerTheme(brassWorkshop)
+registerTheme(violetCourt)
 
 export function getTheme(id: string): OfficeTheme {
   return themes.get(id) ?? neoEdoSteam

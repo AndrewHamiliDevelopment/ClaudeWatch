@@ -3,6 +3,7 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import { OfficeApp } from '../OfficeApp'
 import { makeAgent, makeFloor, makeFrame, makeRoom, makeSession, makeZone } from './fixtures'
 import type { OfficeFeed } from '../scene-model'
+import { listThemes } from '../themes/registry'
 import type { OfficeTheme, TowerFloor } from '../themes/types'
 
 vi.mock('../webgl-support', () => ({ canCreateWebGL2: () => true }))
@@ -73,6 +74,7 @@ it('passes theme selection and building totals to the scene and flies to zones f
   fireEvent.click(screen.getByRole('button', { name: /Theme: Neo Edo Steam/ }))
   expect(screen.getByLabelText('Scene theme Brass Workshop')).toBeInTheDocument()
   expect(localStorage.getItem('claudewatch.office.theme')).toBe('brass-workshop')
-  fireEvent.keyDown(window, { key: 't' })
+  // T walks the rest of the registry and wraps back to the first theme.
+  for (let press = 2; press <= listThemes().length; press++) fireEvent.keyDown(window, { key: 't' })
   expect(screen.getByLabelText('Scene theme Neo Edo Steam')).toBeInTheDocument()
 })

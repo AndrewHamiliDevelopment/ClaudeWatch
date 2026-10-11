@@ -267,6 +267,18 @@ it('four companies alternating the two built-in themes stay inside the draw ceil
   expect(result.triangles).toBeLessThanOrEqual(TRIANGLE_CEILING)
 })
 
+it('four companies alternating Neo Edo Steam and Violet Court stay inside the draw ceiling', () => {
+  const result = measure({
+    ...twentyAgents(4),
+    floorTheme: getTheme(EDO),
+    themeIdFor: companyThemes([EDO, 'violet-court'])
+  })
+  report('edo + violet court, 4 companies, 20 agents', result)
+  expect(result.themeCount).toBe(2)
+  expect(result.draws).toBeLessThanOrEqual(DRAW_CEILING)
+  expect(result.triangles).toBeLessThanOrEqual(TRIANGLE_CEILING)
+})
+
 it('a third theme that shares nothing still fits four companies inside the draw ceiling', () => {
   const result = measure({
     ...twentyAgents(4),
