@@ -6,8 +6,9 @@ import type {
   SessionUsage,
   SourceHealth
 } from '../shared/office/types'
+import { type CodexTotal, codexTotalOf } from '../shared/accounts'
 import { projectKey } from '../shared/office/project-key'
-import { type BridgeIo, jsonObject, object } from './io'
+import { type BridgeIo, isMissing, jsonObject, object } from './io'
 import { resolveProject } from './project-root'
 import { findRollouts } from './codex-rollouts'
 import { parseCodexUsage } from './codex-usage'
@@ -60,10 +61,20 @@ interface Remembered {
       size: number
       state: ReturnType<typeof parseCodexActivity>
       usage: SessionUsage | null
+      // The session last shown for this rollout: what its final total is filed under.
+      session: SessionRef | null
     }
   >
 }
 const remembered = new WeakMap<BridgeIo, Remembered>()
+
+export interface CodexBatch {
+  sessions: SessionRef[]
+  // The total each rollout ended on, for the sessions that left since the last look: one may
+  // have finished a turn after the last look that found its process.
+  departed: CodexTotal[]
+  sources: SourceHealth[]
+}
 
 export async function collectCodex(
   root: string,
@@ -71,8 +82,9 @@ export async function collectCodex(
   readProcesses = (): Promise<ProcessRow[]> => readProcessTable(io),
   derivesAccounts = false,
   now = Date.now()
-): Promise<{ sessions: SessionRef[]; sources: SourceHealth[] }> {
+): Promise<CodexBatch> {
   const sessions: SessionRef[] = []
+  const departed: CodexTotal[] = []
   const health: SourceHealth = { id: 'codex', ok: true, detail: 'empty' }
   let memory = remembered.get(io)
   if (!memory) {
@@ -118,7 +130,8 @@ export async function collectCodex(
             mtimeMs: rollout.mtimeMs,
             size: rollout.size,
             state: parseCodexActivity(text),
-            usage: parseCodexUsage(text)
+            usage: parseCodexUsage(text),
+            session: null
           }
           tails.set(rollout.path, tail)
         }
@@ -134,7 +147,7 @@ export async function collectCodex(
         if (usage) known.set(id, usage)
         live.add(id)
         const project = await resolveProject(cwd, io, now)
-        sessions.push({
+        const session: SessionRef = {
           key: `codex:${id}`,
           provider: 'codex',
           sessionId: id,
@@ -158,7 +171,9 @@ export async function collectCodex(
           accountKey: rollout?.accountKey ?? null,
           // A rollout names its own account, so nothing is inferred from who is signed in.
           ...(rollout?.accountKey && { accountConfidence: 'exact' as const })
-        })
+        }
+        sessions.push(session)
+        if (tail) tail.session = session
         health.detail = 'live'
       } catch {
         health.ok = false
@@ -168,10 +183,23 @@ export async function collectCodex(
     for (const id of known.keys()) if (!live.has(id)) known.delete(id)
     const running = new Set(processes.map((process) => `${process.pid}:${process.startedAtMs}`))
     for (const identity of folders.keys()) if (!running.has(identity)) folders.delete(identity)
-    for (const path of tails.keys()) if (!liveTails.has(path)) tails.delete(path)
+    for (const [path, { session }] of tails) {
+      if (liveTails.has(path)) continue
+      tails.delete(path)
+      try {
+        // Its last turn may have been written after the last look that found its process.
+        const usage = session && parseCodexUsage(await io.readTail(path))
+        const total = usage && codexTotalOf({ ...session, usage })
+        if (total) departed.push(total)
+      } catch (error) {
+        if (isMissing(error)) continue
+        health.ok = false
+        health.detail = 'rollout read failed'
+      }
+    }
   } catch {
     health.ok = false
     health.detail = 'discovery failed'
   }
-  return { sessions, sources: [health] }
+  return { sessions, departed, sources: [health] }
 }

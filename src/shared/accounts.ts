@@ -1,4 +1,4 @@
-import type { AccountConfidence, AccountRef, TokenCounts } from './office/types'
+import type { AccountConfidence, AccountRef, SessionRef, TokenCounts } from './office/types'
 
 // How long the ledger remembers a quiet transcript or a closed sign-in span. It never counts a
 // line older than this in a transcript it has no place for, so the bridge does not post one.
@@ -21,6 +21,35 @@ export interface UsageMessage {
   type: 'usage'
   v: 1
   deltas: UsageDelta[]
+}
+
+// A Codex thread's running total as the bridge last read it, with what the ledger files it
+// under. It travels beside the feed, which holds a session's numbers back for the display.
+export interface CodexTotal extends Pick<UsageDelta, 'sessionKey' | 'projectKey' | 'projectLabel'> {
+  accountKey: string | null
+  // null when the thread does not say when it began.
+  threadStartedAtMs: number | null
+  counts: TokenCounts
+}
+
+export interface CodexUsageMessage {
+  type: 'codex-usage'
+  v: 1
+  totals: CodexTotal[]
+}
+
+// null for a session that is not Codex's or has no total yet: Claude's tokens are counted from
+// its transcript lines.
+export function codexTotalOf(session: SessionRef): CodexTotal | null {
+  if (session.provider !== 'codex' || !session.usage) return null
+  return {
+    sessionKey: session.key,
+    projectKey: session.projectKey,
+    projectLabel: session.projectLabel,
+    accountKey: session.accountKey ?? null,
+    threadStartedAtMs: session.threadStartedAtMs ?? null,
+    counts: session.usage.own
+  }
 }
 
 export type AccountSource = 'default-login' | 'orca' | 'codex-rollout'

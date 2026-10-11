@@ -3,7 +3,7 @@ import { object } from '../../bridge/io'
 import type { AccountLimit, AccountSource } from '../../shared/accounts'
 import type { AccountConfidence, ProviderId, TokenCounts } from '../../shared/office/types'
 import { isAlias } from './account-records'
-import { amountOrNull, isAmount, isPosition } from './amount'
+import { amountOrNull, isAmount, isPosition, toCounts } from './amount'
 import {
   type AccountRecord,
   BEYOND_ANY_LINE,
@@ -34,15 +34,6 @@ const pairs = (value: unknown): [string, unknown][] =>
   items(value).flatMap((pair): [string, unknown][] =>
     Array.isArray(pair) && pair.length === 2 && isText(pair[0]) ? [[pair[0], pair[1]]] : []
   )
-
-function toCounts(value: unknown): TokenCounts | null {
-  const counts = object(value)
-  if (!counts) return null
-  const { input, output, cacheWrite, cacheRead } = counts
-  return isAmount(input) && isAmount(output) && isAmount(cacheWrite) && isAmount(cacheRead)
-    ? { input, output, cacheWrite, cacheRead }
-    : null
-}
 
 function toAccount(value: unknown): AccountRecord[] {
   const account = object(value)

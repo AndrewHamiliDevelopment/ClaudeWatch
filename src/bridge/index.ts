@@ -1,12 +1,12 @@
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
-import type { UsageMessage } from '../shared/accounts'
+import type { CodexUsageMessage, UsageMessage } from '../shared/accounts'
 import { paceOf } from '../shared/office/pace'
 import type { FeedMessage } from '../shared/office/types'
 import { BridgePoller } from './poller'
 
 interface BridgePort {
-  postMessage(message: FeedMessage | UsageMessage): void
+  postMessage(message: FeedMessage | UsageMessage | CodexUsageMessage): void
   on(event: 'message', listener: (event: { data: unknown }) => void): unknown
 }
 
@@ -21,7 +21,10 @@ export async function main(args = process.argv.slice(2), port?: BridgePort): Pro
     claudeRoots: roots,
     ...(args.includes('--accounts') && { derivesAccounts: true }),
     // Only a parent listens for added tokens; a one-shot run prints the snapshot alone.
-    ...(port && { onUsage: (deltas) => port.postMessage({ type: 'usage', v: 1, deltas }) })
+    ...(port && {
+      onUsage: (deltas) => port.postMessage({ type: 'usage', v: 1, deltas }),
+      onCodexTotals: (totals) => port.postMessage({ type: 'codex-usage', v: 1, totals })
+    })
   })
   if (args.includes('--once')) {
     // The first tick publishes before any transcript is counted; a one-shot run wants the numbers.

@@ -1,10 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import { accountKey } from '../../bridge/account-key'
-import { fixtureIo, registryEntry, session } from '../../bridge/__fixtures__/helpers'
+import { fixtureIo, registryEntry } from '../../bridge/__fixtures__/helpers'
 import { BridgePoller } from '../../bridge/poller'
-import { type UsageDelta, USAGE_RETENTION_MS } from '../../shared/accounts'
-import type { SessionRef } from '../../shared/office/types'
-import { countCodexSessions, countUsage, prune, recordIdentity, toUsageDeltas } from './attribution'
+import { type CodexTotal, type UsageDelta, USAGE_RETENTION_MS } from '../../shared/accounts'
+import {
+  countCodexSessions,
+  countUsage,
+  prune,
+  recordIdentity,
+  toCodexTotals,
+  toUsageDeltas
+} from './attribution'
 import type { IdentityRead } from './identity'
 import { toAccountsState } from './accounts-view'
 import { fromStored, toStored } from './ledger-shape'
@@ -289,30 +295,19 @@ describe('a bridge that starts again', () => {
 
 describe('Codex sessions', () => {
   const codexKey = accountKey('codex', 'acct_1')
-  const codex = (tokens: number | null, overrides: Partial<SessionRef> = {}): SessionRef => ({
-    ...session('c'),
-    key: 'codex:c',
-    provider: 'codex',
-    startedAtMs: at(9, 30),
-    threadStartedAtMs: at(9, 30),
+  const codex = (tokens: number, overrides: Partial<CodexTotal> = {}): CodexTotal => ({
+    sessionKey: 'codex:c',
+    projectKey: 'p_repo',
+    projectLabel: 'repo',
     accountKey: codexKey,
-    accountConfidence: 'exact',
-    usage:
-      tokens === null
-        ? null
-        : {
-            own: output(tokens),
-            subagents: output(0),
-            spawned: 0,
-            contextTokens: null,
-            contextLimit: null
-          },
+    threadStartedAtMs: at(9, 30),
+    counts: output(tokens),
     ...overrides
   })
 
   it('counts the growth of a running total once, exactly, under the account the session names', () => {
     const state = emptyLedger(at(9))
-    expect(countCodexSessions(state, [codex(null)], at(10))).toBe(false)
+    expect(countCodexSessions(state, [], at(10))).toBe(false)
     expect(countCodexSessions(state, [codex(40)], at(10, 1))).toBe(true)
     expect(countCodexSessions(state, [codex(40)], at(10, 2))).toBe(false)
     countCodexSessions(state, [codex(65)], at(10, 3))
@@ -330,7 +325,7 @@ describe('Codex sessions', () => {
 
   it.each([
     ['began before tracking and was resumed in a new process', { threadStartedAtMs: at(8) }],
-    ['does not say when it began', { threadStartedAtMs: undefined }],
+    ['does not say when it began', { threadStartedAtMs: null }],
     [
       'began longer ago than a counted total is remembered',
       { threadStartedAtMs: at(9, 30) - 31 * 24 * 60 * 60 * 1000 }
@@ -352,9 +347,31 @@ describe('Codex sessions', () => {
     expect(state.accounts).toEqual([])
   })
 
-  it('leaves Claude sessions to the transcript lines, which carry their own times', () => {
-    const state = emptyLedger(at(9))
-    const claude = { ...codex(12), key: 'claude:a', provider: 'claude' as const }
-    expect(countCodexSessions(state, [claude], at(10))).toBe(false)
+  it('takes from the bridge only well-formed totals of Codex sessions', () => {
+    const posted = (...totals: unknown[]): unknown => ({ type: 'codex-usage', v: 1, totals })
+    expect(toCodexTotals(posted(codex(40), codex(7, { accountKey: null })))).toEqual([
+      codex(40),
+      codex(7, { accountKey: null })
+    ])
+    expect(toCodexTotals(posted(codex(40, { threadStartedAtMs: null })))).toHaveLength(1)
+    for (const message of [
+      null,
+      { type: 'usage', v: 1, totals: [codex(1)] },
+      { type: 'codex-usage', v: 2, totals: [codex(1)] },
+      { type: 'codex-usage', v: 1, totals: 'many' },
+      posted('total'),
+      posted({ ...codex(1), sessionKey: 'claude:a' }),
+      posted({ ...codex(1), sessionKey: 7 }),
+      posted({ ...codex(1), projectKey: '' }),
+      posted({ ...codex(1), projectLabel: null }),
+      posted({ ...codex(1), accountKey: 'someone@example.test' }),
+      posted({ ...codex(1), accountKey: undefined }),
+      posted({ ...codex(1), threadStartedAtMs: 'today' }),
+      posted({ ...codex(1), threadStartedAtMs: undefined }),
+      posted({ ...codex(1), counts: { ...output(1), input: -1 } }),
+      posted({ ...codex(1), counts: null })
+    ]) {
+      expect(toCodexTotals(message)).toEqual([])
+    }
   })
 })
