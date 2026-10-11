@@ -31,7 +31,7 @@ Validated (B8): with six teammates running, `node out/main/bridge.js --once` rep
 - [x] Phase 4 — Theme engine: a theme per company with a project override (B5) (merged 898cdf7; two themes on one floor measure 245 to 264 draw calls, three measure 283 to 292, ceiling 300)
 - [x] Phase 5 — Dashboard and popover redesign, "Dispatch Deck", with the Open Office button (B2, B1) (merged 5f7403f, wired to the real preload in eb95d99; the built app on live sessions shows the hold lane, squads, tokens by project and Open Office with 0 console errors)
 - [x] Phase 6 — Office HUD redesign: tokens, teammates, theme picker and focus in the HUD (B2, B3, B4, B5) (merged 94a2105, then 94e3a14, d874a89, d5d77fb: tokens per office, project, agent and teammate; theme picker per company and project; Focus terminal through the feed on every host; talk and peek reach a teammate's own pane; zoom and fit buttons; 0 console errors on the preview)
-- [ ] Phase 7 — Accounts: ledger, attribution, Accounts view (B6)
+- [x] Phase 7 — Accounts: ledger, attribution, Accounts view (B6) (merged 9ac0aac and 33ec28d, then the review fixes: a ledger that reads names and plans only, kept in a 0600 file; an Accounts screen with tokens for today, 7 days and since tracking, split exact and inferred; this Mac's live ledger lists 5 accounts)
 - [x] Phase 8 — Three themes: Violet Court, Orbital Garrison, Quiet Grove (B5) (merged 005d539 + 67f02c5, ce0404b, c18b50a: 12 named characters and three parked frames or helpers per theme; alone 86 to 128 draw calls, mixed with Neo Edo Steam 212 to 231, three themes on one floor 258, ceiling 300)
 - [x] Phase 9 — Standalone Office: loopback web host and web bridge in ClaudeWatch (B7) (merged edb65a4: `npm run build:office-web` emits 10 files, 1.44 MB, largest 383,551 bytes; view-only server on 127.0.0.1 refused a request without the token and a POST to an action route; 26 guards each have a test that fails when the guard is removed)
 - [ ] Phase 10 — zkidz-claude-team: vendored Office bundle and the `zkoffice` command (B7)
@@ -115,6 +115,10 @@ Total **153h with AI | 408h without**. Phases 1 to 5 run in parallel, then 6 to 
 - ASSUMPTION: the bridge runs for the whole life of the app, not only while the Office window is open — chose this because the dashboard's "Needs you" lane, tray rows, notification clicks and the accounts ledger all read it.
 - ASSUMPTION: the fly-to frame target (worst frame at or under 34 ms) is left at the measured 36 and 43 ms on two of six fly-tos — chose this because the only known lever is caching the batch key per material, and a material's colour changes in place when a theme changes, so a cached key could batch two different colours together. One dropped frame per fly-to is the smaller harm.
 - ASSUMPTION: view-only on the web page still allows "focus this agent's pane" — chose this because it types nothing into a terminal.
+- ASSUMPTION: account watching stays on by default — chose this because the owner asked for every signed-in account to be watched; the switch and the Accounts screen say that names, plans and email addresses are read and kept on this Mac, and that turning it off keeps what was counted.
+- ASSUMPTION: Talk types only when the agent's own input line is at the bottom of its screen — chose the positive proof over a list of known dialogs after the review showed a list misses unnumbered pickers; the cost is that an unusual prompt layout is refused until its shape is added.
+- ASSUMPTION: the view-only web page still lets you focus an agent's terminal — chose this because it types nothing; outside Orca it only brings the terminal app forward.
+- ASSUMPTION: a transcript is append-only — the ledger counts a line when it lies beyond the furthest byte counted or is later than the latest time counted; a file rewritten in place to a larger size could have old lines counted again.
 - ASSUMPTION: no CI workflow is added — chose this because none was asked for; the README no longer claims one.
 - ASSUMPTION: nothing is pushed for ClaudeWatch without Angelo's word; the framework repo follows its own standing merge rule.
 
@@ -130,6 +134,8 @@ Fixed in session, outside the phase file lists:
 - `src/shared/office/feed-message.ts`, `src/main/bridge-host.ts`, `electron-builder.yml` (6494a4b): one feed-message check for both hosts; the web bundle stays out of the packaged app.
 - `src/renderer/deck/roster.ts` (fa02c77): unique crests per roster.
 - `src/renderer/office/scene/NameCards.tsx`, `src/renderer/components/deck/WorkOrderSlip.tsx` (d5d77fb): paper name tag for an agent that needs the owner.
+- Review fixes, by both reviews and the independent one (911616e..1f14739, about forty commits): Talk refuses unless the agent's input line is on screen; the Orca signature check is one requirement anchored at Apple and guards the bridge too; a one-time launch code for the web page; a finished teammate keeps its tokens; the dashboard and the Office share one token roll-up; a lost-server and a view-only state on the web page; the ledger counts by file position; `knip.json` for the dead-code scan.
+- Cleanup pass (be42ce0..9a5122c): shared helpers under `src/shared/office/` (`agent-key`, `attention`, `token-counts`), one roster builder for the three themes, one trusted IPC handler helper, and the bridge's tick cut from 8 spawned processes to 1.
 - `README.md`, `package.json` (cdaccf5): the release section and the Node version.
 
 ## Not in this batch
