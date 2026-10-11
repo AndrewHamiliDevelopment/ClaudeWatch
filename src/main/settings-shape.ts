@@ -1,19 +1,8 @@
 import { DEFAULT_SETTINGS, type AppSettings } from '../renderer/lib/types'
+import { clamp } from '../shared/range'
+import { COOLDOWN_SECONDS_RANGE, SETTING_RANGES } from '../shared/settings-ranges'
 
 const THEMES: readonly unknown[] = ['dark', 'light', 'system']
-
-// Inclusive range of every numeric setting.
-const RANGES = {
-  pollingIntervalMs: [500, 60_000],
-  cpuIdleThreshold: [0.1, 100],
-  maxHistoryEntries: [1, 10_000],
-  weeklyTokenTarget: [100_000, 100_000_000],
-  staleThresholdMinutes: [5, 120]
-} as const
-const COOLDOWN_SECONDS = [10, 120] as const
-
-const clamp = (value: number, [low, high]: readonly [number, number]): number =>
-  Math.min(Math.max(value, low), high)
 
 function hasShapeOf(value: unknown, standard: unknown): boolean {
   if (Array.isArray(standard)) {
@@ -45,14 +34,14 @@ export function conformSettings(data: unknown): Partial<AppSettings> {
     ) as AppSettings['notifications']
   }
   if (!THEMES.includes(settings.theme)) delete settings.theme
-  for (const key of Object.keys(RANGES) as (keyof typeof RANGES)[]) {
+  for (const key of Object.keys(SETTING_RANGES) as (keyof typeof SETTING_RANGES)[]) {
     const value = settings[key]
-    if (value !== undefined) settings[key] = clamp(value, RANGES[key])
+    if (value !== undefined) settings[key] = clamp(value, SETTING_RANGES[key])
   }
   if (settings.notifications?.cooldownSeconds !== undefined) {
     settings.notifications.cooldownSeconds = clamp(
       settings.notifications.cooldownSeconds,
-      COOLDOWN_SECONDS
+      COOLDOWN_SECONDS_RANGE
     )
   }
   return settings

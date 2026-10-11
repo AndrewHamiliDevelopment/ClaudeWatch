@@ -109,42 +109,41 @@ describe('Issue #5: Concurrent poll guard', () => {
 })
 
 // ─── ISSUE #6: IPC settings:set validation ───
-// We test this indirectly via the validateSettings function we'll create
-import { validateSettings } from './ipc-handlers'
+import { conformSettings } from './settings-shape'
 
 describe('Issue #6: settings:set validation', () => {
   it('should clamp pollingIntervalMs to minimum 500', () => {
-    const result = validateSettings({ pollingIntervalMs: 100 })
+    const result = conformSettings({ pollingIntervalMs: 100 })
     expect(result.pollingIntervalMs).toBe(500)
   })
 
   it('should clamp pollingIntervalMs to maximum 60000', () => {
-    const result = validateSettings({ pollingIntervalMs: 120000 })
+    const result = conformSettings({ pollingIntervalMs: 120000 })
     expect(result.pollingIntervalMs).toBe(60000)
   })
 
   it('should clamp cpuIdleThreshold to minimum 0.1', () => {
-    const result = validateSettings({ cpuIdleThreshold: 0 })
+    const result = conformSettings({ cpuIdleThreshold: 0 })
     expect(result.cpuIdleThreshold).toBe(0.1)
   })
 
   it('should clamp cpuIdleThreshold to maximum 100', () => {
-    const result = validateSettings({ cpuIdleThreshold: 200 })
+    const result = conformSettings({ cpuIdleThreshold: 200 })
     expect(result.cpuIdleThreshold).toBe(100)
   })
 
   it('should clamp maxHistoryEntries to minimum 1', () => {
-    const result = validateSettings({ maxHistoryEntries: 0 })
+    const result = conformSettings({ maxHistoryEntries: 0 })
     expect(result.maxHistoryEntries).toBe(1)
   })
 
   it('should clamp maxHistoryEntries to maximum 10000', () => {
-    const result = validateSettings({ maxHistoryEntries: 50000 })
+    const result = conformSettings({ maxHistoryEntries: 50000 })
     expect(result.maxHistoryEntries).toBe(10000)
   })
 
   it('should pass through valid values unchanged', () => {
-    const result = validateSettings({
+    const result = conformSettings({
       pollingIntervalMs: 3000,
       cpuIdleThreshold: 5.0,
       maxHistoryEntries: 200
@@ -155,7 +154,7 @@ describe('Issue #6: settings:set validation', () => {
   })
 
   it('should pass through non-numeric fields unchanged', () => {
-    const result = validateSettings({ theme: 'light' as const })
+    const result = conformSettings({ theme: 'light' as const })
     expect(result.theme).toBe('light')
   })
 })
@@ -202,39 +201,39 @@ describe('Issue #16: notification sound setting', () => {
   })
 })
 
-describe('validateSettings switches', () => {
+describe('conformSettings switches', () => {
   it('accepts the open-Office-on-start switch', () => {
-    expect(validateSettings({ openOfficeOnLaunch: true })).toEqual({ openOfficeOnLaunch: true })
+    expect(conformSettings({ openOfficeOnLaunch: true })).toEqual({ openOfficeOnLaunch: true })
   })
 
   it('drops a switch that is not a boolean', () => {
     const forged = { openOfficeOnLaunch: 'yes', launchAtLogin: 1, minimizeToTray: null }
-    expect(validateSettings(forged as unknown as Parameters<typeof validateSettings>[0])).toEqual(
-      {}
-    )
+    expect(conformSettings(forged)).toEqual({})
   })
 })
 
-describe('validateSettings types', () => {
-  const forge = (data: unknown) => validateSettings(data as Parameters<typeof validateSettings>[0])
-
+describe('conformSettings types', () => {
   it('drops any value whose type differs from its default', () => {
-    expect(forge({ pollingIntervalMs: 'abc', maxHistoryEntries: Number.NaN, theme: 7 })).toEqual({})
-    expect(forge({ notifications: null })).toEqual({})
-    expect(forge({ notifications: 'all' })).toEqual({})
+    expect(
+      conformSettings({ pollingIntervalMs: 'abc', maxHistoryEntries: Number.NaN, theme: 7 })
+    ).toEqual({})
+    expect(conformSettings({ notifications: null })).toEqual({})
+    expect(conformSettings({ notifications: 'all' })).toEqual({})
   })
 
   it('checks the notification fields the same way', () => {
     expect(
-      forge({
+      conformSettings({
         notifications: { sound: 'loud', cooldownSeconds: '30', mutedProjects: 'all', onIdle: false }
       })
     ).toEqual({ notifications: { onIdle: false } })
-    expect(forge({ notifications: { mutedProjects: ['/a', 5] } })).toEqual({ notifications: {} })
+    expect(conformSettings({ notifications: { mutedProjects: ['/a', 5] } })).toEqual({
+      notifications: {}
+    })
   })
 
   it('accepts only a known theme', () => {
-    expect(forge({ theme: 'neon' })).toEqual({})
-    expect(forge({ theme: 'light' })).toEqual({ theme: 'light' })
+    expect(conformSettings({ theme: 'neon' })).toEqual({})
+    expect(conformSettings({ theme: 'light' })).toEqual({ theme: 'light' })
   })
 })

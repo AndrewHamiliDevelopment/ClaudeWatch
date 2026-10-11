@@ -59,6 +59,15 @@ export class SessionTracker extends EventEmitter {
     this.staleThresholdMinutes = minutes
   }
 
+  setCpuIdleThreshold(percent: number): void {
+    this.monitor.setCpuIdleThreshold(percent)
+  }
+
+  setMaxHistoryEntries(count: number): void {
+    this.maxHistoryEntries = count
+    this.trimHistory()
+  }
+
   setCooldownSeconds(seconds: number): void {
     this.idleCooldownMs = seconds * 1000
   }

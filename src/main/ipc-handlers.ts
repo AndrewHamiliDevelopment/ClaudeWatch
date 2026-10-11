@@ -14,9 +14,6 @@ import type { AppSettings, TerminalType } from '../renderer/lib/types'
 import type { TrayManager } from './tray'
 import type { Office } from './office-setup'
 
-// One rule set for what a valid setting is, shared with the store's read path.
-export const validateSettings = conformSettings
-
 const TERMINAL_TYPES = {
   'terminal-app': true,
   iterm2: true,
@@ -40,7 +37,13 @@ function isTerminalType(value: unknown): value is TerminalType {
 interface IpcHandlerOptions {
   tracker: Pick<
     SessionTracker,
-    'getInstances' | 'getStats' | 'setStaleThreshold' | 'setCooldownSeconds'
+    | 'getInstances'
+    | 'getStats'
+    | 'start'
+    | 'setCpuIdleThreshold'
+    | 'setMaxHistoryEntries'
+    | 'setStaleThreshold'
+    | 'setCooldownSeconds'
   >
   store: Pick<SettingsStore, 'getSettings' | 'setSettings' | 'getHistory' | 'clearHistory'>
   updater?: Pick<AutoUpdaterManager, 'checkForUpdates' | 'downloadUpdate' | 'quitAndInstall'>
@@ -95,7 +98,7 @@ export function setupIpcHandlers(options: IpcHandlerOptions): void {
   handle('settings:get', () => store.getSettings())
 
   handle('settings:set', (_event: Electron.IpcMainInvokeEvent, data: Partial<AppSettings>) => {
-    const validated = validateSettings(data)
+    const validated = conformSettings(data)
     store.setSettings(validated)
     const updated = store.getSettings()
     if (validated.weeklyTokenTarget !== undefined && usageReader) {
@@ -103,6 +106,13 @@ export function setupIpcHandlers(options: IpcHandlerOptions): void {
     }
     if (validated.launchAtLogin !== undefined) {
       app.setLoginItemSettings({ openAtLogin: validated.launchAtLogin })
+    }
+    if (validated.pollingIntervalMs !== undefined) tracker.start(updated.pollingIntervalMs)
+    if (validated.cpuIdleThreshold !== undefined) {
+      tracker.setCpuIdleThreshold(updated.cpuIdleThreshold)
+    }
+    if (validated.maxHistoryEntries !== undefined) {
+      tracker.setMaxHistoryEntries(updated.maxHistoryEntries)
     }
     if (validated.staleThresholdMinutes !== undefined) {
       tracker.setStaleThreshold(updated.staleThresholdMinutes)

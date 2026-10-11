@@ -34,6 +34,9 @@ const tracker = {
   getStats: vi.fn(() => stats),
   setStaleThreshold: vi.fn(),
   setCooldownSeconds: vi.fn(),
+  setCpuIdleThreshold: vi.fn(),
+  setMaxHistoryEntries: vi.fn(),
+  start: vi.fn(),
   on: vi.fn()
 }
 const store = {
@@ -160,6 +163,20 @@ it('retains settings propagation', () => {
   expect(tracker.setCooldownSeconds).toHaveBeenCalledWith(
     DEFAULT_SETTINGS.notifications.cooldownSeconds
   )
+})
+it('applies polling, CPU threshold and history size to the running tracker', () => {
+  handlers['settings:set'](appEvent, {
+    pollingIntervalMs: 5000,
+    cpuIdleThreshold: 1.5,
+    maxHistoryEntries: 20
+  })
+  expect(tracker.start).toHaveBeenCalledWith(DEFAULT_SETTINGS.pollingIntervalMs)
+  expect(tracker.setCpuIdleThreshold).toHaveBeenCalledWith(DEFAULT_SETTINGS.cpuIdleThreshold)
+  expect(tracker.setMaxHistoryEntries).toHaveBeenCalledWith(DEFAULT_SETTINGS.maxHistoryEntries)
+})
+it('does not restart polling for an unrelated setting', () => {
+  handlers['settings:set'](appEvent, { theme: 'dark' })
+  expect(tracker.start).not.toHaveBeenCalled()
 })
 it.each(['bogus', null, 42, {}, 'toString'])('rejects terminal type %j', (type) => {
   expect(handlers['terminal:open'](appEvent, '/project', type)).toEqual({ success: false })

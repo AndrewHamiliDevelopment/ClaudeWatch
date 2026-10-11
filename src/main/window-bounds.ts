@@ -1,3 +1,5 @@
+import { clamp } from '../shared/range'
+
 export interface Bounds {
   x: number
   y: number
@@ -16,9 +18,6 @@ function isBounds(value: unknown): value is Bounds {
     (rect.height as number) > 0
   )
 }
-
-const clamp = (value: number, low: number, high: number): number =>
-  Math.min(Math.max(value, low), high)
 
 export function isOnAnyDisplay(rect: Bounds, workAreas: readonly Bounds[]): boolean {
   return workAreas.some(
@@ -50,11 +49,11 @@ export function restoreBounds(
       centre.y < area.y + area.height
   )
   if (!home) return fallback
-  const width = Math.round(clamp(saved.width, minimum.width, home.width))
-  const height = Math.round(clamp(saved.height, minimum.height, home.height))
+  const width = Math.round(clamp(saved.width, [minimum.width, home.width]))
+  const height = Math.round(clamp(saved.height, [minimum.height, home.height]))
   return {
-    x: Math.round(clamp(saved.x, home.x, home.x + home.width - width)),
-    y: Math.round(clamp(saved.y, home.y, home.y + home.height - height)),
+    x: Math.round(clamp(saved.x, [home.x, home.x + home.width - width])),
+    y: Math.round(clamp(saved.y, [home.y, home.y + home.height - height])),
     width,
     height
   }

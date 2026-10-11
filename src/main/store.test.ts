@@ -3,11 +3,14 @@ import { SettingsStore } from './store'
 import type { SessionHistoryEntry } from '../renderer/lib/types'
 import { DEFAULT_SETTINGS } from '../renderer/lib/types'
 
+// What the settings file holds before the app starts; a test sets it to model an older install.
+const seed = vi.hoisted(() => ({ file: {} as Record<string, unknown> }))
+
 // Mock electron-store
 vi.mock('electron-store', () => {
   return {
     default: vi.fn().mockImplementation(() => {
-      const data: Record<string, unknown> = {}
+      const data: Record<string, unknown> = { ...seed.file }
       return {
         get: vi.fn((key: string, defaultValue?: unknown) => {
           return key in data ? data[key] : defaultValue
@@ -30,7 +33,29 @@ describe('SettingsStore', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    seed.file = {}
     store = new SettingsStore()
+  })
+
+  describe('the old CPU threshold default', () => {
+    it('moves a file still on 1.0 to the current default', () => {
+      seed.file = { settings: { ...DEFAULT_SETTINGS, cpuIdleThreshold: 1.0 } }
+      expect(new SettingsStore().getSettings().cpuIdleThreshold).toBe(3.0)
+    })
+
+    it('keeps 1.0 when the owner chooses it afterwards', () => {
+      store.setSettings({ cpuIdleThreshold: 1.0 })
+      expect(store.getSettings().cpuIdleThreshold).toBe(1.0)
+      expect(store.getSettings().cpuIdleThreshold).toBe(1.0)
+    })
+
+    it('does not migrate a second time on the next start', () => {
+      seed.file = {
+        settings: { ...DEFAULT_SETTINGS, cpuIdleThreshold: 1.0 },
+        cpuIdleDefaultMigrated: true
+      }
+      expect(new SettingsStore().getSettings().cpuIdleThreshold).toBe(1.0)
+    })
   })
 
   describe('getSettings()', () => {

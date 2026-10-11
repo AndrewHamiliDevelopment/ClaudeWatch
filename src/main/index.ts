@@ -112,7 +112,10 @@ app.whenReady().then(() => {
 
   // Initialize terminal resolver and process monitor
   const terminalResolver = new TerminalResolver()
-  const monitor = new ProcessMonitor({ terminalResolver })
+  const monitor = new ProcessMonitor({
+    terminalResolver,
+    cpuIdleThreshold: settings.cpuIdleThreshold
+  })
   tracker = new SessionTracker(monitor, {
     maxHistoryEntries: settings.maxHistoryEntries,
     staleThresholdMinutes: settings.staleThresholdMinutes,

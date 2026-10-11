@@ -92,6 +92,10 @@ export class ProcessMonitor {
     this.terminalResolver = options?.terminalResolver
   }
 
+  setCpuIdleThreshold(percent: number): void {
+    this.cpuIdleThreshold = percent
+  }
+
   async poll(): Promise<ClaudeInstance[]> {
     let rawProcesses: RawProcessInfo[]
     try {
