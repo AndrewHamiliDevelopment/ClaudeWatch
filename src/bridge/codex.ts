@@ -75,7 +75,8 @@ export async function collectCodex(
           .split('\n')
           .find((line) => line.startsWith('n/'))
           ?.slice(1)
-        if (!cwd) continue
+        // Codex bundled in an app (ChatGPT, Orca helpers) runs from inside the bundle; not a session.
+        if (!cwd || /\.app\/Contents(\/|$)/.test(cwd)) continue
         const rollout = rollouts.find((item) => item.cwd === cwd && !used.has(item.id))
         if (rollout) used.add(rollout.id)
         const id = rollout?.id ?? `pid-${process.pid}-${process.startedAtMs}`

@@ -64,6 +64,15 @@ it('keeps live CLI processes even without a rollout and reports process failures
   }
   expect((await collectCodex('/codex', io)).sources[0].ok).toBe(false)
 })
+it('skips Codex processes running inside an app bundle (helpers, not user sessions)', async () => {
+  const io = fixtureIo()
+  io.exec = async (file) =>
+    file.endsWith('ps')
+      ? '42 Sat Oct 10 15:29:12 2026 codex'
+      : 'n/Applications/ChatGPT.app/Contents/Resources'
+  expect((await collectCodex('/codex', io)).sessions).toEqual([])
+})
+
 it('handles current Codex response_item tool and reasoning records without retaining inputs', () => {
   const tool = JSON.stringify({
     type: 'response_item',
