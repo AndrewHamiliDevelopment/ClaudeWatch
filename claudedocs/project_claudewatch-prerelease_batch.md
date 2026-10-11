@@ -17,6 +17,11 @@ Framing in his words: "You have fewer issues that we need to do before we are ab
 | B6 | none — needs filing | intake | session message, 2026-10-11 | "We need to also make sure we track all of the token usage, overall token usage for each of the accounts in Claude. For example in Orca, you can have multiple Claude accounts. If possible every authenticated account should also be watched here." |
 | B7 | none — needs filing | intake | session message, 2026-10-11 | "Also I want you to make sure that this is properly wired with ZKidz claude Team. Even without Cloud Watch I should be able to use it with just the ZKidz claude team repo" |
 
+## Carried in from the command-center change
+
+- Cleanup pass on the command-center diff (reuse, simplification, efficiency, altitude), applied on `feature/prerelease-batch` (7dab6ce): numeric ranges moved next to the settings shape check so the stored file is range-checked on read too; window-bounds helpers simplified. Skipped on purpose: the tray popover keeps its own position-save timer (it saves a position only while pinned), and the explicit quitting flag before an update install stays (that path closes windows before `before-quit`).
+- B1 answered from the code: no Office entry exists on the dashboard or the popover; only the tray menu item (`src/main/tray.ts:279`) and the start-up switch.
+
 ## Scope probe
 
 Pending: research workflow (one reader per item, adversarial checks on the claims the build depends on, three redesign directions plus Codex's, a completeness critic).
