@@ -1,7 +1,7 @@
 import { autoUpdater } from 'electron-updater'
 import { BrowserWindow } from 'electron'
 import { is } from '@electron-toolkit/utils'
-import type { UpdateStatus } from '../renderer/lib/types'
+import type { UpdaterStatusPayload } from '../renderer/lib/types'
 
 export class AutoUpdaterManager {
   private getWindows: (() => BrowserWindow | null)[]
@@ -16,7 +16,7 @@ export class AutoUpdaterManager {
     autoUpdater.autoInstallOnAppQuit = true
 
     autoUpdater.on('checking-for-update', () => {
-      this.send('checking')
+      this.send({ status: 'checking' })
     })
 
     autoUpdater.on('update-available', (info) => {
@@ -27,31 +27,31 @@ export class AutoUpdaterManager {
       } else if (Array.isArray(info.releaseNotes)) {
         notes = info.releaseNotes.map((n) => n.note).join('\n\n')
       }
-      this.send('available', {
-        version: info.version,
-        releaseNotes: notes
-      })
+      this.send({ status: 'available', data: { version: info.version, releaseNotes: notes } })
     })
 
     autoUpdater.on('update-not-available', () => {
-      this.send('not-available')
+      this.send({ status: 'not-available' })
     })
 
     autoUpdater.on('download-progress', (progress) => {
-      this.send('downloading', {
-        percent: progress.percent,
-        bytesPerSecond: progress.bytesPerSecond,
-        transferred: progress.transferred,
-        total: progress.total
+      this.send({
+        status: 'downloading',
+        data: {
+          percent: progress.percent,
+          bytesPerSecond: progress.bytesPerSecond,
+          transferred: progress.transferred,
+          total: progress.total
+        }
       })
     })
 
     autoUpdater.on('update-downloaded', () => {
-      this.send('downloaded')
+      this.send({ status: 'downloaded' })
     })
 
     autoUpdater.on('error', (err) => {
-      this.send('error', err.message)
+      this.send({ status: 'error', data: err.message })
     })
   }
 
@@ -80,11 +80,11 @@ export class AutoUpdaterManager {
     }
   }
 
-  private send(status: UpdateStatus, data?: unknown): void {
+  private send(payload: UpdaterStatusPayload): void {
     for (const getWin of this.getWindows) {
       const win = getWin()
       if (win && !win.isDestroyed()) {
-        win.webContents.send('updater:status', { status, data })
+        win.webContents.send('updater:status', payload)
       }
     }
   }

@@ -137,10 +137,12 @@ export interface UpdateProgress {
   total: number
 }
 
-export interface UpdaterStatusPayload {
-  status: UpdateStatus
-  data?: UpdateInfo | UpdateProgress | string
-}
+// Each status carries its own data, so neither side has to cast it.
+export type UpdaterStatusPayload =
+  | { status: 'idle' | 'checking' | 'not-available' | 'downloaded' }
+  | { status: 'available'; data: UpdateInfo }
+  | { status: 'downloading'; data: UpdateProgress }
+  | { status: 'error'; data: string }
 
 export interface UsageStats {
   totalInputTokens: number
