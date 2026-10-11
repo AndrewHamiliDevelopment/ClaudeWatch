@@ -1,0 +1,134 @@
+import { STEAM } from '../office-palette'
+import { Walls } from '../scene/Walls'
+import { Elevator } from '../scene/Elevator'
+import { signTexture } from '../scene/textures'
+import { doorSignPlacement, DESK_REACH } from '../logic/room-layout'
+import { Matte } from '../scene/InstancedParts'
+import { BRASS } from './palettes'
+import { Batch, Box, Cylinder } from './primitives'
+import { MaintenanceHangar } from './Hangar'
+import { ThemeTower } from './WorldArchitecture'
+import type { DeskProps, FloorProps, RoomProps, TowerProps, WallsProps } from './types'
+
+export function BrassFloor({ floor }: FloorProps) {
+  return (
+    <>
+      <Box at={[0, -0.15, 0]} size={[floor.width + 1, 0.3, floor.depth + 1]} color={STEAM.slab} />
+      <Box
+        at={[0, 0, floor.corridor.z]}
+        size={[floor.width, 0.008, floor.corridor.width]}
+        color={STEAM.iron}
+      />
+      {floor.rooms.map((room) => (
+        <Box
+          key={room.id}
+          at={[room.x, 0.008, room.z]}
+          size={[room.width, 0.008, room.depth]}
+          color={room.kind === 'team' ? STEAM.ironLight : STEAM.floorWood}
+        />
+      ))}
+    </>
+  )
+}
+
+export function BrassWalls({ floor, mode, isReducedMotion }: WallsProps) {
+  return <Walls rooms={floor.rooms} mode={mode} isReducedMotion={isReducedMotion} />
+}
+
+export function BrassDoorway({ room }: RoomProps) {
+  const sign = doorSignPlacement(room)
+  return (
+    <group position={[sign.x, 0, sign.z]} rotation={[0, sign.rotationY, 0]}>
+      <mesh position={[0, 0.7, 0]}>
+        <torusGeometry args={[0.58, 0.07, 6, 16, Math.PI]} />
+        <Matte color={STEAM.brass} />
+      </mesh>
+      <Batch
+        color={STEAM.brass}
+        points={[-0.58, 0.58].map((x) => ({ x, y: 0.35, z: 0, rotationY: 0 }))}
+      >
+        <cylinderGeometry args={[0.07, 0.07, 0.7, 8]} />
+      </Batch>
+      <Batch
+        color={STEAM.rivetLight}
+        glow
+        points={[-0.58, 0.58].map((x) => ({ x, y: 0.72, z: 0, rotationY: 0 }))}
+      >
+        <sphereGeometry args={[0.06, 8, 6]} />
+      </Batch>
+    </group>
+  )
+}
+
+export function BrassDesk({ slot }: DeskProps) {
+  return (
+    <group position={[slot.x, 0, slot.z]} rotation={[0, slot.heading, 0]}>
+      <Box at={[0, 0.31, DESK_REACH]} size={[1.2, 0.62, 0.62]} color={STEAM.darkWood} />
+      <Box at={[0, 0.8, DESK_REACH + 0.1]} size={[0.414, 0.36, 0.36]} color={STEAM.crtBody} />
+      <Box
+        at={[0, 0.8, DESK_REACH - 0.085]}
+        size={[0.324, 0.259, 0.01]}
+        color={STEAM.crtScreen}
+        glow
+      />
+      <Cylinder
+        at={[0.42, 0.8, DESK_REACH + 0.12]}
+        radius={0.02}
+        height={0.36}
+        color={STEAM.brass}
+      />
+      <mesh position={[0.42, 1, DESK_REACH + 0.12]}>
+        <coneGeometry args={[0.11, 0.12, 8]} />
+        <Matte color={STEAM.lampGlow} glow />
+      </mesh>
+      <Cylinder at={[0, 0.16, 0]} radius={0.2} height={0.32} color={STEAM.copper} />
+    </group>
+  )
+}
+
+export function BrassRoomDressing({ room }: RoomProps) {
+  return (
+    <group position={[room.x + room.width / 2 - 0.55, 0, room.z + room.depth / 2 - 0.55]}>
+      <Cylinder at={[0, 0.475, 0]} radius={0.26} height={0.95} color={STEAM.copper} />
+      <mesh position={[0, 1.07, 0]}>
+        <sphereGeometry args={[0.13, 12, 8]} />
+        <Matte color={STEAM.cream} />
+      </mesh>
+    </group>
+  )
+}
+
+export function BrassRoomSign({ room }: RoomProps) {
+  const sign = doorSignPlacement(room)
+  return (
+    <mesh position={[sign.x, 1.62, sign.z]} rotation={[0, sign.rotationY, 0]}>
+      <planeGeometry args={[1.7, 0.35]} />
+      <meshBasicMaterial map={signTexture(room.label)} toneMapped={false} />
+    </mesh>
+  )
+}
+
+export function BrassElevator(props: FloorProps) {
+  return <Elevator {...props} />
+}
+export function BrassHangar(props: FloorProps) {
+  return <MaintenanceHangar {...props} palette={BRASS} />
+}
+export function BrassTower(props: TowerProps) {
+  return <ThemeTower {...props} palette={BRASS} />
+}
+
+export function BrassDistrict({ floor }: FloorProps) {
+  return (
+    <group position={[-floor.width / 2 - 4, 0, 0]}>
+      <Box at={[0, -0.25, 0]} size={[6, 0.2, floor.depth + 8]} color={STEAM.iron} />
+      <Batch
+        color={STEAM.copper}
+        points={[-3, 0, 3].map((z) => ({ x: 0, y: 1.5, z, rotationY: 0 }))}
+      >
+        <cylinderGeometry args={[0.4, 0.4, 3, 10]} />
+      </Batch>
+      <Box at={[0, 1, 0]} size={[0.15, 0.15, 7]} color={STEAM.brass} />
+    </group>
+  )
+}

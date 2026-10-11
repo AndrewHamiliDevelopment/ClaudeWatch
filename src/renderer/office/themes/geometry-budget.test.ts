@@ -1,0 +1,161 @@
+import { createElement, isValidElement, type ReactNode } from 'react'
+import { describe, expect, it, vi } from 'vitest'
+import {
+  BoxGeometry,
+  CapsuleGeometry,
+  ConeGeometry,
+  CylinderGeometry,
+  IcosahedronGeometry,
+  PlaneGeometry,
+  RingGeometry,
+  SphereGeometry,
+  TorusGeometry,
+  Texture,
+  type BufferGeometry
+} from 'three'
+import { InstancedParts } from '../scene/InstancedParts'
+import { ThemePreviewContent } from './ThemePreview'
+import { listThemes } from './registry'
+import { previewFixture } from './preview-fixture'
+import { useRobotRig } from './rig'
+
+// Expand the real procedural JSX without a Canvas, frame loop or GPU.
+vi.mock('react', async (original) => ({
+  ...(await original<typeof import('react')>()),
+  useMemo: (factory: () => object) => factory(),
+  useLayoutEffect: () => undefined,
+  useRef: () => ({ current: null }),
+  useState: () => [false, () => undefined]
+}))
+vi.mock('@react-three/fiber', () => ({ useFrame: () => undefined, Canvas: () => null }))
+vi.mock('@react-three/drei', () => ({ Html: () => null, OrbitControls: () => null }))
+vi.mock('../scene/textures', () => ({ signTexture: () => new Texture() }))
+
+interface Props {
+  children?: ReactNode
+  args?: readonly (number | undefined)[]
+  placements?: readonly object[]
+  ref?: object
+}
+
+function expand(node: ReactNode): ReactNode {
+  if (!isValidElement<Props>(node) || typeof node.type !== 'function') return node
+  if (node.type === InstancedParts) return node
+  return expand((node.type as (props: Props) => ReactNode)(node.props))
+}
+
+function triangleCount(kind: string, args: readonly (number | undefined)[]): number {
+  const [a, b, c, d, e, f] = args
+  let geometry: BufferGeometry
+  switch (kind) {
+    case 'boxGeometry':
+      geometry = new BoxGeometry(a, b, c)
+      break
+    case 'sphereGeometry':
+      geometry = new SphereGeometry(a, b, c)
+      break
+    case 'cylinderGeometry':
+      geometry = new CylinderGeometry(a, b, c, d)
+      break
+    case 'capsuleGeometry':
+      geometry = new CapsuleGeometry(a, b, c, d)
+      break
+    case 'torusGeometry':
+      geometry = new TorusGeometry(a, b, c, d, e)
+      break
+    case 'coneGeometry':
+      geometry = new ConeGeometry(a, b, c)
+      break
+    case 'icosahedronGeometry':
+      geometry = new IcosahedronGeometry(a, b)
+      break
+    case 'planeGeometry':
+      geometry = new PlaneGeometry(a, b)
+      break
+    case 'ringGeometry':
+      geometry = new RingGeometry(a, b, c, d, e, f)
+      break
+    default:
+      throw new Error(`Uncounted geometry: ${kind}`)
+  }
+  const triangles = (geometry.index?.count ?? geometry.attributes.position.count) / 3
+  geometry.dispose()
+  return triangles
+}
+
+function audit(
+  node: ReactNode,
+  instances = 1
+): { draws: number; triangles: number; refs: object[] } {
+  if (Array.isArray(node)) {
+    return node
+      .map((child) => audit(child, instances))
+      .reduce(
+        (sum, entry) => ({
+          draws: sum.draws + entry.draws,
+          triangles: sum.triangles + entry.triangles,
+          refs: [...sum.refs, ...entry.refs]
+        }),
+        { draws: 0, triangles: 0, refs: [] }
+      )
+  }
+  const element = expand(node)
+  if (Array.isArray(element)) return audit(element, instances)
+  if (!isValidElement<Props>(element)) return { draws: 0, triangles: 0, refs: [] }
+  const instanced = element.type === InstancedParts || element.type === 'instancedMesh'
+  const count =
+    element.type === InstancedParts
+      ? (element.props.placements?.length ?? 0)
+      : instanced
+        ? (element.props.args?.[2] ?? 0)
+        : instances
+  const children = audit(element.props.children, count)
+  const kind = typeof element.type === 'string' ? element.type : ''
+  return {
+    draws: children.draws + (kind === 'mesh' || instanced ? 1 : 0),
+    triangles:
+      children.triangles +
+      (kind.endsWith('Geometry') ? triangleCount(kind, element.props.args ?? []) * instances : 0),
+    refs: element.props.ref ? [...children.refs, element.props.ref] : children.refs
+  }
+}
+
+describe('procedural geometry budgets', () => {
+  for (const theme of listThemes()) {
+    it(`${theme.id} keeps each provider model under 2500 triangles with controller refs`, () => {
+      for (const provider of ['claude', 'codex'] as const) {
+        const rig = useRobotRig()
+        const agent = { ...previewFixture().agents[0], provider }
+        const result = audit(
+          createElement(theme.robot.Model, {
+            agent,
+            skin: theme.robot.skins[provider],
+            rig,
+            isReducedMotion: true
+          })
+        )
+        expect(result.triangles).toBeLessThanOrEqual(2500)
+        for (const ref of [
+          rig.body,
+          rig.head,
+          rig.leftArm,
+          rig.rightArm,
+          rig.gear,
+          rig.eye,
+          rig.thought,
+          rig.base
+        ]) {
+          expect(result.refs).toContain(ref)
+        }
+      }
+    })
+    it(`${theme.id} focused preview stays under 300 draws and 600k triangles`, () => {
+      const result = audit(ThemePreviewContent({ themeId: theme.id, isReducedMotion: true }))
+      console.info(
+        `${theme.id}: ${result.draws + 3} draw calls, ${result.triangles + 144} triangles (including selection rings)`
+      )
+      expect(result.draws + 3).toBeLessThanOrEqual(300)
+      expect(result.triangles + 144).toBeLessThanOrEqual(600_000)
+    })
+  }
+})
