@@ -92,7 +92,7 @@ export function Settings() {
 
           <SettingRow
             label="Watch accounts"
-            description="Reads account names and plans to count tokens per account. Never credentials."
+            description="Reads account names, plans and email addresses, kept on this Mac, to count tokens per account. Never credentials. Turning it off keeps what was counted."
           >
             <ToggleSwitch
               checked={settings.watchAccounts}

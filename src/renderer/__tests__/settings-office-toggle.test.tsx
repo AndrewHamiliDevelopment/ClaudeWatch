@@ -59,7 +59,7 @@ describe('Settings: open the Office on start', () => {
     expect(toggle).toHaveAttribute('aria-checked', 'true')
     expect(
       screen.getByText(
-        'Reads account names and plans to count tokens per account. Never credentials.'
+        'Reads account names, plans and email addresses, kept on this Mac, to count tokens per account. Never credentials. Turning it off keeps what was counted.'
       )
     ).toBeInTheDocument()
     fireEvent.click(toggle)

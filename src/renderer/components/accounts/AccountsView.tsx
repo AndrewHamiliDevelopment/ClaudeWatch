@@ -48,7 +48,7 @@ export function AccountsView() {
           <Notice
             role="status"
             message="Accounts are not being watched."
-            detail="Watching reads account names and plans to count tokens per account. It never reads credentials."
+            detail="Watching reads account names, plans and email addresses, kept on this Mac, to count tokens per account. It never reads credentials."
           >
             <button
               type="button"
