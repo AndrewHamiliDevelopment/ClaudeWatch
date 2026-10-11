@@ -9,10 +9,26 @@ export default defineConfig({
       alias: {
         '@': resolve('src/main')
       }
+    },
+    build: {
+      rollupOptions: {
+        input: {
+          index: resolve('src/main/index.ts'),
+          bridge: resolve('src/bridge/index.ts')
+        }
+      }
     }
   },
   preload: {
-    plugins: [externalizeDepsPlugin()]
+    plugins: [externalizeDepsPlugin()],
+    build: {
+      rollupOptions: {
+        input: {
+          index: resolve('src/preload/index.ts'),
+          office: resolve('src/preload/office.ts')
+        }
+      }
+    }
   },
   renderer: {
     resolve: {
@@ -20,6 +36,14 @@ export default defineConfig({
         '@renderer': resolve('src/renderer')
       }
     },
-    plugins: [react()]
+    plugins: [react()],
+    build: {
+      rollupOptions: {
+        input: {
+          index: resolve('src/renderer/index.html'),
+          office: resolve('src/renderer/office.html')
+        }
+      }
+    }
   }
 })

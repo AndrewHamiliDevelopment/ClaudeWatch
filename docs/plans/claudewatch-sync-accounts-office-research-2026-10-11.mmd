@@ -1,0 +1,35 @@
+flowchart LR
+  REG["sessions/*.json per root"] --> ING
+  TEE["statusline tee spool"] --> ING
+  HOOK["plugin hooks → unix socket"] --> ING
+  CDX["Codex rollouts / app-server"] --> ING
+  ORCA["orca CLI --json"] --> ING
+  ING["bridge: ingest + allowlist + normalise"] --> RED["pure reducer → Snapshot"]
+  RED --> MAIN["main: tray, notifications, widget"]
+  RED --> UI["popover + dashboard"]
+  RED --> OFF["Office window"]
+%% ---
+flowchart LR
+  BR["bridge reducer → Snapshot"] -->|"MessagePort patches"| SIM["office sim (pure TS, 10 Hz)"]
+  SIM -->|"AgentView"| R3F["R3F scene (WebGPU / WebGL2)"]
+  SIM --> HUD["DOM HUD: meters, queue, elevator"]
+  HUD --> INS["Inspector → jump to terminal"]
+  SIM --> LIST["List view fallback"]
+%% ---
+flowchart TB
+  NEED["Needs-you strip + Next"] --> ACC["Account cards: Claude + Codex"]
+  ACC --> BARS["Windows by real duration, % + source + age"]
+  ACC --> SUG["Advisory: use account B next"]
+  SUG --> SES["Sessions by project with state"]
+  SES --> FOOT["Dashboard · Office · Settings · Quit"]
+%% ---
+flowchart TB
+  W0["W0 decisions + 5 prototypes"] --> W1["W1 hygiene, CI, Electron 44"]
+  W1 --> W2["W2 v1.3.0 make-true + hardening"]
+  W2 --> W3["W3 contract freeze"]
+  W3 --> W4["W4 providers, Orca, hooks, sim, mocks"]
+  W4 --> W5["W5 assemble bridge + snapshot"]
+  W5 --> W6["W6 cockpit UI, widget, notifications"]
+  W6 --> W7["W7 office L0 graybox"]
+  W7 --> W8["W8 office L1 characters"]
+  W8 --> GATE["Gate: A/B + week-3 metric → L2 → L3"]

@@ -61,6 +61,8 @@ export interface AppSettings {
   pollingIntervalMs: number
   cpuIdleThreshold: number
   launchAtLogin: boolean
+  // With launchAtLogin this makes the Office the first thing on screen after login.
+  openOfficeOnLaunch: boolean
   minimizeToTray: boolean
   notifications: {
     onTaskComplete: boolean
@@ -83,6 +85,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   pollingIntervalMs: 3000,
   cpuIdleThreshold: 3.0,
   launchAtLogin: false,
+  openOfficeOnLaunch: false,
   minimizeToTray: true,
   notifications: {
     onTaskComplete: true,
@@ -185,30 +188,3 @@ export interface RateLimits {
   isStale: boolean
   isVeryStale: boolean
 }
-
-export type IpcChannels =
-  | 'instances:update'
-  | 'instances:get'
-  | 'settings:get'
-  | 'settings:set'
-  | 'history:get'
-  | 'history:clear'
-  | 'app:open-dashboard'
-  | 'app:quit'
-  | 'terminal:open'
-  | 'updater:check'
-  | 'updater:download'
-  | 'updater:install'
-  | 'updater:status'
-  | 'usage:get'
-  | 'usage:refresh'
-  | 'usage:update'
-  | 'promo:get'
-  | 'promo:update'
-  | 'ratelimits:get'
-  | 'ratelimits:update'
-  | 'notifications:check-permission'
-  | 'notifications:open-settings'
-  | 'notifications:send-test'
-  | 'notifications:mute-project'
-  | 'notifications:unmute-project'

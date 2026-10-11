@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { SettingsStore } from './store'
-import type { AppSettings, SessionHistoryEntry, DEFAULT_SETTINGS } from '../renderer/lib/types'
+import type { SessionHistoryEntry } from '../renderer/lib/types'
+import { DEFAULT_SETTINGS } from '../renderer/lib/types'
 
 // Mock electron-store
 vi.mock('electron-store', () => {
@@ -56,6 +57,7 @@ describe('SettingsStore', () => {
     it('should update nested notification settings', () => {
       const updated = store.setSettings({
         notifications: {
+          ...DEFAULT_SETTINGS.notifications,
           onIdle: false,
           onExited: true,
           onError: true,
@@ -203,6 +205,57 @@ describe('SettingsStore', () => {
       store.setSettings({ theme: 'light' })
       store.clearHistory()
       expect(store.getSettings().theme).toBe('light')
+    })
+  })
+
+  describe('office', () => {
+    it('back-fills openOfficeOnLaunch for settings saved by an older version', () => {
+      const { openOfficeOnLaunch: _added, ...older } = DEFAULT_SETTINGS
+      const raw = store as unknown as { store: { set(key: string, value: unknown): void } }
+      raw.store.set('settings', older)
+
+      expect(store.getSettings().openOfficeOnLaunch).toBe(false)
+    })
+
+    it('starts from defaults when a stored group is missing or broken', () => {
+      const raw = store as unknown as { store: { set(key: string, value: unknown): void } }
+      raw.store.set('settings', { pollingIntervalMs: 5000, notifications: null })
+
+      const settings = store.getSettings()
+      expect(settings.pollingIntervalMs).toBe(5000)
+      expect(settings.notifications).toEqual(DEFAULT_SETTINGS.notifications)
+      expect(settings.theme).toBe(DEFAULT_SETTINGS.theme)
+    })
+
+    it('ignores a stored value of the wrong type instead of acting on it', () => {
+      const raw = store as unknown as { store: { set(key: string, value: unknown): void } }
+      raw.store.set('settings', {
+        ...DEFAULT_SETTINGS,
+        openOfficeOnLaunch: 'false',
+        pollingIntervalMs: 'fast',
+        notifications: { ...DEFAULT_SETTINGS.notifications, sound: 'no' }
+      })
+
+      const settings = store.getSettings()
+      expect(settings.openOfficeOnLaunch).toBe(false)
+      expect(settings.pollingIntervalMs).toBe(DEFAULT_SETTINGS.pollingIntervalMs)
+      expect(settings.notifications.sound).toBe(DEFAULT_SETTINGS.notifications.sound)
+    })
+
+    it('keeps the other notification choices when one is changed', () => {
+      store.setSettings({ notifications: { ...DEFAULT_SETTINGS.notifications, sound: false } })
+      const one = { onIdle: false } as typeof DEFAULT_SETTINGS.notifications
+      expect(store.setSettings({ notifications: one }).notifications).toEqual({
+        ...DEFAULT_SETTINGS.notifications,
+        sound: false,
+        onIdle: false
+      })
+    })
+
+    it('remembers where the Office window was left', () => {
+      expect(store.getOfficeWindowBounds()).toBeNull()
+      store.setOfficeWindowBounds({ x: 40, y: 60, width: 1400, height: 900 })
+      expect(store.getOfficeWindowBounds()).toEqual({ x: 40, y: 60, width: 1400, height: 900 })
     })
   })
 })

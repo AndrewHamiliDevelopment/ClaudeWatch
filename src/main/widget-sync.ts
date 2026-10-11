@@ -6,11 +6,13 @@ import type { WidgetStatsWriter } from './widget-stats-writer'
 import type { UsageStats, RateLimits } from '../renderer/lib/types'
 
 interface SetupWidgetSyncOptions {
-  tracker: SessionTracker
-  usageReader: UsageStatsReader
-  promoChecker: PromoChecker
-  rateLimitReader: RateLimitReader
-  writer: WidgetStatsWriter
+  tracker: Pick<SessionTracker, 'getInstances' | 'getStats'> & {
+    on(event: 'update', listener: () => void): unknown
+  }
+  usageReader: Pick<UsageStatsReader, 'getLastData' | 'onUpdate'>
+  promoChecker: Pick<PromoChecker, 'getLastData'>
+  rateLimitReader: Pick<RateLimitReader, 'getLastData' | 'onUpdate'>
+  writer: Pick<WidgetStatsWriter, 'write'>
 }
 
 export function setupWidgetSync({

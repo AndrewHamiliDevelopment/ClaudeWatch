@@ -1,8 +1,9 @@
-import { readFile, writeFile, copyFile, chmod } from 'fs/promises'
+import { readFile, copyFile, chmod } from 'fs/promises'
 import { homedir } from 'os'
 import { join } from 'path'
 import { BrowserWindow } from 'electron'
 import type { RateLimits, RateLimitWindow } from '../renderer/lib/types'
+import { readJsonObject, writeJsonAtomic } from './settings-file'
 
 interface RateLimitWindowData {
   used_percentage?: number
@@ -16,6 +17,8 @@ interface RateLimitsFileData {
   seven_day?: RateLimitWindowData
   updated_at?: string
 }
+
+const claudeSettingsPath = (): string => join(homedir(), '.claude', 'settings.json')
 
 const EMPTY_WINDOW: RateLimitWindow = { used_percentage: 0, resets_at: null }
 
@@ -115,46 +118,33 @@ export class RateLimitReader {
   }
 
   async isStatuslineConfigured(): Promise<boolean> {
-    try {
-      const settingsPath = join(homedir(), '.claude', 'settings.json')
-      const raw = await readFile(settingsPath, 'utf-8')
-      const settings = JSON.parse(raw)
-      return !!settings.statusLine
-    } catch {
-      return false
-    }
+    const settings = await readJsonObject(claudeSettingsPath()).catch(() => null)
+    return settings?.status === 'ok' && !!settings.data.statusLine
   }
 
   async setupStatusline(scriptSource: string): Promise<boolean> {
     try {
-      const claudeDir = join(homedir(), '.claude')
-      const settingsPath = join(claudeDir, 'settings.json')
-      const destPath = join(claudeDir, 'claudewatch-statusline.sh')
+      const settingsPath = claudeSettingsPath()
+      const destPath = join(homedir(), '.claude', 'claudewatch-statusline.sh')
 
-      // Copy script
-      await copyFile(scriptSource, destPath)
-      await chmod(destPath, 0o755)
+      const existing = await readJsonObject(settingsPath)
+      if (existing.status === 'unparseable') return false
+      const settings = existing.status === 'ok' ? existing.data : {}
 
-      // Read existing settings
-      let settings: Record<string, unknown> = {}
-      try {
-        const raw = await readFile(settingsPath, 'utf-8')
-        settings = JSON.parse(raw)
-      } catch {
-        // Settings file doesn't exist or is malformed — start fresh
-      }
-
-      // Only add statusline if not already configured
+      // Another statusline owns the slot; leave both it and its script alone.
       if (settings.statusLine) {
         return true
       }
+
+      await copyFile(scriptSource, destPath)
+      await chmod(destPath, 0o755)
 
       settings.statusLine = {
         type: 'command',
         command: `bash "${destPath}"`
       }
 
-      await writeFile(settingsPath, JSON.stringify(settings, null, 2) + '\n', 'utf-8')
+      await writeJsonAtomic(settingsPath, settings)
       return true
     } catch {
       return false

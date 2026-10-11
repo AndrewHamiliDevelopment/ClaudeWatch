@@ -10,6 +10,8 @@ import { execFile } from 'child_process'
 
 const mockExecFile = vi.mocked(execFile)
 
+type ExecCallback = (error: Error | null, stdout?: string, stderr?: string) => void
+
 // ─── Darwin ps output samples ───
 const PS_HEADER = '  PID STAT %CPU %MEM     ELAPSED TT       COMMAND'
 
@@ -39,10 +41,10 @@ describe('ProcessMonitor', () => {
         callCount++
         if (callCount === 1) {
           // ps call
-          ;(cb as Function)(null, `${PS_HEADER}\n${PS_LINE_ACTIVE}\n`, '')
+          ;(cb as ExecCallback)(null, `${PS_HEADER}\n${PS_LINE_ACTIVE}\n`, '')
         } else {
           // lsof call for PID 12345
-          ;(cb as Function)(null, LSOF_OUTPUT_12345, '')
+          ;(cb as ExecCallback)(null, LSOF_OUTPUT_12345, '')
         }
       }) as typeof execFile)
 
@@ -65,9 +67,9 @@ describe('ProcessMonitor', () => {
       mockExecFile.mockImplementation(((_bin: string, _args: unknown, cb: unknown) => {
         callCount++
         if (callCount === 1) {
-          ;(cb as Function)(null, `${PS_HEADER}\n${PS_LINE_IDLE}\n`, '')
+          ;(cb as ExecCallback)(null, `${PS_HEADER}\n${PS_LINE_IDLE}\n`, '')
         } else {
-          ;(cb as Function)(null, LSOF_OUTPUT_67890, '')
+          ;(cb as ExecCallback)(null, LSOF_OUTPUT_67890, '')
         }
       }) as typeof execFile)
 
@@ -83,7 +85,7 @@ describe('ProcessMonitor', () => {
 
     it('should exclude Claude.app GUI and grep processes', async () => {
       mockExecFile.mockImplementation(((_bin: string, _args: unknown, cb: unknown) => {
-        ;(cb as Function)(null, `${PS_HEADER}\n${PS_LINE_GUI}\n${PS_LINE_GREP}\n`, '')
+        ;(cb as ExecCallback)(null, `${PS_HEADER}\n${PS_LINE_GUI}\n${PS_LINE_GREP}\n`, '')
       }) as typeof execFile)
 
       const monitor = new ProcessMonitor()
@@ -97,11 +99,11 @@ describe('ProcessMonitor', () => {
       mockExecFile.mockImplementation(((_bin: string, _args: unknown, cb: unknown) => {
         callCount++
         if (callCount === 1) {
-          ;(cb as Function)(null, `${PS_HEADER}\n${PS_LINE_ACTIVE}\n${PS_LINE_IDLE}\n`, '')
+          ;(cb as ExecCallback)(null, `${PS_HEADER}\n${PS_LINE_ACTIVE}\n${PS_LINE_IDLE}\n`, '')
         } else if (callCount === 2) {
-          ;(cb as Function)(null, LSOF_OUTPUT_12345, '')
+          ;(cb as ExecCallback)(null, LSOF_OUTPUT_12345, '')
         } else {
-          ;(cb as Function)(null, LSOF_OUTPUT_67890, '')
+          ;(cb as ExecCallback)(null, LSOF_OUTPUT_67890, '')
         }
       }) as typeof execFile)
 
@@ -114,7 +116,7 @@ describe('ProcessMonitor', () => {
 
     it('should return empty array when no Claude processes found', async () => {
       mockExecFile.mockImplementation(((_bin: string, _args: unknown, cb: unknown) => {
-        ;(cb as Function)(null, `${PS_HEADER}\n`, '')
+        ;(cb as ExecCallback)(null, `${PS_HEADER}\n`, '')
       }) as typeof execFile)
 
       const monitor = new ProcessMonitor()
@@ -125,7 +127,7 @@ describe('ProcessMonitor', () => {
 
     it('should handle ps command failure gracefully', async () => {
       mockExecFile.mockImplementation(((_bin: string, _args: unknown, cb: unknown) => {
-        ;(cb as Function)(new Error('ps failed'), '', 'ps failed')
+        ;(cb as ExecCallback)(new Error('ps failed'), '', 'ps failed')
       }) as typeof execFile)
 
       const monitor = new ProcessMonitor()
@@ -139,9 +141,9 @@ describe('ProcessMonitor', () => {
       mockExecFile.mockImplementation(((_bin: string, _args: unknown, cb: unknown) => {
         callCount++
         if (callCount === 1) {
-          ;(cb as Function)(null, `${PS_HEADER}\n${PS_LINE_ACTIVE}\n`, '')
+          ;(cb as ExecCallback)(null, `${PS_HEADER}\n${PS_LINE_ACTIVE}\n`, '')
         } else {
-          ;(cb as Function)(new Error('lsof failed'), '', 'lsof failed')
+          ;(cb as ExecCallback)(new Error('lsof failed'), '', 'lsof failed')
         }
       }) as typeof execFile)
 
@@ -158,9 +160,9 @@ describe('ProcessMonitor', () => {
       mockExecFile.mockImplementation(((_bin: string, _args: unknown, cb: unknown) => {
         callCount++
         if (callCount === 1) {
-          ;(cb as Function)(null, `${PS_HEADER}\n${psLineLong}\n`, '')
+          ;(cb as ExecCallback)(null, `${PS_HEADER}\n${psLineLong}\n`, '')
         } else {
-          ;(cb as Function)(null, 'p55555\nn/tmp/project\n', '')
+          ;(cb as ExecCallback)(null, 'p55555\nn/tmp/project\n', '')
         }
       }) as typeof execFile)
 
@@ -177,9 +179,9 @@ describe('ProcessMonitor', () => {
       mockExecFile.mockImplementation(((_bin: string, _args: unknown, cb: unknown) => {
         callCount++
         if (callCount === 1) {
-          ;(cb as Function)(null, `${PS_HEADER}\n${PS_LINE_ACTIVE}\n`, '')
+          ;(cb as ExecCallback)(null, `${PS_HEADER}\n${PS_LINE_ACTIVE}\n`, '')
         } else {
-          ;(cb as Function)(
+          ;(cb as ExecCallback)(
             null,
             'p12345\nn/Users/angelo/Desktop/Work/ZKidz/MacClaudeTracker\n',
             ''
@@ -201,9 +203,9 @@ describe('ProcessMonitor', () => {
       mockExecFile.mockImplementation(((_bin: string, _args: unknown, cb: unknown) => {
         callCount++
         if (callCount === 1) {
-          ;(cb as Function)(null, `${PS_HEADER}\n${psLine}\n`, '')
+          ;(cb as ExecCallback)(null, `${PS_HEADER}\n${psLine}\n`, '')
         } else {
-          ;(cb as Function)(null, 'p10000\nn/tmp\n', '')
+          ;(cb as ExecCallback)(null, 'p10000\nn/tmp\n', '')
         }
       }) as typeof execFile)
 
@@ -218,9 +220,9 @@ describe('ProcessMonitor', () => {
       mockExecFile.mockImplementation(((_bin: string, _args: unknown, cb: unknown) => {
         callCount++
         if (callCount === 1) {
-          ;(cb as Function)(null, `${PS_HEADER}\n${psLine}\n`, '')
+          ;(cb as ExecCallback)(null, `${PS_HEADER}\n${psLine}\n`, '')
         } else {
-          ;(cb as Function)(null, 'p10001\nn/tmp\n', '')
+          ;(cb as ExecCallback)(null, 'p10001\nn/tmp\n', '')
         }
       }) as typeof execFile)
 
@@ -235,9 +237,9 @@ describe('ProcessMonitor', () => {
       mockExecFile.mockImplementation(((_bin: string, _args: unknown, cb: unknown) => {
         callCount++
         if (callCount === 1) {
-          ;(cb as Function)(null, `${PS_HEADER}\n${psLine}\n`, '')
+          ;(cb as ExecCallback)(null, `${PS_HEADER}\n${psLine}\n`, '')
         } else {
-          ;(cb as Function)(null, 'p10002\nn/tmp\n', '')
+          ;(cb as ExecCallback)(null, 'p10002\nn/tmp\n', '')
         }
       }) as typeof execFile)
 
@@ -254,9 +256,9 @@ describe('ProcessMonitor', () => {
       mockExecFile.mockImplementation(((_bin: string, _args: unknown, cb: unknown) => {
         callCount++
         if (callCount === 1) {
-          ;(cb as Function)(null, `${PS_HEADER}\n${psLine}\n`, '')
+          ;(cb as ExecCallback)(null, `${PS_HEADER}\n${psLine}\n`, '')
         } else {
-          ;(cb as Function)(null, 'p10010\nn/tmp\n', '')
+          ;(cb as ExecCallback)(null, 'p10010\nn/tmp\n', '')
         }
       }) as typeof execFile)
 
@@ -274,9 +276,9 @@ describe('ProcessMonitor', () => {
       mockExecFile.mockImplementation(((_bin: string, _args: unknown, cb: unknown) => {
         callCount++
         if (callCount === 1) {
-          ;(cb as Function)(null, `${PS_HEADER}\n${psLine}\n`, '')
+          ;(cb as ExecCallback)(null, `${PS_HEADER}\n${psLine}\n`, '')
         } else {
-          ;(cb as Function)(null, 'p20000\nn/tmp\n', '')
+          ;(cb as ExecCallback)(null, 'p20000\nn/tmp\n', '')
         }
       }) as typeof execFile)
 
@@ -292,9 +294,9 @@ describe('ProcessMonitor', () => {
       mockExecFile.mockImplementation(((_bin: string, _args: unknown, cb: unknown) => {
         callCount++
         if (callCount === 1) {
-          ;(cb as Function)(null, `${PS_HEADER}\n${psLine}\n`, '')
+          ;(cb as ExecCallback)(null, `${PS_HEADER}\n${psLine}\n`, '')
         } else {
-          ;(cb as Function)(null, 'p20001\nn/tmp\n', '')
+          ;(cb as ExecCallback)(null, 'p20001\nn/tmp\n', '')
         }
       }) as typeof execFile)
 
@@ -310,9 +312,9 @@ describe('ProcessMonitor', () => {
       mockExecFile.mockImplementation(((_bin: string, _args: unknown, cb: unknown) => {
         callCount++
         if (callCount === 1) {
-          ;(cb as Function)(null, `${PS_HEADER}\n${psLine}\n`, '')
+          ;(cb as ExecCallback)(null, `${PS_HEADER}\n${psLine}\n`, '')
         } else {
-          ;(cb as Function)(null, 'p20002\nn/tmp\n', '')
+          ;(cb as ExecCallback)(null, 'p20002\nn/tmp\n', '')
         }
       }) as typeof execFile)
 
@@ -334,9 +336,9 @@ describe('terminal enrichment', () => {
     mockExecFile.mockImplementation(((_bin: string, _args: unknown, cb: unknown) => {
       callCount++
       if (callCount === 1) {
-        ;(cb as Function)(null, `${PS_HEADER}\n${PS_LINE_ACTIVE}\n`, '')
+        ;(cb as ExecCallback)(null, `${PS_HEADER}\n${PS_LINE_ACTIVE}\n`, '')
       } else {
-        ;(cb as Function)(null, LSOF_OUTPUT_12345, '')
+        ;(cb as ExecCallback)(null, LSOF_OUTPUT_12345, '')
       }
     }) as typeof execFile)
 
@@ -347,7 +349,7 @@ describe('terminal enrichment', () => {
       })
     }
 
-    const monitor = new ProcessMonitor({ terminalResolver: mockResolver as any })
+    const monitor = new ProcessMonitor({ terminalResolver: mockResolver })
     const instances = await monitor.poll()
 
     expect(instances).toHaveLength(1)
@@ -361,9 +363,9 @@ describe('terminal enrichment', () => {
     mockExecFile.mockImplementation(((_bin: string, _args: unknown, cb: unknown) => {
       callCount++
       if (callCount === 1) {
-        ;(cb as Function)(null, `${PS_HEADER}\n${PS_LINE_ACTIVE}\n`, '')
+        ;(cb as ExecCallback)(null, `${PS_HEADER}\n${PS_LINE_ACTIVE}\n`, '')
       } else {
-        ;(cb as Function)(null, LSOF_OUTPUT_12345, '')
+        ;(cb as ExecCallback)(null, LSOF_OUTPUT_12345, '')
       }
     }) as typeof execFile)
 

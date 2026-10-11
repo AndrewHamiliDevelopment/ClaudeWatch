@@ -1,5 +1,3 @@
-import type { ClaudeInstance } from '../../renderer/lib/types'
-import { parseElapsedTime, getProjectName } from '../../renderer/lib/utils'
 import { execFilePromise } from './exec'
 
 export interface RawProcessInfo {

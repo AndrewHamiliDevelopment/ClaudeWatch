@@ -1,0 +1,20 @@
+flowchart LR
+  REG["sessions/*.json per root"] --> BR
+  TR["transcript tail (tool labels)"] --> BR
+  SUB["subagents meta"] --> BR
+  CDX["Codex sessions"] --> BR
+  ORCA["orca worktree ps (10 s)"] --> BR
+  BR["bridge utilityProcess: reducer → snapshot"] -->|"MessagePort"| SIM["office sim: layout, FSM, A*"]
+  SIM -->|"AgentView"| SCN["R3F scene + HUD + list view"]
+%% ---
+flowchart LR
+  P0["Phase 0 base (primary)"] --> P1["Phase 1 platform (Codex)"]
+  P0 --> P2["Phase 2 bridge (Codex)"]
+  P0 --> P3["Phase 3 sim (Codex)"]
+  P0 --> P4["Phase 4 scene (@lena)"]
+  P0 --> P5["Phase 5 look room (@lena + Codex images)"]
+  P1 --> P6["Phase 6 merge, gates, review, video"]
+  P2 --> P6
+  P3 --> P6
+  P4 --> P6
+  P5 --> P6

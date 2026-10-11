@@ -1,0 +1,87 @@
+import type {
+  AgentView,
+  InteractionResult,
+  PeekResult,
+  PermissionDecision,
+  ProviderId,
+  SessionRef,
+  SourceHealth
+} from '../../shared/office/types'
+
+// All lengths in metres, floor-local, 1 unit = 1 m, Y up. Plain data: Phase 6 maps the sim's LayoutMap into it.
+// The floor-local origin is the centre of the floor plate; room x/z is the room centre.
+export interface DeskSlot {
+  slotId: string
+  x: number
+  z: number
+  // Yaw in radians; the character faces (sin heading, cos heading) on the XZ plane.
+  heading: number
+}
+
+export interface RoomGeometry {
+  id: string
+  sessionKey: string | null
+  x: number
+  z: number
+  width: number
+  depth: number
+  door: { x: number; z: number }
+  label: string
+  kind: 'office' | 'team'
+  // Where the sim seats agents; the scene draws one desk in front of each.
+  seats: DeskSlot[]
+}
+
+// Offices within offices: a company zone holds its project offices, each holding one office per
+// agent session (plus a team area for overflow subagents). Centre-based metres, like RoomGeometry.
+type ZoneKind = 'company' | 'project' | 'office' | 'team'
+
+export interface ZoneGeometry {
+  id: string
+  kind: ZoneKind
+  label: string
+  x: number
+  z: number
+  width: number
+  depth: number
+  door: { x: number; z: number } | null
+  companyKey: string | null
+  projectKey: string | null
+  sessionKey: string | null
+  children: ZoneGeometry[]
+}
+
+export interface FloorGeometry {
+  floorId: string
+  label: string
+  plate: number
+  width: number
+  depth: number
+  corridor: { z: number; width: number }
+  rooms: RoomGeometry[]
+  // Company zones, outermost first; rooms are the leaf offices the current scene draws.
+  zones: ZoneGeometry[]
+  elevator: { x: number; z: number }
+}
+
+export interface OfficeFrame {
+  floors: FloorGeometry[]
+  agents: AgentView[]
+  sessions: SessionRef[]
+  // False until the bridge's first snapshot arrives, so "no agents" is not shown while connecting.
+  connected: boolean
+  sources: SourceHealth[]
+}
+
+export interface OfficeFeed {
+  subscribe(listener: (frame: OfficeFrame) => void): () => void
+  jump(sessionKey: string): void
+  send(sessionKey: string, text: string): Promise<InteractionResult>
+  respond(
+    sessionKey: string,
+    decision: PermissionDecision,
+    fingerprint: string
+  ): Promise<InteractionResult>
+  peek(sessionKey: string): Promise<PeekResult>
+  start(projectKey: string, provider: ProviderId): Promise<InteractionResult>
+}

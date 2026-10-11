@@ -19,6 +19,8 @@ vi.mock('electron', () => ({
 
 import { SoundPlayer } from './sound-player'
 
+type ExecCallback = (error: Error | null, stdout?: string, stderr?: string) => void
+
 describe('SoundPlayer', () => {
   let player: SoundPlayer
 
@@ -38,7 +40,7 @@ describe('SoundPlayer', () => {
 
     it('should call afplay on macOS when sound file exists', async () => {
       mockExistsSync.mockReturnValue(true)
-      mockExecFile.mockImplementation((_cmd: string, _args: string[], cb: Function) => {
+      mockExecFile.mockImplementation((_cmd: string, _args: string[], cb: ExecCallback) => {
         cb(null)
       })
 
@@ -54,7 +56,7 @@ describe('SoundPlayer', () => {
 
     it('should resolve even if afplay fails', async () => {
       mockExistsSync.mockReturnValue(true)
-      mockExecFile.mockImplementation((_cmd: string, _args: string[], cb: Function) => {
+      mockExecFile.mockImplementation((_cmd: string, _args: string[], cb: ExecCallback) => {
         cb(new Error('afplay failed'))
       })
 

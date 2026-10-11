@@ -56,7 +56,7 @@ function determineStatus(
   return 'active'
 }
 
-export function getPlatformDetector(): PlatformDetector {
+function getPlatformDetector(): PlatformDetector {
   if (process.platform === 'win32') {
     return new Win32Detector()
   }
@@ -80,12 +80,12 @@ export function detectSessionType(command: string, flags: string[]): SessionType
 export class ProcessMonitor {
   private detector: PlatformDetector
   private cpuIdleThreshold: number
-  private terminalResolver?: TerminalResolver
+  private terminalResolver?: Pick<TerminalResolver, 'resolve'>
 
   constructor(options?: {
     cpuIdleThreshold?: number
     detector?: PlatformDetector
-    terminalResolver?: TerminalResolver
+    terminalResolver?: Pick<TerminalResolver, 'resolve'>
   }) {
     this.cpuIdleThreshold = options?.cpuIdleThreshold ?? 3.0
     this.detector = options?.detector ?? getPlatformDetector()

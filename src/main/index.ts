@@ -1,3 +1,4 @@
+import { createAppWindow } from './window-factory'
 import { app, BrowserWindow } from 'electron'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
@@ -15,6 +16,8 @@ import { setupIpcHandlers, forwardUpdatesToRenderer } from './ipc-handlers'
 import { createWidgetStatsWriter } from './widget-stats-writer'
 import { SoundPlayer } from './sound-player'
 import { setupWidgetSync } from './widget-sync'
+import { setupOffice } from './office-setup'
+import { opensOfficeOnStart } from './office-window'
 
 // Prevent "write EIO" crashes when stdout/stderr pipe is broken
 // (e.g., launching terminal closed, or running packaged without a TTY)
@@ -30,7 +33,7 @@ let trayManager: TrayManager | null = null
 let tracker: SessionTracker | null = null
 
 function createWindow(store: SettingsStore): BrowserWindow {
-  const win = new BrowserWindow({
+  const win = createAppWindow({
     width: 900,
     height: 700,
     minWidth: 600,
@@ -43,9 +46,7 @@ function createWindow(store: SettingsStore): BrowserWindow {
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 15, y: 15 },
     webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
-      sandbox: false,
-      contextIsolation: true
+      preload: join(__dirname, '../preload/index.js')
     }
   })
 
@@ -59,10 +60,9 @@ function createWindow(store: SettingsStore): BrowserWindow {
   })
 
   // Hide to tray instead of minimizing to dock (when enabled)
-  win.on('minimize', (event) => {
+  win.on('minimize', () => {
     const settings = store.getSettings()
     if (settings.minimizeToTray) {
-      event.preventDefault()
       // Defer hide to next tick so Electron finishes processing the event
       process.nextTick(() => {
         if (!win.isDestroyed()) {
@@ -95,7 +95,14 @@ function showDashboard(): void {
   }
 }
 
+// One copy only: a login item plus a manual start would otherwise run two Offices and two
+// bridges. Development runs are left alone so they can sit beside the installed app.
+const isOnlyInstance = !app.isPackaged || app.requestSingleInstanceLock()
+if (!isOnlyInstance) app.quit()
+app.on('second-instance', () => showDashboard())
+
 app.whenReady().then(() => {
+  if (!isOnlyInstance) return
   // Initialize store and settings
   const store = new SettingsStore()
   const settings = store.getSettings()
@@ -125,9 +132,12 @@ app.whenReady().then(() => {
     () => trayManager?.getPopoverWindow() ?? null
   ])
 
+  const office = setupOffice(terminalResolver, store)
+
   // Create tray with popover support
   trayManager = new TrayManager({
     onOpenDashboard: showDashboard,
+    onOpenOffice: office.open,
     onQuit: () => {
       app.isQuitting = true
       app.quit()
@@ -230,10 +240,22 @@ app.whenReady().then(() => {
 
   // Start auto-update checks (every 4 hours, first check after 10s)
   updater.startAutoCheck()
+
+  // Last, and contained: a failing Office must not cost the tray, where it can be switched off.
+  if (opensOfficeOnStart(settings, process.argv)) {
+    try {
+      office.open()
+    } catch (error) {
+      console.error('Office failed to open at start:', error)
+    }
+  }
 })
 
 // Clean up tray before quitting to prevent "Object has been destroyed" errors
 app.on('before-quit', () => {
+  // Without this the hidden dashboard vetoes its own close and Cmd+Q leaves a process with
+  // no tray and no window.
+  app.isQuitting = true
   trayManager?.destroy()
   trayManager = null
 })
@@ -258,9 +280,11 @@ process.on('SIGINT', () => {
   app.quit()
 })
 
-// Extend app type for isQuitting flag
-declare module 'electron' {
-  interface App {
-    isQuitting?: boolean
+// Extend app type for isQuitting flag; Electron's `App` lives in the global namespace.
+declare global {
+  namespace Electron {
+    interface App {
+      isQuitting?: boolean
+    }
   }
 }

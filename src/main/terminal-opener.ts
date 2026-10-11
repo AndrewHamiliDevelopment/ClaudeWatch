@@ -1,32 +1,35 @@
-import { execFile } from 'child_process'
+import { execFilePromise } from './platform/exec'
 import type { TerminalType } from '../renderer/lib/types'
+import type { AgentCommand } from './orca-terminals'
 
 const EXEC_TIMEOUT = 10_000
 
-function escapeForAppleScript(str: string): string {
-  return str.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
-}
-
-function runOsascript(script: string): Promise<{ success: boolean }> {
-  return new Promise<{ success: boolean }>((resolve) => {
-    execFile('osascript', ['-e', script], { timeout: EXEC_TIMEOUT }, (error) => {
-      resolve({ success: !error })
-    })
-  })
-}
+const toResult = (run: Promise<unknown>): Promise<{ success: boolean }> =>
+  run.then(
+    () => ({ success: true }),
+    () => ({ success: false })
+  )
 
 function runCommand(cmd: string, args: string[]): Promise<{ success: boolean }> {
-  return new Promise<{ success: boolean }>((resolve) => {
-    execFile(cmd, args, { timeout: EXEC_TIMEOUT }, (error) => {
-      resolve({ success: !error })
-    })
-  })
+  return toResult(execFilePromise(cmd, args, { timeout: EXEC_TIMEOUT }))
 }
+
+// The path reaches AppleScript as argv and the shell via `quoted form of`, so no
+// character in a folder name can end the string or start a command substitution.
+function runOsascript(
+  script: string,
+  projectPath: string,
+  ...extraArgs: string[]
+): Promise<{ success: boolean }> {
+  const wrapped = `on run argv\nset projectPath to item 1 of argv\n${script}\nend run`
+  return runCommand('osascript', ['-e', wrapped, projectPath, ...extraArgs])
+}
+
+const CD_INTO_PROJECT = '"cd " & quoted form of projectPath'
 
 // --- Opener functions per terminal type ---
 
 function openWarp(projectPath: string): Promise<{ success: boolean }> {
-  const escaped = escapeForAppleScript(projectPath)
   const script = `
     tell application "Warp"
       activate
@@ -37,7 +40,7 @@ function openWarp(projectPath: string): Promise<{ success: boolean }> {
         set found to false
         repeat with w in windows
           set winName to name of w
-          if winName contains "${escaped}" then
+          if winName contains projectPath then
             perform action "AXRaise" of w
             set found to true
             exit repeat
@@ -46,37 +49,35 @@ function openWarp(projectPath: string): Promise<{ success: boolean }> {
         if not found then
           keystroke "t" using command down
           delay 0.3
-          keystroke "cd \\"${escaped}\\"" & return
+          keystroke ${CD_INTO_PROJECT} & return
         end if
       end tell
     end tell
   `
-  return runOsascript(script)
+  return runOsascript(script, projectPath)
 }
 
 function openITerm2(projectPath: string): Promise<{ success: boolean }> {
-  const escaped = escapeForAppleScript(projectPath)
   const script = `
     tell application "iTerm2"
       activate
       set newWindow to (create window with default profile)
       tell current session of newWindow
-        write text "cd \\"${escaped}\\""
+        write text ${CD_INTO_PROJECT}
       end tell
     end tell
   `
-  return runOsascript(script)
+  return runOsascript(script, projectPath)
 }
 
 function openTerminalApp(projectPath: string): Promise<{ success: boolean }> {
-  const escaped = escapeForAppleScript(projectPath)
   const script = `
     tell application "Terminal"
       activate
-      do script "cd \\"${escaped}\\""
+      do script ${CD_INTO_PROJECT}
     end tell
   `
-  return runOsascript(script)
+  return runOsascript(script, projectPath)
 }
 
 function openVSCode(projectPath: string): Promise<{ success: boolean }> {
@@ -96,7 +97,6 @@ function openWezterm(projectPath: string): Promise<{ success: boolean }> {
 }
 
 function openGhostty(projectPath: string): Promise<{ success: boolean }> {
-  const escaped = escapeForAppleScript(projectPath)
   const script = `
     tell application "Ghostty"
       activate
@@ -106,11 +106,11 @@ function openGhostty(projectPath: string): Promise<{ success: boolean }> {
       tell process "Ghostty"
         keystroke "t" using command down
         delay 0.3
-        keystroke "cd \\"${escaped}\\"" & return
+        keystroke ${CD_INTO_PROJECT} & return
       end tell
     end tell
   `
-  return runOsascript(script)
+  return runOsascript(script, projectPath)
 }
 
 function openDefault(projectPath: string): Promise<{ success: boolean }> {
@@ -138,4 +138,18 @@ export async function openTerminal(
 ): Promise<{ success: boolean }> {
   const opener = (terminalType && openerRegistry[terminalType]) || openDefault
   return opener(projectPath)
+}
+
+// Fallback for starting an agent when Orca is not running: a Terminal.app window in the folder.
+export function openTerminalRunning(
+  projectPath: string,
+  command: AgentCommand
+): Promise<{ success: boolean }> {
+  const script = `
+    tell application "Terminal"
+      activate
+      do script ${CD_INTO_PROJECT} & " && " & quoted form of (item 2 of argv)
+    end tell
+  `
+  return runOsascript(script, projectPath, command)
 }

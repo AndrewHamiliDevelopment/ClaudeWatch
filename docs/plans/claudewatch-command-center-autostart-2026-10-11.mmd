@@ -1,0 +1,9 @@
+flowchart TD
+  login[Log in] --> item[macOS login item]
+  item --> app[ClaudeWatch tray app starts]
+  app --> q{openOfficeOnLaunch?}
+  q -- no --> tray[Tray only]
+  q -- yes --> open[office.open]
+  open --> win[Office window at saved bounds<br/>or 1280x820 centred]
+  win -- close or quit --> save[store.officeWindowBounds]
+  save -.-> win

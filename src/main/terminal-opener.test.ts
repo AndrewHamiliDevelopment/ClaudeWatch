@@ -6,7 +6,9 @@ vi.mock('child_process', () => ({
   execFile: (...args: unknown[]) => mockExecFile(...args)
 }))
 
-import { openTerminal } from './terminal-opener'
+import { openTerminal, openTerminalRunning } from './terminal-opener'
+
+type ExecCallback = (error: Error | null, stdout?: string, stderr?: string) => void
 
 describe('openTerminal', () => {
   beforeEach(() => {
@@ -15,7 +17,7 @@ describe('openTerminal', () => {
 
   it('dispatches to Warp opener for "warp"', async () => {
     mockExecFile.mockImplementation(
-      (_cmd: string, _args: string[], _opts: unknown, cb: Function) => {
+      (_cmd: string, _args: string[], _opts: unknown, cb: ExecCallback) => {
         cb(null)
       }
     )
@@ -25,7 +27,7 @@ describe('openTerminal', () => {
     expect(result).toEqual({ success: true })
     expect(mockExecFile).toHaveBeenCalledWith(
       'osascript',
-      ['-e', expect.stringContaining('tell application "Warp"')],
+      ['-e', expect.stringContaining('tell application "Warp"'), '/Users/dev/project'],
       expect.objectContaining({ timeout: 10_000 }),
       expect.any(Function)
     )
@@ -33,7 +35,7 @@ describe('openTerminal', () => {
 
   it('dispatches to iTerm2 opener for "iterm2"', async () => {
     mockExecFile.mockImplementation(
-      (_cmd: string, _args: string[], _opts: unknown, cb: Function) => {
+      (_cmd: string, _args: string[], _opts: unknown, cb: ExecCallback) => {
         cb(null)
       }
     )
@@ -43,7 +45,7 @@ describe('openTerminal', () => {
     expect(result).toEqual({ success: true })
     expect(mockExecFile).toHaveBeenCalledWith(
       'osascript',
-      ['-e', expect.stringContaining('tell application "iTerm2"')],
+      ['-e', expect.stringContaining('tell application "iTerm2"'), '/Users/dev/project'],
       expect.objectContaining({ timeout: 10_000 }),
       expect.any(Function)
     )
@@ -51,7 +53,7 @@ describe('openTerminal', () => {
 
   it('dispatches to Terminal.app opener for "terminal-app"', async () => {
     mockExecFile.mockImplementation(
-      (_cmd: string, _args: string[], _opts: unknown, cb: Function) => {
+      (_cmd: string, _args: string[], _opts: unknown, cb: ExecCallback) => {
         cb(null)
       }
     )
@@ -61,7 +63,7 @@ describe('openTerminal', () => {
     expect(result).toEqual({ success: true })
     expect(mockExecFile).toHaveBeenCalledWith(
       'osascript',
-      ['-e', expect.stringContaining('tell application "Terminal"')],
+      ['-e', expect.stringContaining('tell application "Terminal"'), '/Users/dev/project'],
       expect.objectContaining({ timeout: 10_000 }),
       expect.any(Function)
     )
@@ -69,7 +71,7 @@ describe('openTerminal', () => {
 
   it('dispatches to VS Code opener for "vscode"', async () => {
     mockExecFile.mockImplementation(
-      (_cmd: string, _args: string[], _opts: unknown, cb: Function) => {
+      (_cmd: string, _args: string[], _opts: unknown, cb: ExecCallback) => {
         cb(null)
       }
     )
@@ -87,7 +89,7 @@ describe('openTerminal', () => {
 
   it('dispatches to Cursor opener for "cursor"', async () => {
     mockExecFile.mockImplementation(
-      (_cmd: string, _args: string[], _opts: unknown, cb: Function) => {
+      (_cmd: string, _args: string[], _opts: unknown, cb: ExecCallback) => {
         cb(null)
       }
     )
@@ -105,7 +107,7 @@ describe('openTerminal', () => {
 
   it('dispatches to kitty opener for "kitty"', async () => {
     mockExecFile.mockImplementation(
-      (_cmd: string, _args: string[], _opts: unknown, cb: Function) => {
+      (_cmd: string, _args: string[], _opts: unknown, cb: ExecCallback) => {
         cb(null)
       }
     )
@@ -123,7 +125,7 @@ describe('openTerminal', () => {
 
   it('dispatches to wezterm opener for "wezterm"', async () => {
     mockExecFile.mockImplementation(
-      (_cmd: string, _args: string[], _opts: unknown, cb: Function) => {
+      (_cmd: string, _args: string[], _opts: unknown, cb: ExecCallback) => {
         cb(null)
       }
     )
@@ -141,7 +143,7 @@ describe('openTerminal', () => {
 
   it('dispatches to Ghostty opener for "ghostty"', async () => {
     mockExecFile.mockImplementation(
-      (_cmd: string, _args: string[], _opts: unknown, cb: Function) => {
+      (_cmd: string, _args: string[], _opts: unknown, cb: ExecCallback) => {
         cb(null)
       }
     )
@@ -151,7 +153,7 @@ describe('openTerminal', () => {
     expect(result).toEqual({ success: true })
     expect(mockExecFile).toHaveBeenCalledWith(
       'osascript',
-      ['-e', expect.stringContaining('tell application "Ghostty"')],
+      ['-e', expect.stringContaining('tell application "Ghostty"'), '/Users/dev/project'],
       expect.objectContaining({ timeout: 10_000 }),
       expect.any(Function)
     )
@@ -159,7 +161,7 @@ describe('openTerminal', () => {
 
   it('falls back to default for unknown terminal type', async () => {
     mockExecFile.mockImplementation(
-      (_cmd: string, _args: string[], _opts: unknown, cb: Function) => {
+      (_cmd: string, _args: string[], _opts: unknown, cb: ExecCallback) => {
         cb(null)
       }
     )
@@ -177,7 +179,7 @@ describe('openTerminal', () => {
 
   it('falls back to default when terminalType is undefined', async () => {
     mockExecFile.mockImplementation(
-      (_cmd: string, _args: string[], _opts: unknown, cb: Function) => {
+      (_cmd: string, _args: string[], _opts: unknown, cb: ExecCallback) => {
         cb(null)
       }
     )
@@ -195,7 +197,7 @@ describe('openTerminal', () => {
 
   it('handles AppleScript execution failure gracefully', async () => {
     mockExecFile.mockImplementation(
-      (_cmd: string, _args: string[], _opts: unknown, cb: Function) => {
+      (_cmd: string, _args: string[], _opts: unknown, cb: ExecCallback) => {
         cb(new Error('osascript failed'))
       }
     )
@@ -204,23 +206,50 @@ describe('openTerminal', () => {
 
     expect(result).toEqual({ success: false })
   })
+})
 
-  it('escapes special characters in project paths', async () => {
+describe('openTerminal with an untrusted project path', () => {
+  const hostilePath = '/tmp/proj"; $(touch /tmp/cw-pwned) "'
+
+  beforeEach(() => {
+    vi.clearAllMocks()
     mockExecFile.mockImplementation(
-      (_cmd: string, _args: string[], _opts: unknown, cb: Function) => {
+      (_cmd: string, _args: string[], _opts: unknown, cb: ExecCallback) => {
         cb(null)
       }
     )
+  })
 
-    const pathWithSpecialChars = '/Users/dev/my "project" path\\here'
-    await openTerminal(pathWithSpecialChars, 'warp')
+  it.each(['warp', 'iterm2', 'terminal-app', 'ghostty'] as const)(
+    '%s passes the path as an osascript argument, never inside the script',
+    async (terminalType) => {
+      await openTerminal(hostilePath, terminalType)
 
-    const scriptArg = mockExecFile.mock.calls[0][1][1] as string
-    // Backslash should be escaped to double-backslash
-    expect(scriptArg).toContain('\\\\')
-    // Double quotes should be escaped
-    expect(scriptArg).toContain('\\"')
-    // The raw unescaped characters should NOT appear in the AppleScript
-    expect(scriptArg).not.toContain('my "project"')
+      const [command, args] = mockExecFile.mock.calls[0] as [string, string[]]
+      expect(command).toBe('osascript')
+      expect(args[1]).not.toContain('cw-pwned')
+      expect(args[1]).toContain('quoted form of')
+      expect(args.slice(2)).toEqual([hostilePath])
+    }
+  )
+})
+
+describe('openTerminalRunning', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockExecFile.mockImplementation(
+      (_cmd: string, _args: string[], _opts: unknown, cb: ExecCallback) => {
+        cb(null)
+      }
+    )
+  })
+
+  it('starts the agent command in Terminal.app with path and command as argv', async () => {
+    expect(await openTerminalRunning('/tmp/a b"$(x)', 'codex')).toEqual({ success: true })
+    const [command, args] = mockExecFile.mock.calls[0] as [string, string[]]
+    expect(command).toBe('osascript')
+    expect(args.slice(2)).toEqual(['/tmp/a b"$(x)', 'codex'])
+    expect(args[1]).toContain('quoted form of projectPath')
+    expect(args[1]).not.toContain('$(x)')
   })
 })

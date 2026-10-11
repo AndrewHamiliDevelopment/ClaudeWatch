@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { useUsage } from '../hooks/useUsage'
 import type { UsageStats } from '../lib/types'
+import { mockApi } from './api-mock'
 
 describe('useUsage', () => {
   let usageCallback: ((data: UsageStats) => void) | null = null
@@ -23,12 +24,14 @@ describe('useUsage', () => {
       }
     ],
     dataAvailable: true,
-    lastUpdated: '2026-03-18T10:00:00Z'
+    lastUpdated: '2026-03-18T10:00:00Z',
+    weeklyTokens: 0,
+    weeklyTokenTarget: 5_000_000
   }
 
   beforeEach(() => {
     usageCallback = null
-    window.api = {
+    window.api = mockApi({
       getInstances: vi.fn(),
       getSettings: vi.fn(),
       setSettings: vi.fn(),
@@ -52,7 +55,7 @@ describe('useUsage', () => {
       }),
       getPromoStatus: vi.fn().mockResolvedValue(null),
       onPromoUpdate: vi.fn().mockReturnValue(() => {})
-    }
+    })
   })
 
   afterEach(() => {

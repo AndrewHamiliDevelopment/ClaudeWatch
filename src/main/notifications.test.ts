@@ -11,7 +11,7 @@ const { mockShow, mockIsSupported, MockNotification } = vi.hoisted(() => {
     on: vi.fn(),
     close: vi.fn()
   }))
-  MockNotification.isSupported = mockIsSupported
+  Object.assign(MockNotification, { isSupported: mockIsSupported })
   return { mockShow, mockIsSupported, MockNotification }
 })
 

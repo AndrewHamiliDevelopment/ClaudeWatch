@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { usePromoStatus } from '../hooks/usePromoStatus'
 import type { PromoStatus } from '../lib/types'
+import { mockApi } from './api-mock'
 
 describe('usePromoStatus', () => {
   let promoCallback: ((data: PromoStatus) => void) | null = null
@@ -20,7 +21,7 @@ describe('usePromoStatus', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     promoCallback = null
-    window.api = {
+    window.api = mockApi({
       getInstances: vi.fn(),
       getSettings: vi.fn(),
       setSettings: vi.fn(),
@@ -44,7 +45,7 @@ describe('usePromoStatus', () => {
           promoCallback = null
         }
       })
-    }
+    })
   })
 
   afterEach(() => {

@@ -7,7 +7,7 @@ interface StatusBadgeProps {
   className?: string
 }
 
-const statusConfig: Record<
+export const statusConfig: Record<
   ClaudeInstance['status'],
   { label: string; colorClass: string; dotClass: string }
 > = {

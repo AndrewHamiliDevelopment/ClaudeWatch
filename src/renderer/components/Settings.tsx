@@ -453,6 +453,17 @@ export function Settings() {
           </SettingRow>
 
           <SettingRow
+            label="Open the Office on Start"
+            description="Show the agent office as soon as ClaudeWatch starts"
+          >
+            <ToggleSwitch
+              checked={settings.openOfficeOnLaunch}
+              onChange={(val) => updateSettings({ openOfficeOnLaunch: val })}
+              label="Open the Office on start"
+            />
+          </SettingRow>
+
+          <SettingRow
             label="Minimize to Tray"
             description="Hide window to tray instead of minimizing to dock"
           >

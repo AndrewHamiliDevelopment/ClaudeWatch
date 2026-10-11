@@ -1,40 +1,42 @@
 import Store from 'electron-store'
 import type { AppSettings, SessionHistoryEntry } from '../renderer/lib/types'
 import { DEFAULT_SETTINGS } from '../renderer/lib/types'
+import type { Bounds } from './window-bounds'
+import { conformSettings } from './settings-shape'
+
+interface StoreSchema {
+  settings: AppSettings
+  history: SessionHistoryEntry[]
+  popoverPinned: boolean
+  popoverPosition: { x: number; y: number } | null
+  officeWindowBounds: Bounds | null
+}
 
 export class SettingsStore {
-  private store: InstanceType<typeof Store>
+  private store: Store<StoreSchema>
 
   constructor() {
-    this.store = new Store({
+    this.store = new Store<StoreSchema>({
       name: 'claudewatch',
       defaults: {
         settings: DEFAULT_SETTINGS,
-        history: [] as SessionHistoryEntry[]
+        history: [],
+        popoverPinned: false,
+        popoverPosition: null,
+        officeWindowBounds: null
       }
     })
   }
 
   getSettings(): AppSettings {
-    const stored = this.store.get('settings', DEFAULT_SETTINGS) as AppSettings
-    // Ensure new notification fields exist for users upgrading from older versions
-    if (stored.notifications.onTaskComplete === undefined) {
-      stored.notifications.onTaskComplete = DEFAULT_SETTINGS.notifications.onTaskComplete
-    }
-    if (stored.notifications.pingSound === undefined) {
-      stored.notifications.pingSound = DEFAULT_SETTINGS.notifications.pingSound
-    }
-    // Ensure minimizeToTray exists for users upgrading from older versions
-    if (stored.minimizeToTray === undefined) {
-      stored.minimizeToTray = DEFAULT_SETTINGS.minimizeToTray
-    }
-    // Ensure weeklyTokenTarget exists for users upgrading from older versions
-    if (stored.weeklyTokenTarget === undefined) {
-      stored.weeklyTokenTarget = DEFAULT_SETTINGS.weeklyTokenTarget
-    }
-    // Ensure mutedProjects exists for users upgrading from older versions
-    if (stored.notifications.mutedProjects === undefined) {
-      stored.notifications.mutedProjects = DEFAULT_SETTINGS.notifications.mutedProjects
+    const saved = this.store.get('settings', DEFAULT_SETTINGS)
+    // Defaults fill whatever an older version never saved, or a damaged or hand-edited file
+    // holds in the wrong type.
+    const known = conformSettings(saved)
+    const stored: AppSettings = {
+      ...DEFAULT_SETTINGS,
+      ...known,
+      notifications: { ...DEFAULT_SETTINGS.notifications, ...known.notifications }
     }
     // Migrate cpuIdleThreshold from old default (1.0) to new default (3.0)
     if (stored.cpuIdleThreshold === 1.0) {
@@ -46,13 +48,17 @@ export class SettingsStore {
 
   setSettings(partial: Partial<AppSettings>): AppSettings {
     const current = this.getSettings()
-    const merged: AppSettings = { ...current, ...partial }
+    const merged: AppSettings = {
+      ...current,
+      ...partial,
+      notifications: { ...current.notifications, ...partial.notifications }
+    }
     this.store.set('settings', merged)
     return merged
   }
 
   getHistory(): SessionHistoryEntry[] {
-    return (this.store.get('history', []) as SessionHistoryEntry[]) ?? []
+    return this.store.get('history', [])
   }
 
   addHistoryEntry(entry: SessionHistoryEntry): void {
@@ -68,7 +74,7 @@ export class SettingsStore {
   }
 
   getPopoverPinned(): boolean {
-    return this.store.get('popoverPinned', false) as boolean
+    return this.store.get('popoverPinned', false)
   }
 
   setPopoverPinned(pinned: boolean): void {
@@ -76,10 +82,18 @@ export class SettingsStore {
   }
 
   getPopoverPosition(): { x: number; y: number } | null {
-    return this.store.get('popoverPosition', null) as { x: number; y: number } | null
+    return this.store.get('popoverPosition', null)
   }
 
   setPopoverPosition(position: { x: number; y: number } | null): void {
     this.store.set('popoverPosition', position)
+  }
+
+  getOfficeWindowBounds(): Bounds | null {
+    return this.store.get('officeWindowBounds', null)
+  }
+
+  setOfficeWindowBounds(bounds: Bounds): void {
+    this.store.set('officeWindowBounds', bounds)
   }
 }

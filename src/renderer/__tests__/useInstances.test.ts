@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act, waitFor } from '@testing-library/react'
 import { useInstances } from '../hooks/useInstances'
 import type { ClaudeInstance, InstanceUpdate } from '../lib/types'
+import { mockApi } from './api-mock'
 
 const mockInstance = (overrides: Partial<ClaudeInstance> = {}): ClaudeInstance => ({
   pid: 1234,
@@ -36,7 +37,7 @@ const mockUpdate: InstanceUpdate = {
       projectName: 'projects/done'
     })
   ],
-  stats: { total: 3, active: 1, idle: 1, exited: 1, recentlyCompleted: 0 }
+  stats: { total: 3, active: 1, idle: 1, stale: 0, exited: 1, recentlyCompleted: 0 }
 }
 
 describe('useInstances', () => {
@@ -44,7 +45,7 @@ describe('useInstances', () => {
 
   beforeEach(() => {
     unsubscribe = vi.fn()
-    window.api = {
+    window.api = mockApi({
       getInstances: vi.fn().mockResolvedValue(mockUpdate),
       getSettings: vi.fn(),
       setSettings: vi.fn(),
@@ -53,7 +54,7 @@ describe('useInstances', () => {
       openDashboard: vi.fn(),
       quit: vi.fn(),
       onInstancesUpdate: vi.fn().mockReturnValue(unsubscribe)
-    }
+    })
   })
 
   afterEach(() => {
@@ -92,7 +93,7 @@ describe('useInstances', () => {
 
     const newUpdate: InstanceUpdate = {
       instances: [mockInstance({ pid: 1111, status: 'active' })],
-      stats: { total: 1, active: 1, idle: 0, exited: 0, recentlyCompleted: 0 }
+      stats: { total: 1, active: 1, idle: 0, stale: 0, exited: 0, recentlyCompleted: 0 }
     }
 
     const callback = (window.api.onInstancesUpdate as ReturnType<typeof vi.fn>).mock.calls[0][0]
@@ -203,7 +204,7 @@ describe('useInstances', () => {
             lastBecameIdleAt: new Date() // just now
           })
         ],
-        stats: { total: 1, active: 0, idle: 1, exited: 0, recentlyCompleted: 1 }
+        stats: { total: 1, active: 0, idle: 1, stale: 0, exited: 0, recentlyCompleted: 1 }
       }
 
       ;(window.api.getInstances as ReturnType<typeof vi.fn>).mockResolvedValue(recentUpdate)
@@ -228,7 +229,7 @@ describe('useInstances', () => {
             lastBecameIdleAt: oldDate
           })
         ],
-        stats: { total: 1, active: 0, idle: 1, exited: 0, recentlyCompleted: 0 }
+        stats: { total: 1, active: 0, idle: 1, stale: 0, exited: 0, recentlyCompleted: 0 }
       }
 
       ;(window.api.getInstances as ReturnType<typeof vi.fn>).mockResolvedValue(oldUpdate)

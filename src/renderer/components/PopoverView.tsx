@@ -15,6 +15,7 @@ import { useUsage } from '../hooks/useUsage'
 import { usePromoStatus } from '../hooks/usePromoStatus'
 import { useRateLimits } from '../hooks/useRateLimits'
 import type { ClaudeInstance, InstanceUpdate, RateLimits } from '../lib/types'
+import { statusConfig } from './StatusBadge'
 
 const RECENT_WINDOW_MS = 10 * 60 * 1000
 
@@ -25,13 +26,6 @@ const emptyStats: InstanceUpdate['stats'] = {
   stale: 0,
   exited: 0,
   recentlyCompleted: 0
-}
-
-const statusColors: Record<ClaudeInstance['status'], string> = {
-  active: 'bg-status-active',
-  idle: 'bg-status-idle',
-  stale: 'bg-text-tertiary',
-  exited: 'bg-status-exited'
 }
 
 const statusIcons: Record<ClaudeInstance['status'], typeof Activity> = {
@@ -357,7 +351,7 @@ function PopoverInstanceRow({
   }, [instance.elapsedSeconds, instance.status, instance.pid])
 
   const StatusIcon = iconOverride ?? statusIcons[instance.status]
-  const resolvedDotColor = dotColor ?? statusColors[instance.status]
+  const resolvedDotColor = dotColor ?? statusConfig[instance.status].dotClass
 
   const idleAgo =
     instance.lastBecameIdleAt && instance.status === 'idle'
@@ -395,13 +389,10 @@ function PopoverInstanceRow({
 
       {/* Status icon */}
       <StatusIcon
-        className={cn('h-3 w-3 shrink-0', {
-          'text-emerald-400': !!iconOverride,
-          'text-status-active': !iconOverride && instance.status === 'active',
-          'text-status-idle': !iconOverride && instance.status === 'idle',
-          'text-text-tertiary': !iconOverride && instance.status === 'stale',
-          'text-status-exited': !iconOverride && instance.status === 'exited'
-        })}
+        className={cn(
+          'h-3 w-3 shrink-0',
+          iconOverride ? 'text-emerald-400' : statusConfig[instance.status].colorClass
+        )}
         aria-label={instance.status}
       />
     </div>

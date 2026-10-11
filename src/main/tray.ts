@@ -1,3 +1,4 @@
+import { createAppWindow } from './window-factory'
 import {
   Tray,
   BrowserWindow,
@@ -10,9 +11,11 @@ import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 import type { ClaudeInstance, InstanceUpdate, PromoStatus } from '../renderer/lib/types'
 import type { SettingsStore } from './store'
+import { isOnAnyDisplay } from './window-bounds'
 
 interface TrayManagerOptions {
   onOpenDashboard: () => void
+  onOpenOffice?: () => void
   onQuit: () => void
   onCheckForUpdates?: () => void
   preloadPath: string
@@ -33,6 +36,7 @@ export class TrayManager {
   private tray: Tray | null = null
   private popover: BrowserWindow | null = null
   private onOpenDashboard: () => void
+  private onOpenOffice?: () => void
   private onQuit: () => void
   private onCheckForUpdates?: () => void
   private preloadPath: string
@@ -52,6 +56,7 @@ export class TrayManager {
 
   constructor(options: TrayManagerOptions) {
     this.onOpenDashboard = options.onOpenDashboard
+    this.onOpenOffice = options.onOpenOffice
     this.onQuit = options.onQuit
     this.onCheckForUpdates = options.onCheckForUpdates
     this.preloadPath = options.preloadPath
@@ -84,7 +89,7 @@ export class TrayManager {
   }
 
   private createPopover(): void {
-    this.popover = new BrowserWindow({
+    this.popover = createAppWindow({
       width: POPOVER_WIDTH,
       height: POPOVER_HEIGHT,
       show: false,
@@ -101,9 +106,7 @@ export class TrayManager {
       roundedCorners: true,
       alwaysOnTop: this.pinned,
       webPreferences: {
-        preload: this.preloadPath,
-        sandbox: false,
-        contextIsolation: true
+        preload: this.preloadPath
       }
     })
 
@@ -191,11 +194,11 @@ export class TrayManager {
   }
 
   private isPositionOnScreen(x: number, y: number): boolean {
-    const displays = screen.getAllDisplays()
-    return displays.some((display) => {
-      const { x: dx, y: dy, width, height } = display.workArea
-      return x + 50 > dx && x < dx + width && y + 50 > dy && y < dy + height
-    })
+    // On screen means at least a 50 px corner of the popover can be grabbed.
+    return isOnAnyDisplay(
+      { x, y, width: 50, height: 50 },
+      screen.getAllDisplays().map((display) => display.workArea)
+    )
   }
 
   setPinned(pinned: boolean): void {
@@ -271,6 +274,12 @@ export class TrayManager {
       label: 'Open Dashboard',
       click: () => this.onOpenDashboard()
     })
+    if (this.onOpenOffice) {
+      menuItems.push({
+        label: 'Open Office',
+        click: () => this.onOpenOffice?.()
+      })
+    }
     if (this.onCheckForUpdates) {
       menuItems.push({
         label: 'Check for Updates',

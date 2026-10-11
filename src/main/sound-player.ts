@@ -22,7 +22,7 @@ export class SoundPlayer {
 
     if (process.platform === 'darwin') {
       return new Promise<void>((res) => {
-        execFile('afplay', [this.soundPath], (err) => {
+        execFile('afplay', [this.soundPath], () => {
           // Graceful no-op on error
           res()
         })
@@ -32,7 +32,7 @@ export class SoundPlayer {
     if (process.platform === 'win32') {
       return new Promise<void>((res) => {
         const script = `(New-Object System.Media.SoundPlayer '${this.soundPath}').PlaySync()`
-        execFile('powershell', ['-Command', script], (err) => {
+        execFile('powershell', ['-Command', script], () => {
           res()
         })
       })

@@ -77,7 +77,7 @@ describe('Issue #5: Concurrent poll guard', () => {
       })
     } as unknown as ProcessMonitor
 
-    tracker = new SessionTracker(monitor, { maxHistoryEntries: 5 })
+    tracker = new SessionTracker(monitor, { maxHistoryEntries: 5, staleThresholdMinutes: 30 })
   })
 
   afterEach(() => {
@@ -192,17 +192,6 @@ describe('Issue #10: shared execFilePromise', () => {
 
 // ─── ISSUE #16: notification.sound setting never applied ───
 describe('Issue #16: notification sound setting', () => {
-  // We re-import to get fresh mocks
-  const { mockShow: mockShow16, MockNotification: MockNotification16 } = vi.hoisted(() => {
-    const mockShow = vi.fn()
-    const MockNotification = vi.fn().mockImplementation(() => ({
-      show: mockShow,
-      on: vi.fn(),
-      close: vi.fn()
-    }))
-    return { mockShow, MockNotification }
-  })
-
   // Note: this test validates the Notification constructor receives `silent` option.
   // Due to module mock limitations, we test the logic conceptually.
   // The actual notification.test.ts covers this more thoroughly.
@@ -210,5 +199,42 @@ describe('Issue #16: notification sound setting', () => {
     // This test is validated in the updated notifications.test.ts
     // Here we just confirm the formatDuration shared util works with notifications
     expect(formatDuration(332)).toBe('5m 32s')
+  })
+})
+
+describe('validateSettings switches', () => {
+  it('accepts the open-Office-on-start switch', () => {
+    expect(validateSettings({ openOfficeOnLaunch: true })).toEqual({ openOfficeOnLaunch: true })
+  })
+
+  it('drops a switch that is not a boolean', () => {
+    const forged = { openOfficeOnLaunch: 'yes', launchAtLogin: 1, minimizeToTray: null }
+    expect(validateSettings(forged as unknown as Parameters<typeof validateSettings>[0])).toEqual(
+      {}
+    )
+  })
+})
+
+describe('validateSettings types', () => {
+  const forge = (data: unknown) => validateSettings(data as Parameters<typeof validateSettings>[0])
+
+  it('drops any value whose type differs from its default', () => {
+    expect(forge({ pollingIntervalMs: 'abc', maxHistoryEntries: Number.NaN, theme: 7 })).toEqual({})
+    expect(forge({ notifications: null })).toEqual({})
+    expect(forge({ notifications: 'all' })).toEqual({})
+  })
+
+  it('checks the notification fields the same way', () => {
+    expect(
+      forge({
+        notifications: { sound: 'loud', cooldownSeconds: '30', mutedProjects: 'all', onIdle: false }
+      })
+    ).toEqual({ notifications: { onIdle: false } })
+    expect(forge({ notifications: { mutedProjects: ['/a', 5] } })).toEqual({ notifications: {} })
+  })
+
+  it('accepts only a known theme', () => {
+    expect(forge({ theme: 'neon' })).toEqual({})
+    expect(forge({ theme: 'light' })).toEqual({ theme: 'light' })
   })
 })

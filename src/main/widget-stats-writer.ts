@@ -26,7 +26,7 @@ const WIDGET_BUNDLE_IDS = [
   'com.zkidzdev.claudewatch.host.widget'
 ]
 
-export interface WidgetInstanceData {
+interface WidgetInstanceData {
   pid: number
   projectName: string
   status: 'active' | 'idle' | 'stale' | 'exited'
@@ -35,7 +35,7 @@ export interface WidgetInstanceData {
   elapsedSeconds: number
 }
 
-export interface WidgetUsageData {
+interface WidgetUsageData {
   totalCostUSD: number
   totalInputTokens: number
   totalOutputTokens: number
@@ -43,14 +43,14 @@ export interface WidgetUsageData {
   dataAvailable: boolean
 }
 
-export interface WidgetPromoData {
+interface WidgetPromoData {
   is2x: boolean
   promoActive: boolean
   expiresInSeconds: number | null
   promoPeriod: string
 }
 
-export interface WidgetRateLimitData {
+interface WidgetRateLimitData {
   window5hPercent: number
   window7dPercent: number
   window5hResetsAt: string | null
@@ -58,7 +58,7 @@ export interface WidgetRateLimitData {
   dataAvailable: boolean
 }
 
-export interface WidgetStatsPayload {
+interface WidgetStatsPayload {
   updatedAt: string
   stats: {
     total: number
