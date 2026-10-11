@@ -42,7 +42,7 @@ export function sessionFromRegistry(
       ? /permission|approval/i.test(entry.waitingFor)
         ? 'permission'
         : 'question'
-      : transcript.error
+      : entry.status !== 'idle' && transcript.error
         ? 'error'
         : 'none',
     currentTool: transcript.tool,

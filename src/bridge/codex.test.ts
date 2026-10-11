@@ -36,7 +36,7 @@ it('matches cwd using only rollout headers then tails the newest match', async (
   })
   const stat = io.stat
   io.stat = async (path) =>
-    path.includes('rollout-new') ? { directory: false, mtimeMs: 2000 } : stat(path)
+    path.includes('rollout-new') ? { directory: false, mtimeMs: 2000, size: 100 } : stat(path)
   io.exec = vi.fn(async (file) =>
     file.endsWith('ps') ? '42 Sat Oct 10 15:29:12 2026 /bin/codex' : 'p42\nn/repo\n'
   )
@@ -77,3 +77,22 @@ it('handles current Codex response_item tool and reasoning records without retai
   expect(parseCodexActivity(`${tool}\n${reasoning}`).activity).toBe('thinking')
   expect(JSON.stringify(parseCodexActivity(tool))).not.toContain('SECRET_INPUT')
 })
+
+it.each(['/company/repo', '/company/repo/.claude/.worktree/task'])(
+  'keeps main project and company identity for %s',
+  async (cwd) => {
+    const io = fixtureIo({
+      '/company/repo/.git': null,
+      '/company/repo/.claude/.worktree/task/.git': 'gitdir: /company/repo/.git/worktrees/task\n'
+    })
+    io.exec = async (file) =>
+      file.endsWith('ps') ? '42 Sat Oct 10 15:29:12 2026 codex' : `n${cwd}`
+    const batch = await collectCodex('/codex', io)
+    expect(batch.sessions[0]).toMatchObject({
+      projectRoot: '/company/repo',
+      projectLabel: 'repo',
+      companyLabel: 'company',
+      worktree: cwd === '/company/repo' ? null : cwd
+    })
+  }
+)

@@ -42,17 +42,33 @@ export function parseTranscript(text: string): TranscriptState {
   }
 }
 
+const paths = new WeakMap<BridgeIo, Map<string, string>>()
+
 export async function transcriptPath(
   root: string,
   cwd: string,
   sessionId: string,
   io: BridgeIo
 ): Promise<string | null> {
+  let cache = paths.get(io)
+  if (!cache) paths.set(io, (cache = new Map()))
+  const key = JSON.stringify([root, cwd, sessionId])
+  const cached = cache.get(key)
+  if (cached) return cached
+  const remember = (path: string): string => {
+    // Bound discovery state even when the bridge runs across many sessions.
+    if (cache.size >= 1024) {
+      const oldest = cache.keys().next().value
+      if (oldest !== undefined) cache.delete(oldest)
+    }
+    cache.set(key, path)
+    return path
+  }
   const projects = join(root, 'projects')
-  const direct = join(projects, cwd.replace(/[/.]/g, '-'), `${sessionId}.jsonl`)
+  const direct = join(projects, cwd.replace(/[^a-zA-Z0-9]/g, '-'), `${sessionId}.jsonl`)
   try {
     await io.stat(direct)
-    return direct
+    return remember(direct)
   } catch (error) {
     if (!isMissing(error)) throw error
   }
@@ -67,7 +83,7 @@ export async function transcriptPath(
     const candidate = join(projects, slug, `${sessionId}.jsonl`)
     try {
       await io.stat(candidate)
-      return candidate
+      return remember(candidate)
     } catch (error) {
       if (!isMissing(error)) throw error
     }

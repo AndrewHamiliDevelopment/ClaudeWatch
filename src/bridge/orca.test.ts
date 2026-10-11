@@ -65,3 +65,25 @@ describe('Orca polling', () => {
     })
   })
 })
+
+it('retries failed environment reads after 30 seconds', async () => {
+  vi.useFakeTimers()
+  try {
+    vi.setSystemTime(0)
+    const io = fixtureIo()
+    io.exec = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('timeout'))
+      .mockResolvedValue('claude ORCA_PANE_KEY=p')
+    const source = new OrcaSource(io)
+    expect((await source.enrich(session('a'))).orcaPaneKey).toBeNull()
+    vi.setSystemTime(29999)
+    await source.enrich(session('a'))
+    expect(io.exec).toHaveBeenCalledTimes(1)
+    vi.setSystemTime(30000)
+    expect((await source.enrich(session('a'))).orcaPaneKey).toBe('p')
+    expect(io.exec).toHaveBeenCalledTimes(2)
+  } finally {
+    vi.useRealTimers()
+  }
+})

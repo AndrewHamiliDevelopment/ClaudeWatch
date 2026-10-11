@@ -134,3 +134,19 @@ it('registry idle status overrides unfinished tools from the bounded tail', () =
   )
   expect(ref.activity).toBe('idle')
 })
+
+it('clears failed-tool attention when Claude becomes idle', () => {
+  const ref = sessionFromRegistry(
+    { ...registryEntry(), status: 'idle' },
+    { tool: null, error: true },
+    [],
+    '/company/repo',
+    '/company/repo/.claude/.worktree/task'
+  )
+  expect(ref.attention).toBe('none')
+  expect(ref).toMatchObject({
+    projectRoot: '/company/repo',
+    projectLabel: 'repo',
+    companyLabel: 'company'
+  })
+})

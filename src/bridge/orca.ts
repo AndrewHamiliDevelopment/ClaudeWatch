@@ -26,7 +26,7 @@ export class OrcaSource {
   private nextPoll = 0
   private delay = 10000
   private health: SourceHealth = { id: 'orca', ok: true, detail: 'not polled' }
-  private environments = new Map<string, OrcaEnvironment>()
+  private environments = new Map<string, { value: OrcaEnvironment; retryAt: number }>()
   constructor(private readonly io: BridgeIo) {}
 
   async poll(now: number): Promise<SourceHealth> {
@@ -48,21 +48,33 @@ export class OrcaSource {
     return { ...this.health }
   }
 
-  async enrich(session: SessionRef): Promise<SessionRef> {
+  prune(sessions: SessionRef[]): void {
+    const live = new Set(sessions.map((session) => `${session.pid}:${session.startedAtMs}`))
+    for (const identity of this.environments.keys()) {
+      if (!live.has(identity)) this.environments.delete(identity)
+    }
+  }
+
+  async enrich(session: SessionRef, now = Date.now()): Promise<SessionRef> {
     if (session.provider !== 'claude' || session.pid === null) return session
     const identity = `${session.pid}:${session.startedAtMs}`
-    let environment = this.environments.get(identity)
-    if (!environment) {
+    let cached = this.environments.get(identity)
+    if (!cached || now >= cached.retryAt) {
       try {
         // Only these three keys survive the process-environment read.
-        environment = parseOrcaEnvironment(
+        const value = parseOrcaEnvironment(
           await this.io.exec('/bin/ps', ['-E', '-o', 'command=', '-p', String(session.pid)])
         )
+        cached = { value, retryAt: Infinity }
       } catch {
-        environment = { paneKey: null, worktreeId: null, jobDir: null }
+        cached = {
+          value: { paneKey: null, worktreeId: null, jobDir: null },
+          retryAt: now + 30000
+        }
       }
-      this.environments.set(identity, environment)
+      this.environments.set(identity, cached)
     }
+    const environment = cached.value
     return {
       ...session,
       host: environment.paneKey ? 'orca' : session.host,
