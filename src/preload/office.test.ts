@@ -45,6 +45,13 @@ describe('office preload', () => {
     expect(ipcRenderer.invoke).toHaveBeenCalledWith('office:jump', 'claude:abc')
   })
 
+  it('asks main to focus an agent, a teammate included, and returns where it landed', async () => {
+    ipcRenderer.invoke.mockResolvedValueOnce({ success: true, target: 'pane' })
+
+    expect(await api.focus('claude:abc#lena')).toEqual({ success: true, target: 'pane' })
+    expect(ipcRenderer.invoke).toHaveBeenCalledWith('office:focus', 'claude:abc#lena')
+  })
+
   it('routes talk, respond, peek and start to their own channels', async () => {
     await api.send('claude:a', 'hi')
     await api.respond('claude:a', 'approve', 'fp')

@@ -16,10 +16,14 @@ import { isOnAnyDisplay } from './window-bounds'
 interface TrayManagerOptions {
   onOpenDashboard: () => void
   onOpenOffice?: () => void
+  onFocusSession: (pid: number) => void
   onQuit: () => void
   onCheckForUpdates?: () => void
   preloadPath: string
-  store: SettingsStore
+  store: Pick<
+    SettingsStore,
+    'getPopoverPinned' | 'getPopoverPosition' | 'setPopoverPinned' | 'setPopoverPosition'
+  >
 }
 
 const STATUS_EMOJI: Record<ClaudeInstance['status'], string> = {
@@ -37,10 +41,11 @@ export class TrayManager {
   private popover: BrowserWindow | null = null
   private onOpenDashboard: () => void
   private onOpenOffice?: () => void
+  private onFocusSession: (pid: number) => void
   private onQuit: () => void
   private onCheckForUpdates?: () => void
   private preloadPath: string
-  private store: SettingsStore
+  private store: TrayManagerOptions['store']
   private pinned = false
   private positionSaveTimeout: ReturnType<typeof setTimeout> | null = null
   private instances: ClaudeInstance[] = []
@@ -57,6 +62,7 @@ export class TrayManager {
   constructor(options: TrayManagerOptions) {
     this.onOpenDashboard = options.onOpenDashboard
     this.onOpenOffice = options.onOpenOffice
+    this.onFocusSession = options.onFocusSession
     this.onQuit = options.onQuit
     this.onCheckForUpdates = options.onCheckForUpdates
     this.preloadPath = options.preloadPath
@@ -256,7 +262,7 @@ export class TrayManager {
       const emoji = STATUS_EMOJI[inst.status] ?? '\u26AA'
       menuItems.push({
         label: `${emoji} ${inst.projectName} \u2014 ${inst.elapsedTime}`,
-        enabled: false
+        click: () => this.onFocusSession(inst.pid)
       })
     }
     if (this.instances.length > maxShown) {

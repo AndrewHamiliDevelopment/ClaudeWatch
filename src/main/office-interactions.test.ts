@@ -50,7 +50,8 @@ describe('OfficeInteractions', () => {
     sendPrompt: vi.fn(),
     sendKey: vi.fn(),
     screen: vi.fn(),
-    create: vi.fn()
+    create: vi.fn(),
+    focus: vi.fn()
   }
   const openTerminalRunning = vi.fn()
   const processStart = vi.fn()
@@ -67,7 +68,9 @@ describe('OfficeInteractions', () => {
       snapshot: () => snapshot,
       orca,
       openTerminalRunning,
-      processStart
+      processStart,
+      raiseOrca: vi.fn(),
+      openFolder: vi.fn()
     })
   })
 

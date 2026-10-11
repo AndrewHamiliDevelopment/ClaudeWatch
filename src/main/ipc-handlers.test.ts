@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_SETTINGS } from '../renderer/lib/types'
+import type { FocusResult, OfficeSnapshot } from '../shared/office/types'
 
 const { handle, app, openExternal } = vi.hoisted(() => ({
   handle: vi.fn(),
@@ -55,6 +56,10 @@ const rateLimitReader = {
 const updater = { checkForUpdates: vi.fn(), downloadUpdate: vi.fn(), quitAndInstall: vi.fn() }
 const notifications = { isSupported: vi.fn(() => true), sendTest: vi.fn(() => ({ sent: true })) }
 const onOpenDashboard = vi.fn()
+const onOpenOffice = vi.fn()
+const focusSession = vi.fn(async (): Promise<FocusResult> => ({ success: true, target: 'pane' }))
+const officeSnapshot: OfficeSnapshot = { rev: 3, generatedAtMs: 1, sessions: [], sources: [] }
+const getOfficeSnapshot = vi.fn((): OfficeSnapshot | null => officeSnapshot)
 let handlers: Record<string, (...args: unknown[]) => unknown>
 
 beforeEach(() => {
@@ -73,12 +78,15 @@ beforeEach(() => {
     promoChecker,
     rateLimitReader,
     notifications,
-    onOpenDashboard
+    onOpenDashboard,
+    onOpenOffice,
+    focusSession,
+    getOfficeSnapshot
   })
 })
 
 describe('IPC authorization', () => {
-  it('registers all 25 handlers', () => expect(Object.keys(handlers)).toHaveLength(25))
+  it('registers all 28 handlers', () => expect(Object.keys(handlers)).toHaveLength(28))
   it.each([
     null,
     { senderFrame: null },
@@ -183,6 +191,7 @@ it.each([
 it.each([
   ['history:clear', store.clearHistory],
   ['app:open-dashboard', onOpenDashboard],
+  ['app:open-office', onOpenOffice],
   ['app:quit', app.quit],
   ['updater:check', updater.checkForUpdates],
   ['updater:download', updater.downloadUpdate],
@@ -196,11 +205,42 @@ it.each([
   if (channel === 'app:quit' || channel === 'updater:install') expect(app.isQuitting).toBe(true)
 })
 it('does not begin quitting without an updater', () => {
-  setupIpcHandlers({ tracker, store, onOpenDashboard })
+  setupIpcHandlers({
+    tracker,
+    store,
+    onOpenDashboard,
+    onOpenOffice,
+    focusSession,
+    getOfficeSnapshot
+  })
   handlers['updater:install'](appEvent)
   expect(app.isQuitting).toBe(false)
   expect(handlers['ratelimits:get'](appEvent)).toBeNull()
 })
+it('gives the dashboard the bridge’s snapshot, or null while there is none', () => {
+  expect(handlers['office:snapshot'](appEvent)).toEqual(officeSnapshot)
+  getOfficeSnapshot.mockReturnValueOnce(null)
+  expect(handlers['office:snapshot'](appEvent)).toBeNull()
+})
+it('refuses the snapshot to the Office page, which has its own feed', () => {
+  const officePage = pathToFileURL(join(__dirname, '../renderer/office.html')).href
+  expect(() =>
+    handlers['office:snapshot']({ senderFrame: { parent: null, url: officePage } })
+  ).toThrow('Untrusted IPC sender')
+})
+it('opens the Office and reports it', () => {
+  expect(handlers['app:open-office'](appEvent)).toEqual({ success: true })
+})
+it.each([4242, -1, 1.5, '4242', null, undefined, {}])(
+  'leaves judging pid %j to the focus routine and returns its answer',
+  async (pid) => {
+    expect(await handlers['session:focus'](appEvent, pid)).toEqual({
+      success: true,
+      target: 'pane'
+    })
+    expect(focusSession).toHaveBeenCalledWith(pid)
+  }
+)
 it('opens only the fixed notification settings destination', () => {
   handlers['notifications:open-settings'](appEvent)
   expect(openExternal).toHaveBeenCalledWith(

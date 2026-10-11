@@ -119,8 +119,11 @@ app.whenReady().then(() => {
     cooldownSeconds: settings.notifications.cooldownSeconds
   })
 
+  const office = setupOffice(terminalResolver, store, tracker)
+  const focusSession = (pid: number): void => void office.focusSession(pid)
+
   // Initialize notifications and sound player
-  const notifications = new NotificationManager(() => store.getSettings())
+  const notifications = new NotificationManager(() => store.getSettings(), focusSession)
   const soundPlayer = new SoundPlayer()
 
   // Create window (hidden by default)
@@ -132,12 +135,11 @@ app.whenReady().then(() => {
     () => trayManager?.getPopoverWindow() ?? null
   ])
 
-  const office = setupOffice(terminalResolver, store)
-
   // Create tray with popover support
   trayManager = new TrayManager({
     onOpenDashboard: showDashboard,
     onOpenOffice: office.open,
+    onFocusSession: focusSession,
     onQuit: () => {
       app.isQuitting = true
       app.quit()
@@ -167,6 +169,9 @@ app.whenReady().then(() => {
     rateLimitReader,
     notifications,
     onOpenDashboard: showDashboard,
+    onOpenOffice: office.open,
+    focusSession: office.focusSession,
+    getOfficeSnapshot: office.snapshot,
     getTrayManager: () => trayManager
   })
 
@@ -242,13 +247,14 @@ app.whenReady().then(() => {
   updater.startAutoCheck()
 
   // Last, and contained: a failing Office must not cost the tray, where it can be switched off.
-  if (opensOfficeOnStart(settings, process.argv)) {
-    try {
-      office.open()
-    } catch (error) {
-      console.error('Office failed to open at start:', error)
-    }
+  // The bridge starts with the app: the dashboard shows its data with the Office closed.
+  try {
+    office.start()
+    if (opensOfficeOnStart(settings, process.argv)) office.open()
+  } catch (error) {
+    console.error('Office failed to start:', error)
   }
+  app.on('before-quit', () => office.stop())
 })
 
 // Clean up tray before quitting to prevent "Object has been destroyed" errors

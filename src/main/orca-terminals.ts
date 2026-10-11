@@ -99,6 +99,20 @@ export class OrcaTerminals {
     return Array.isArray(terminal?.tail) ? terminal.tail.filter((l) => typeof l === 'string') : []
   }
 
+  // Makes the pane the active one in Orca's window, across worktrees and tabs. False when Orca
+  // had no window to navigate. It never brings the app forward; the caller does that.
+  async focus(handle: string): Promise<boolean> {
+    const { focus } = result(
+      await this.exec(['terminal', 'switch', '--terminal', handle, '--json'])
+    )
+    return (
+      typeof focus === 'object' &&
+      focus !== null &&
+      'navigated' in focus &&
+      focus.navigated === true
+    )
+  }
+
   async create(worktreePath: string, command: AgentCommand, title: string): Promise<void> {
     result(
       await this.exec([
