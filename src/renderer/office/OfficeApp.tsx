@@ -1,10 +1,17 @@
-import { lazy, Suspense, useCallback, useMemo, useReducer, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useReducer, useState } from 'react'
 import { useNow } from './hooks'
 import { buildAttentionQueue } from './logic/attention-queue'
-import { buildListTree, sessionForAgent, summariseFloors } from './logic/floor-model'
+import {
+  buildListTree,
+  mainAgentForSession,
+  sessionForAgent,
+  summariseFloors
+} from './logic/floor-model'
+import { canRespond, projectKeyForFloor } from './logic/interactions'
 import { buildNameCards } from './logic/name-cards'
 import { INITIAL_OFFICE_STATE, officeReducer } from './logic/office-reducer'
 import { createFrameMetrics } from './frame-metrics'
+import { AgentActions } from './hud/AgentActions'
 import { AttentionRail } from './hud/AttentionRail'
 import { BottomBar } from './hud/BottomBar'
 import { ElevatorPanel } from './hud/ElevatorPanel'
@@ -23,6 +30,7 @@ import { canCreateWebGL2 } from './webgl-support'
 
 // three.js loads in its own chunk so the HUD paints before the scene is ready.
 const OfficeScene = lazy(() => import('./scene/OfficeScene'))
+const SPEECH_BUBBLE_MS = 1500
 
 export function OfficeApp({ feed }: { feed: OfficeFeed }) {
   const [state, dispatch] = useReducer(officeReducer, INITIAL_OFFICE_STATE)
@@ -30,6 +38,7 @@ export function OfficeApp({ feed }: { feed: OfficeFeed }) {
   const [hasSceneFailed, setHasSceneFailed] = useState(false)
   const [metrics] = useState(createFrameMetrics)
   const nowMs = useNow(1000)
+  const [speakingAgentKey, setSpeakingAgentKey] = useState<string | null>(null)
 
   const is3DAvailable = hasWebGL && !hasSceneFailed
   const isShowingList = state.isListView || !is3DAvailable
@@ -43,6 +52,16 @@ export function OfficeApp({ feed }: { feed: OfficeFeed }) {
   const focusedFloor = frame?.floors.find((floor) => floor.floorId === state.focusedFloorId)
   const selectedAgent = frame?.agents.find((agent) => agent.agentKey === state.selectedAgentKey)
   const selectedSession = frame && selectedAgent ? sessionForAgent(frame, selectedAgent) : undefined
+  const reviewableKeys = useMemo(
+    () => new Set((frame?.sessions ?? []).filter(canRespond).map((session) => session.key)),
+    [frame]
+  )
+
+  useEffect(() => {
+    if (!speakingAgentKey) return
+    const timer = setTimeout(() => setSpeakingAgentKey(null), SPEECH_BUBBLE_MS)
+    return () => clearTimeout(timer)
+  }, [speakingAgentKey])
 
   const selectAgent = useCallback(
     (agentKey: string | null) => dispatch({ type: 'agent-selected', agentKey }),
@@ -53,6 +72,15 @@ export function OfficeApp({ feed }: { feed: OfficeFeed }) {
     []
   )
   const onSceneError = useCallback(() => setHasSceneFailed(true), [])
+  const openReview = useCallback(
+    (sessionKey: string) => dispatch({ type: 'review-opened', sessionKey }),
+    []
+  )
+  const closeReview = useCallback(() => dispatch({ type: 'review-closed' }), [])
+  const onSent = (sessionKey: string): void => {
+    const speaker = frame ? mainAgentForSession(frame, sessionKey) : undefined
+    if (speaker) setSpeakingAgentKey(speaker.agentKey)
+  }
 
   return (
     <main className="relative h-screen w-screen overflow-hidden bg-surface text-text-primary">
@@ -70,6 +98,9 @@ export function OfficeApp({ feed }: { feed: OfficeFeed }) {
               metrics={metrics}
               onSelectAgent={selectAgent}
               onFlyToAgent={flyToAgent}
+              reviewableKeys={reviewableKeys}
+              onReview={openReview}
+              speakingAgentKey={speakingAgentKey}
             />
           </Suspense>
         </SceneErrorBoundary>
@@ -83,6 +114,8 @@ export function OfficeApp({ feed }: { feed: OfficeFeed }) {
             nowMs={nowMs}
             onOpen={(sessionKey) => dispatch({ type: 'session-opened', sessionKey })}
             onNext={() => dispatch({ type: 'next-attention' })}
+            reviewableKeys={reviewableKeys}
+            onReview={openReview}
           />
           {!is3DAvailable && (
             <p className="rounded-card border border-border bg-surface-raised px-3 py-2 text-body text-text-secondary">
@@ -110,11 +143,12 @@ export function OfficeApp({ feed }: { feed: OfficeFeed }) {
           )}
         </div>
 
-        <div className="pointer-events-auto flex min-h-0 flex-col gap-3 self-start">
+        <div className="pointer-events-auto flex max-h-full min-h-0 flex-col gap-3 self-start overflow-y-auto">
           <ElevatorPanel
             floors={floors}
             focusedFloorId={state.focusedFloorId}
             onSelect={(floorId) => dispatch({ type: 'floor-selected', floorId })}
+            onStart={(floorId, provider) => feed.start(projectKeyForFloor(floorId), provider)}
           />
           {selectedAgent && (
             <Inspector
@@ -125,7 +159,18 @@ export function OfficeApp({ feed }: { feed: OfficeFeed }) {
               onJump={(sessionKey) => feed.jump(sessionKey)}
               onFly={() => dispatch({ type: 'fly-to-selected' })}
               onClose={() => selectAgent(null)}
-            />
+            >
+              {selectedSession && (
+                <AgentActions
+                  key={selectedSession.key}
+                  session={selectedSession}
+                  feed={feed}
+                  isReviewing={state.reviewingSessionKey === selectedSession.key}
+                  onReviewClose={closeReview}
+                  onSent={onSent}
+                />
+              )}
+            </Inspector>
           )}
         </div>
 

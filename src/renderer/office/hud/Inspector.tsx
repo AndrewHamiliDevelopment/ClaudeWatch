@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import type { AgentView, SessionRef } from '../../../shared/office/types'
 import { cn, formatElapsedTime } from '../../lib/utils'
 import { gemFor } from '../logic/status-gem'
@@ -13,6 +14,8 @@ interface InspectorProps {
   onJump: (sessionKey: string) => void
   onFly: () => void
   onClose: () => void
+  // Interaction panels (talk, review, peek) composed in by the caller.
+  children?: ReactNode
 }
 
 function Detail({ term, value }: { term: string; value: string }) {
@@ -31,7 +34,8 @@ export function Inspector({
   canFly,
   onJump,
   onFly,
-  onClose
+  onClose,
+  children
 }: InspectorProps) {
   const gem = gemFor(agent)
   const elapsedSeconds = session ? Math.max(0, Math.floor((nowMs - session.startedAtMs) / 1000)) : 0
@@ -74,6 +78,7 @@ export function Inspector({
           Close
         </button>
       </div>
+      {children}
     </aside>
   )
 }

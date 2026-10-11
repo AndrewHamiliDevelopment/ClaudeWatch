@@ -54,6 +54,8 @@ export function NameCardLayer(props: {
   band: ZoomBand
   selectedAgentKey: string | null
   anchors: CardAnchors
+  reviewableKeys: ReadonlySet<string>
+  onReview: (sessionKey: string) => void
 }) {
   const isCompact = props.band === 'building'
   const register = (agentKey: string) => (element: HTMLElement | null) => {
@@ -99,6 +101,17 @@ export function NameCardLayer(props: {
             </span>
             {!isCompact && (
               <span className="pl-3.5 text-[10px] text-neutral-600">{card.detail}</span>
+            )}
+            {!isCompact && card.sessionKey && props.reviewableKeys.has(card.sessionKey) && (
+              // Mouse shortcut only: the layer is aria-hidden; the queue row has the keyboard Review.
+              <button
+                type="button"
+                tabIndex={-1}
+                onClick={() => card.sessionKey && props.onReview(card.sessionKey)}
+                className="pointer-events-auto mt-1 rounded-md bg-neutral-900 px-2 py-0.5 text-[10px] font-semibold text-white hover:bg-neutral-700"
+              >
+                Review
+              </button>
             )}
           </div>
         )

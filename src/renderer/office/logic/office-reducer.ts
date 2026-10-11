@@ -14,6 +14,8 @@ export interface OfficeState {
   frame: OfficeFrame | null
   focusedFloorId: string | null
   selectedAgentKey: string | null
+  // The session whose permission prompt is open for review in the inspector.
+  reviewingSessionKey: string | null
   wallsMode: WallsMode
   isListView: boolean
   isMetricsVisible: boolean
@@ -28,6 +30,8 @@ export type OfficeAction =
   | { type: 'agent-selected'; agentKey: string | null }
   | { type: 'agent-flown'; agentKey: string }
   | { type: 'session-opened'; sessionKey: string }
+  | { type: 'review-opened'; sessionKey: string }
+  | { type: 'review-closed' }
   | { type: 'next-attention' }
   | { type: 'fly-to-selected' }
   | { type: 'camera-rotated'; direction: -1 | 1 }
@@ -40,6 +44,7 @@ export const INITIAL_OFFICE_STATE: OfficeState = {
   frame: null,
   focusedFloorId: null,
   selectedAgentKey: null,
+  reviewingSessionKey: null,
   wallsMode: 'cutaway',
   isListView: false,
   isMetricsVisible: false,
@@ -115,13 +120,26 @@ export function officeReducer(state: OfficeState, action: OfficeAction): OfficeS
     case 'floor-numbered':
       return focusFloor(state, floorAt(state, action.number - 1))
     case 'agent-selected':
-      return { ...state, selectedAgentKey: action.agentKey }
+      return {
+        ...state,
+        selectedAgentKey: action.agentKey,
+        reviewingSessionKey:
+          action.agentKey === state.selectedAgentKey ? state.reviewingSessionKey : null
+      }
     case 'agent-flown':
       return flyTo(state, action.agentKey)
     case 'session-opened': {
       const agent = state.frame ? mainAgentForSession(state.frame, action.sessionKey) : undefined
       return agent ? flyTo(state, agent.agentKey) : state
     }
+    case 'review-opened': {
+      const agent = state.frame ? mainAgentForSession(state.frame, action.sessionKey) : undefined
+      return agent
+        ? { ...flyTo(state, agent.agentKey), reviewingSessionKey: action.sessionKey }
+        : state
+    }
+    case 'review-closed':
+      return { ...state, reviewingSessionKey: null }
     case 'next-attention':
       return openNextAttention(state)
     case 'fly-to-selected':

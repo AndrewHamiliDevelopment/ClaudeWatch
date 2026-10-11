@@ -15,6 +15,8 @@ export type CardStatus =
 
 export interface NameCard {
   agentKey: string
+  // Set for main agents, so the card can offer Review for that session.
+  sessionKey: string | null
   kind: 'card' | 'pill'
   x: number
   z: number
@@ -74,6 +76,7 @@ export function buildNameCards(
         return {
           agentKey: agent.agentKey,
           kind: 'pill',
+          sessionKey: null,
           x: agent.x,
           z: agent.z,
           title: agent.label,
@@ -84,6 +87,7 @@ export function buildNameCards(
       return {
         agentKey: agent.agentKey,
         kind: 'card',
+        sessionKey: session?.key ?? null,
         x: agent.x + Math.sin(agent.heading) * DESK_REACH,
         z: agent.z + Math.cos(agent.heading) * DESK_REACH,
         title: session?.name ?? agent.label,
