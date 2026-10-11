@@ -70,9 +70,11 @@ export function claimPanes(sessions: SessionRef[]): SessionRef[] {
 }
 
 // Each ask verifies Orca's whole bundle first (about 1.3 CPU-seconds), so a healthy Orca is
-// asked once a minute. A failing one is retried sooner, then backs off to the same minute.
-const HEALTHY_POLL_MS = 60_000
+// asked every five minutes. A failing one is retried sooner, backing off to once a minute, and
+// at once when a session shows a pane key: Orca is then running.
+const HEALTHY_POLL_MS = 5 * 60_000
 const FIRST_RETRY_MS = 10_000
+const MAX_RETRY_MS = 60_000
 
 export class OrcaSource {
   private nextPoll = 0
@@ -93,7 +95,7 @@ export class OrcaSource {
     } catch {
       this.health = { id: 'orca', ok: false, detail: 'unavailable' }
       this.nextPoll = now + this.delay
-      this.delay = Math.min(this.delay * 2, HEALTHY_POLL_MS)
+      this.delay = Math.min(this.delay * 2, MAX_RETRY_MS)
     }
     return { ...this.health }
   }
@@ -144,6 +146,7 @@ export class OrcaSource {
       try {
         const value = await readOrcaEnvironment(pid, (args) => this.io.exec('/bin/ps', args))
         cached = { value, retryAt: Infinity }
+        if (value.paneKey && !this.health.ok) this.nextPoll = 0
       } catch {
         cached = {
           value: { paneKey: null, worktreeId: null, jobDir: null },
