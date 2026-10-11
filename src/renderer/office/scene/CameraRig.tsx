@@ -1,14 +1,18 @@
 import { CameraControls, CameraControlsImpl } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
+import { Vector3 } from 'three'
 import type { AgentView } from '../../../shared/office/types'
 import {
   BAND_ZOOM,
   buildingFraming,
   createWheelStepper,
+  followAnchor,
+  followStep,
   ISO_POLAR,
   snapAzimuth,
   stepBand,
+  type FollowAnchor,
   type ZoomBand,
   type ZoomDirection
 } from '../logic/camera-bands'
@@ -48,6 +52,8 @@ interface CameraRigProps {
 export function CameraRig(props: CameraRigProps) {
   const controlsRef = useRef<CameraControlsImpl>(null)
   const bandRef = useRef<ZoomBand>('floor')
+  const followRef = useRef<FollowAnchor | null>(null)
+  const targetScratch = useMemo(() => new Vector3(), [])
   const size = useThree((state) => state.size)
   const domElement = useThree((state) => state.gl.domElement)
   const occupied = useMemo(
@@ -61,11 +67,12 @@ export function CameraRig(props: CameraRigProps) {
     const controls = controlsRef.current
     if (!controls) return
     controls.mouseButtons.left = ACTION.TRUCK
-    controls.mouseButtons.right = ACTION.TRUCK
+    // Right-drag (two fingers on touch) turns the map; min = max polar keeps the elevation locked.
+    controls.mouseButtons.right = ACTION.ROTATE
     controls.mouseButtons.middle = ACTION.NONE
     controls.mouseButtons.wheel = ACTION.NONE
     controls.touches.one = ACTION.TOUCH_TRUCK
-    controls.touches.two = ACTION.NONE
+    controls.touches.two = ACTION.TOUCH_ROTATE
     controls.touches.three = ACTION.NONE
   }, [])
 
@@ -73,6 +80,7 @@ export function CameraRig(props: CameraRigProps) {
   const rig = useRef({
     setBand(band: ZoomBand): void {
       bandRef.current = band
+      if (band !== 'desk') followRef.current = null
       latestRef.current.onBandChange(band)
     },
     frame(bounds: Bounds, maxZoom: number): void {
@@ -104,6 +112,7 @@ export function CameraRig(props: CameraRigProps) {
       const { agents, selectedAgentKey, isAnimated } = latestRef.current
       const selected = agents.find((agent) => agent.agentKey === selectedAgentKey)
       if (selected) void controls.moveTo(selected.x, LOOK_HEIGHT, selected.z, isAnimated)
+      followRef.current = selected ? followAnchor(selected, latestRef.current.floor.rooms) : null
       void controls.zoomTo(BAND_ZOOM.desk, isAnimated)
     }
   }).current
@@ -112,9 +121,31 @@ export function CameraRig(props: CameraRigProps) {
   // unless the owner has zoomed to a desk or out to the building.
   const occupiedKey = `${props.floor.floorId}:${Object.values(occupied).map(Math.round).join(',')}`
   useEffect(() => {
-    if (bandRef.current === 'desk') rig.setBand('floor')
     if (bandRef.current === 'floor') rig.frameFloor()
   }, [occupiedKey, rig])
+
+  // At desk zoom, keep the followed agent's office in view when the floor re-packs. Only a room
+  // that actually moved shifts the target, so the owner's own pan is never interrupted.
+  const { floor: followedFloor, agents: followedAgents } = props
+  useEffect(() => {
+    const controls = controlsRef.current
+    const anchor = followRef.current
+    if (!controls || !anchor || bandRef.current !== 'desk') return
+    const step = followStep(anchor, followedAgents, followedFloor.rooms)
+    if (step.kind === 'stay') return
+    if (step.kind === 'lost') {
+      rig.setBand('floor')
+      return rig.frameFloor()
+    }
+    followRef.current = step.anchor
+    const target = controls.getTarget(targetScratch)
+    void controls.moveTo(
+      target.x + step.dx,
+      target.y,
+      target.z + step.dz,
+      latestRef.current.isAnimated
+    )
+  }, [followedFloor, followedAgents, rig, targetScratch])
 
   useEffect(() => {
     if (bandRef.current === 'building') rig.frameBuilding()
@@ -157,6 +188,7 @@ export function CameraRig(props: CameraRigProps) {
         const agent = agents.find((candidate) => candidate.agentKey === request.agentKey)
         if (!agent) return
         rig.setBand('desk')
+        followRef.current = followAnchor(agent, floor.rooms)
         void controls.moveTo(agent.x, LOOK_HEIGHT, agent.z, isAnimated)
         void controls.zoomTo(BAND_ZOOM.desk, isAnimated)
         return

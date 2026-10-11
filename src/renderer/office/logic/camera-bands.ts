@@ -76,3 +76,52 @@ export function buildingFraming(
     )
   }
 }
+
+// Desk zoom follows the room an agent sits in, not the agent itself (it moves while walking).
+export interface FollowAnchor {
+  agentKey: string
+  roomX: number
+  roomZ: number
+}
+
+export type FollowStep =
+  | { kind: 'stay' }
+  | { kind: 'shift'; dx: number; dz: number; anchor: FollowAnchor }
+  | { kind: 'lost' }
+
+interface FollowedAgent {
+  agentKey: string
+  roomId: string
+}
+
+interface RoomCentre {
+  id: string
+  x: number
+  z: number
+}
+
+const ROOM_MOVED_EPSILON_M = 0.01
+
+export function followAnchor(
+  agent: FollowedAgent,
+  rooms: readonly RoomCentre[]
+): FollowAnchor | null {
+  const room = rooms.find((candidate) => candidate.id === agent.roomId)
+  return room ? { agentKey: agent.agentKey, roomX: room.x, roomZ: room.z } : null
+}
+
+// 'shift' carries a delta, so a pan the owner made inside the office is kept, only moved along.
+export function followStep(
+  anchor: FollowAnchor,
+  agents: readonly FollowedAgent[],
+  rooms: readonly RoomCentre[]
+): FollowStep {
+  const agent = agents.find((candidate) => candidate.agentKey === anchor.agentKey)
+  if (!agent) return { kind: 'lost' }
+  const next = followAnchor(agent, rooms)
+  if (!next) return { kind: 'stay' }
+  const dx = next.roomX - anchor.roomX
+  const dz = next.roomZ - anchor.roomZ
+  if (Math.hypot(dx, dz) < ROOM_MOVED_EPSILON_M) return { kind: 'stay' }
+  return { kind: 'shift', dx, dz, anchor: next }
+}
