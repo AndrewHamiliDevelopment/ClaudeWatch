@@ -12,7 +12,9 @@ export default defineConfig({
       ['src/main/**/*.test.ts', 'node'],
       ['src/bridge/**/*.test.ts', 'node'],
       ['src/shared/**/*.test.ts', 'node'],
-      ['src/office/sim/**/*.test.ts', 'node']
+      ['src/office/sim/**/*.test.ts', 'node'],
+      ['src/office-host/**/*.test.ts', 'node'],
+      ['src/office-web/**/*.test.ts', 'node']
     ],
     coverage: {
       provider: 'v8',

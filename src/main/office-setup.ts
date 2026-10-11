@@ -4,25 +4,15 @@ import { is } from '@electron-toolkit/utils'
 import { BridgeHost } from './bridge-host'
 import { OfficeWindowController } from './office-window'
 import { assertTrustedSender, createAppWindow } from './window-factory'
-import { openTerminal, openTerminalRunning } from './terminal-opener'
-import { OfficeInteractions } from './office-interactions'
-import { OrcaTerminals } from './orca-terminals'
-import { createOrcaCli } from './orca-cli'
 import { PaneFocus } from './pane-focus'
 import { parseOrcaEnvironment } from '../bridge/orca'
-import type {
-  FocusResult,
-  OfficeSnapshot,
-  PermissionDecision,
-  ProviderId
-} from '../shared/office/types'
+import { createOfficeService, PS_OPTIONS } from '../office-host/office-service'
+import type { FocusResult, OfficeSnapshot } from '../shared/office/types'
 import { execFilePromise } from './platform/exec'
 import type { SessionTracker } from './session-tracker'
 import type { TerminalResolver } from './terminal-resolver'
 import type { SettingsStore } from './store'
 import { rememberBounds, restoreBounds } from './window-bounds'
-
-const PS_OPTIONS = { timeout: 5000, env: { LC_ALL: 'C', TZ: 'UTC' } }
 
 type OfficeWindowStore = Pick<SettingsStore, 'getOfficeWindowBounds' | 'setOfficeWindowBounds'>
 
@@ -80,63 +70,42 @@ export function setupOffice(
     createWindow: () => createOfficeWindow(store)
   })
 
-  const orcaCli = createOrcaCli(execFilePromise)
-  // The bridge's own process identity: `ps` start time, read in C locale and UTC.
-  const processStart = (pid: number): Promise<number | null> =>
-    execFilePromise('/bin/ps', ['-o', 'lstart=', '-p', String(pid)], PS_OPTIONS).then(
-      ({ stdout }) => Date.parse(`${stdout.trim()} UTC`) || null,
-      () => null
-    )
-  const interactions = new OfficeInteractions({
-    snapshot: () => host.snapshot(),
-    orca: new OrcaTerminals(orcaCli.exec),
-    openTerminalRunning,
-    processStart,
-    raiseOrca: orcaCli.raise,
-    openFolder: async (path, pid) =>
-      openTerminal(
-        path,
-        pid === null ? undefined : (await terminalResolver.resolve(pid)).terminalType
-      )
+  // The same service the standalone web Office runs; here IPC carries it.
+  const service = createOfficeService({
+    host,
+    run: execFilePromise,
+    terminalOf: async (pid) => (await terminalResolver.resolve(pid)).terminalType
   })
   const paneFocus = new PaneFocus({
     instances: () => tracker.getInstances(),
-    processStart,
+    processStart: service.processStart,
     // `ps -E` prints the whole environment; the parser keeps the pane key and drops the rest.
     paneKeyOf: (pid) =>
       execFilePromise('/bin/ps', ['-E', '-o', 'command=', '-p', String(pid)], PS_OPTIONS).then(
         ({ stdout }) => parseOrcaEnvironment(stdout).paneKey,
         () => null
       ),
-    focusProcess: (owner) => interactions.focusProcess(owner)
+    focusProcess: service.focusProcess
   })
-  const asString = (value: unknown): string => (typeof value === 'string' ? value : '')
-  const isDecision = (value: unknown): value is PermissionDecision =>
-    value === 'approve' || value === 'deny'
-  const isProvider = (value: unknown): value is ProviderId =>
-    value === 'claude' || value === 'codex'
-  const invalid = { success: false, reason: 'invalid-input' } as const
 
   ipcMain.handle('office:send', (event, sessionKey: unknown, text: unknown) => {
     assertTrustedSender(event, 'office.html')
-    return interactions.send(asString(sessionKey), asString(text))
+    return service.send(sessionKey, text)
   })
   ipcMain.handle(
     'office:respond',
     (event, sessionKey: unknown, decision: unknown, fingerprint: unknown) => {
       assertTrustedSender(event, 'office.html')
-      if (!isDecision(decision)) return invalid
-      return interactions.respond(asString(sessionKey), decision, asString(fingerprint))
+      return service.respond(sessionKey, decision, fingerprint)
     }
   )
   ipcMain.handle('office:peek', (event, sessionKey: unknown) => {
     assertTrustedSender(event, 'office.html')
-    return interactions.peek(asString(sessionKey))
+    return service.peek(sessionKey)
   })
   ipcMain.handle('office:start', (event, projectKey: unknown, provider: unknown) => {
     assertTrustedSender(event, 'office.html')
-    if (!isProvider(provider)) return invalid
-    return interactions.start(asString(projectKey), provider)
+    return service.startAgent(projectKey, provider)
   })
   ipcMain.handle('office:ready', (event) => {
     assertTrustedSender(event, 'office.html')
@@ -146,7 +115,7 @@ export function setupOffice(
   for (const channel of ['office:focus', 'office:jump']) {
     ipcMain.handle(channel, (event, agentKey: unknown) => {
       assertTrustedSender(event, 'office.html')
-      return interactions.focus(asString(agentKey))
+      return service.focus(agentKey)
     })
   }
 
