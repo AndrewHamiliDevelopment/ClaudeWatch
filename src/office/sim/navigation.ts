@@ -36,11 +36,14 @@ export function officeGrid(floor: FloorLayout): NavGrid {
 
 export class PathCache {
   private readonly paths = new Map<string, Point[]>()
-  constructor(private readonly grid: NavGrid) {}
+  private grid: NavGrid | null = null
+  constructor(private readonly floor: FloorLayout) {}
   get(from: Point, to: Point): Point[] {
     const key = `${from.x},${from.z}:${to.x},${to.z}`
     let path = this.paths.get(key)
     if (!path) {
+      // Built on first use: most feed messages only change activity and need no path.
+      this.grid ??= officeGrid(this.floor)
       path = findPath(this.grid, from, to)
       this.paths.set(key, path)
     }

@@ -1,7 +1,7 @@
 import type { AgentView, FeedMessage, SessionRef } from '../../shared/office/types'
 import { createAgent, leaveAgent, tickAgent, updateAgent, type AgentRecord } from './behaviour'
 import { buildLayout, type LayoutMap } from './layout'
-import { officeGrid, PathCache } from './navigation'
+import { PathCache } from './navigation'
 import { placements } from './placements'
 
 export class World {
@@ -41,8 +41,8 @@ export class World {
     }
     const oldMap = this.map
     this.map = buildLayout([...this.sessions.values()], this.map, this.now())
-    const paths = new PathCache(officeGrid(this.map.floors[0]))
-    const oldPaths = oldMap.floors[0]?.zones ? new PathCache(officeGrid(oldMap.floors[0])) : paths
+    const paths = new PathCache(this.map.floors[0])
+    const oldPaths = oldMap.floors[0]?.zones ? new PathCache(oldMap.floors[0]) : paths
     const held = new Map(
       [...this.agents]
         .filter(([, agent]) => agent.state !== 'leaving')
@@ -60,15 +60,16 @@ export class World {
     for (const placement of desired) {
       const { session, room, slot, floorId, isSubagent } = placement
       const existing = this.agents.get(session.key)
+      const oldSlot = oldMap.floors[0]?.rooms
+        .find((r) => r.id === room.id)
+        ?.slots.find((s) => s.id === slot.id)
       if (
         existing &&
         existing.state !== 'leaving' &&
         existing.view.roomId === room.id &&
         existing.view.slotId === slot.id &&
-        oldMap.floors[0]?.rooms.find((r) => r.id === room.id)?.slots.find((s) => s.id === slot.id)
-          ?.x === slot.x &&
-        oldMap.floors[0]?.rooms.find((r) => r.id === room.id)?.slots.find((s) => s.id === slot.id)
-          ?.z === slot.z
+        oldSlot?.x === slot.x &&
+        oldSlot?.z === slot.z
       ) {
         const updated = updateAgent(existing, session.activity, session.attention)
         updated.view.label = session.name
