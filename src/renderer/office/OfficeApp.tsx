@@ -27,7 +27,6 @@ import { ListView } from './hud/ListView'
 import { MetricsOverlay } from './hud/MetricsOverlay'
 import { OfficesPanel } from './hud/OfficesPanel'
 import { ResourceBar } from './hud/ResourceBar'
-import { characterFor } from './hud/theme-character'
 import { buildTokenLedger } from '../deck/tokens'
 import { SceneErrorBoundary } from './SceneErrorBoundary'
 import type { OfficeFeed } from './scene-model'
@@ -38,6 +37,7 @@ import {
   useOfficeHotkeys
 } from './use-office-effects'
 import { canCreateWebGL2 } from './webgl-support'
+import { themeCharacter } from './themes/registry'
 
 // The scene component loads separately so the HUD can paint before Canvas mounts.
 const OfficeScene = lazy(() => import('./scene/OfficeScene'))
@@ -101,7 +101,7 @@ export function OfficeApp({ feed }: { feed: OfficeFeed }) {
   const selectedTargetKey = selectedTarget?.key
   const selectedCharacter =
     frame && selectedAgent && selectedSession
-      ? characterFor(
+      ? themeCharacter(
           resolveTheme(selectedSession, themeAssignments, theme.id),
           selectedAgent,
           bayForAgent(frame, selectedAgent)
@@ -244,6 +244,7 @@ export function OfficeApp({ feed }: { feed: OfficeFeed }) {
               session={selectedSession}
               member={selectedMember}
               character={selectedCharacter}
+              accounts={frame?.accounts}
               nowMs={nowMs}
               canFly={!isShowingList}
               onFocusTerminal={focusSelected}

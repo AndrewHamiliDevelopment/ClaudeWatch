@@ -137,6 +137,21 @@ describe('createLiveFeed', () => {
     expect(frames.at(-1)).toMatchObject({ connected: true, sources })
   })
 
+  it('carries the snapshot’s account labels to the frame', () => {
+    const frames: OfficeFrame[] = []
+    createLiveFeed(source, { storage: store }).subscribe((frame) => frames.push(frame))
+    const accounts = [
+      { key: 'acct_1', provider: 'claude' as const, label: 'Work', plan: 'Max', isActive: true }
+    ]
+    listener?.({
+      type: 'hello',
+      v: 1,
+      snapshot: { rev: 1, generatedAtMs: 1, sessions: [], sources: [], accounts }
+    })
+    vi.advanceTimersByTime(200)
+    expect(frames.at(-1)?.accounts).toEqual(accounts)
+  })
+
   it('emits only when the frame changed, not on every tick', () => {
     const frames: OfficeFrame[] = []
     createLiveFeed(source, { storage: store }).subscribe((frame) => frames.push(frame))

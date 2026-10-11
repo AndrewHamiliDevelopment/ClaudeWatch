@@ -1,4 +1,5 @@
 import type {
+  AccountRef,
   AgentView,
   FocusResult,
   InteractionResult,
@@ -74,6 +75,8 @@ export interface OfficeFrame {
   // False until the bridge's first snapshot arrives, so "no agents" is not shown while connecting.
   connected: boolean
   sources: SourceHealth[]
+  // Labels only (never an address); absent when accounts are not being watched.
+  accounts?: AccountRef[]
 }
 
 export interface OfficeFeed {

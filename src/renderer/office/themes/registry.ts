@@ -32,7 +32,6 @@ export function themeForTeam(): OfficeTheme {
 }
 
 // The character an agent plays in a theme, or null where the theme has no cast.
-// dead-code-allowed: hud/theme-character.ts takes this over in the lead's follow-up 2026-11-30
 export function themeCharacter(
   themeId: string,
   agent: Pick<AgentView, 'provider' | 'isSubagent'>,

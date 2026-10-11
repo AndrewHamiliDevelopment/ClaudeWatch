@@ -8,9 +8,6 @@ import { CourtDistrict, CourtHangar, CourtTower } from './CourtWorld'
 import { COURT, COURT_PALETTE } from './palette'
 import { castIndexFor, VIOLET_COURT_ID, violetCourtRoster } from './roster'
 
-// The Office HUD still reads the cast from here; the theme's `roster` is the generic way in.
-export { violetCourtRoster } from './roster'
-
 export const violetCourt: OfficeTheme = {
   id: VIOLET_COURT_ID,
   label: 'Violet Court',

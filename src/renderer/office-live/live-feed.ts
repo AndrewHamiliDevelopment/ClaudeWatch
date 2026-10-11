@@ -100,7 +100,8 @@ export function createLiveFeed(
         agents,
         sessions: snapshot?.sessions ?? [],
         connected: snapshot !== null,
-        sources: snapshot?.sources ?? []
+        sources: snapshot?.sources ?? [],
+        accounts: snapshot?.accounts
       }
       for (const listener of listeners) listener(frame)
     }, TICK_MS)
