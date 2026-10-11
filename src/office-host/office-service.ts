@@ -13,9 +13,9 @@ import type {
   PermissionDecision,
   ProviderId
 } from '../shared/office/types'
+import { PARSED_OUTPUT_ENV, startTimeArgs } from '../shared/ps'
 
-// `ps` output is parsed, so it is read in the C locale and UTC.
-export const PS_OPTIONS = { timeout: 5000, env: { LC_ALL: 'C', TZ: 'UTC' } }
+export const PS_OPTIONS = { timeout: 5000, env: PARSED_OUTPUT_ENV }
 
 interface OfficeServiceDeps {
   host: Pick<BridgeHost, 'snapshot' | 'onMessage'>
@@ -55,7 +55,7 @@ export function createOfficeService({
 }: OfficeServiceDeps): OfficeService {
   const orcaCli = createOrcaCli(run)
   const processStart = (pid: number): Promise<number | null> =>
-    run('/bin/ps', ['-o', 'lstart=', '-p', String(pid)], PS_OPTIONS).then(
+    run('/bin/ps', startTimeArgs(pid), PS_OPTIONS).then(
       ({ stdout }) => Date.parse(`${stdout.trim()} UTC`) || null,
       () => null
     )

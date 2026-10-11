@@ -1,6 +1,8 @@
 import { execFile } from 'node:child_process'
 import { open, readdir, realpath, stat } from 'node:fs/promises'
+import { isJsonObject } from '../shared/json-object'
 import { assertOrcaTrusted, ORCA_CLI } from '../shared/orca-bundle'
+import { PARSED_OUTPUT_ENV } from '../shared/ps'
 
 interface FileInfo {
   directory: boolean
@@ -132,7 +134,7 @@ export const systemIo: BridgeIo = {
       execFile(
         file,
         args,
-        { env: { LC_ALL: 'C', TZ: 'UTC' }, timeout: 5000, maxBuffer: 8 * 1024 * 1024 },
+        { env: PARSED_OUTPUT_ENV, timeout: 5000, maxBuffer: 8 * 1024 * 1024 },
         (error, stdout) => {
           if (error) reject(error)
           else resolve(stdout)
@@ -142,11 +144,8 @@ export const systemIo: BridgeIo = {
   }
 }
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value)
-
 export function object(value: unknown): Record<string, unknown> | null {
-  return isRecord(value) ? value : null
+  return isJsonObject(value) ? value : null
 }
 
 // An agent type or a tool name read from disk, before it may enter the feed: short, one

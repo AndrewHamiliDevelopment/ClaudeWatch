@@ -1,3 +1,5 @@
+import { clamp } from '../range'
+
 // How often the bridge polls while a window that draws its data is on screen.
 export const LIVE_POLL_MS = 2000
 // With none on screen only the accounts ledger listens, and it places tokens by the time
@@ -17,5 +19,5 @@ export function paceOf(message: unknown): number | null {
   if (!('type' in message) || message.type !== 'pace' || !('intervalMs' in message)) return null
   const { intervalMs } = message
   if (typeof intervalMs !== 'number' || !Number.isFinite(intervalMs)) return null
-  return Math.min(Math.max(intervalMs, LIVE_POLL_MS), BACKGROUND_POLL_MS)
+  return clamp(intervalMs, [LIVE_POLL_MS, BACKGROUND_POLL_MS])
 }

@@ -1,14 +1,11 @@
 import { copyFile, open, readFile, realpath, rename, rm, stat } from 'fs/promises'
 import { randomBytes } from 'crypto'
+import { isJsonObject } from '../shared/json-object'
 
 export type JsonObjectRead =
   | { status: 'ok'; data: Record<string, unknown> }
   | { status: 'missing' }
   | { status: 'unparseable' }
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
 
 // An unparseable file must never be treated as `{}`: writing back from that
 // would replace the user's hooks and permissions with a near-empty file.
@@ -22,7 +19,7 @@ export async function readJsonObject(filePath: string): Promise<JsonObjectRead> 
   }
   try {
     const parsed: unknown = JSON.parse(raw)
-    return isPlainObject(parsed) ? { status: 'ok', data: parsed } : { status: 'unparseable' }
+    return isJsonObject(parsed) ? { status: 'ok', data: parsed } : { status: 'unparseable' }
   } catch {
     return { status: 'unparseable' }
   }

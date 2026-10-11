@@ -1,4 +1,5 @@
 import { join } from 'path'
+import { PARSED_OUTPUT_ENV } from '../../shared/ps'
 import { createOrcaCli } from '../orca-cli'
 import { execFilePromise } from '../platform/exec'
 import { AccountLedger } from './account-ledger'
@@ -16,9 +17,6 @@ interface AccountLedgerPlaces {
   userData: string
 }
 
-// Orca's command line needs nothing from this process, so it is given no token-bearing variable.
-const SCRUBBED_ENVIRONMENT = { LC_ALL: 'C', TZ: 'UTC' }
-
 // The ledger wired to the real files: the default login, Orca's identity files and its
 // signature-checked command line, and ClaudeWatch's own ledger file.
 export function createAccountLedger({
@@ -27,7 +25,7 @@ export function createAccountLedger({
   userData
 }: AccountLedgerPlaces): AccountLedger {
   const orca = createOrcaCli((program, args, options) =>
-    execFilePromise(program, args, { ...options, env: SCRUBBED_ENVIRONMENT })
+    execFilePromise(program, args, { ...options, env: PARSED_OUTPUT_ENV })
   )
   const orcaData = join(home, 'Library', 'Application Support', 'orca')
   const ledgerFile = join(userData, 'accounts-ledger.json')
