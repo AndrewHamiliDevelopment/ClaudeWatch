@@ -3,7 +3,7 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import { useOfficeTheme } from '../hooks'
 import { useOfficeHotkeys } from '../use-office-effects'
 import { BottomBar } from '../hud/BottomBar'
-import { themeForTeam } from '../themes/registry'
+import { listThemes, themeForTeam } from '../themes/registry'
 
 beforeEach(() => localStorage.clear())
 
@@ -14,9 +14,10 @@ it('uses the team default and falls back for unknown stored ids', () => {
 })
 
 it('restores a registered theme, cycles in registry order and persists', () => {
-  localStorage.setItem('claudewatch.office.theme', 'brass-workshop')
+  const lastThemeId = listThemes().at(-1)?.id ?? ''
+  localStorage.setItem('claudewatch.office.theme', lastThemeId)
   const { result } = renderHook(useOfficeTheme)
-  expect(result.current.theme.id).toBe('brass-workshop')
+  expect(result.current.theme.id).toBe(lastThemeId)
   act(() => result.current.cycleTheme())
   expect(result.current.theme.id).toBe('neo-edo-steam')
   expect(localStorage.getItem('claudewatch.office.theme')).toBe('neo-edo-steam')
