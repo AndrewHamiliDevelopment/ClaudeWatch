@@ -125,6 +125,7 @@ app.whenReady().then(() => {
   ])
 
   const office = setupOffice(terminalResolver)
+  if (process.argv.includes('--open-office')) office.open()
 
   // Create tray with popover support
   trayManager = new TrayManager({
