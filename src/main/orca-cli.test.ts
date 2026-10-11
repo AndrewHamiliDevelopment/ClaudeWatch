@@ -27,6 +27,13 @@ describe('createOrcaCli', () => {
     expect(assertTrusted).toHaveBeenCalledTimes(2)
   })
 
+  it('asks for a second of trust to spare before a screen read, so the keys that follow share its check', async () => {
+    const cli = createOrcaCli(run, assertTrusted)
+    await cli.exec(['terminal', 'read', '--terminal', 'term_a', '--screen', '--json'])
+    await cli.exec(['terminal', 'send', '--terminal', 'term_a', '--text', 'hi', '--json'])
+    expect(assertTrusted.mock.calls).toEqual([[1000], [0]])
+  })
+
   it('raises the bundle that was verified, not whichever app claims its bundle id', async () => {
     expect(await createOrcaCli(run, assertTrusted).raise()).toBe(true)
     expect(assertTrusted).toHaveBeenCalledOnce()

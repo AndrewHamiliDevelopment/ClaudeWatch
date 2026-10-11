@@ -37,11 +37,14 @@ function verifySignature(): Promise<void> {
 
 // Resolves when Orca's bundle is sealed and signed by Orca's team; rejects otherwise. A failed
 // check is not remembered, so an Orca installed later works without a restart.
-export function createOrcaTrust(now: () => number = Date.now): () => Promise<void> {
+// `minLeftMs` is how much of the window a caller needs left: with less, it is checked afresh.
+export function createOrcaTrust(
+  now: () => number = Date.now
+): (minLeftMs?: number) => Promise<void> {
   let trusted: Promise<void> | null = null
   let checkedAtMs = 0
-  return () => {
-    if (!trusted || now() - checkedAtMs > ORCA_TRUST_MS) {
+  return (minLeftMs = 0) => {
+    if (!trusted || now() - checkedAtMs > ORCA_TRUST_MS - minLeftMs) {
       checkedAtMs = now()
       const check = verifySignature()
       trusted = check

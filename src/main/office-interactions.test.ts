@@ -42,8 +42,10 @@ const PROMPT_SCREEN = [
   '❯ 1. Yes',
   '  2. No'
 ]
-// An agent between turns: its input box, no dialog.
-const IDLE_SCREEN = ['⏺ Done. The tests pass.', '', '❯ ', '  ? for shortcuts']
+const RULE = '─'.repeat(40)
+// An agent between turns, as Claude Code draws it: its input line between two rules.
+const IDLE_SCREEN = ['⏺ Done. The tests pass.', '', RULE, '❯', RULE, '  ⏵⏵ accept edits on']
+const CODEX_IDLE_SCREEN = ['• Done.', '', '› Ask Codex to do anything', '  ? for shortcuts']
 
 describe('OfficeInteractions', () => {
   let snapshot: OfficeSnapshot
@@ -137,8 +139,89 @@ describe('OfficeInteractions', () => {
     )
 
     it('does not take a typed message that begins with a number for a dialog', async () => {
-      orca.screen.mockResolvedValue(['❯ 1. fix the build first', '', '⏺ On it.', '', '❯ '])
+      orca.screen.mockResolvedValue([
+        '❯ 1. fix the build first',
+        '  2. then the lint',
+        ...IDLE_SCREEN
+      ])
       expect(await interactions.send('claude:s1', 'thanks')).toEqual({ success: true })
+    })
+
+    it('talks to an agent that ended its turn by asking, in prose, whether to proceed', async () => {
+      orca.screen.mockResolvedValue(['⏺ Do you want to proceed with it?', ...IDLE_SCREEN.slice(1)])
+      expect(await interactions.send('claude:s1', 'yes, go on')).toEqual({ success: true })
+    })
+
+    it.each([
+      [
+        'a picker with a pointer and no numbers',
+        [' Resume a session?', ' ❯ fix the build', '   add the tests']
+      ],
+      ['a dialog with one numbered row', [' Update installed', ' ❯ 1. Continue']],
+      ['an input line that is not between two rules', ['⏺ Done.', '', '❯ ', '  ? for shortcuts']],
+      [
+        'a dialog under an input line left on screen',
+        [...IDLE_SCREEN, ' Do it?', ' ❯ Yes', '   No']
+      ],
+      [
+        'an input line far above the bottom',
+        [...IDLE_SCREEN, ...Array.from({ length: 30 }, () => '  output')]
+      ],
+      ['nothing at all', []]
+    ])('types nothing when the screen shows %s', async (_kind, screen) => {
+      orca.screen.mockResolvedValue(screen)
+      expect(await interactions.send('claude:s1', 'carry on')).toEqual({
+        success: false,
+        reason: 'prompt-on-screen'
+      })
+      expect(orca.sendPrompt).not.toHaveBeenCalled()
+    })
+
+    it('talks to a Claude agent whose input line holds a draft', async () => {
+      orca.screen.mockResolvedValue([
+        '⏺ Done.',
+        RULE,
+        '❯\u00a0and then',
+        RULE,
+        '  ⏵⏵ accept edits on'
+      ])
+      expect(await interactions.send('claude:s1', 'run the tests')).toEqual({ success: true })
+    })
+
+    describe('to a Codex agent', () => {
+      beforeEach(() => {
+        snapshot.sessions = [session({ provider: 'codex' })]
+        orca.handleFor.mockResolvedValue(pane({ agent: 'codex' }))
+      })
+
+      it('types when its composer and the shortcuts hint under it are at the bottom', async () => {
+        orca.screen.mockResolvedValue(CODEX_IDLE_SCREEN)
+        expect(await interactions.send('claude:s1', 'carry on')).toEqual({ success: true })
+        orca.screen.mockResolvedValue([
+          '• Done.',
+          '› Ask Codex to do anything',
+          '  gpt · ~/repo · main',
+          '  ? for shortcuts'
+        ])
+        expect(await interactions.send('claude:s1', 'carry on')).toEqual({ success: true })
+      })
+
+      it.each([
+        ['an approval', ['Allow command?', '› 1. Yes, proceed (y)', '  2. No (esc)']],
+        [
+          'a picker with no numbers',
+          ['Resume?', '› fix the build', '  add the tests', '  enter to confirm']
+        ],
+        ['Claude Code’s input line, which is not its own', IDLE_SCREEN],
+        ['its composer far above the bottom', [...CODEX_IDLE_SCREEN, '  a', '  b', '  c', '  d']]
+      ])('types nothing when the screen shows %s', async (_kind, screen) => {
+        orca.screen.mockResolvedValue(screen)
+        expect(await interactions.send('claude:s1', 'carry on')).toEqual({
+          success: false,
+          reason: 'prompt-on-screen'
+        })
+        expect(orca.sendPrompt).not.toHaveBeenCalled()
+      })
     })
 
     it('types nothing when the screen cannot be read', async () => {
