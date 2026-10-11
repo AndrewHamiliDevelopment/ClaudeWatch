@@ -260,11 +260,9 @@ describe('while accounts are watched', () => {
 })
 
 describe('saving', () => {
-  it('writes shortly after a change, once, and not again while nothing changes', async () => {
+  it('writes shortly after a change, once, and counted tokens two minutes after them', async () => {
     const { ledger, deps } = await running()
     await vi.advanceTimersByTimeAsync(30_000)
-    expect(deps.save).toHaveBeenCalledOnce()
-    await vi.advanceTimersByTimeAsync(10 * 60_000)
     expect(deps.save).toHaveBeenCalledOnce()
     ledger.ingestBridgeMessage(usage(line(5)))
     ledger.ingestBridgeMessage(usage(line(6, Date.now() + 1)))
@@ -275,6 +273,46 @@ describe('saving', () => {
     expect(deps.save).toHaveBeenCalledTimes(2)
   })
 
+  it('writes how long it has watched every five minutes while nothing else changes, not at every look', async () => {
+    const { deps, disk } = await running()
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(deps.save).toHaveBeenCalledOnce()
+    await vi.advanceTimersByTimeAsync(4.5 * 60_000)
+    expect(deps.save).toHaveBeenCalledOnce()
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(deps.save).toHaveBeenCalledTimes(2)
+    expect(disk.ledger?.sampledAtMs).toBeGreaterThanOrEqual(START + 5 * 60_000)
+    await vi.advanceTimersByTimeAsync(10 * 60_000)
+    expect(deps.save).toHaveBeenCalledTimes(3)
+  })
+
+  it.each([
+    ['is quit', true, 20_000],
+    ['crashes', false, 10 * 60_000]
+  ])(
+    'still knows how long it watched an account when the app %s and another is signed in at the next start',
+    async (_case, isStopped, writtenBeforeEndMs) => {
+      const first = await running()
+      // An hour of looks at one account, and nothing else to save.
+      await vi.advanceTimersByTimeAsync(60 * 60_000)
+      const writtenAtMs = Date.now() - writtenBeforeEndMs
+      if (isStopped) first.ledger.stop()
+
+      const second = setup()
+      second.disk.ledger = first.disk.ledger
+      second.deps.readDefaultIdentity.mockResolvedValue(signedIn('grace'))
+      vi.setSystemTime(Date.now() + 10 * 60_000)
+      second.ledger.start()
+      await vi.advanceTimersByTimeAsync(0)
+      // Written while ada was being watched; the bridge reads it only now.
+      second.ledger.ingestBridgeMessage(usage(line(5, writtenAtMs)))
+      expect(second.ledger.view()).toMatchObject({
+        unattributed: { usage: { today: tokens(0) } }
+      })
+      expect(today(second.ledger.view())).toEqual({ [keyOf('ada')]: 5, [keyOf('grace')]: 0 })
+    }
+  )
+
   it('writes a name the owner gave within thirty seconds, even while counted tokens wait longer', async () => {
     const { ledger, deps, disk } = await running()
     await vi.advanceTimersByTimeAsync(30_000)
@@ -284,8 +322,8 @@ describe('saving', () => {
     await vi.advanceTimersByTimeAsync(30_000)
     expect(deps.save).toHaveBeenCalledTimes(2)
     expect(disk.ledger?.accounts[0].alias).toBe('Work')
-    // That write carried the tokens too: nothing is left to save.
-    await vi.advanceTimersByTimeAsync(5 * 60_000)
+    // That write carried the tokens too: their two minutes pass with nothing left to save.
+    await vi.advanceTimersByTimeAsync(3 * 60_000)
     expect(deps.save).toHaveBeenCalledTimes(2)
   })
 

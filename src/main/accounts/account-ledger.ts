@@ -27,6 +27,9 @@ const SAVE_DELAY_MS = 30_000
 // Counted tokens wait longer: after a crash the bridge reports every live transcript again and
 // they are counted again. Only what a session spent and then exited within the wait is lost.
 const USAGE_SAVE_DELAY_MS = 2 * 60_000
+// How long the sign-in has been watched changes at every look and is written this often, and
+// at quit: after a restart it is where the open span ends if another account is then found.
+const WATCH_SAVE_DELAY_MS = 5 * 60_000
 // Tokens are counted on every tick; the dashboard is told of them this often.
 const PUBLISH_DELAY_MS = 5_000
 
@@ -179,8 +182,10 @@ export class AccountLedger {
     if (!this.isWatching || !state) return
     const now = Date.now()
     const before = JSON.stringify([state.accounts, state.spans])
+    const watchedUntilMs = state.sampledAtMs
     recordIdentity(state, read, now)
     prune(state, now)
+    if (state.sampledAtMs !== watchedUntilMs) this.saveWithin(WATCH_SAVE_DELAY_MS)
     const isFirstLook = !this.hasSampled
     this.hasSampled = true
     const hasCountedLines = countUsage(state, this.waiting, now)
