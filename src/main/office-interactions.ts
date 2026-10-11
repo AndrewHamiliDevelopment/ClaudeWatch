@@ -1,5 +1,6 @@
 import { createHash } from 'crypto'
 import type {
+  AgentAttention,
   FocusResult,
   InteractionFailure,
   InteractionResult,
@@ -35,6 +36,15 @@ const PEEK_LINES = 40
 // Claude Code's permission dialog; respond() sends nothing unless it is on screen.
 const PERMISSION_PROMPT = /Do you want to (proceed|make this edit|create|allow)|❯\s*1\.\s*Yes/
 const DECISION_KEYS: Record<PermissionDecision, string> = { approve: '1', deny: '\u001b' }
+// Claude Code reports 'waiting' only while a dialog covers its prompt (a permission, a picker,
+// an MCP form), never for a turn that merely ended with a question: that one is idle.
+const WAITS_ON_DIALOG: ReadonlySet<AgentAttention> = new Set(['permission', 'question'])
+// One row of a numbered choice list, boxed or not: its pointer if it is the highlighted row,
+// and its number.
+const CHOICE_ROW = /^[\s│|]*([❯›>]\s*)?(\d+)\.\s+\S/
+// A highlighted row counts as a dialog only with a neighbouring number this close, so a typed
+// message that begins "1." is not taken for one.
+const CHOICE_NEIGHBOUR_LINES = 6
 const AGENT_TITLES: Record<ProviderId, string> = {
   claude: 'New Claude agent',
   codex: 'New Codex agent'
@@ -53,6 +63,22 @@ function visibleLines(screen: string[]): string[] {
   let end = screen.length
   while (end > 0 && !screen[end - 1].trim()) end--
   return screen.slice(Math.max(0, end - PEEK_LINES), end)
+}
+
+// A selection dialog: a highlighted numbered row beside the next or previous number. Enter
+// confirms the highlighted row and a digit picks one, so typed text would answer it.
+function showsChoiceDialog(screen: string[]): boolean {
+  const rows = screen.map((line) => CHOICE_ROW.exec(line))
+  return rows.some((row, index) => {
+    if (!row?.[1]) return false
+    const near = rows.slice(
+      Math.max(0, index - CHOICE_NEIGHBOUR_LINES),
+      index + CHOICE_NEIGHBOUR_LINES + 1
+    )
+    return near.some(
+      (other) => other && !other[1] && Math.abs(Number(other[2]) - Number(row[2])) === 1
+    )
+  })
 }
 
 const fingerprintOf = (lines: string[]): string =>
@@ -84,7 +110,14 @@ export class OfficeInteractions {
     if (!prompt || prompt.length > MAX_PROMPT_LENGTH || !isPrintable(prompt)) {
       return fail('invalid-input')
     }
+    const attention = this.session(sessionKey)?.attention
+    if (attention && WAITS_ON_DIALOG.has(attention)) return fail('prompt-on-screen')
     return this.withTerminal(sessionKey, async ({ handle }) => {
+      // The snapshot is seconds old and says nothing of a teammate or a Codex agent, so the
+      // screen decides. A dialog that opens between this read and the send is not caught.
+      const screen = await this.deps.orca.screen(handle)
+      if (PERMISSION_PROMPT.test(screen.join('\n')) || showsChoiceDialog(screen))
+        return fail('prompt-on-screen')
       await this.deps.orca.sendPrompt(handle, prompt)
       return { success: true }
     })

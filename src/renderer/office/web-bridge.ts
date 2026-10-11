@@ -21,6 +21,7 @@ const FAILURES: Record<InteractionFailure, true> = {
   'orca-unavailable': true,
   'terminal-not-found': true,
   'no-permission-prompt': true,
+  'prompt-on-screen': true,
   'prompt-changed': true,
   'unsupported-provider': true,
   'invalid-input': true,

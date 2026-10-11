@@ -145,6 +145,8 @@ export type InteractionFailure =
   | 'orca-unavailable'
   | 'terminal-not-found'
   | 'no-permission-prompt'
+  // Talk refused: a dialog is on the agent's screen, and typed text would answer it.
+  | 'prompt-on-screen'
   | 'prompt-changed'
   | 'unsupported-provider'
   | 'invalid-input'
