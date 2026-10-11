@@ -10,7 +10,7 @@ import type {
   ProviderId
 } from '../../shared/office/types'
 import type { FloorGeometry, OfficeFeed, OfficeFrame } from '../office/scene-model'
-import { toFloorGeometry, toSceneAgent } from './layout-geometry'
+import { toFloorGeometry } from './layout-geometry'
 
 export interface FeedSource {
   ready(): Promise<void>
@@ -77,7 +77,7 @@ export function createLiveFeed(
 
     const timer = setInterval(() => {
       const tick = now()
-      const agents = world.step(tick - lastTick).map(toSceneAgent)
+      const agents = world.step(tick - lastTick)
       lastTick = tick
       // Idle offices produce identical frames; skip them so the scene is not re-rendered for nothing.
       const agentsKey = JSON.stringify(agents)

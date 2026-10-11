@@ -4,7 +4,7 @@ import {
   type RoomLayout,
   type ZoneLayout
 } from '../../office/sim/layout'
-import type { AgentView, SessionRef } from '../../shared/office/types'
+import type { SessionRef } from '../../shared/office/types'
 import type { FloorGeometry, RoomGeometry, ZoneGeometry } from '../office/scene-model'
 
 function toZone(zone: ZoneLayout, labels: Map<string, string>): ZoneGeometry {
@@ -54,9 +54,4 @@ export function toFloorGeometry(layout: LayoutMap, sessions: SessionRef[]): Floo
       elevator: { x: floor.elevator.x, z: floor.elevator.z }
     }
   ]
-}
-
-// Sim coordinates already use the centre-based floor frame, including its arrival gate.
-export function toSceneAgent(view: AgentView): AgentView {
-  return { ...view }
 }

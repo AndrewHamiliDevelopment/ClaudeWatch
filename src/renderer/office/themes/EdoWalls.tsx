@@ -1,8 +1,8 @@
 import { useFrame } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
 import type { InstancedMesh } from 'three'
-import { approach } from '../logic/character-pose'
-import { roomWallSegments, wallHeight } from '../logic/room-layout'
+import { roomWallSegments } from '../logic/room-layout'
+import { createWallHeights } from '../logic/wall-heights'
 import { writeInstances, type InstancePlacement } from '../scene/instancing'
 import { Matte } from '../scene/InstancedParts'
 import { EDO } from './palettes'
@@ -14,30 +14,28 @@ export function EdoWalls({ floor, mode, isReducedMotion }: WallsProps) {
   const lattice = useRef<InstancedMesh>(null)
   const pipes = useRef<InstancedMesh>(null)
   const gauges = useRef<InstancedMesh>(null)
-  const heights = useRef<number[]>([])
+  const wallHeights = useRef(createWallHeights()).current
   const segments = useMemo(() => floor.rooms.flatMap(roomWallSegments), [floor.rooms])
   const latticeCount = segments.reduce((count, s) => count + Math.ceil(s.length / 0.5) + 4, 0)
   useFrame(({ camera }, delta) => {
+    if (!panels.current || !lattice.current || !pipes.current || !gauges.current) return
+    // Settled walls under a still camera need no new instance matrices.
+    if (!wallHeights.step(segments, mode, camera.position, delta, isReducedMotion)) return
     const paper: InstancePlacement[] = []
     const bars: InstancePlacement[] = []
     const copper: InstancePlacement[] = []
     const dials: InstancePlacement[] = []
     segments.forEach((segment, index) => {
-      const target = wallHeight(mode, segment, camera.position)
-      const h = isReducedMotion
-        ? target
-        : approach(heights.current[index] ?? target, target, delta, 10)
-      heights.current[index] = h
-      const parts = shojiParts(segment, h)
+      const parts = shojiParts(segment, wallHeights.heights[index])
       paper.push(parts.panel)
       bars.push(...parts.bars)
       copper.push(parts.pipe)
       dials.push(parts.dial)
     })
-    if (panels.current) writeInstances(panels.current, paper)
-    if (lattice.current) writeInstances(lattice.current, bars)
-    if (pipes.current) writeInstances(pipes.current, copper)
-    if (gauges.current) writeInstances(gauges.current, dials)
+    writeInstances(panels.current, paper)
+    writeInstances(lattice.current, bars)
+    writeInstances(pipes.current, copper)
+    writeInstances(gauges.current, dials)
   })
   return (
     <>

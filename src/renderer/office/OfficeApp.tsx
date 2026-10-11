@@ -49,6 +49,21 @@ export function OfficeApp({ feed }: { feed: OfficeFeed }) {
   // The Tower stays as a landmark showing the building's totals; it no longer picks floors.
   const towerFloors = useMemo(() => (frame ? summariseFloors(frame) : []), [frame])
   const companies = useMemo(() => (frame ? buildOfficesTree(frame) : []), [frame])
+  // Memoised on the frame: the 1 Hz clock re-renders the HUD and must not rebuild scene inputs.
+  const floorId = state.focusedFloorId
+  const floorAgents = useMemo(
+    () => (frame ? frame.agents.filter((agent) => agent.floorId === floorId) : []),
+    [frame, floorId]
+  )
+  const cards = useMemo(
+    () => (frame && floorId ? buildNameCards(frame, floorId, state.selectedAgentKey) : []),
+    [frame, floorId, state.selectedAgentKey]
+  )
+  const stacks = useMemo(
+    () => (frame && floorId ? buildProjectStacks(frame, floorId) : []),
+    [frame, floorId]
+  )
+  const companyList = useMemo(() => (frame ? buildCompanyList(frame) : []), [frame])
   const isConnecting = !frame || (!frame.connected && frame.sessions.length === 0)
   const focusedFloor = frame?.floors.find((floor) => floor.floorId === state.focusedFloorId)
   const selectedAgent = frame?.agents.find((agent) => agent.agentKey === state.selectedAgentKey)
@@ -96,9 +111,9 @@ export function OfficeApp({ feed }: { feed: OfficeFeed }) {
               sessions={frame.sessions}
               onFlyToZone={flyToZone}
               floor={focusedFloor}
-              agents={frame.agents.filter((agent) => agent.floorId === focusedFloor.floorId)}
-              cards={buildNameCards(frame, focusedFloor.floorId, state.selectedAgentKey)}
-              stacks={buildProjectStacks(frame, focusedFloor.floorId)}
+              agents={floorAgents}
+              cards={cards}
+              stacks={stacks}
               selectedAgentKey={state.selectedAgentKey}
               wallsMode={state.wallsMode}
               cameraRequest={state.cameraRequest}
@@ -142,7 +157,7 @@ export function OfficeApp({ feed }: { feed: OfficeFeed }) {
             frame && (
               <div className="pointer-events-auto h-full w-full">
                 <ListView
-                  companies={buildCompanyList(frame)}
+                  companies={companyList}
                   selectedAgentKey={state.selectedAgentKey}
                   onSelectAgent={selectAgent}
                 />

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { buildLayout } from '../../office/sim/layout'
 import { session } from '../../office/sim/fixtures'
 import { placements } from '../../office/sim/placements'
-import { toFloorGeometry, toSceneAgent } from './layout-geometry'
+import { toFloorGeometry } from './layout-geometry'
 import type { AgentView } from '../../shared/office/types'
 
 const sessions = [
@@ -47,7 +47,7 @@ describe('headquarters geometry', () => {
       expect(Math.abs(zone.z) + zone.depth / 2).toBeLessThanOrEqual(floor.depth / 2)
     }
     for (const placement of placements(sessions, layout)) {
-      const view: AgentView = {
+      const agent: AgentView = {
         ...placement.slot,
         agentKey: placement.session.key,
         floorId: placement.floorId,
@@ -59,8 +59,6 @@ describe('headquarters geometry', () => {
         isSubagent: false,
         label: placement.session.name
       }
-      const agent = toSceneAgent(view)
-      expect(agent).toEqual(view)
       const room = floor.rooms.find((r) => r.id === agent.roomId)!
       expect(Math.abs(agent.x - room.x)).toBeLessThan(room.width / 2)
       expect(Math.abs(agent.z - room.z)).toBeLessThan(room.depth / 2)

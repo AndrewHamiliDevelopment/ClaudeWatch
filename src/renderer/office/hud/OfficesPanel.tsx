@@ -2,6 +2,7 @@ import { Plus } from 'lucide-react'
 import { useRef, useState } from 'react'
 import type { InteractionResult, ProviderId } from '../../../shared/office/types'
 import { cn } from '../../lib/utils'
+import { agentCountLabel, needsYouLabel } from '../logic/floor-model'
 import type { OfficeCompanyRow, OfficeProjectRow } from '../logic/zone-model'
 import { STATE_COLOR } from '../office-palette'
 import { FOCUS_RING_CLASS, PANEL_CLASS } from './hud-styles'
@@ -15,12 +16,8 @@ interface OfficesPanelProps {
 }
 
 function rowName(row: Pick<OfficeProjectRow, 'label' | 'agentCount' | 'attentionCount'>): string {
-  const agents = `${row.agentCount} ${row.agentCount === 1 ? 'agent' : 'agents'}`
-  const waiting =
-    row.attentionCount > 0
-      ? `, ${row.attentionCount} ${row.attentionCount === 1 ? 'needs' : 'need'} you`
-      : ''
-  return `${row.label}, ${agents}${waiting}`
+  const waiting = row.attentionCount > 0 ? `, ${needsYouLabel(row.attentionCount)}` : ''
+  return `${row.label}, ${agentCountLabel(row.agentCount)}${waiting}`
 }
 
 function Counts({ row }: { row: Pick<OfficeProjectRow, 'agentCount' | 'attentionCount'> }) {
