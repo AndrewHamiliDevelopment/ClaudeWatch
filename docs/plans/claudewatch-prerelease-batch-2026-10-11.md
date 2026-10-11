@@ -25,11 +25,11 @@ Validated (B8): with six teammates running, `node out/main/bridge.js --once` rep
 ## Ledger
 
 - [x] Phase 0 — Contract: optional fields for teammates, tokens, accounts and focus in `src/shared/office/types.ts` (31d253b); this plan
-- [ ] Phase 1 — Data: teammates in the Office (B8) and token counters per session, subagent and teammate (B3)
-- [x] Phase 2 — Orca: exact pane focus (B4), an Open Office entry for the dashboard (B1, main side), one Orca binary and a signature check (merged 00c068f, gate fix 35511af; the live pane switch is not run: it would move the owner's focus while he works)
+- [x] Phase 1 — Data: teammates in the Office (B8) and token counters per session, subagent and teammate (B3) (merged 4f69ee5: the live bridge reports token totals for six Claude sessions and this session's three running agents; no process-backed teammate was alive to observe, that path is proven on real transcripts with stand-in roster rows)
+- [x] Phase 2 — Orca: exact pane focus (B4), an Open Office entry for the dashboard (B1, main side), one Orca binary and a signature check (merged 00c068f, gate fix 35511af; live check passed: the built app focused this session's own Orca pane by process id and returned `target: pane`, and a stale handle returns `terminal_handle_stale` with exit 1)
 - [ ] Phase 3 — Camera: continuous zoom toward the cursor, inertial pan, interaction frame policy (B0)
 - [x] Phase 4 — Theme engine: a theme per company with a project override (B5) (merged 898cdf7; two themes on one floor measure 245 to 264 draw calls, three measure 283 to 292, ceiling 300)
-- [ ] Phase 5 — Dashboard and popover redesign, "Dispatch Deck", with the Open Office button (B2, B1)
+- [x] Phase 5 — Dashboard and popover redesign, "Dispatch Deck", with the Open Office button (B2, B1) (merged 5f7403f, wired to the real preload in eb95d99; the built app on live sessions shows the hold lane, squads, tokens by project and Open Office with 0 console errors)
 - [ ] Phase 6 — Office HUD redesign: tokens, teammates, theme picker and focus in the HUD (B2, B3, B4, B5)
 - [ ] Phase 7 — Accounts: ledger, attribution, Accounts view (B6)
 - [ ] Phase 8 — Three themes: Violet Court, Orbital Garrison, Quiet Grove (B5)
@@ -115,6 +115,16 @@ Total **153h with AI | 408h without**. Phases 1 to 5 run in parallel, then 6 to 
 - ASSUMPTION: the bridge runs for the whole life of the app, not only while the Office window is open — chose this because the dashboard's "Needs you" lane, tray rows, notification clicks and the accounts ledger all read it.
 - ASSUMPTION: no CI workflow is added — chose this because none was asked for; the README no longer claims one.
 - ASSUMPTION: nothing is pushed for ClaudeWatch without Angelo's word; the framework repo follows its own standing merge rule.
+
+## Deviations
+
+Fixed in session, outside the phase file lists:
+
+- `src/main/{store,process-monitor,session-tracker,ipc-handlers,index,window-bounds,settings-shape}.ts`, `src/shared/{range,settings-ranges}.ts`, `src/renderer/components/Settings.tsx`, `src/renderer/components/settings/{controls,NotificationSettings}.tsx` (c6c5ce5, eb95d99): four older settings defects a review surfaced — the CPU threshold never reached the process monitor, a changed polling interval and history size waited for a restart, a chosen 1.0 threshold was rewritten to 3.0 on every read, and the weekly-target field saved every keystroke.
+- `src/main/auto-updater.ts`, `src/renderer/hooks/useUpdater.ts`, `src/renderer/lib/types.ts` (ad11ba2): the updater payload is a union keyed by status, so the hook no longer casts it.
+- `src/main/orca-cli.ts` and its tests (35511af): the signature gate verifies nested code, re-checks after ten minutes and raises the verified path.
+- `src/renderer/office/themes/violet-court/{frame-parts,roster}.ts` (67f02c5): the crimson frame lost its single oversized clawed arm, which the themes study lists as a design to stay clear of.
+- `README.md`, `package.json` (cdaccf5): the release section and the Node version.
 
 ## Not in this batch
 
