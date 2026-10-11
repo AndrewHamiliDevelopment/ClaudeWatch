@@ -18,6 +18,8 @@ interface RateLimitsFileData {
   updated_at?: string
 }
 
+const claudeSettingsPath = (): string => join(homedir(), '.claude', 'settings.json')
+
 const EMPTY_WINDOW: RateLimitWindow = { used_percentage: 0, resets_at: null }
 
 const EMPTY_RATE_LIMITS: RateLimits = {
@@ -116,34 +118,26 @@ export class RateLimitReader {
   }
 
   async isStatuslineConfigured(): Promise<boolean> {
-    try {
-      const settingsPath = join(homedir(), '.claude', 'settings.json')
-      const raw = await readFile(settingsPath, 'utf-8')
-      const settings = JSON.parse(raw)
-      return !!settings.statusLine
-    } catch {
-      return false
-    }
+    const settings = await readJsonObject(claudeSettingsPath()).catch(() => null)
+    return settings?.status === 'ok' && !!settings.data.statusLine
   }
 
   async setupStatusline(scriptSource: string): Promise<boolean> {
     try {
-      const claudeDir = join(homedir(), '.claude')
-      const settingsPath = join(claudeDir, 'settings.json')
-      const destPath = join(claudeDir, 'claudewatch-statusline.sh')
-
-      // Copy script
-      await copyFile(scriptSource, destPath)
-      await chmod(destPath, 0o755)
+      const settingsPath = claudeSettingsPath()
+      const destPath = join(homedir(), '.claude', 'claudewatch-statusline.sh')
 
       const existing = await readJsonObject(settingsPath)
       if (existing.status === 'unparseable') return false
       const settings = existing.status === 'ok' ? existing.data : {}
 
-      // Only add statusline if not already configured
+      // Another statusline owns the slot; leave both it and its script alone.
       if (settings.statusLine) {
         return true
       }
+
+      await copyFile(scriptSource, destPath)
+      await chmod(destPath, 0o755)
 
       settings.statusLine = {
         type: 'command',

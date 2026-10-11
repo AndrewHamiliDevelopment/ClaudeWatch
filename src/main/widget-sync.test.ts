@@ -1,28 +1,21 @@
 import { describe, it, expect, vi } from 'vitest'
 import { EventEmitter } from 'events'
 import { setupWidgetSync } from './widget-sync'
+import type { ClaudeInstance, InstanceUpdate } from '../renderer/lib/types'
 
 describe('setupWidgetSync', () => {
   it('rewrites widget data when usage updates arrive', async () => {
-    const tracker = new EventEmitter() as EventEmitter & {
-      getInstances: () => []
-      getStats: () => {
-        total: number
-        active: number
-        idle: number
-        stale: number
-        exited: number
-        recentlyCompleted: number
-      }
-    }
-    tracker.getInstances = () => []
-    tracker.getStats = () => ({
+    const stats: InstanceUpdate['stats'] = {
       total: 0,
       active: 0,
       idle: 0,
       stale: 0,
       exited: 0,
       recentlyCompleted: 0
+    }
+    const tracker = Object.assign(new EventEmitter(), {
+      getInstances: (): ClaudeInstance[] => [],
+      getStats: () => stats
     })
 
     let usageListener = null as ((data: { dataAvailable: boolean }) => void) | null

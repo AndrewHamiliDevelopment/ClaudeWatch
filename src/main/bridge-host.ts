@@ -84,7 +84,7 @@ export class BridgeHost {
     this.restartDelayMs = Math.min(delay * 2, MAX_RESTART_DELAY_MS)
     this.restartTimer = setTimeout(() => {
       this.restartTimer = null
-      if (this.running) this.launch()
+      this.launch()
     }, delay)
   }
 }

@@ -25,7 +25,7 @@ export class SettingsStore {
   }
 
   getSettings(): AppSettings {
-    const stored = this.store.get('settings', DEFAULT_SETTINGS) as AppSettings
+    const stored = this.store.get('settings', DEFAULT_SETTINGS)
     // Ensure new notification fields exist for users upgrading from older versions
     if (stored.notifications.onTaskComplete === undefined) {
       stored.notifications.onTaskComplete = DEFAULT_SETTINGS.notifications.onTaskComplete
@@ -61,7 +61,7 @@ export class SettingsStore {
   }
 
   getHistory(): SessionHistoryEntry[] {
-    return (this.store.get('history', []) as SessionHistoryEntry[]) ?? []
+    return this.store.get('history', [])
   }
 
   addHistoryEntry(entry: SessionHistoryEntry): void {
@@ -77,7 +77,7 @@ export class SettingsStore {
   }
 
   getPopoverPinned(): boolean {
-    return this.store.get('popoverPinned', false) as boolean
+    return this.store.get('popoverPinned', false)
   }
 
   setPopoverPinned(pinned: boolean): void {
@@ -85,7 +85,7 @@ export class SettingsStore {
   }
 
   getPopoverPosition(): { x: number; y: number } | null {
-    return this.store.get('popoverPosition', null) as { x: number; y: number } | null
+    return this.store.get('popoverPosition', null)
   }
 
   setPopoverPosition(position: { x: number; y: number } | null): void {

@@ -192,17 +192,6 @@ describe('Issue #10: shared execFilePromise', () => {
 
 // ─── ISSUE #16: notification.sound setting never applied ───
 describe('Issue #16: notification sound setting', () => {
-  // We re-import to get fresh mocks
-  const { mockShow: _mockShow16, MockNotification: _MockNotification16 } = vi.hoisted(() => {
-    const mockShow = vi.fn()
-    const MockNotification = vi.fn().mockImplementation(() => ({
-      show: mockShow,
-      on: vi.fn(),
-      close: vi.fn()
-    }))
-    return { mockShow, MockNotification }
-  })
-
   // Note: this test validates the Notification constructor receives `silent` option.
   // Due to module mock limitations, we test the logic conceptually.
   // The actual notification.test.ts covers this more thoroughly.

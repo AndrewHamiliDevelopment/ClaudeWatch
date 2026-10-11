@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 const mockReadFile = vi.hoisted(() => vi.fn())
-const mockWriteFile = vi.hoisted(() => vi.fn())
 const mockCopyFile = vi.hoisted(() => vi.fn())
 const mockChmod = vi.hoisted(() => vi.fn())
 const mockHomedir = vi.hoisted(() => vi.fn().mockReturnValue('/Users/test'))
@@ -10,7 +9,6 @@ const mockWriteJsonAtomic = vi.hoisted(() => vi.fn())
 
 vi.mock('fs/promises', () => ({
   readFile: mockReadFile,
-  writeFile: mockWriteFile,
   copyFile: mockCopyFile,
   chmod: mockChmod
 }))
@@ -340,23 +338,25 @@ describe('RateLimitReader', () => {
 
   describe('isStatuslineConfigured', () => {
     it('returns true when statusLine is configured', async () => {
-      mockReadFile.mockResolvedValue(
-        JSON.stringify({ statusLine: { type: 'command', command: 'bash foo.sh' } })
-      )
+      mockReadJsonObject.mockResolvedValue({
+        status: 'ok',
+        data: { statusLine: { type: 'command', command: 'bash foo.sh' } }
+      })
       const reader = new RateLimitReader([])
       const result = await reader.isStatuslineConfigured()
       expect(result).toBe(true)
+      expect(mockReadJsonObject).toHaveBeenCalledWith('/Users/test/.claude/settings.json')
     })
 
     it('returns false when statusLine is not in settings', async () => {
-      mockReadFile.mockResolvedValue(JSON.stringify({ permissions: {} }))
+      mockReadJsonObject.mockResolvedValue({ status: 'ok', data: { permissions: {} } })
       const reader = new RateLimitReader([])
       const result = await reader.isStatuslineConfigured()
       expect(result).toBe(false)
     })
 
     it('returns false when settings.json is missing', async () => {
-      mockReadFile.mockRejectedValue(new Error('ENOENT'))
+      mockReadJsonObject.mockResolvedValue({ status: 'missing' })
       const reader = new RateLimitReader([])
       const result = await reader.isStatuslineConfigured()
       expect(result).toBe(false)
@@ -410,7 +410,7 @@ describe('RateLimitReader', () => {
 
       expect(result).toBe(false)
       expect(mockWriteJsonAtomic).not.toHaveBeenCalled()
-      expect(mockWriteFile).not.toHaveBeenCalled()
+      expect(mockCopyFile).not.toHaveBeenCalled()
     })
 
     it('does not overwrite existing statusLine config', async () => {
@@ -423,11 +423,12 @@ describe('RateLimitReader', () => {
       const result = await reader.setupStatusline('/app/resources/claudewatch-statusline.sh')
 
       expect(result).toBe(true)
-      expect(mockCopyFile).toHaveBeenCalled()
+      expect(mockCopyFile).not.toHaveBeenCalled()
       expect(mockWriteJsonAtomic).not.toHaveBeenCalled()
     })
 
     it('returns false on failure', async () => {
+      mockReadJsonObject.mockResolvedValue({ status: 'missing' })
       mockCopyFile.mockRejectedValue(new Error('Permission denied'))
       const reader = new RateLimitReader([])
       const result = await reader.setupStatusline('/app/resources/claudewatch-statusline.sh')

@@ -1,10 +1,11 @@
 const FNV_OFFSET_BASIS = 0xcbf29ce484222325n
 const FNV_PRIME = 0x100000001b3n
 const UINT64_MASK = 0xffffffffffffffffn
+const utf8 = new TextEncoder()
 
 function fnv1a64(text: string): string {
   let hash = FNV_OFFSET_BASIS
-  for (const byte of new TextEncoder().encode(text)) {
+  for (const byte of utf8.encode(text)) {
     hash ^= BigInt(byte)
     hash = (hash * FNV_PRIME) & UINT64_MASK
   }

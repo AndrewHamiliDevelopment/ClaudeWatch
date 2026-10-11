@@ -8,14 +8,14 @@ export function applyFeed(
 ): OfficeSnapshot | null {
   if (message.type === 'hello') return message.snapshot
   if (message.type === 'resync' || current === null) return null
+  if (message.upserts.length === 0 && message.removed.length === 0) {
+    return { ...current, rev: message.seq }
+  }
 
-  const removed = new Set(message.removed)
-  const upserts = new Map(message.upserts.map((session) => [session.key, session]))
-  const kept = current.sessions
-    .filter((session) => !removed.has(session.key))
-    .map((session) => upserts.get(session.key) ?? session)
-  const keptKeys = new Set(kept.map((session) => session.key))
-  const added = message.upserts.filter((session) => !keptKeys.has(session.key))
+  // A Map keeps existing keys in place and appends new ones, so floor order is stable.
+  const byKey = new Map(current.sessions.map((session) => [session.key, session]))
+  for (const key of message.removed) byKey.delete(key)
+  for (const session of message.upserts) byKey.set(session.key, session)
 
-  return { ...current, rev: message.seq, sessions: [...kept, ...added] }
+  return { ...current, rev: message.seq, sessions: [...byKey.values()] }
 }

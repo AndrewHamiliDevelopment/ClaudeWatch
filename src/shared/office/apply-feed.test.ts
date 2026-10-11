@@ -52,6 +52,13 @@ describe('applyFeed', () => {
     expect(next?.rev).toBe(2)
   })
 
+  it('keeps the same sessions array for an empty patch so memoised consumers skip work', () => {
+    const start = snapshot([session('claude:a')])
+    const next = applyFeed(start, { type: 'patch', v: 1, seq: 5, upserts: [], removed: [] })
+    expect(next?.sessions).toBe(start.sessions)
+    expect(next?.rev).toBe(5)
+  })
+
   it('ignores a patch that arrives before any hello', () => {
     expect(
       applyFeed(null, { type: 'patch', v: 1, seq: 1, upserts: [session('claude:a')], removed: [] })

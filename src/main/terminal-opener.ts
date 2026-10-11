@@ -1,30 +1,26 @@
-import { execFile } from 'child_process'
+import { execFilePromise } from './platform/exec'
 import type { TerminalType } from '../renderer/lib/types'
 
 const EXEC_TIMEOUT = 10_000
 
+const toResult = (run: Promise<unknown>): Promise<{ success: boolean }> =>
+  run.then(
+    () => ({ success: true }),
+    () => ({ success: false })
+  )
+
+function runCommand(cmd: string, args: string[]): Promise<{ success: boolean }> {
+  return toResult(execFilePromise(cmd, args, { timeout: EXEC_TIMEOUT }))
+}
+
 // The path reaches AppleScript as argv and the shell via `quoted form of`, so no
 // character in a folder name can end the string or start a command substitution.
 function runOsascript(script: string, projectPath: string): Promise<{ success: boolean }> {
-  return new Promise<{ success: boolean }>((resolve) => {
-    execFile(
-      'osascript',
-      ['-e', `on run argv\nset projectPath to item 1 of argv\n${script}\nend run`, projectPath],
-      { timeout: EXEC_TIMEOUT },
-      (error) => {
-        resolve({ success: !error })
-      }
-    )
-  })
+  const wrapped = `on run argv\nset projectPath to item 1 of argv\n${script}\nend run`
+  return runCommand('osascript', ['-e', wrapped, projectPath])
 }
 
-function runCommand(cmd: string, args: string[]): Promise<{ success: boolean }> {
-  return new Promise<{ success: boolean }>((resolve) => {
-    execFile(cmd, args, { timeout: EXEC_TIMEOUT }, (error) => {
-      resolve({ success: !error })
-    })
-  })
-}
+const CD_INTO_PROJECT = '"cd " & quoted form of projectPath'
 
 // --- Opener functions per terminal type ---
 
@@ -48,7 +44,7 @@ function openWarp(projectPath: string): Promise<{ success: boolean }> {
         if not found then
           keystroke "t" using command down
           delay 0.3
-          keystroke "cd " & quoted form of projectPath & return
+          keystroke ${CD_INTO_PROJECT} & return
         end if
       end tell
     end tell
@@ -62,7 +58,7 @@ function openITerm2(projectPath: string): Promise<{ success: boolean }> {
       activate
       set newWindow to (create window with default profile)
       tell current session of newWindow
-        write text "cd " & quoted form of projectPath
+        write text ${CD_INTO_PROJECT}
       end tell
     end tell
   `
@@ -73,7 +69,7 @@ function openTerminalApp(projectPath: string): Promise<{ success: boolean }> {
   const script = `
     tell application "Terminal"
       activate
-      do script "cd " & quoted form of projectPath
+      do script ${CD_INTO_PROJECT}
     end tell
   `
   return runOsascript(script, projectPath)
@@ -105,7 +101,7 @@ function openGhostty(projectPath: string): Promise<{ success: boolean }> {
       tell process "Ghostty"
         keystroke "t" using command down
         delay 0.3
-        keystroke "cd " & quoted form of projectPath & return
+        keystroke ${CD_INTO_PROJECT} & return
       end tell
     end tell
   `
