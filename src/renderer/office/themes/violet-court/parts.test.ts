@@ -59,15 +59,15 @@ describe('Violet Court figures', () => {
     expect(new Set(builds.map((parts) => JSON.stringify(parts))).size).toBe(3)
   })
 
-  it('gives only the close-combat frame one oversized arm', () => {
-    const widestForearm = (kind: FrameKind, side: -1 | 1) =>
+  // An original silhouette: no frame has one oversized arm.
+  it.each<FrameKind>(['command', 'vanguard', 'lancer'])('builds %s with matched arms', (kind) => {
+    const widestForearm = (side: -1 | 1) =>
       Math.max(
         ...frameParts(kind)
           .filter((part) => Math.sign(part.at[0]) === side && part.at[1] > 0.8 && part.at[1] < 1.3)
-          .filter((part) => Math.abs(part.at[0]) > 0.3)
+          .filter((part) => Math.abs(part.at[0]) > 0.3 && Math.abs(part.at[0]) < 0.5)
           .map((part) => part.size[0])
       )
-    expect(widestForearm('talon', -1)).toBeGreaterThan(widestForearm('talon', 1) * 1.5)
-    expect(widestForearm('lancer', -1)).toBeCloseTo(widestForearm('lancer', 1))
+    expect(widestForearm(-1)).toBeCloseTo(widestForearm(1))
   })
 })

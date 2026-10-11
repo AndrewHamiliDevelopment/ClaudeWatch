@@ -47,10 +47,10 @@ describe('Violet Court roster', () => {
   })
 
   it('parks one of the three knight frames in every bay', () => {
-    expect(COURT_FRAMES.map((frame) => frame.kind)).toEqual(['command', 'talon', 'lancer'])
+    expect(COURT_FRAMES.map((frame) => frame.kind)).toEqual(['command', 'vanguard', 'lancer'])
     expect([0, 1, 2, 3].map((bay) => frameForBay(bay).kind)).toEqual([
       'command',
-      'talon',
+      'vanguard',
       'lancer',
       'command'
     ])

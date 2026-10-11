@@ -17,7 +17,7 @@ export function castIndexFor(
   return FIRST_LEAD[agent.provider] + (rosterIndex % LEADS_PER_FACTION)
 }
 
-export type FrameKind = 'command' | 'talon' | 'lancer'
+export type FrameKind = 'command' | 'vanguard' | 'lancer'
 type CourtFrame = RosterEntry & { kind: FrameKind }
 
 // Original machines, in the order the leads pilot them (bay 0, 1, 2, then round again).
@@ -29,10 +29,10 @@ export const COURT_FRAMES: readonly CourtFrame[] = [
     role: 'Black command frame with broad shoulder plates; the seat of the strategist in the field.'
   },
   {
-    kind: 'talon',
-    id: 'ember-gauntlet',
-    name: 'Ember Gauntlet',
-    role: 'Crimson close-combat frame; one oversized clawed arm for breaking a line.'
+    kind: 'vanguard',
+    id: 'ember-vanguard',
+    name: 'Ember Vanguard',
+    role: 'Crimson close-combat frame; a short blade on each forearm for breaking a line.'
   },
   {
     kind: 'lancer',

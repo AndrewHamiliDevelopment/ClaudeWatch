@@ -10,14 +10,14 @@ interface FrameLivery {
 
 const LIVERY: Record<FrameKind, FrameLivery> = {
   command: { armor: COURT.ink, joint: COURT.slate, trim: COURT.gold },
-  talon: { armor: COURT.crimson, joint: COURT.ink, trim: COURT.gold },
+  vanguard: { armor: COURT.crimson, joint: COURT.ink, trim: COURT.gold },
   lancer: { armor: COURT.ivory, joint: COURT.slate, trim: COURT.gold }
 }
 
 const SIDES = [-1, 1] as const
 const ARM_X = 0.38
 
-// One forearm and fist; the close-combat frame swaps its left one for the claw.
+// One forearm and fist.
 const forearm = (side: number, { armor, joint }: FrameLivery): PartSpec[] => [
   box([side * ARM_X, 1.1, 0], [0.14, 0.34, 0.16], armor),
   box([side * ARM_X, 0.89, 0], [0.1, 0.1, 0.12], joint)
@@ -64,20 +64,14 @@ const EXTRAS: Record<FrameKind, (livery: FrameLivery) => PartSpec[]> = {
     crest(0, 0.22),
     crest(0.07, 0.14)
   ],
-  // One arm built for grappling: a heavy gauntlet ending in three talons.
-  talon: (livery) => [
-    ...forearm(1, livery),
-    ...shoulders([0.2, 0.18, 0.26], livery.armor),
-    box([-0.44, 1.76, 0], [0.3, 0.12, 0.34], COURT.gold),
-    box([-0.42, 1.05, 0.02], [0.28, 0.5, 0.3], livery.armor),
-    box([-0.42, 0.84, 0.02], [0.3, 0.08, 0.32], COURT.gold),
-    ...[-0.09, 0, 0.09].map<PartSpec>((spread) => ({
-      shape: 'cone',
-      at: [-0.42 + spread, 0.66, 0.06],
-      size: [0.07, 0.3, 0.07],
-      rotation: [Math.PI, 0, 0],
-      color: COURT.marble
-    })),
+  // Matched arms, each carrying a short blade along the forearm, and a swept head fin.
+  vanguard: (livery) => [
+    ...SIDES.flatMap((side) => [
+      ...forearm(side, livery),
+      box([side * 0.5, 1.02, 0.1], [0.03, 0.46, 0.12], COURT.marble),
+      box([side * 0.5, 1.26, 0.1], [0.05, 0.06, 0.16], COURT.gold)
+    ]),
+    ...shoulders([0.24, 0.16, 0.3], livery.armor),
     turned(box([0, 2.02, -0.04], [0.05, 0.08, 0.3], COURT.gold), [0.5, 0, 0])
   ],
   // A grounded lance taller than the frame, and a short riding mantle.
