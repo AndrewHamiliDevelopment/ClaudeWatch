@@ -33,7 +33,11 @@ export function reduce(prev: OfficeSnapshot, batch: IngestBatch): OfficeSnapshot
     sources: batch.sources.map((source) => ({ ...source }))
   }
 }
-export function diff(prev: OfficeSnapshot, next: OfficeSnapshot, seq: number): FeedMessage {
+export function diff(
+  prev: OfficeSnapshot,
+  next: OfficeSnapshot,
+  seq: number
+): Extract<FeedMessage, { type: 'patch' }> {
   const old = new Map(prev.sessions.map((session) => [session.key, JSON.stringify(session)]))
   const keys = new Set(next.sessions.map((session) => session.key))
   return {

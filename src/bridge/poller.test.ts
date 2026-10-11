@@ -62,17 +62,102 @@ it('keeps two-second cadence when collection takes time', async () => {
       await new Promise((resolve) => setTimeout(resolve, 500))
     return ''
   }
-  const post = vi.fn()
   const poller = new BridgePoller({
     io,
     claudeRoots: [],
     codexRoot: '/codex',
     now: () => Date.now()
   })
-  const stop = await poller.start(post)
+  const stop = await poller.start(vi.fn())
   await vi.advanceTimersByTimeAsync(4500)
-  expect(post).toHaveBeenCalledTimes(3)
+  expect(discoveryCalls).toBe(3)
   stop()
+})
+
+it('posts no patch for a tick that changed nothing, only a keepalive when the feed has been quiet', async () => {
+  vi.useFakeTimers()
+  const entry = registryEntry()
+  const io = fixtureIo({ '/claude/sessions/42.json': JSON.stringify(entry), '/repo/.git': null })
+  let live = true
+  io.exec = async (_file, args) => (args.includes('lstart=') && live ? entry.procStart : '')
+  const messages: FeedMessage[] = []
+  const poller = new BridgePoller({
+    io,
+    claudeRoots: ['/claude'],
+    codexRoot: '/codex',
+    now: () => Date.now()
+  })
+  const stop = await poller.start((message) => messages.push(message))
+  // The second tick reports the usage source as counted: the last real change.
+  await vi.advanceTimersByTimeAsync(2000)
+  expect(messages).toHaveLength(2)
+  await vi.advanceTimersByTimeAsync(14_000)
+  expect(messages).toHaveLength(2)
+  await vi.advanceTimersByTimeAsync(2000)
+  expect(messages[2]).toEqual({ type: 'patch', v: 1, seq: 10, upserts: [], removed: [] })
+  // A change is posted by the tick that sees it, under that tick's revision.
+  live = false
+  await vi.advanceTimersByTimeAsync(2000)
+  expect(messages[3]).toMatchObject({ type: 'patch', seq: 11, removed: ['claude:a'] })
+  expect(messages).toHaveLength(4)
+  stop()
+})
+
+it('still posts on every tick at the background pace', async () => {
+  vi.useFakeTimers()
+  const messages: FeedMessage[] = []
+  const poller = new BridgePoller({
+    io: fixtureIo(),
+    claudeRoots: [],
+    codexRoot: '/codex',
+    now: () => Date.now()
+  })
+  const stop = await poller.start((message) => messages.push(message))
+  poller.setIntervalMs(30_000)
+  await vi.advanceTimersByTimeAsync(90_000)
+  expect(messages.filter((message) => message.type === 'patch')).toHaveLength(3)
+  stop()
+})
+
+it('posts no usage for a transcript line older than the ledger keeps', async () => {
+  vi.useFakeTimers()
+  vi.setSystemTime(new Date('2026-10-11T12:00:00Z'))
+  const day = 24 * 60 * 60 * 1000
+  const lineAt = (id: string, ageMs: number): string =>
+    `${JSON.stringify({
+      type: 'assistant',
+      timestamp: new Date(Date.now() - ageMs).toISOString(),
+      message: { id, usage: { input_tokens: 0, output_tokens: 10 } }
+    })}\n`
+  const entry = registryEntry()
+  const io = fixtureIo({
+    '/claude/sessions/42.json': JSON.stringify(entry),
+    '/repo/.git': null,
+    [transcript]: lineAt('old', 8 * day) + lineAt('edge', 7 * day) + lineAt('new', 60_000)
+  })
+  io.exec = async (_file, args) => (args.includes('lstart=') ? entry.procStart : '')
+  const onUsage = vi.fn()
+  const poller = new BridgePoller({
+    io,
+    claudeRoots: ['/claude'],
+    codexRoot: '/codex',
+    now: () => Date.now(),
+    onUsage
+  })
+  await poller.tick()
+  const snapshot = await poller.tick()
+  expect(onUsage.mock.calls).toEqual([
+    [
+      [
+        expect.objectContaining({
+          atMs: Date.now() - 60_000,
+          counts: expect.objectContaining({ output: 10 })
+        })
+      ]
+    ]
+  ])
+  // The session's own counter still holds every line.
+  expect(snapshot.sessions[0].usage?.own.output).toBe(30)
 })
 
 it('prunes environment identities when their sessions disappear', async () => {
@@ -180,8 +265,9 @@ it('re-sends a session for its token counters at most every ten seconds', async 
   const outputs: (number | undefined)[] = []
   for (let turn = 1; turn <= 5; turn++) {
     files[transcript] += usageLine(`m${turn}`, 10)
+    const posted = messages.length
     await vi.advanceTimersByTimeAsync(2000)
-    const patch = messages.at(-1)
+    const patch = messages.length > posted ? messages.at(-1) : undefined
     outputs.push(patch?.type === 'patch' ? patch.upserts[0]?.usage?.own.output : undefined)
   }
   expect(outputs).toEqual([undefined, undefined, undefined, undefined, 51])
@@ -322,22 +408,23 @@ it('carries on after a tick that fails, with no unhandled rejection', async () =
 it('polls at the pace it is told, and at once when told to speed up', async () => {
   vi.useFakeTimers()
   const poller = new BridgePoller({ io: fixtureIo(), claudeRoots: [], codexRoot: '/codex' })
-  const post = vi.fn()
-  const stop = await poller.start(post)
-  expect(post).toHaveBeenCalledTimes(1)
+  // Ticks are counted, not posts: a tick that changed nothing posts nothing.
+  const tick = vi.spyOn(poller, 'tick')
+  const stop = await poller.start(vi.fn())
+  expect(tick).toHaveBeenCalledTimes(1)
 
   poller.setIntervalMs(30_000)
   await vi.advanceTimersByTimeAsync(29_999)
-  expect(post).toHaveBeenCalledTimes(1)
+  expect(tick).toHaveBeenCalledTimes(1)
   await vi.advanceTimersByTimeAsync(1)
-  expect(post).toHaveBeenCalledTimes(2)
+  expect(tick).toHaveBeenCalledTimes(2)
 
   // A window came back: it should not wait out the slow interval to see current state.
   poller.setIntervalMs(2000)
   await vi.advanceTimersByTimeAsync(0)
-  expect(post).toHaveBeenCalledTimes(3)
+  expect(tick).toHaveBeenCalledTimes(3)
   await vi.advanceTimersByTimeAsync(2000)
-  expect(post).toHaveBeenCalledTimes(4)
+  expect(tick).toHaveBeenCalledTimes(4)
   stop()
 })
 

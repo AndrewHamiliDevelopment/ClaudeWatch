@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { accountKey } from '../../bridge/account-key'
 import { session } from '../../bridge/__fixtures__/helpers'
-import type { UsageDelta } from '../../shared/accounts'
+import { type UsageDelta, USAGE_RETENTION_MS } from '../../shared/accounts'
 import type { SessionRef } from '../../shared/office/types'
 import { countCodexSessions, countUsage, prune, recordIdentity } from './attribution'
 import type { IdentityRead } from './identity'
 import { toAccountsState } from './accounts-view'
-import { addUsage, dayKey, emptyLedger, type LedgerState, RETENTION_MS } from './ledger-state'
+import { addUsage, dayKey, emptyLedger, type LedgerState } from './ledger-state'
 
 it('folds days older than the view’s week into one bucket per account, project and confidence, keeping every total', () => {
   const noon = new Date(2026, 9, 11, 12).getTime()
@@ -149,7 +149,7 @@ describe('counting each line once', () => {
     const state = watching('ada', at(10, 30))
     const old = line(at(10, 10), 5)
     countUsage(state, [old], at(10, 11))
-    const later = at(10, 11) + RETENTION_MS + 60_000
+    const later = at(10, 11) + USAGE_RETENTION_MS + 60_000
     recordIdentity(state, signedIn('ada'), later)
     prune(state, later)
     expect(state.files.size).toBe(0)

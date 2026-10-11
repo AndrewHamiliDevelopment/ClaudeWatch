@@ -1,7 +1,7 @@
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import type { UsageDelta } from '../shared/accounts'
-import { LIVE_POLL_MS } from '../shared/office/pace'
+import { type UsageDelta, USAGE_RETENTION_MS } from '../shared/accounts'
+import { LIVE_POLL_MS, QUIET_FEED_MS } from '../shared/office/pace'
 import type { FeedMessage, OfficeSnapshot } from '../shared/office/types'
 import { type BridgeIo, systemIo } from './io'
 import { type ClaudeBatch, collectClaude } from './registry'
@@ -73,7 +73,7 @@ export class BridgePoller {
       this.orca.poll(now)
     ])
     // The first snapshot goes out with usage unknown, so no window waits on a first scan.
-    if (this.snapshot.rev > 0) await this.scanUsage(claude)
+    if (this.snapshot.rev > 0) await this.scanUsage(claude, now)
     this.orca.prune(claude.sessions)
     const enriched = claimPanes(
       await Promise.all(claude.sessions.map((session) => this.orca.enrich(session, now)))
@@ -87,10 +87,14 @@ export class BridgePoller {
     })
     return this.snapshot
   }
-  private async scanUsage(claude: ClaudeBatch): Promise<void> {
+  private async scanUsage(claude: ClaudeBatch, now: number): Promise<void> {
     if (!this.onUsage) return this.usage.scan(claude.transcripts)
     const added: TranscriptDelta[] = []
-    await this.usage.scan(claude.transcripts, (delta) => added.push(delta))
+    // A first scan reads months of lines; the ledger would drop all but the last week of them.
+    const oldestKept = now - USAGE_RETENTION_MS
+    await this.usage.scan(claude.transcripts, (delta) => {
+      if (delta.atMs > oldestKept) added.push(delta)
+    })
     const sessions = new Map(claude.sessions.map((session) => [session.key, session]))
     const deltas = added.flatMap((delta): UsageDelta[] => {
       const session = sessions.get(delta.sessionKey)
@@ -103,6 +107,7 @@ export class BridgePoller {
   async start(post: (message: FeedMessage) => void): Promise<() => void> {
     let previous = await this.tick()
     post({ type: 'hello', v: 1, snapshot: previous })
+    let postedAtMs = previous.generatedAtMs
     let stopped = false
     let polling = false
     const poll = async (): Promise<void> => {
@@ -111,8 +116,13 @@ export class BridgePoller {
       try {
         const next = await this.tick()
         if (stopped) return
-        post(diff(previous, next, next.rev))
+        const patch = diff(previous, next, next.rev)
         previous = next
+        // A tick that changed nothing posts nothing, until the feed has been quiet too long.
+        const isEmpty = !patch.upserts.length && !patch.removed.length && !patch.sources
+        if (isEmpty && next.generatedAtMs - postedAtMs < QUIET_FEED_MS) return
+        postedAtMs = next.generatedAtMs
+        post(patch)
       } catch {
         // The next tick tries again. The cause may name local paths, so it is not written out.
         process.stderr.write('Office bridge tick failed\n')

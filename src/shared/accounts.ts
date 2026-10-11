@@ -1,5 +1,9 @@
 import type { AccountConfidence, AccountRef, TokenCounts } from './office/types'
 
+// How long the ledger remembers a quiet transcript or a closed sign-in span. It never counts a
+// line older than this in a transcript it has no place for, so the bridge does not post one.
+export const USAGE_RETENTION_MS = 7 * 24 * 60 * 60 * 1000
+
 // Tokens one transcript line added, as the bridge reports them to main. Numbers and labels only.
 export interface UsageDelta {
   sessionKey: string

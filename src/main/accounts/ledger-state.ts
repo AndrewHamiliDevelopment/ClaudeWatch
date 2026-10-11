@@ -49,10 +49,6 @@ export interface LedgerState {
   limits: Map<string, AccountLimit[]>
 }
 
-// How long a quiet transcript or a closed span is remembered. A line older than this in a
-// transcript the ledger has no place for is not counted, which keeps forgetting safe.
-export const RETENTION_MS = 7 * 24 * 60 * 60 * 1000
-
 export function emptyLedger(now: number): LedgerState {
   return {
     trackingSinceMs: now,
