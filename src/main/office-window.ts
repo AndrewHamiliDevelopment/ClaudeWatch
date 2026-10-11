@@ -5,7 +5,7 @@ export function opensOfficeOnStart(
   settings: Pick<AppSettings, 'openOfficeOnLaunch'>,
   argv: readonly string[]
 ): boolean {
-  return settings.openOfficeOnLaunch || argv.includes('--open-office')
+  return settings.openOfficeOnLaunch === true || argv.includes('--open-office')
 }
 
 export interface OfficeWindowLike {

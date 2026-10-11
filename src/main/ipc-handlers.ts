@@ -1,7 +1,7 @@
 import { ipcMain, BrowserWindow, app, shell } from 'electron'
 import { isAbsolute, join } from 'path'
 import { assertTrustedSender } from './window-factory'
-import { DEFAULT_SETTINGS } from '../renderer/lib/types'
+import { conformSettings } from './settings-shape'
 import { openTerminal } from './terminal-opener'
 import type { SessionTracker } from './session-tracker'
 import type { SettingsStore } from './store'
@@ -13,37 +13,8 @@ import type { NotificationManager } from './notifications'
 import type { AppSettings, TerminalType } from '../renderer/lib/types'
 import type { TrayManager } from './tray'
 
-const THEMES: readonly unknown[] = ['dark', 'light', 'system']
-
-// A value is kept only when it has the shape of its default: the app boots from this file, so
-// a wrong type here (a null group, a NaN interval) would stop the next start.
-function hasShapeOf(value: unknown, standard: unknown): boolean {
-  if (Array.isArray(standard)) {
-    return Array.isArray(value) && value.every((item) => typeof item === 'string')
-  }
-  if (typeof standard === 'number') return typeof value === 'number' && Number.isFinite(value)
-  if (typeof standard === 'object' && standard !== null) {
-    return typeof value === 'object' && value !== null && !Array.isArray(value)
-  }
-  return typeof value === typeof standard
-}
-
-function knownEntries(value: object, defaults: object): [string, unknown][] {
-  const standard = defaults as Record<string, unknown>
-  return Object.entries(value).filter(
-    ([key, entry]) => Object.hasOwn(standard, key) && hasShapeOf(entry, standard[key])
-  )
-}
-
 export function validateSettings(data: Partial<AppSettings>): Partial<AppSettings> {
-  if (typeof data !== 'object' || data === null) return {}
-  const validated = Object.fromEntries(knownEntries(data, DEFAULT_SETTINGS)) as Partial<AppSettings>
-  if (validated.notifications) {
-    validated.notifications = Object.fromEntries(
-      knownEntries(validated.notifications, DEFAULT_SETTINGS.notifications)
-    ) as AppSettings['notifications']
-  }
-  if (!THEMES.includes(validated.theme)) delete validated.theme
+  const validated = conformSettings(data)
 
   if (validated.pollingIntervalMs !== undefined) {
     validated.pollingIntervalMs = Math.max(500, Math.min(60000, validated.pollingIntervalMs))

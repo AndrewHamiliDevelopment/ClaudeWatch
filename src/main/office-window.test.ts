@@ -146,5 +146,8 @@ describe('opensOfficeOnStart', () => {
     expect(opensOfficeOnStart({ openOfficeOnLaunch: true }, ['electron', 'main.js'])).toBe(true)
     expect(opensOfficeOnStart({ openOfficeOnLaunch: false }, ['app', '--open-office'])).toBe(true)
     expect(opensOfficeOnStart({ openOfficeOnLaunch: false }, ['electron', 'main.js'])).toBe(false)
+    // A hand-edited file can hold a string; only a real true counts.
+    const edited = { openOfficeOnLaunch: 'false' as unknown as boolean }
+    expect(opensOfficeOnStart(edited, ['electron', 'main.js'])).toBe(false)
   })
 })

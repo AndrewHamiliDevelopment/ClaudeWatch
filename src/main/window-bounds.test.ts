@@ -22,13 +22,18 @@ describe('restoreBounds', () => {
   })
 
   it('pulls a window that hangs off its display back inside it', () => {
-    const saved = { x: 1200, y: 600, width: 1600, height: 1000 }
+    const saved = { x: 300, y: 300, width: 1400, height: 800 }
     expect(restoreBounds(saved, [laptop], fallback)).toEqual({
-      x: 0,
-      y: 25,
-      width: 1512,
-      height: 920
+      x: 112,
+      y: 145,
+      width: 1400,
+      height: 800
     })
+  })
+
+  it('shrinks a window that is larger than the display it sits on', () => {
+    const saved = { x: -100, y: 0, width: 1800, height: 1000 }
+    expect(restoreBounds(saved, [laptop], fallback)).toEqual(laptop)
   })
 
   it('ignores a saved value that is not a rectangle', () => {
@@ -42,12 +47,18 @@ describe('restoreBounds', () => {
     expect(restoreBounds(saved, [laptop, left], fallback)).toEqual(saved)
   })
 
-  it('brings a window back from a sliver of overlap', () => {
-    const saved = { x: 1500, y: 100, width: 1000, height: 600 }
+  it('falls back when only a strip of the window is left on a connected display', () => {
+    // It lived on the side display; 112 px of it overlapped the laptop.
+    const saved = { x: 1400, y: 100, width: 2000, height: 1200 }
+    expect(restoreBounds(saved, [laptop], fallback)).toEqual(fallback)
+  })
+
+  it('rounds to whole pixels, which is all a window accepts', () => {
+    const saved = { x: 100.4, y: 99.6, width: 1000.5, height: 600.2 }
     expect(restoreBounds(saved, [laptop], fallback)).toEqual({
-      x: 512,
+      x: 100,
       y: 100,
-      width: 1000,
+      width: 1001,
       height: 600
     })
   })

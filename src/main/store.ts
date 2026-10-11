@@ -2,6 +2,7 @@ import Store from 'electron-store'
 import type { AppSettings, SessionHistoryEntry } from '../renderer/lib/types'
 import { DEFAULT_SETTINGS } from '../renderer/lib/types'
 import type { Bounds } from './window-bounds'
+import { conformSettings } from './settings-shape'
 
 interface StoreSchema {
   settings: AppSettings
@@ -9,13 +10,6 @@ interface StoreSchema {
   popoverPinned: boolean
   popoverPosition: { x: number; y: number } | null
   officeWindowBounds: Bounds | null
-}
-
-function defined<T extends object>(value: T | null | undefined): Partial<T> {
-  if (typeof value !== 'object' || value === null) return {}
-  return Object.fromEntries(
-    Object.entries(value).filter(([, entry]) => entry != null)
-  ) as Partial<T>
 }
 
 export class SettingsStore {
@@ -36,11 +30,13 @@ export class SettingsStore {
 
   getSettings(): AppSettings {
     const saved = this.store.get('settings', DEFAULT_SETTINGS)
-    // Defaults fill whatever an older version never saved, or a damaged file lost.
+    // Defaults fill whatever an older version never saved, or a damaged or hand-edited file
+    // holds in the wrong type.
+    const known = conformSettings(saved)
     const stored: AppSettings = {
       ...DEFAULT_SETTINGS,
-      ...defined(saved),
-      notifications: { ...DEFAULT_SETTINGS.notifications, ...defined(saved?.notifications) }
+      ...known,
+      notifications: { ...DEFAULT_SETTINGS.notifications, ...known.notifications }
     }
     // Migrate cpuIdleThreshold from old default (1.0) to new default (3.0)
     if (stored.cpuIdleThreshold === 1.0) {

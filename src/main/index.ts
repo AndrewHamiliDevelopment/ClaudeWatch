@@ -133,7 +133,6 @@ app.whenReady().then(() => {
   ])
 
   const office = setupOffice(terminalResolver, store)
-  if (opensOfficeOnStart(settings, process.argv)) office.open()
 
   // Create tray with popover support
   trayManager = new TrayManager({
@@ -241,6 +240,15 @@ app.whenReady().then(() => {
 
   // Start auto-update checks (every 4 hours, first check after 10s)
   updater.startAutoCheck()
+
+  // Last, and contained: a failing Office must not cost the tray, where it can be switched off.
+  if (opensOfficeOnStart(settings, process.argv)) {
+    try {
+      office.open()
+    } catch (error) {
+      console.error('Office failed to open at start:', error)
+    }
+  }
 })
 
 // Clean up tray before quitting to prevent "Object has been destroyed" errors

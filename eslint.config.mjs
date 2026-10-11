@@ -10,6 +10,7 @@ export default tseslint.config(
       'widget/**',
       'widget-build/**',
       'labs/**',
+      'recordings/**',
       '.claude/**'
     ]
   },

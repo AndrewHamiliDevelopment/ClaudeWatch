@@ -27,9 +27,8 @@ export function isOnAnyDisplay(rect: Bounds, workAreas: readonly Bounds[]): bool
   return workAreas.some((area) => overlapArea(rect, area) > 0)
 }
 
-// Reuses saved bounds only on a display that is still connected (an unplugged monitor would
-// leave the window off screen) and keeps the whole window, at no less than its minimum size,
-// inside that display's work area.
+// Reuses saved bounds only on a display that is still connected, and keeps the whole window,
+// at no less than its minimum size, inside that display's work area.
 export function restoreBounds(
   saved: unknown,
   workAreas: readonly Bounds[],
@@ -37,17 +36,22 @@ export function restoreBounds(
   minimum: Size = { width: 0, height: 0 }
 ): Bounds | Size {
   if (!isBounds(saved)) return fallback
-  const home = workAreas.reduce<Bounds | null>(
-    (best, area) =>
-      overlapArea(saved, area) > (best ? overlapArea(saved, best) : 0) ? area : best,
-    null
+  // The display under the window's centre is its home. A window that mostly sat on a display
+  // that is gone opens at the default instead of being squeezed onto what is left.
+  const centre = { x: saved.x + saved.width / 2, y: saved.y + saved.height / 2 }
+  const home = workAreas.find(
+    (area) =>
+      centre.x >= area.x &&
+      centre.x < area.x + area.width &&
+      centre.y >= area.y &&
+      centre.y < area.y + area.height
   )
   if (!home) return fallback
-  const width = Math.min(Math.max(saved.width, minimum.width), home.width)
-  const height = Math.min(Math.max(saved.height, minimum.height), home.height)
+  const width = Math.round(Math.min(Math.max(saved.width, minimum.width), home.width))
+  const height = Math.round(Math.min(Math.max(saved.height, minimum.height), home.height))
   return {
-    x: Math.min(Math.max(saved.x, home.x), home.x + home.width - width),
-    y: Math.min(Math.max(saved.y, home.y), home.y + home.height - height),
+    x: Math.round(Math.min(Math.max(saved.x, home.x), home.x + home.width - width)),
+    y: Math.round(Math.min(Math.max(saved.y, home.y), home.y + home.height - height)),
     width,
     height
   }

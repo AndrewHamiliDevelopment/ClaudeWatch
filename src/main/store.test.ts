@@ -227,6 +227,21 @@ describe('SettingsStore', () => {
       expect(settings.theme).toBe(DEFAULT_SETTINGS.theme)
     })
 
+    it('ignores a stored value of the wrong type instead of acting on it', () => {
+      const raw = store as unknown as { store: { set(key: string, value: unknown): void } }
+      raw.store.set('settings', {
+        ...DEFAULT_SETTINGS,
+        openOfficeOnLaunch: 'false',
+        pollingIntervalMs: 'fast',
+        notifications: { ...DEFAULT_SETTINGS.notifications, sound: 'no' }
+      })
+
+      const settings = store.getSettings()
+      expect(settings.openOfficeOnLaunch).toBe(false)
+      expect(settings.pollingIntervalMs).toBe(DEFAULT_SETTINGS.pollingIntervalMs)
+      expect(settings.notifications.sound).toBe(DEFAULT_SETTINGS.notifications.sound)
+    })
+
     it('keeps the other notification choices when one is changed', () => {
       store.setSettings({ notifications: { ...DEFAULT_SETTINGS.notifications, sound: false } })
       const one = { onIdle: false } as typeof DEFAULT_SETTINGS.notifications
