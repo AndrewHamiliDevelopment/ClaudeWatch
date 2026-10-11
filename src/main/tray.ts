@@ -1,3 +1,4 @@
+import { createAppWindow } from './window-factory'
 import {
   Tray,
   BrowserWindow,
@@ -84,7 +85,7 @@ export class TrayManager {
   }
 
   private createPopover(): void {
-    this.popover = new BrowserWindow({
+    this.popover = createAppWindow({
       width: POPOVER_WIDTH,
       height: POPOVER_HEIGHT,
       show: false,
@@ -101,9 +102,7 @@ export class TrayManager {
       roundedCorners: true,
       alwaysOnTop: this.pinned,
       webPreferences: {
-        preload: this.preloadPath,
-        sandbox: false,
-        contextIsolation: true
+        preload: this.preloadPath
       }
     })
 
