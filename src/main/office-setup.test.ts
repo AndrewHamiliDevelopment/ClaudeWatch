@@ -62,6 +62,15 @@ describe('setupOffice', () => {
   const tracker = { getInstances: vi.fn() }
   const terminalResolver = { resolve: vi.fn() }
   const store = { getOfficeWindowBounds: vi.fn(), setOfficeWindowBounds: vi.fn() }
+  // Accounts have their own file, office-setup.accounts.test.ts; here they add nothing.
+  const unchanged = <Value>(value: Value): Value => value
+  const accounts = {
+    ingestBridgeMessage: vi.fn(),
+    observeSessions: vi.fn(),
+    decorate: unchanged,
+    decorateSession: unchanged,
+    onOfficeChange: () => () => {}
+  }
   const commands = (): [string, string[]][] =>
     execFilePromise.mock.calls.map(([program, args]) => [program, args])
 
@@ -77,15 +86,16 @@ describe('setupOffice', () => {
     openTerminal.mockResolvedValue({ success: true })
     terminalResolver.resolve.mockResolvedValue({ terminalType: 'iterm2' })
     tracker.getInstances.mockReturnValue([{ pid: 4242, projectPath: '/repo/app' }])
-    office = setupOffice(terminalResolver, store, tracker)
+    office = setupOffice(terminalResolver, store, tracker, accounts)
   })
 
   describe('the bridge', () => {
     const bridge = { on: vi.fn(), kill: vi.fn() }
     const snapshot = { rev: 3, generatedAtMs: 1, sessions: [], sources: [] }
     const bridgeSays = (message: unknown): void => {
-      const [, listener] = bridge.on.mock.calls.find(([event]) => event === 'message') ?? []
-      listener(message)
+      // The feed and the accounts ledger each listen to the bridge.
+      for (const [event, listener] of bridge.on.mock.calls)
+        if (event === 'message') listener(message)
     }
 
     beforeEach(() => fork.mockReturnValue(bridge))

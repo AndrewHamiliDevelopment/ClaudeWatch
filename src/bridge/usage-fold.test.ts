@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { contextTokens, emptyFold, foldLines, foldTotal } from './usage-fold'
+import { contextTokens, emptyFold, foldLines, foldTotal, type UsageIncrement } from './usage-fold'
 
 // One transcript line as Claude Code writes it: a message is repeated once per content block.
 function line(id: string, usage: Record<string, number>, extra: Record<string, unknown> = {}) {
@@ -115,4 +115,39 @@ it('reports the window of the latest message as context, and none before any mes
 it('keeps numbers and the message id only, never transcript text', () => {
   const state = fold(line('m1', { input_tokens: 1 }, { cwd: '/CANARY_PATH' }))
   expect(JSON.stringify(state)).not.toMatch(/CANARY/)
+})
+
+it('reports what each line added, stamped with the line, and nothing for a repeat', () => {
+  const at = (minute: number) => ({ timestamp: `2026-10-11T10:${minute}:00.000Z` })
+  const atMs = (minute: number): number => Date.parse(at(minute).timestamp)
+  const added: UsageIncrement[] = []
+  const text = [
+    line('m1', { output_tokens: 2, cache_read_input_tokens: 70 }, at(10)),
+    line('m1', { output_tokens: 2, cache_read_input_tokens: 70 }, at(11)),
+    line('m1', { output_tokens: 468, cache_read_input_tokens: 70 }, at(12)),
+    line('m2', { input_tokens: 5, output_tokens: 1 }, at(40))
+  ].join('\n')
+  const state = foldLines(emptyFold(), `${text}\n`, (increment) => added.push(increment))
+  expect(added).toEqual([
+    { atMs: atMs(10), counts: { input: 0, output: 2, cacheWrite: 0, cacheRead: 70 } },
+    { atMs: atMs(12), counts: { input: 0, output: 466, cacheWrite: 0, cacheRead: 0 } },
+    { atMs: atMs(40), counts: { input: 5, output: 1, cacheWrite: 0, cacheRead: 0 } }
+  ])
+  const reported = added.reduce(
+    (sum, { counts }) => sum + counts.input + counts.output + counts.cacheRead,
+    0
+  )
+  const total = foldTotal(state)
+  expect(reported).toBe(total.input + total.output + total.cacheRead)
+})
+
+it('counts a line with no readable time but does not report it for attribution', () => {
+  const added: unknown[] = []
+  const state = foldLines(
+    emptyFold(),
+    `${line('m1', { output_tokens: 9 })}\n${line('m2', { output_tokens: 1 }, { timestamp: 'soon' })}\n`,
+    (increment) => added.push(increment)
+  )
+  expect(foldTotal(state).output).toBe(10)
+  expect(added).toEqual([])
 })

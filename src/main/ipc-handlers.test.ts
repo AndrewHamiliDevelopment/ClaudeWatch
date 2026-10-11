@@ -89,7 +89,7 @@ beforeEach(() => {
 })
 
 describe('IPC authorization', () => {
-  it('registers all 28 handlers', () => expect(Object.keys(handlers)).toHaveLength(28))
+  it('registers all 30 handlers', () => expect(Object.keys(handlers)).toHaveLength(30))
   it.each([
     null,
     { senderFrame: null },

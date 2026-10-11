@@ -1,4 +1,5 @@
 import { expect, it, vi } from 'vitest'
+import { accountKey } from './account-key'
 import { collectCodex, parseCodexProcesses, parseCodexActivity } from './codex'
 import { parseCodexUsage } from './codex-usage'
 import { fixtureIo } from './__fixtures__/helpers'
@@ -121,6 +122,27 @@ it('skips Codex processes running inside an app bundle (helpers, not user sessio
       ? '42 Sat Oct 10 15:29:12 2026 codex'
       : 'n/Applications/ChatGPT.app/Contents/Resources'
   expect((await collectCodex('/codex', io)).sessions).toEqual([])
+})
+
+it.each([
+  ['the account its rollout names, exactly', { creator_account_id: 'acct_CANARY_ID' }],
+  ['no account when its rollout names none', {}]
+])('attributes a Codex session to %s', async (_case, creator) => {
+  const io = fixtureIo({
+    '/codex/sessions/rollout-a.jsonl': JSON.stringify({
+      type: 'session_meta',
+      payload: { id: 'a', cwd: '/repo', ...creator }
+    }),
+    '/repo/.git': null
+  })
+  io.exec = async (file) =>
+    file.endsWith('ps') ? '42 Sat Oct 10 15:29:12 2026 /bin/codex' : 'p42\nn/repo\n'
+  const [session] = (await collectCodex('/codex', io)).sessions
+  const named = 'creator_account_id' in creator
+  expect(session.key).toBe('codex:a')
+  expect(session.accountKey).toBe(named ? accountKey('codex', 'acct_CANARY_ID') : null)
+  expect(session.accountConfidence).toBe(named ? 'exact' : undefined)
+  expect(JSON.stringify(session)).not.toContain('CANARY')
 })
 
 it('handles current Codex response_item tool and reasoning records without retaining inputs', () => {

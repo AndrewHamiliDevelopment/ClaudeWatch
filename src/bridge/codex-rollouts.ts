@@ -1,4 +1,5 @@
 import { join } from 'node:path'
+import { accountKey } from './account-key'
 import { type BridgeIo, isMissing, jsonObject, object } from './io'
 
 export interface Rollout {
@@ -6,6 +7,8 @@ export interface Rollout {
   id: string
   cwd: string
   mtimeMs: number
+  // The account the session was created under, hashed here so its id never leaves this file.
+  accountKey: string | null
 }
 interface CachedRollout {
   mtimeMs: number
@@ -53,7 +56,14 @@ export async function findRollouts(root: string, io: BridgeIo): Promise<Rollout[
           typeof meta?.cwd === 'string' &&
           typeof meta.id === 'string'
         ) {
-          rollout = { path, id: meta.id, cwd: meta.cwd, mtimeMs: info.mtimeMs }
+          const creator = meta.creator_account_id
+          rollout = {
+            path,
+            id: meta.id,
+            cwd: meta.cwd,
+            mtimeMs: info.mtimeMs,
+            accountKey: typeof creator === 'string' && creator ? accountKey('codex', creator) : null
+          }
           rollouts.push(rollout)
         }
         entries.set(path, { mtimeMs: info.mtimeMs, size: info.size, rollout })

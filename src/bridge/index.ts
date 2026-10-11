@@ -1,10 +1,11 @@
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
+import type { UsageMessage } from '../shared/accounts'
 import type { FeedMessage } from '../shared/office/types'
 import { BridgePoller } from './poller'
 
 interface BridgePort {
-  postMessage(message: FeedMessage): void
+  postMessage(message: FeedMessage | UsageMessage): void
 }
 
 const ONCE_MAX_TICKS = 30
@@ -14,7 +15,11 @@ export async function main(args = process.argv.slice(2), port?: BridgePort): Pro
   for (let index = 0; index < args.length; index++) {
     if (args[index] === '--root' && args[index + 1]) roots.push(resolve(args[++index]))
   }
-  const poller = new BridgePoller({ claudeRoots: roots })
+  const poller = new BridgePoller({
+    claudeRoots: roots,
+    // Only a parent listens for added tokens; a one-shot run prints the snapshot alone.
+    ...(port && { onUsage: (deltas) => port.postMessage({ type: 'usage', v: 1, deltas }) })
+  })
   if (args.includes('--once')) {
     // The first tick publishes before any transcript is counted; a one-shot run wants the numbers.
     let snapshot = await poller.tick()

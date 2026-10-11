@@ -21,6 +21,7 @@ import type { SessionTracker } from './session-tracker'
 import type { TerminalResolver } from './terminal-resolver'
 import type { SettingsStore } from './store'
 import { rememberBounds, restoreBounds } from './window-bounds'
+import { type AccountLedger, type OfficeAccounts, withAccounts } from './accounts'
 
 const PS_OPTIONS = { timeout: 5000, env: { LC_ALL: 'C', TZ: 'UTC' } }
 
@@ -67,14 +68,21 @@ export interface Office {
 export function setupOffice(
   terminalResolver: Pick<TerminalResolver, 'resolve'>,
   store: OfficeWindowStore,
-  tracker: Pick<SessionTracker, 'getInstances'>
+  tracker: Pick<SessionTracker, 'getInstances'>,
+  accounts: OfficeAccounts & Pick<AccountLedger, 'ingestBridgeMessage' | 'observeSessions'>
 ): Office {
-  const host = new BridgeHost({
-    spawn: () =>
-      utilityProcess.fork(join(__dirname, 'bridge.js'), [], {
+  const bridge = new BridgeHost({
+    spawn: () => {
+      const child = utilityProcess.fork(join(__dirname, 'bridge.js'), [], {
         serviceName: 'ClaudeWatch Office Bridge'
       })
+      // Token counts travel beside the feed, as their own message, and only the ledger reads them.
+      child.on('message', (message: unknown) => accounts.ingestBridgeMessage(message))
+      return child
+    }
   })
+  bridge.onMessage(() => accounts.observeSessions(bridge.snapshot()?.sessions ?? []))
+  const host = withAccounts(bridge, accounts)
   const controller = new OfficeWindowController({
     host,
     createWindow: () => createOfficeWindow(store)
@@ -88,7 +96,7 @@ export function setupOffice(
       () => null
     )
   const interactions = new OfficeInteractions({
-    snapshot: () => host.snapshot(),
+    snapshot: () => bridge.snapshot(),
     orca: new OrcaTerminals(orcaCli.exec),
     openTerminalRunning,
     processStart,
@@ -152,8 +160,8 @@ export function setupOffice(
 
   return {
     open: () => controller.open(),
-    start: () => host.start(),
-    stop: () => host.stop(),
+    start: () => bridge.start(),
+    stop: () => bridge.stop(),
     snapshot: () => host.snapshot(),
     focusSession: (pid) => paneFocus.focus(pid)
   }

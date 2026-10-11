@@ -79,6 +79,8 @@ export interface AppSettings {
   maxHistoryEntries: number
   weeklyTokenTarget: number
   staleThresholdMinutes: number
+  // Off: no identity file is read, no usage is attributed and the accounts ledger is not written.
+  watchAccounts: boolean
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -101,7 +103,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   theme: 'dark',
   maxHistoryEntries: 100,
   weeklyTokenTarget: 5_000_000,
-  staleThresholdMinutes: 30
+  staleThresholdMinutes: 30,
+  watchAccounts: true
 }
 
 export interface InstanceUpdate {

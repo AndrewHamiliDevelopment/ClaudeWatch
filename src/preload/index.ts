@@ -9,6 +9,7 @@ import type {
   RateLimits
 } from '../renderer/lib/types'
 import type { FocusResult, OfficeSnapshot } from '../shared/office/types'
+import type { AccountsState, AliasResult } from '../shared/accounts'
 
 const api = {
   getInstances: (): Promise<InstanceUpdate> => ipcRenderer.invoke('instances:get'),
@@ -111,6 +112,22 @@ const api = {
     ipcRenderer.invoke('ratelimits:statusline-status'),
 
   setupRateLimitSync: (): Promise<boolean> => ipcRenderer.invoke('ratelimits:setup-statusline'),
+
+  // Every known account with its token totals; `{ status: 'off' }` while accounts are not watched.
+  getAccounts: (): Promise<AccountsState> => ipcRenderer.invoke('accounts:get'),
+
+  // The owner's own name for an account; null or an empty name clears it.
+  setAccountAlias: (key: string, alias: string | null): Promise<AliasResult> =>
+    ipcRenderer.invoke('accounts:set-alias', key, alias),
+
+  onAccountsUpdate: (callback: (state: AccountsState) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, state: AccountsState): void =>
+      callback(state)
+    ipcRenderer.on('accounts:update', handler)
+    return () => {
+      ipcRenderer.removeListener('accounts:update', handler)
+    }
+  },
 
   // Popover pin controls
   setPopoverPinned: (pinned: boolean): Promise<{ success: boolean }> =>
