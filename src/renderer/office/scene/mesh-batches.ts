@@ -4,6 +4,7 @@ import {
   InstancedMesh,
   Matrix4,
   Mesh,
+  Texture,
   type Material,
   type Object3D
 } from 'three'
@@ -27,10 +28,12 @@ function batchKey(mesh: Mesh, material: Material): string | null {
   const sharedBatch: unknown = mesh.userData[SHARED_BATCH]
   if (typeof sharedBatch === 'string') return `shared:${sharedBatch}`
   if (material.transparent) return null
+  // Textured signs and per-agent transparent effects keep their own draw and ordering. Tested
+  // before serialising: a material's JSON carries its texture's image.
+  if ('map' in material && material.map instanceof Texture) return null
+  if (!('parameters' in mesh.geometry)) return null
   const geometry = mesh.geometry.toJSON()
   const shading = material.toJSON()
-  // Textured signs and per-agent transparent effects keep their own draw and ordering.
-  if ('map' in shading || !('parameters' in mesh.geometry)) return null
   const { uuid: geometryId, metadata: geometryMetadata, ...shape } = geometry
   const { uuid: materialId, metadata: materialMetadata, ...surface } = shading
   void geometryId

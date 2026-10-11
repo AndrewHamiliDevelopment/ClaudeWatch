@@ -9,7 +9,7 @@ import {
   PlaneGeometry,
   Texture
 } from 'three'
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { createMeshBatches, updateMeshBatches, releaseMeshBatches } from './mesh-batches'
 
 it('instances matching geometry/materials while retaining controller refs and transforms', () => {
@@ -99,4 +99,15 @@ it('merges transparent textured meshes that opt into one shared batch, and follo
   const matrix = new Matrix4()
   batches[0].mesh.getMatrixAt(2, matrix)
   expect(matrix.elements[12]).toBe(4)
+})
+
+it('leaves a textured sign in its own draw without serialising its texture', () => {
+  const root = new Group()
+  const signs = [0, 1].map(
+    () => new Mesh(new PlaneGeometry(2, 1), new MeshBasicMaterial({ map: new Texture() }))
+  )
+  const serialised = signs.map((sign) => vi.spyOn(sign.material, 'toJSON'))
+  root.add(...signs)
+  expect(createMeshBatches(root)).toEqual([])
+  for (const toJSON of serialised) expect(toJSON).not.toHaveBeenCalled()
 })
