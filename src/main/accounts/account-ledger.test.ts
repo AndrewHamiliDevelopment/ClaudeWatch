@@ -4,6 +4,7 @@ import { session } from '../../bridge/__fixtures__/helpers'
 import type { AccountsState, UsageDelta } from '../../shared/accounts'
 import type { OfficeSnapshot, SessionRef } from '../../shared/office/types'
 import { AccountLedger } from './account-ledger'
+import * as accountsView from './accounts-view'
 import type { Identity, IdentityRead } from './identity'
 import type { LedgerState } from './ledger-state'
 import type { OrcaAccountList } from './orca-accounts'
@@ -99,7 +100,36 @@ describe('while accounts are watched', () => {
     const { ledger, shown } = await running()
     await vi.advanceTimersByTimeAsync(1_000)
     ledger.ingestBridgeMessage(usage(line(5), line(7, Date.now() - 1)))
+    expect(today(ledger.view())).toEqual({ [keyOf('ada')]: 12 })
+    await vi.advanceTimersByTimeAsync(5_000)
     expect(today(shown.at(-1)!)).toEqual({ [keyOf('ada')]: 12 })
+  })
+
+  it('tells the dashboard about counted tokens once in five seconds, however many ticks added some', async () => {
+    const { ledger, shown } = await running()
+    await vi.advanceTimersByTimeAsync(1_000)
+    const published = shown.length
+    for (let tick = 1; tick <= 3; tick++) {
+      ledger.ingestBridgeMessage(usage(line(tick, Date.now())))
+      await vi.advanceTimersByTimeAsync(1_000)
+    }
+    expect(shown).toHaveLength(published)
+    await vi.advanceTimersByTimeAsync(2_000)
+    expect(shown).toHaveLength(published + 1)
+    expect(today(shown.at(-1)!)).toEqual({ [keyOf('ada')]: 6 })
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(shown).toHaveLength(published + 1)
+  })
+
+  it('builds no view of counted tokens while nobody listens for one', async () => {
+    const build = vi.spyOn(accountsView, 'toAccountsState')
+    const ledger = new AccountLedger(setup().deps)
+    ledger.start()
+    await vi.advanceTimersByTimeAsync(1_000)
+    ledger.ingestBridgeMessage(usage(line(5)))
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(build).not.toHaveBeenCalled()
+    expect(today(ledger.view())).toEqual({ [keyOf('ada')]: 5 })
   })
 
   it('holds tokens that arrive before it knows who is signed in, then counts them once', async () => {
@@ -138,6 +168,7 @@ describe('while accounts are watched', () => {
     }
     expect(shown).toHaveLength(published)
     ledger.ingestBridgeMessage(usage({ ...line(1), projectLabel: 9 }, line(3)))
+    await vi.advanceTimersByTimeAsync(5_000)
     expect(today(shown.at(-1)!)).toEqual({ [keyOf('ada')]: 3 })
   })
 
@@ -168,6 +199,39 @@ describe('while accounts are watched', () => {
     )
   })
 
+  it('takes a Codex session it was shown before its first look as seen at that look, not at the next feed message', async () => {
+    const { ledger, deps } = setup()
+    let finishRead = (_read: IdentityRead): void => {}
+    deps.readDefaultIdentity.mockReturnValue(new Promise((resolve) => (finishRead = resolve)))
+    ledger.start()
+    const codexKey = accountKey('codex', 'acct_1')
+    const spent = (output: number): SessionRef => ({
+      ...session('c'),
+      key: 'codex:c',
+      provider: 'codex',
+      accountKey: codexKey,
+      // A thread older than the ledger: what it had already spent is never counted.
+      threadStartedAtMs: START - 60_000,
+      usage: {
+        own: tokens(output),
+        subagents: tokens(0),
+        spawned: 0,
+        contextTokens: null,
+        contextLimit: null
+      }
+    })
+    ledger.observeSessions([spent(100)])
+    finishRead(signedIn('ada'))
+    await vi.advanceTimersByTimeAsync(0)
+    // The feed stays quiet until the session spends again: only the growth since the look counts.
+    ledger.observeSessions([spent(150)])
+    const view = ledger.view()
+    if (view.status !== 'on') throw new Error('expected a watching state')
+    expect(view.accounts.find((account) => account.key === codexKey)?.usage.exact.today).toEqual(
+      tokens(50)
+    )
+  })
+
   it('lets the owner name an account, and saves the name', async () => {
     const { ledger, deps, disk } = await running()
     expect(ledger.setAlias(keyOf('ada'), 'Work')).toEqual({ success: true })
@@ -188,7 +252,24 @@ describe('saving', () => {
     expect(deps.save).toHaveBeenCalledOnce()
     ledger.ingestBridgeMessage(usage(line(5)))
     ledger.ingestBridgeMessage(usage(line(6, Date.now() + 1)))
+    // Counted tokens can be counted again from the transcripts, so they wait two minutes.
+    await vi.advanceTimersByTimeAsync(119_000)
+    expect(deps.save).toHaveBeenCalledOnce()
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(deps.save).toHaveBeenCalledTimes(2)
+  })
+
+  it('writes a name the owner gave within thirty seconds, even while counted tokens wait longer', async () => {
+    const { ledger, deps, disk } = await running()
     await vi.advanceTimersByTimeAsync(30_000)
+    ledger.ingestBridgeMessage(usage(line(5)))
+    await vi.advanceTimersByTimeAsync(10_000)
+    ledger.setAlias(keyOf('ada'), 'Work')
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(deps.save).toHaveBeenCalledTimes(2)
+    expect(disk.ledger?.accounts[0].alias).toBe('Work')
+    // That write carried the tokens too: nothing is left to save.
+    await vi.advanceTimersByTimeAsync(5 * 60_000)
     expect(deps.save).toHaveBeenCalledTimes(2)
   })
 
@@ -229,7 +310,7 @@ describe('saving', () => {
     await vi.advanceTimersByTimeAsync(30_000)
     expect(failure).toHaveBeenCalledExactlyOnceWith('[accounts] the ledger could not be saved')
     ledger.ingestBridgeMessage(usage(line(5)))
-    await vi.advanceTimersByTimeAsync(30_000)
+    await vi.advanceTimersByTimeAsync(2 * 60_000)
     expect(deps.save).toHaveBeenCalledTimes(2)
   })
 })
