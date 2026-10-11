@@ -16,7 +16,10 @@ import { isLive } from './liveness'
 import { sessionFromRegistry } from './claude'
 import { resolveProject } from './project-root'
 import { parseTranscript, transcriptPath } from './transcript-tail'
-import { collectSubagents } from './subagents'
+import { listAgentFiles, liveSubagents } from './subagents'
+import { PROCESS_TABLE_ARGS } from './process-table'
+import { parseTeammateProcesses, type TeammateProcess, TeammateSource } from './teammates'
+import type { SessionFiles } from './usage-tracker'
 
 function parseRegistry(text: string): RegistryEntry | null {
   const record = jsonObject(text)
@@ -48,13 +51,26 @@ function parseRegistry(text: string): RegistryEntry | null {
   }
 }
 
+export interface ClaudeBatch {
+  sessions: SessionRef[]
+  sources: SourceHealth[]
+  // The transcripts behind each session, by session key, for the token counters.
+  transcripts: Map<string, SessionFiles>
+}
+
 export async function collectClaude(
   roots: string[],
   io: BridgeIo,
-  now: number
-): Promise<{ sessions: SessionRef[]; sources: SourceHealth[] }> {
+  now: number,
+  teammates = new TeammateSource(io)
+): Promise<ClaudeBatch> {
   const sessions: SessionRef[] = []
   const sources: SourceHealth[] = []
+  const transcripts = new Map<string, SessionFiles>()
+  // Read at most once per tick, and only when some session leads a team.
+  let processTable: Promise<TeammateProcess[]> | undefined
+  const processes = (): Promise<TeammateProcess[]> =>
+    (processTable ??= io.exec('/bin/ps', PROCESS_TABLE_ARGS).then(parseTeammateProcesses))
   for (const root of [...new Set(roots)]) {
     const health: SourceHealth = { id: `claude:${root}`, ok: true, detail: 'empty' }
     try {
@@ -68,11 +84,33 @@ export async function collectClaude(
           const transcript = path
             ? parseTranscript(await io.readTail(path))
             : { tool: null, error: false }
-          const agents = path ? await collectSubagents(path, io, now) : []
-          sessions.push(
-            sessionFromRegistry(entry, transcript, agents, project.root, project.worktree)
+          const agentFiles = path ? await listAgentFiles(path, io) : []
+          const agents = await liveSubagents(agentFiles, io, now)
+          // A team that cannot be read costs the lead its teammates, never the lead itself.
+          const team = await teammates
+            .collect(root, entry.sessionId, processes, now)
+            .catch(() => null)
+          const session = sessionFromRegistry(
+            entry,
+            transcript,
+            [...agents, ...(team ?? []).map((teammate) => teammate.ref)],
+            project.root,
+            project.worktree
           )
+          sessions.push(session)
+          if (path)
+            transcripts.set(session.key, {
+              main: path,
+              agents: agentFiles,
+              teammates: new Map(
+                (team ?? []).map((teammate) => [teammate.ref.id, teammate.transcripts])
+              )
+            })
           health.detail = 'live'
+          if (!team) {
+            health.ok = false
+            health.detail = 'team read failed'
+          }
         } catch (error) {
           if (!isMissing(error)) {
             health.ok = false
@@ -88,5 +126,6 @@ export async function collectClaude(
     }
     sources.push(health)
   }
-  return { sessions, sources }
+  teammates.prune()
+  return { sessions, sources, transcripts }
 }

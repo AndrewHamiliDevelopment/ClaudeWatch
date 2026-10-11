@@ -1,5 +1,5 @@
 import { afterEach, expect, it } from 'vitest'
-import { mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
+import { appendFile, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { systemIo } from './io'
@@ -44,6 +44,7 @@ it('refuses to open credential stores, whatever a caller asks for', async () => 
     await expect(systemIo.readText(path)).rejects.toThrow('forbidden')
     await expect(systemIo.readTail(path)).rejects.toThrow('forbidden')
     await expect(systemIo.readFirstLine(path)).rejects.toThrow('forbidden')
+    await expect(systemIo.readFrom(path, 0, 64)).rejects.toThrow('forbidden')
   }
 })
 
@@ -57,7 +58,24 @@ it('refuses a credential store reached through a symlink or a different letter c
     await expect(systemIo.readText(path)).rejects.toThrow('forbidden')
     await expect(systemIo.readTail(path)).rejects.toThrow('forbidden')
     await expect(systemIo.readFirstLine(path)).rejects.toThrow('forbidden')
+    await expect(systemIo.readFrom(path, 0, 64)).rejects.toThrow('forbidden')
   }
+})
+
+it('reads forward from an offset in whole lines and says where to resume', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'bridge-from-'))
+  directories.push(directory)
+  const path = join(directory, 'transcript.jsonl')
+  await writeFile(path, 'one\ntwé\nthr')
+  expect(await systemIo.readFrom(path, 0, 1024)).toEqual({ text: 'one\ntwé\n', nextOffset: 9 })
+  // A half-written last line waits for its newline.
+  expect(await systemIo.readFrom(path, 9, 1024)).toEqual({ text: '', nextOffset: 9 })
+  await appendFile(path, 'ee\n')
+  expect(await systemIo.readFrom(path, 9, 1024)).toEqual({ text: 'three\n', nextOffset: 15 })
+  expect(await systemIo.readFrom(path, 0, 6)).toEqual({ text: 'one\n', nextOffset: 4 })
+  expect(await systemIo.readFrom(path, 99, 1024)).toEqual({ text: '', nextOffset: 99 })
+  await writeFile(path, '')
+  expect(await systemIo.readFrom(path, 0, 1024)).toEqual({ text: '', nextOffset: 0 })
 })
 
 it('runs only the three programs the bridge needs', async () => {

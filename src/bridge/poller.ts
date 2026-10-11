@@ -6,6 +6,9 @@ import { collectClaude } from './registry'
 import { collectCodex } from './codex'
 import { claimPanes, OrcaSource } from './orca'
 import { diff, emptySnapshot, reduce } from './reducer'
+import { TeammateSource } from './teammates'
+import { UsageThrottle } from './usage-throttle'
+import { UsageTracker } from './usage-tracker'
 
 export interface PollerOptions {
   io?: BridgeIo
@@ -17,6 +20,9 @@ export class BridgePoller {
   private snapshot = emptySnapshot()
   private readonly io: BridgeIo
   private readonly orca: OrcaSource
+  private readonly teammates: TeammateSource
+  private readonly usage: UsageTracker
+  private readonly throttle = new UsageThrottle()
   private readonly roots: string[]
   private readonly codexRoot: string
   private readonly now: () => number
@@ -24,6 +30,8 @@ export class BridgePoller {
   constructor(options: PollerOptions = {}) {
     this.io = options.io ?? systemIo
     this.orca = new OrcaSource(this.io)
+    this.teammates = new TeammateSource(this.io)
+    this.usage = new UsageTracker(this.io)
     this.roots = options.claudeRoots ?? [join(homedir(), '.claude')]
     this.codexRoot = options.codexRoot ?? join(homedir(), '.codex')
     this.now = options.now ?? Date.now
@@ -35,21 +43,29 @@ export class BridgePoller {
     })
     return this.pending
   }
+  // True until every live transcript has been counted; a one-shot run waits on it.
+  get isCountingUsage(): boolean {
+    return this.usage.isBehind
+  }
   private async ingest(): Promise<OfficeSnapshot> {
     const now = this.now()
     const [claude, codex, orca] = await Promise.all([
-      collectClaude(this.roots, this.io, now),
+      collectClaude(this.roots, this.io, now, this.teammates),
       collectCodex(this.codexRoot, this.io),
       this.orca.poll(now)
     ])
+    // The first snapshot goes out with usage unknown, so no window waits on a first scan.
+    if (this.snapshot.rev > 0) await this.usage.scan(claude.transcripts)
     this.orca.prune(claude.sessions)
-    const sessions = claimPanes(
+    const enriched = claimPanes(
       await Promise.all(claude.sessions.map((session) => this.orca.enrich(session, now)))
     )
+    const sessions = [...enriched.map((session) => this.usage.fill(session)), ...codex.sessions]
+    this.throttle.prune(new Set(sessions.map((session) => session.key)))
     this.snapshot = reduce(this.snapshot, {
       now,
-      sessions: [...sessions, ...codex.sessions],
-      sources: [...claude.sources, ...codex.sources, orca]
+      sessions: sessions.map((session) => this.throttle.apply(session, now)),
+      sources: [...claude.sources, ...codex.sources, orca, this.usage.health()]
     })
     return this.snapshot
   }

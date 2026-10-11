@@ -1,6 +1,20 @@
 import { describe, expect, it, vi } from 'vitest'
 import { claimPanes, OrcaSource, parseOrcaEnvironment } from './orca'
+import { ORCA_CLI } from './io'
 import { fixtureIo, missing, session } from './__fixtures__/helpers'
+import type { SubagentRef } from '../shared/office/types'
+
+const teammate = (name: string, pid: number, startedAtMs: number): SubagentRef => ({
+  id: `${name}@session-a`,
+  type: 'lena',
+  activity: 'thinking',
+  kind: 'teammate',
+  name,
+  pid,
+  startedAtMs,
+  orcaPaneKey: null,
+  tokens: null
+})
 
 it('CLAUDE_JOB_DIR suppresses Orca identifiers and discards other env', () => {
   expect(
@@ -19,7 +33,7 @@ describe('Orca polling', () => {
   it.each(['missing', 'bad-json', 'not-ok'])(
     'backs off on %s and caps retry delay at 60s',
     async (failure) => {
-      const io = fixtureIo({ '/opt/homebrew/bin/orca': '' })
+      const io = fixtureIo({ [ORCA_CLI]: '' })
       io.exec = vi.fn(async () => {
         if (failure === 'missing') throw missing()
         return failure === 'bad-json' ? 'invalid' : '{"ok":false}'
@@ -42,12 +56,13 @@ describe('Orca polling', () => {
     }
   )
   it('polls successful responses at most every 10s and reads each new pid env once', async () => {
-    const io = fixtureIo({ '/opt/homebrew/bin/orca': '' })
+    const io = fixtureIo({ [ORCA_CLI]: '' })
     io.exec = vi.fn(async (file) =>
       file.endsWith('orca') ? '{"ok":true,"data":[]}' : 'claude ORCA_PANE_KEY=p SECRET=hidden'
     )
     const source = new OrcaSource(io)
     expect((await source.poll(0)).ok).toBe(true)
+    expect(io.exec).toHaveBeenCalledWith(ORCA_CLI, ['worktree', 'ps', '--json'])
     await source.poll(9000)
     const ref = session('a')
     expect(await source.enrich(ref)).toMatchObject({ host: 'orca', orcaPaneKey: 'p' })
@@ -86,6 +101,51 @@ it('retries failed environment reads after 30 seconds', async () => {
   } finally {
     vi.useRealTimers()
   }
+})
+
+it('reads each teammate’s pane from its own process, once, and forgets it when it leaves', async () => {
+  const io = fixtureIo()
+  io.exec = vi.fn(async (_file, args) => `claude ORCA_PANE_KEY=pane-of-${args.at(-1)} SECRET=x`)
+  const source = new OrcaSource(io)
+  const lead = { ...session('a'), subagents: [teammate('lena', 77, 5), teammate('ravi', 78, 6)] }
+  const plain = { id: 'abc', type: 'Explore', activity: 'thinking' as const }
+  const enriched = await source.enrich({ ...lead, subagents: [...lead.subagents, plain] })
+  expect(enriched.orcaPaneKey).toBe('pane-of-42')
+  expect(enriched.subagents.map((agent) => agent.orcaPaneKey)).toEqual([
+    'pane-of-77',
+    'pane-of-78',
+    undefined
+  ])
+  source.prune([lead])
+  await source.enrich(lead)
+  expect(io.exec).toHaveBeenCalledTimes(3)
+  source.prune([{ ...lead, subagents: [lead.subagents[0]] }])
+  await source.enrich(lead)
+  expect(io.exec).toHaveBeenCalledTimes(4)
+})
+
+it('takes a pane away from a teammate that only inherited it', () => {
+  const pane = (agent: SubagentRef, orcaPaneKey: string): SubagentRef => ({ ...agent, orcaPaneKey })
+  const lead = {
+    ...session('lead'),
+    host: 'orca' as const,
+    orcaPaneKey: 't:l',
+    startedAtMs: 10,
+    subagents: [
+      pane(teammate('inherited', 77, 20), 't:l'),
+      pane(teammate('own', 78, 30), 't:own'),
+      pane(teammate('shared-later', 79, 50), 't:shared'),
+      pane(teammate('shared-first', 80, 40), 't:shared')
+    ]
+  }
+  const [claimed] = claimPanes([lead])
+  expect(claimed.orcaPaneKey).toBe('t:l')
+  expect(claimed.subagents.map((agent) => [agent.name, agent.orcaPaneKey])).toEqual([
+    ['inherited', null],
+    ['own', 't:own'],
+    ['shared-later', null],
+    ['shared-first', 't:shared']
+  ])
 })
 
 it('lets only the earliest session keep a pane that several sessions report', () => {

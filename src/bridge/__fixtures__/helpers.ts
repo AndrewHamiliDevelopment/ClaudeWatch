@@ -14,6 +14,11 @@ export function fixtureIo(files: Record<string, string | null> = {}): BridgeIo {
     readText: read,
     readTail: read,
     readFirstLine: async (path) => (await read(path)).split('\n')[0],
+    readFrom: async (path, offset, maxBytes) => {
+      const window = Buffer.from(await read(path)).subarray(offset, offset + maxBytes)
+      const end = window.lastIndexOf(10) + 1
+      return { text: window.subarray(0, end).toString('utf8'), nextOffset: offset + end }
+    },
     list: async (path) => {
       const children = Object.keys(files)
         .filter((file) => file.startsWith(`${path}/`))

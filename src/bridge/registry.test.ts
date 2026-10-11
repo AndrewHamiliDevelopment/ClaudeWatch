@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { collectClaude } from './registry'
 import { isLive } from './liveness'
-import { collectSubagents } from './subagents'
+import { listAgentFiles, liveSubagents } from './subagents'
 import { fixtureIo, registryEntry, missing } from './__fixtures__/helpers'
 
 const root = '/claude'
@@ -69,6 +69,99 @@ describe('Claude registry', () => {
   })
 })
 
+describe('agent teams', () => {
+  const lead = '6a654bca-1111-2222-3333-444444444444'
+  const team = 'session-6a654bca'
+  const transcript = `${root}/projects/-repo/${lead}.jsonl`
+  const files = {
+    [file]: JSON.stringify({ ...entry, sessionId: lead }),
+    '/repo/.git': null,
+    [transcript]: '',
+    [`${root}/projects/-repo/${lead}/subagents/agent-abc.jsonl`]: '',
+    [`${root}/projects/-repo/${lead}/subagents/agent-abc.meta.json`]: '{"agentType":"Explore"}',
+    [`${root}/projects/-repo/mate.jsonl`]: `${JSON.stringify({ teamName: team, agentName: 'lena-b0' })}\n`,
+    [`${root}/projects/-repo/mate/subagents/agent-xyz.jsonl`]: '',
+    [`${root}/teams/${team}/config.json`]: JSON.stringify({
+      leadSessionId: lead,
+      members: [
+        { agentId: `team-lead@${team}`, name: 'team-lead', agentType: 'team-lead' },
+        {
+          agentId: `lena-b0@${team}`,
+          name: 'lena-b0',
+          agentType: 'lena',
+          cwd: '/repo',
+          joinedAt: 1
+        }
+      ]
+    })
+  }
+  const table = `93143 ${entry.procStart} /versions/2.1.296 --agent-id lena-b0@${team} --parent-session-id ${lead}`
+
+  it('reports a live teammate under its lead, though it has no registry file of its own', async () => {
+    const io = fixtureIo(files)
+    const exec = vi.fn(async (_file: string, args: string[]) =>
+      args[0] === '-Ao' ? table : entry.procStart
+    )
+    io.exec = exec
+    const batch = await collectClaude([root], io, 2000)
+    expect(batch.sessions).toHaveLength(1)
+    expect(batch.sessions[0].usage).toBeNull()
+    expect(batch.sessions[0].subagents).toEqual([
+      { id: 'abc', type: 'Explore', activity: 'thinking' },
+      {
+        id: `lena-b0@${team}`,
+        type: 'lena',
+        activity: 'thinking',
+        kind: 'teammate',
+        name: 'lena-b0',
+        pid: 93143,
+        startedAtMs: Date.parse(`${entry.procStart} UTC`),
+        orcaPaneKey: null,
+        tokens: null
+      }
+    ])
+    expect(batch.transcripts.get(`claude:${lead}`)).toEqual({
+      main: transcript,
+      agents: [
+        {
+          id: 'abc',
+          path: `${root}/projects/-repo/${lead}/subagents/agent-abc.jsonl`,
+          size: 0,
+          mtimeMs: 1000
+        }
+      ],
+      // The teammate's own transcript, then those of the agents it spawned.
+      teammates: new Map([
+        [
+          `lena-b0@${team}`,
+          [
+            `${root}/projects/-repo/mate.jsonl`,
+            `${root}/projects/-repo/mate/subagents/agent-xyz.jsonl`
+          ]
+        ]
+      ])
+    })
+    // One process table serves every lead in the tick.
+    expect(exec.mock.calls.filter(([, args]) => args[0] === '-Ao')).toHaveLength(1)
+  })
+  it('keeps the lead when its team cannot be read, and says so', async () => {
+    const io = fixtureIo(files)
+    io.exec = async (_file, args) => {
+      if (args[0] === '-Ao') throw new Error('timeout')
+      return entry.procStart
+    }
+    const batch = await collectClaude([root], io, 2000)
+    expect(batch.sessions[0].subagents).toEqual([
+      { id: 'abc', type: 'Explore', activity: 'thinking' }
+    ])
+    expect(batch.sources[0]).toEqual({
+      id: `claude:${root}`,
+      ok: false,
+      detail: 'team read failed'
+    })
+  })
+})
+
 describe('subagents', () => {
   it('keeps only fresh id and agent type, excluding descriptions', async () => {
     const io = fixtureIo({
@@ -79,10 +172,33 @@ describe('subagents', () => {
       '/t/subagents/agent-abc.jsonl': 'PRIVATE_TRANSCRIPT',
       '/t/subagents/agent-old.meta.json': '{}'
     })
-    expect(await collectSubagents('/t.jsonl', io, 2000)).toEqual([
+    const files = await listAgentFiles('/t.jsonl', io)
+    expect(await liveSubagents(files, io, 2000)).toEqual([
       { id: 'abc', type: 'Explore', activity: 'thinking' }
     ])
-    expect(await collectSubagents('/t.jsonl', io, 62000)).toEqual([])
+    expect(await liveSubagents(files, io, 62000)).toEqual([])
+  })
+  it('finds workflow agents beside plain ones and skips journals and stray files', async () => {
+    const meta = (agentType: string) => JSON.stringify({ agentType })
+    const io = fixtureIo({
+      '/t/subagents/agent-abc.meta.json': meta('Explore'),
+      '/t/subagents/agent-abc.jsonl': 'four',
+      '/t/subagents/agent-abc.forked-skill.json': '{}',
+      '/t/subagents/workflows/wf_1/agent-def.meta.json': meta('general-purpose'),
+      '/t/subagents/workflows/wf_1/agent-def.jsonl': 'sixsix',
+      '/t/subagents/workflows/wf_1/journal.jsonl': 'PRIVATE_JOURNAL',
+      '/t/subagents/workflows/stray': 'not a folder'
+    })
+    const files = await listAgentFiles('/t.jsonl', io)
+    expect(files).toEqual([
+      { id: 'abc', path: '/t/subagents/agent-abc.jsonl', size: 4, mtimeMs: 1000 },
+      { id: 'def', path: '/t/subagents/workflows/wf_1/agent-def.jsonl', size: 6, mtimeMs: 1000 }
+    ])
+    expect(await liveSubagents(files, io, 2000)).toEqual([
+      { id: 'abc', type: 'Explore', activity: 'thinking' },
+      { id: 'def', type: 'general-purpose', activity: 'thinking' }
+    ])
+    expect(await listAgentFiles('/none.jsonl', io)).toEqual([])
   })
 })
 
