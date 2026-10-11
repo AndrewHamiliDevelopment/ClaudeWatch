@@ -3,6 +3,9 @@
   "version": "1.2.15",
   "description": "Cross-platform Electron app to monitor Claude Code CLI instances",
   "main": "./out/main/index.js",
+  "engines": {
+    "node": ">=22.12"
+  },
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
