@@ -82,7 +82,8 @@ async function readFrom(path: string, offset: number, maxBytes: number): Promise
 }
 
 // Enforced here, at the only door to the disk and to subprocesses, so no source can
-// reach a credential store or a shell by mistake.
+// reach a credential store or a shell by mistake. The one program run elsewhere is codesign,
+// by the Orca bundle check, with a fixed path and fixed arguments.
 const CREDENTIAL_STORE =
   /(^|\/)(\.credentials\.json|[\w.-]*auth\.json|\.orca-managed-claude-auth|orca-(runtime|e2ee-keypair|secret-protection)\.json|Cookies)$|\.key$/i
 const PROGRAMS = new Set(['/bin/ps', '/usr/sbin/lsof', ORCA_CLI])
