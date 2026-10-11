@@ -61,6 +61,8 @@ export interface AppSettings {
   pollingIntervalMs: number
   cpuIdleThreshold: number
   launchAtLogin: boolean
+  // With launchAtLogin this makes the Office the first thing on screen after login.
+  openOfficeOnLaunch: boolean
   minimizeToTray: boolean
   notifications: {
     onTaskComplete: boolean
@@ -83,6 +85,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   pollingIntervalMs: 3000,
   cpuIdleThreshold: 3.0,
   launchAtLogin: false,
+  openOfficeOnLaunch: false,
   minimizeToTray: true,
   notifications: {
     onTaskComplete: true,

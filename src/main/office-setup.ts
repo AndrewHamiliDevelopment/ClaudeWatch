@@ -1,4 +1,4 @@
-import { ipcMain, utilityProcess } from 'electron'
+import { ipcMain, screen, utilityProcess } from 'electron'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 import { BridgeHost } from './bridge-host'
@@ -10,15 +10,24 @@ import { OrcaTerminals } from './orca-terminals'
 import type { PermissionDecision, ProviderId } from '../shared/office/types'
 import { execFilePromise } from './platform/exec'
 import type { TerminalResolver } from './terminal-resolver'
+import type { SettingsStore } from './store'
+import { restoreBounds } from './window-bounds'
 
 // The app bundle's CLI, not whatever `orca` is first on PATH.
 const ORCA_CLI = '/Applications/Orca.app/Contents/Resources/bin/orca'
 const ORCA_TIMEOUT_MS = 15_000
 
-function createOfficeWindow(): Electron.BrowserWindow {
+type OfficeWindowStore = Pick<SettingsStore, 'getOfficeWindowBounds' | 'setOfficeWindowBounds'>
+
+const DEFAULT_SIZE = { width: 1280, height: 820 }
+
+function createOfficeWindow(store: OfficeWindowStore): Electron.BrowserWindow {
   const window = createAppWindow({
-    width: 1280,
-    height: 820,
+    ...restoreBounds(
+      store.getOfficeWindowBounds(),
+      screen.getAllDisplays().map((display) => display.workArea),
+      DEFAULT_SIZE
+    ),
     minWidth: 800,
     minHeight: 560,
     title: 'ClaudeWatch Office',
@@ -32,10 +41,15 @@ function createOfficeWindow(): Electron.BrowserWindow {
   } else {
     window.loadFile(join(__dirname, '../renderer/office.html'))
   }
+  // Normal bounds, so a maximised or full-screen window still reopens at its own size.
+  window.on('close', () => store.setOfficeWindowBounds(window.getNormalBounds()))
   return window
 }
 
-export function setupOffice(terminalResolver: Pick<TerminalResolver, 'resolve'>): {
+export function setupOffice(
+  terminalResolver: Pick<TerminalResolver, 'resolve'>,
+  store: OfficeWindowStore
+): {
   open: () => void
 } {
   const host = new BridgeHost({
@@ -46,7 +60,7 @@ export function setupOffice(terminalResolver: Pick<TerminalResolver, 'resolve'>)
   })
   const controller = new OfficeWindowController({
     host,
-    createWindow: createOfficeWindow,
+    createWindow: () => createOfficeWindow(store),
     openTerminal,
     resolveTerminalType: async (pid) => (await terminalResolver.resolve(pid)).terminalType,
     activateOrca: () =>

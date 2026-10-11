@@ -1,5 +1,12 @@
 import type { FeedMessage, OfficeSnapshot } from '../shared/office/types'
-import type { TerminalType } from '../renderer/lib/types'
+import type { AppSettings, TerminalType } from '../renderer/lib/types'
+
+export function opensOfficeOnStart(
+  settings: Pick<AppSettings, 'openOfficeOnLaunch'>,
+  argv: readonly string[]
+): boolean {
+  return settings.openOfficeOnLaunch || argv.includes('--open-office')
+}
 
 export interface OfficeWindowLike {
   webContents: { send(channel: string, message: FeedMessage): void }

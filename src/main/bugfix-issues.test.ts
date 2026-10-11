@@ -201,3 +201,16 @@ describe('Issue #16: notification sound setting', () => {
     expect(formatDuration(332)).toBe('5m 32s')
   })
 })
+
+describe('validateSettings switches', () => {
+  it('accepts the open-Office-on-start switch', () => {
+    expect(validateSettings({ openOfficeOnLaunch: true })).toEqual({ openOfficeOnLaunch: true })
+  })
+
+  it('drops a switch that is not a boolean', () => {
+    const forged = { openOfficeOnLaunch: 'yes', launchAtLogin: 1, minimizeToTray: null }
+    expect(validateSettings(forged as unknown as Parameters<typeof validateSettings>[0])).toEqual(
+      {}
+    )
+  })
+})

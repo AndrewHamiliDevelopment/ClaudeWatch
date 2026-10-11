@@ -207,4 +207,20 @@ describe('SettingsStore', () => {
       expect(store.getSettings().theme).toBe('light')
     })
   })
+
+  describe('office', () => {
+    it('back-fills openOfficeOnLaunch for settings saved by an older version', () => {
+      const { openOfficeOnLaunch: _added, ...older } = DEFAULT_SETTINGS
+      const raw = store as unknown as { store: { set(key: string, value: unknown): void } }
+      raw.store.set('settings', older)
+
+      expect(store.getSettings().openOfficeOnLaunch).toBe(false)
+    })
+
+    it('remembers where the Office window was left', () => {
+      expect(store.getOfficeWindowBounds()).toBeNull()
+      store.setOfficeWindowBounds({ x: 40, y: 60, width: 1400, height: 900 })
+      expect(store.getOfficeWindowBounds()).toEqual({ x: 40, y: 60, width: 1400, height: 900 })
+    })
+  })
 })

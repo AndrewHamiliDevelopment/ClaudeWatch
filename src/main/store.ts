@@ -1,12 +1,14 @@
 import Store from 'electron-store'
 import type { AppSettings, SessionHistoryEntry } from '../renderer/lib/types'
 import { DEFAULT_SETTINGS } from '../renderer/lib/types'
+import type { Bounds } from './window-bounds'
 
 interface StoreSchema {
   settings: AppSettings
   history: SessionHistoryEntry[]
   popoverPinned: boolean
   popoverPosition: { x: number; y: number } | null
+  officeWindowBounds: Bounds | null
 }
 
 export class SettingsStore {
@@ -19,7 +21,8 @@ export class SettingsStore {
         settings: DEFAULT_SETTINGS,
         history: [],
         popoverPinned: false,
-        popoverPosition: null
+        popoverPosition: null,
+        officeWindowBounds: null
       }
     })
   }
@@ -36,6 +39,9 @@ export class SettingsStore {
     // Ensure minimizeToTray exists for users upgrading from older versions
     if (stored.minimizeToTray === undefined) {
       stored.minimizeToTray = DEFAULT_SETTINGS.minimizeToTray
+    }
+    if (stored.openOfficeOnLaunch === undefined) {
+      stored.openOfficeOnLaunch = DEFAULT_SETTINGS.openOfficeOnLaunch
     }
     // Ensure weeklyTokenTarget exists for users upgrading from older versions
     if (stored.weeklyTokenTarget === undefined) {
@@ -90,5 +96,13 @@ export class SettingsStore {
 
   setPopoverPosition(position: { x: number; y: number } | null): void {
     this.store.set('popoverPosition', position)
+  }
+
+  getOfficeWindowBounds(): Bounds | null {
+    return this.store.get('officeWindowBounds', null)
+  }
+
+  setOfficeWindowBounds(bounds: Bounds): void {
+    this.store.set('officeWindowBounds', bounds)
   }
 }

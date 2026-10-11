@@ -17,6 +17,7 @@ import { createWidgetStatsWriter } from './widget-stats-writer'
 import { SoundPlayer } from './sound-player'
 import { setupWidgetSync } from './widget-sync'
 import { setupOffice } from './office-setup'
+import { opensOfficeOnStart } from './office-window'
 
 // Prevent "write EIO" crashes when stdout/stderr pipe is broken
 // (e.g., launching terminal closed, or running packaged without a TTY)
@@ -124,8 +125,8 @@ app.whenReady().then(() => {
     () => trayManager?.getPopoverWindow() ?? null
   ])
 
-  const office = setupOffice(terminalResolver)
-  if (process.argv.includes('--open-office')) office.open()
+  const office = setupOffice(terminalResolver, store)
+  if (opensOfficeOnStart(settings, process.argv)) office.open()
 
   // Create tray with popover support
   trayManager = new TrayManager({

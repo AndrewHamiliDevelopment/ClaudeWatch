@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { EventEmitter } from 'events'
-import { OfficeWindowController, type OfficeWindowLike } from './office-window'
+import { OfficeWindowController, opensOfficeOnStart, type OfficeWindowLike } from './office-window'
 import type { FeedMessage, OfficeSnapshot, SessionRef } from '../shared/office/types'
 
 class FakeWindow extends EventEmitter implements OfficeWindowLike {
@@ -138,5 +138,13 @@ describe('OfficeWindowController', () => {
     snapshot = { rev: 1, generatedAtMs: 1, sessions: [], sources: [] }
     expect(await controller.jump('claude:missing')).toEqual({ success: false })
     expect(openTerminal).not.toHaveBeenCalled()
+  })
+})
+
+describe('opensOfficeOnStart', () => {
+  it('opens for the setting or the --open-office switch, and stays in the tray otherwise', () => {
+    expect(opensOfficeOnStart({ openOfficeOnLaunch: true }, ['electron', 'main.js'])).toBe(true)
+    expect(opensOfficeOnStart({ openOfficeOnLaunch: false }, ['app', '--open-office'])).toBe(true)
+    expect(opensOfficeOnStart({ openOfficeOnLaunch: false }, ['electron', 'main.js'])).toBe(false)
   })
 })

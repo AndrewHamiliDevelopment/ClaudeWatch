@@ -23,6 +23,11 @@ export function validateSettings(data: Partial<AppSettings>): Partial<AppSetting
     ) as AppSettings['notifications']
   }
 
+  // These decide what starts by itself, so anything but a real boolean is dropped.
+  for (const key of ['launchAtLogin', 'openOfficeOnLaunch', 'minimizeToTray'] as const) {
+    if (key in validated && typeof validated[key] !== 'boolean') delete validated[key]
+  }
+
   if (validated.pollingIntervalMs !== undefined) {
     validated.pollingIntervalMs = Math.max(500, Math.min(60000, validated.pollingIntervalMs))
   }
