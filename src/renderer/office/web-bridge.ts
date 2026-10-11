@@ -16,6 +16,8 @@ const TOKEN_KEY = 'claudewatch.office.token'
 const TOKEN_FRAGMENT = /^#t=([A-Za-z0-9_-]{43})$/
 const SESSION_TOKEN = /^[A-Za-z0-9_-]{43}$/
 const FEED_RETRY_MS = 1000
+// This many tries in a row with no answer, and the server is taken to have stopped.
+const LOST_AFTER_TRIES = 10
 
 // What this page can show the standalone server: the one-time code in its launch address,
 // taken out of the address at once, or the session token this tab stored after trading one.
@@ -100,7 +102,8 @@ async function openSession(launchCode: string): Promise<string | null> {
 // The preload's bridge, for a page served by the standalone Office server: the feed is one
 // long response read line by line, and every call carries the session token in a header.
 // `credential` is what takeLaunchToken found: this tab's stored token, or a launch code.
-export function createWebBridge(credential: string): OfficeBridgeApi {
+// `onLost` fires once, when the server has stopped or no longer accepts this tab.
+export function createWebBridge(credential: string, onLost?: () => void): OfficeBridgeApi {
   let sessionToken = window.sessionStorage.getItem(TOKEN_KEY) === credential ? credential : null
   const opening = sessionToken
     ? null
@@ -119,6 +122,8 @@ export function createWebBridge(credential: string): OfficeBridgeApi {
     for (const listener of listeners) listener(message)
   }
 
+  let failedTries = 0
+
   // Resolves when the stream ends: true when reconnecting could help.
   async function readFeed(signal: AbortSignal): Promise<boolean> {
     const headers = await authorization()
@@ -128,6 +133,7 @@ export function createWebBridge(credential: string): OfficeBridgeApi {
     if (response.status === 401 || response.status === 403) return false
     const reader = response.ok ? response.body?.getReader() : undefined
     if (!reader) return true
+    failedTries = 0
     const decoder = new TextDecoder()
     let unfinished = ''
     for (;;) {
@@ -148,7 +154,8 @@ export function createWebBridge(credential: string): OfficeBridgeApi {
       if (signal.aborted) return
       // What the Office shows may be out of date until the next hello.
       deliver({ type: 'resync' })
-      if (!canRetry) return
+      failedTries += 1
+      if (!canRetry || failedTries >= LOST_AFTER_TRIES) return onLost?.()
       await pause(FEED_RETRY_MS, signal)
     }
   }

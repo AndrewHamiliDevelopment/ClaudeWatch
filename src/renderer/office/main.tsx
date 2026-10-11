@@ -14,11 +14,11 @@ const surface: OfficeSurface = /\bElectron\//.test(window.navigator.userAgent) ?
 const isPreviewBuild = import.meta.env.DEV && surface === 'web'
 
 // The Electron window's preload first, then the standalone server that launched this tab.
-function findBridge(): FeedSource | null {
+function findBridge(onLost: () => void): FeedSource | null {
   if (window.officeBridge) return window.officeBridge
   try {
     const launchToken = takeLaunchToken(window)
-    return launchToken ? createWebBridge(launchToken) : null
+    return launchToken ? createWebBridge(launchToken, onLost) : null
   } catch {
     // The token lives in session storage, which throws where site data is blocked.
     return null
@@ -26,17 +26,20 @@ function findBridge(): FeedSource | null {
 }
 
 // Null when nothing can reach the agents: the page says so and never invents an office.
-async function resolveFeed(): Promise<OfficeFeed | null> {
-  const bridge = findBridge()
+async function resolveFeed(onLost: () => void): Promise<OfficeFeed | null> {
+  const bridge = findBridge(onLost)
   if (bridge) return createLiveFeed(bridge, { storage: browserStorage() })
   if (!isPreviewBuild) return null
   const { createFixtureFeed } = await import('./fixture/fixture-feed')
   return createFixtureFeed()
 }
 
-const root = document.getElementById('root')
-if (root) {
-  void resolveFeed().then((feed) =>
-    createRoot(root).render(feed ? <OfficeApp feed={feed} /> : <NotConnected surface={surface} />)
+const container = document.getElementById('root')
+if (container) {
+  const root = createRoot(container)
+  // A tab whose server went away says so, instead of an office that reads "connecting" for ever.
+  const showStopped = (): void => root.render(<NotConnected surface="stopped" />)
+  void resolveFeed(showStopped).then((feed) =>
+    root.render(feed ? <OfficeApp feed={feed} /> : <NotConnected surface={surface} />)
   )
 }

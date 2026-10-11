@@ -107,6 +107,26 @@ describe('the Office page entry point', () => {
     expect(window.location.hash).toBe('')
   })
 
+  it('says the server has stopped once it no longer accepts this tab', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('', { status: 401 })))
+    await openPage({ hash: `#t=${TOKEN}` })
+    expect(await screen.findByText('The office')).toBeInTheDocument()
+
+    // The live feed is what starts the stream; here the test stands in for it.
+    const [bridge] = createLiveFeed.mock.calls[0] as unknown as [
+      { ready(): Promise<void>; onFeedMessage(listener: () => void): () => void }
+    ]
+    bridge.onFeedMessage(() => undefined)
+    await act(async () => {
+      await bridge.ready()
+    })
+
+    expect(await screen.findByRole('heading', { name: 'Not connected' })).toBeInTheDocument()
+    expect(screen.getByText(/Office server has stopped/)).toBeInTheDocument()
+    expect(screen.queryByText('The office')).not.toBeInTheDocument()
+    vi.unstubAllGlobals()
+  })
+
   it('still renders when site data is blocked: nothing is remembered and there is no token', async () => {
     const blocked = (): never => {
       throw new DOMException('The operation is insecure.', 'SecurityError')

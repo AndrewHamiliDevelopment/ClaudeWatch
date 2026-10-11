@@ -200,6 +200,51 @@ describe('createWebBridge', () => {
       expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(3)
     })
 
+    it('says the server is gone after ten seconds of failed tries, and stops trying', async () => {
+      fetchMock.mockRejectedValue(new TypeError('Failed to fetch'))
+      const onLost = vi.fn()
+      const bridge = createWebBridge(TOKEN, onLost)
+      bridge.onFeedMessage(vi.fn())
+      await bridge.ready()
+
+      await vi.advanceTimersByTimeAsync(8000)
+      expect(onLost).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(3000)
+      expect(onLost).toHaveBeenCalledOnce()
+
+      const triesWhenLost = fetchMock.mock.calls.length
+      await vi.advanceTimersByTimeAsync(5000)
+      expect(fetchMock.mock.calls).toHaveLength(triesWhenLost)
+    })
+
+    it('says the server is gone at once when its token is refused', async () => {
+      fetchMock.mockResolvedValue(new Response('', { status: 401 }))
+      const onLost = vi.fn()
+      const bridge = createWebBridge(TOKEN, onLost)
+      bridge.onFeedMessage(vi.fn())
+      await bridge.ready()
+
+      await vi.waitFor(() => expect(onLost).toHaveBeenCalledOnce())
+    })
+
+    it('forgets earlier failures once the feed answers', async () => {
+      const live = feedResponse()
+      fetchMock.mockRejectedValue(new TypeError('Failed to fetch'))
+      const onLost = vi.fn()
+      const bridge = createWebBridge(TOKEN, onLost)
+      bridge.onFeedMessage(vi.fn())
+      await bridge.ready()
+      await vi.advanceTimersByTimeAsync(7000)
+
+      fetchMock.mockResolvedValueOnce(live.response)
+      await vi.advanceTimersByTimeAsync(1000)
+      live.end()
+      fetchMock.mockRejectedValue(new TypeError('Failed to fetch'))
+      await vi.advanceTimersByTimeAsync(7000)
+
+      expect(onLost).not.toHaveBeenCalled()
+    })
+
     it('leaves no abort listener behind for each wait between retries', async () => {
       fetchMock.mockRejectedValue(new TypeError('Failed to fetch'))
       const added = vi.spyOn(AbortSignal.prototype, 'addEventListener')

@@ -1,13 +1,16 @@
 import { PLATE_TITLE_CLASS } from '../components/deck/deck-styles'
 import { Plate } from '../components/deck/Plate'
 
-// Where the page is running: ClaudeWatch's own window, or a browser tab on the standalone server.
-export type OfficeSurface = 'app' | 'web'
+// Why the page has no office to show: ClaudeWatch's own window without its bridge, a browser
+// tab the launcher did not open, or a tab whose server has gone.
+export type OfficeSurface = 'app' | 'web' | 'stopped'
 
 const WHAT_TO_DO: Record<OfficeSurface, string> = {
   app: 'The Office bridge is not available in this window, so it cannot see your agents. Close this window and open the Office again from ClaudeWatch.',
   // The launch link works once and only in the tab it opened.
-  web: 'This tab was not opened from the Office launch link, so it cannot see your agents. Go back to the tab the launcher opened, or start ClaudeWatch Office again and open the link it prints.'
+  web: 'This tab was not opened from the Office launch link, so it cannot see your agents. Go back to the tab the launcher opened, or start ClaudeWatch Office again and open the link it prints.',
+  stopped:
+    'The Office server has stopped, or it no longer accepts this tab. Start the Office again and use the tab it opens.'
 }
 
 // Shown instead of the office when the page has no way to reach the agents.
