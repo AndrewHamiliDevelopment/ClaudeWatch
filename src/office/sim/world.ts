@@ -43,7 +43,12 @@ export class World {
     this.map = buildLayout([...this.sessions.values()], this.map, this.now())
     const paths = new PathCache(officeGrid(this.map.floors[0]))
     const oldPaths = oldMap.floors[0]?.zones ? new PathCache(officeGrid(oldMap.floors[0])) : paths
-    const desired = placements([...this.sessions.values()], this.map)
+    const held = new Map(
+      [...this.agents]
+        .filter(([, agent]) => agent.state !== 'leaving')
+        .map(([key, agent]) => [key, agent.view])
+    )
+    const desired = placements([...this.sessions.values()], this.map, held)
     const active = new Set(desired.map((p) => p.session.key))
     for (const [key, agent] of this.agents) {
       if (active.has(key) || agent.state === 'leaving') continue

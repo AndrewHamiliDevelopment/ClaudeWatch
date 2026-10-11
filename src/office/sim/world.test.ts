@@ -88,3 +88,29 @@ it('arrives from the same gate for all 60 agents across four companies', () => {
   for (const view of sim.step(0))
     expect({ x: view.x, z: view.z, floorId: view.floorId }).toEqual({ x: 0, z: 0, floorId: 'hq' })
 })
+it('keeps a subagent at its desk when a sibling finishes', () => {
+  const sim = new World({ now: () => 0 })
+  const worker = (id: string) => ({ id, type: 'worker', activity: 'reading' as const })
+  const main = { ...session('a'), subagents: ['0', '1', '2'].map(worker) }
+  sim.apply({
+    type: 'hello',
+    v: 1,
+    snapshot: { rev: 0, generatedAtMs: 0, sessions: [main], sources: [] }
+  })
+  for (let i = 0; i < 1000; i++) sim.step(100)
+  const before = sim.step(0).find((a) => a.agentKey === 'a#1')!
+  expect(before.slotId).toBe('desk_guest_1')
+
+  sim.apply({
+    type: 'patch',
+    v: 1,
+    seq: 1,
+    upserts: [{ ...main, subagents: ['1', '2'].map(worker) }],
+    removed: []
+  })
+  const views = sim.step(0)
+  const after = views.find((a) => a.agentKey === 'a#1')!
+  expect(after).toMatchObject({ slotId: 'desk_guest_1', x: before.x, z: before.z })
+  // The free guest desk goes to the subagent that was waiting in the team area.
+  expect(views.find((a) => a.agentKey === 'a#2')!.slotId).toBe('desk_guest_0')
+})
