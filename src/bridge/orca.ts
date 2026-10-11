@@ -22,6 +22,22 @@ export function parseOrcaEnvironment(command: string): OrcaEnvironment {
   return filtered
 }
 
+// A child agent started inside a pane inherits its parent's pane key. The pane belongs to the
+// earliest session; the others keep their host but cannot be driven through it.
+export function claimPanes(sessions: SessionRef[]): SessionRef[] {
+  const owners = new Map<string, SessionRef>()
+  for (const session of sessions) {
+    if (!session.orcaPaneKey) continue
+    const owner = owners.get(session.orcaPaneKey)
+    if (!owner || session.startedAtMs < owner.startedAtMs) owners.set(session.orcaPaneKey, session)
+  }
+  return sessions.map((session) =>
+    session.orcaPaneKey && owners.get(session.orcaPaneKey) !== session
+      ? { ...session, orcaPaneKey: null }
+      : session
+  )
+}
+
 export class OrcaSource {
   private nextPoll = 0
   private delay = 10000

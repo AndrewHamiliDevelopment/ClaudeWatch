@@ -77,6 +77,15 @@ describe('applyFeed', () => {
     expect(next?.rev).toBe(5)
   })
 
+  it('ignores a duplicate or late patch, as the sim does', () => {
+    const start = snapshot([session('claude:a')], 4)
+    for (const seq of [4, 3]) {
+      expect(
+        applyFeed(start, { type: 'patch', v: 1, seq, upserts: [], removed: ['claude:a'] })
+      ).toBe(start)
+    }
+  })
+
   it('ignores a patch that arrives before any hello', () => {
     expect(
       applyFeed(null, { type: 'patch', v: 1, seq: 1, upserts: [session('claude:a')], removed: [] })

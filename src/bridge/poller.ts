@@ -4,7 +4,7 @@ import type { FeedMessage, OfficeSnapshot } from '../shared/office/types'
 import { type BridgeIo, systemIo } from './io'
 import { collectClaude } from './registry'
 import { collectCodex } from './codex'
-import { OrcaSource } from './orca'
+import { claimPanes, OrcaSource } from './orca'
 import { diff, emptySnapshot, reduce } from './reducer'
 
 export interface PollerOptions {
@@ -43,8 +43,8 @@ export class BridgePoller {
       this.orca.poll(now)
     ])
     this.orca.prune(claude.sessions)
-    const sessions = await Promise.all(
-      claude.sessions.map((session) => this.orca.enrich(session, now))
+    const sessions = claimPanes(
+      await Promise.all(claude.sessions.map((session) => this.orca.enrich(session, now)))
     )
     this.snapshot = reduce(this.snapshot, {
       now,
@@ -57,7 +57,6 @@ export class BridgePoller {
     let previous = await this.tick()
     post({ type: 'hello', v: 1, snapshot: previous })
     let stopped = false
-    let sequence = 0
     let polling = false
     const poll = async (): Promise<void> => {
       if (stopped || polling) return
@@ -65,7 +64,7 @@ export class BridgePoller {
       try {
         const next = await this.tick()
         if (stopped) return
-        post(diff(previous, next, ++sequence))
+        post(diff(previous, next, next.rev))
         previous = next
       } finally {
         polling = false

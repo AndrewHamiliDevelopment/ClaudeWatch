@@ -58,6 +58,17 @@ describe('project roots', () => {
       worktree: '/repo/.claude/.worktree/feature'
     })
   })
+  it('ignores a commondir that is not one short line, or a root that is not a directory', async () => {
+    const worktree = '/repo/.claude/.worktree/feature'
+    const files = {
+      [`${worktree}/.git`]: 'gitdir: /repo/.git/worktrees/feature\n',
+      '/repo/.git': null
+    }
+    for (const commondir of ['line one\nSECRET=hidden\n', 'x'.repeat(2000), '/not/a/folder/.git']) {
+      const io = fixtureIo({ ...files, '/repo/.git/worktrees/feature/commondir': commondir })
+      expect(await resolveProject(`${worktree}/src`, io)).toEqual({ root: '/repo', worktree })
+    }
+  })
   it('uses cwd for non-repositories', async () => {
     expect(await resolveProject('/plain', fixtureIo())).toEqual({ root: '/plain', worktree: null })
   })

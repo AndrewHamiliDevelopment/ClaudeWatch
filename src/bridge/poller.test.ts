@@ -26,10 +26,12 @@ it('posts hello followed by removal patches and stops scheduling', async () => {
   })
   live = false
   await vi.advanceTimersByTimeAsync(2000)
+  // seq continues from the hello's revision, so one counter orders the whole feed.
+  expect(messages[0]).toMatchObject({ snapshot: { rev: 1 } })
   expect(messages[1]).toMatchObject({
     type: 'patch',
     v: 1,
-    seq: 1,
+    seq: 2,
     upserts: [],
     removed: ['claude:a']
   })

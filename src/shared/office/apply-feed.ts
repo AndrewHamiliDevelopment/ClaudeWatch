@@ -8,6 +8,8 @@ export function applyFeed(
 ): OfficeSnapshot | null {
   if (message.type === 'hello') return message.snapshot
   if (message.type === 'resync' || current === null) return null
+  // seq is the revision a patch produces; a duplicate or late one changes nothing.
+  if (message.seq <= current.rev) return current
   const sources = message.sources ?? current.sources
   if (message.upserts.length === 0 && message.removed.length === 0) {
     return { ...current, rev: message.seq, sources }

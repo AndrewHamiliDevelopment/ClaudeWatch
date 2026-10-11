@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaSource, parseOrcaEnvironment } from './orca'
+import { claimPanes, OrcaSource, parseOrcaEnvironment } from './orca'
 import { fixtureIo, missing, session } from './__fixtures__/helpers'
 
 it('CLAUDE_JOB_DIR suppresses Orca identifiers and discards other env', () => {
@@ -86,4 +86,20 @@ it('retries failed environment reads after 30 seconds', async () => {
   } finally {
     vi.useRealTimers()
   }
+})
+
+it('lets only the earliest session keep a pane that several sessions report', () => {
+  const parent = {
+    ...session('parent'),
+    host: 'orca' as const,
+    orcaPaneKey: 't:l',
+    startedAtMs: 10
+  }
+  const child = { ...session('child'), host: 'orca' as const, orcaPaneKey: 't:l', startedAtMs: 20 }
+  const other = { ...session('other'), host: 'orca' as const, orcaPaneKey: 't:m', startedAtMs: 30 }
+  expect(claimPanes([child, other, parent]).map((s) => [s.sessionId, s.orcaPaneKey])).toEqual([
+    ['child', null],
+    ['other', 't:m'],
+    ['parent', 't:l']
+  ])
 })

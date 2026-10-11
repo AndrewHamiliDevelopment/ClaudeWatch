@@ -21,7 +21,7 @@ it('starts the done dwell at arrival and does not restart it on duplicate update
 it('finishes arriving when attention changes while walking', () => {
   let agent = createAgent(
     session('a'),
-    { floorId: 'p_a', roomId: 'a', slotId: 'desk_main', x: 1, z: 0, heading: 0 },
+    { floorId: 'p_a', roomId: 'a', slotId: 'desk_main', x: 1, z: 0, heading: 0.5 },
     [
       { x: 0, z: 0 },
       { x: 1, z: 0 }
@@ -32,7 +32,7 @@ it('finishes arriving when attention changes while walking', () => {
   agent = tickAgent(agent, 1000)
   expect(agent.view.x).toBe(1)
   expect(agent.state).toBe('needs_you')
-  expect(agent.view.heading).toBe(Math.PI)
+  expect(agent.view.heading).toBe(0.5)
 })
 
 it('shows done briefly, then resumes working', () => {
@@ -61,14 +61,14 @@ it('coalesces activities until the 1.5 second dwell ends', () => {
   expect(agent.view.activity).toBe('idle')
   expect(tickAgent(agent, 500).view.activity).toBe('running')
 })
-it('applies attention immediately and faces the camera', () => {
+it('applies attention immediately and keeps facing the camera, as its seat does', () => {
   const agent = createAgent(
     session('a'),
-    { floorId: 'p_a', roomId: 'a', slotId: 'desk_main', x: 0, z: 0, heading: 0 },
+    { floorId: 'p_a', roomId: 'a', slotId: 'desk_main', x: 0, z: 0, heading: 0.5 },
     []
   )
   const next = updateAgent(agent, 'editing', 'permission')
   expect(next.state).toBe('needs_you')
-  expect(next.view.heading).toBe(Math.PI)
+  expect(next.view.heading).toBe(0.5)
   expect(next.view.attention).toBe('permission')
 })

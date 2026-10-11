@@ -55,9 +55,9 @@ it('uses fixed ticks and protects returned layout data', () => {
   expect(sim.layout().floors).toHaveLength(1)
 })
 
-it('applies the bridge first seq=1 patch after hello rev=1, then rejects duplicates', () => {
+it('applies the patch that follows the hello revision, then rejects duplicates and late ones', () => {
   const sim = new World({ now: () => 0 })
-  // BridgePoller.start emits the first tick (rev=1) before starting its seq counter at zero.
+  // A patch's seq is the snapshot revision it produces, so it continues from the hello.
   sim.apply({
     type: 'hello',
     v: 1,
@@ -67,13 +67,15 @@ it('applies the bridge first seq=1 patch after hello rev=1, then rejects duplica
   sim.apply({
     type: 'patch',
     v: 1,
-    seq: 1,
+    seq: 2,
     upserts: [{ ...session('a'), attention: 'permission' }],
     removed: []
   })
   expect(sim.step(0)[0].attention).toBe('permission')
-  sim.apply({ type: 'patch', v: 1, seq: 1, upserts: [session('a')], removed: [] })
-  expect(sim.step(0)[0].attention).toBe('permission')
+  for (const seq of [2, 1]) {
+    sim.apply({ type: 'patch', v: 1, seq, upserts: [session('a')], removed: [] })
+    expect(sim.step(0)[0].attention).toBe('permission')
+  }
 })
 
 it('arrives from the same gate for all 60 agents across four companies', () => {
@@ -113,4 +115,27 @@ it('keeps a subagent at its desk when a sibling finishes', () => {
   expect(after).toMatchObject({ slotId: 'desk_guest_1', x: before.x, z: before.z })
   // The free guest desk goes to the subagent that was waiting in the team area.
   expect(views.find((a) => a.agentKey === 'a#2')!.slotId).toBe('desk_guest_0')
+})
+
+it('walks to a moved seat from where the agent is, not from the gate', () => {
+  const sim = new World({ now: () => 0 })
+  const worker = (id: string) => ({ id, type: 'worker', activity: 'reading' as const })
+  const main = { ...session('a'), subagents: ['0', '1', '2'].map(worker) }
+  sim.apply({
+    type: 'hello',
+    v: 1,
+    snapshot: { rev: 1, generatedAtMs: 0, sessions: [main], sources: [] }
+  })
+  for (let i = 0; i < 1500; i++) sim.step(100)
+  const before = sim.step(0).find((a) => a.agentKey === 'a#2')!
+  expect(before.slotId).toBe('team_seat_0')
+
+  // A fifth session grows the project by a row, which pushes the team area down.
+  const more = ['b', 'c', 'd', 'e'].map((key) => session(key))
+  sim.apply({ type: 'patch', v: 1, seq: 2, upserts: more, removed: [] })
+  const after = sim.step(0).find((a) => a.agentKey === 'a#2')!
+  expect(sim.layout().floors[0].rooms.find((r) => r.id === after.roomId)!.z).toBeGreaterThan(
+    before.z
+  )
+  expect({ x: after.x, z: after.z }).toEqual({ x: before.x, z: before.z })
 })

@@ -23,35 +23,30 @@ export function nextBay(occupied: number[]): number {
   return bay
 }
 
-// Use a fixed two-column company grid; expand its pitch only if growth causes a collision.
+// A fixed two-column grid. A company keeps its cell for good: when one outgrows the pitch the
+// cells widen, but nobody changes sides.
 export function packCompanies(companies: ZoneLayout[]): void {
   const width = Math.max(63, ...companies.map((c) => c.width))
   const depth = Math.max(87, ...companies.map((c) => c.depth))
-  const placed = companies.filter((c) => c.index !== -1)
-  const collision = placed.some((a, i) =>
-    placed.slice(i + 1).some((b) => overlaps(a, b, COMPANY_CORRIDOR))
-  )
-  const pending = collision ? companies : companies.filter((c) => c.index === -1)
-  const occupied = collision ? [] : [...placed]
-  for (const company of pending) {
-    let index = 0
-    while (true) {
-      const column = index % 2
-      const row = Math.floor(index / 2)
-      const left = column === 0 ? 3 : -width - 3
-      const top =
-        row % 2 === 0
-          ? 3 + Math.floor(row / 2) * (depth + 3)
-          : -depth - 3 - Math.floor(row / 2) * (depth + 3)
-      const candidate = { ...company, x: left + company.width / 2, z: top + company.depth / 2 }
-      if (!occupied.some((c) => overlaps(c, candidate, COMPANY_CORRIDOR))) {
-        company.x = candidate.x
-        company.z = candidate.z
-        company.index = index
-        occupied.push(company)
-        break
-      }
-      index++
-    }
+  const place = (company: ZoneLayout, index: number): void => {
+    const row = Math.floor(index / 2)
+    const left = index % 2 === 0 ? 3 : -width - 3
+    const top =
+      row % 2 === 0
+        ? 3 + Math.floor(row / 2) * (depth + 3)
+        : -depth - 3 - Math.floor(row / 2) * (depth + 3)
+    company.x = left + company.width / 2
+    company.z = top + company.depth / 2
+    company.index = index
   }
+  const placed = companies.filter((c) => c.index !== -1)
+  const taken = placed.map((c) => c.index)
+  for (const company of companies.filter((c) => c.index === -1)) {
+    place(company, nextBay(taken))
+    taken.push(company.index)
+  }
+  const isCrowded = companies.some((a, i) =>
+    companies.slice(i + 1).some((b) => overlaps(a, b, COMPANY_CORRIDOR))
+  )
+  if (isCrowded) for (const company of placed) place(company, company.index)
 }

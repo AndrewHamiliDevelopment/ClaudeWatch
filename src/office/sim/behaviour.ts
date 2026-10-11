@@ -56,7 +56,7 @@ export function updateAgent(
   if (next.state === 'leaving') return next
   if (urgent(attention)) {
     next.state = next.path.length ? 'arriving' : 'needs_you'
-    next.view.heading = Math.PI
+    next.view.heading = next.slotHeading
     next.view.activity = activity
     next.queued = null
     next.dwellMs = 0
@@ -116,7 +116,7 @@ export function tickAgent(agent: AgentRecord, dtMs: number): AgentRecord {
           : next.view.attention === 'done'
             ? 'done'
             : 'working'
-        next.view.heading = next.state === 'needs_you' ? Math.PI : next.slotHeading
+        next.view.heading = next.slotHeading
         if (next.state === 'done') next.dwellMs = 0
       }
     }

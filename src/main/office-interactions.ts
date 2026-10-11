@@ -28,6 +28,12 @@ const AGENT_TITLES: Record<ProviderId, string> = {
   codex: 'New Codex agent'
 }
 
+// What Orca calls each provider's agent in a pane.
+const ORCA_AGENTS: Record<ProviderId, readonly string[]> = {
+  claude: ['claude', 'claude-agent-teams'],
+  codex: ['codex']
+}
+
 const fail = (reason: InteractionFailure): InteractionResult => ({ success: false, reason })
 
 // The last PEEK_LINES rendered lines without trailing blanks: what the owner sees in the office.
@@ -46,7 +52,8 @@ const isWithin = (path: string, folder: string): boolean =>
 // exits the pane is a shell, and typed text would run as a command.
 const paneServes = (terminal: PaneTerminal, session: SessionRef): boolean =>
   (terminal.worktreePath === session.projectRoot || isWithin(session.cwd, terminal.worktreePath)) &&
-  (terminal.agent === session.provider || !!terminal.agent?.startsWith(`${session.provider}-`))
+  terminal.agent !== null &&
+  ORCA_AGENTS[session.provider].includes(terminal.agent)
 
 // Everything the office can do to a running agent goes through here, and only on a
 // user's click: talk, answer a permission prompt, peek at the screen, start a new agent.

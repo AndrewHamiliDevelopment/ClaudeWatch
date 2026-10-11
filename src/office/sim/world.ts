@@ -29,8 +29,8 @@ export class World {
     if (message.type === 'hello') {
       this.sessions = new Map(message.snapshot.sessions.map((s) => [s.key, structuredClone(s)]))
       this.helloRevision = message.snapshot.rev
-      // Snapshot revisions and patch sequences are separate counters in BridgePoller.
-      this.sequence = -1
+      // A patch's seq is the revision it produces, so anything at or below this one is stale.
+      this.sequence = message.snapshot.rev
       this.ready = true
     } else {
       if (!this.ready || message.seq <= this.sequence) return
@@ -86,7 +86,14 @@ export class World {
         z: slot.z,
         heading: slot.heading
       }
-      const agent = createAgent(session, destination, paths.via(elevator, door, slot))
+      // A seat that moved is walked to from where the agent stands; only newcomers use the gate.
+      const isSeated = existing && existing.state !== 'leaving'
+      const route = isSeated ? paths.get(existing.view, slot) : []
+      const agent = createAgent(
+        session,
+        destination,
+        route.length ? route : paths.via(elevator, door, slot)
+      )
       agent.view.isSubagent = isSubagent
       this.agents.set(session.key, agent)
     }

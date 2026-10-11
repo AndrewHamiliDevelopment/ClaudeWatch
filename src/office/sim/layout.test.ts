@@ -126,3 +126,27 @@ it('keeps every project inside its company after growth and pruning a slot', () 
     )
   }
 })
+
+it('keeps every company on its side when another company grows', () => {
+  const inCompany = (company: string, project: string) => ({
+    ...session(`${company}-${project}`, `p_${company}_${project}`),
+    companyKey: `c_${company}`,
+    companyLabel: company
+  })
+  // Arrival order c, b, a: the grid cells do not follow the alphabet.
+  let sessions = [inCompany('c', '0')]
+  let layout = buildLayout(sessions, undefined, 0)
+  for (const company of ['b', 'a']) {
+    sessions = [...sessions, inCompany(company, '0')]
+    layout = buildLayout(sessions, layout, 1)
+  }
+  const side = (key: string, map = layout) => {
+    const zone = map.floors[0].zones.find((z) => z.companyKey === key)!
+    return [Math.sign(zone.x), Math.sign(zone.z), zone.index]
+  }
+  const before = ['c_a', 'c_b', 'c_c'].map((key) => side(key))
+
+  sessions = [...sessions, ...['1', '2', '3', '4'].map((project) => inCompany('a', project))]
+  const grown = buildLayout(sessions, layout, 2)
+  expect(['c_a', 'c_b', 'c_c'].map((key) => side(key, grown))).toEqual(before)
+})

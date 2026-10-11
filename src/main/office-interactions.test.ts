@@ -133,7 +133,7 @@ describe('OfficeInteractions', () => {
     })
 
     it('refuses a pane where this session’s agent is no longer the running program', async () => {
-      for (const agent of [null, 'codex']) {
+      for (const agent of [null, 'codex', 'claude-something-else']) {
         orca.handleFor.mockResolvedValueOnce(pane({ agent }))
         expect(await interactions.send('claude:s1', 'rm -rf build')).toEqual({
           success: false,
