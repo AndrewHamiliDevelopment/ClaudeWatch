@@ -1,4 +1,4 @@
-import { deskSlots, type WallsMode } from '../logic/room-layout'
+import type { WallsMode } from '../logic/room-layout'
 import type { FloorGeometry } from '../scene-model'
 import type { OfficeTheme } from '../themes/types'
 
@@ -45,7 +45,7 @@ export function FloorView({
           <Doorway room={room} />
           <RoomSign room={room} />
           <RoomDressing room={room} />
-          {deskSlots(room).map((slot) => (
+          {room.seats.map((slot) => (
             <Desk key={slot.slotId} room={room} slot={slot} />
           ))}
         </group>

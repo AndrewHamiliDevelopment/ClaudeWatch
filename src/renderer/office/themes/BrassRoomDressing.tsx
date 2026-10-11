@@ -1,4 +1,4 @@
-import { deskSlots, doorSide } from '../logic/room-layout'
+import { doorSide, inwardHeading } from '../logic/room-layout'
 import { STEAM } from '../office-palette'
 import { Matte } from '../scene/InstancedParts'
 import type { RoomProps } from './types'
@@ -6,13 +6,13 @@ import type { RoomProps } from './types'
 export function BrassRoomDressing({ room }: RoomProps) {
   const side = doorSide(room)
   const isDoorOnZ = side === 'north' || side === 'south'
-  const [main] = deskSlots(room)
+  const heading = inwardHeading(room)
   const backReach = (isDoorOnZ ? room.depth : room.width) / 2 - 0.55
   const across = (isDoorOnZ ? room.width : room.depth) / 2 - 0.55
-  const x = room.x + Math.sin(main.heading) * backReach + (isDoorOnZ ? across : 0)
-  const z = room.z + Math.cos(main.heading) * backReach + (isDoorOnZ ? 0 : across)
+  const x = room.x + Math.sin(heading) * backReach + (isDoorOnZ ? across : 0)
+  const z = room.z + Math.cos(heading) * backReach + (isDoorOnZ ? 0 : across)
   return (
-    <group position={[x, 0, z]} rotation={[0, main.heading, 0]}>
+    <group position={[x, 0, z]} rotation={[0, heading, 0]}>
       <mesh position={[0, 0.475, 0]}>
         <cylinderGeometry args={[0.26, 0.26, 0.95, 12]} />
         <Matte color={STEAM.copper} />

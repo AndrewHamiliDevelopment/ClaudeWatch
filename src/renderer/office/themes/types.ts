@@ -1,8 +1,8 @@
 import type { ComponentType, RefObject } from 'react'
 import type { Group, Mesh, MeshStandardMaterial } from 'three'
 import type { AgentView, ProviderId } from '../../../shared/office/types'
-import type { FloorGeometry, RoomGeometry, ZoneGeometry } from '../scene-model'
-import type { DeskSlot, WallsMode } from '../logic/room-layout'
+import type { DeskSlot, FloorGeometry, RoomGeometry, ZoneGeometry } from '../scene-model'
+import type { WallsMode } from '../logic/room-layout'
 
 export interface ThemePalette {
   lacquer: string

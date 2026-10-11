@@ -34,7 +34,10 @@ function toRoom(room: RoomLayout, labels: Map<string, string>): RoomGeometry {
     depth: room.depth,
     door: { ...room.door },
     label: room.sessionKey ? (labels.get(room.sessionKey) ?? room.label) : room.label,
-    kind: room.kind
+    kind: room.kind,
+    seats: room.slots
+      .filter((slot) => slot.id !== 'door')
+      .map((slot) => ({ slotId: slot.id, x: slot.x, z: slot.z, heading: slot.heading }))
   }
 }
 

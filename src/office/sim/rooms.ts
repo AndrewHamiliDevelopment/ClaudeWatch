@@ -63,7 +63,9 @@ export function room(
   const geometry = isTeam
     ? bounds(left + 1, top + 3 + rows * 6, 20, Math.max(4, Math.ceil(seats / 8) * 2 + 2))
     : bounds(left + 1 + (bay % 4) * 5, top + 3 + Math.floor(bay / 4) * 6, 4, 4)
-  const slot = (id: string, x: number, z: number): Slot => ({ id, x, z, heading: Math.PI })
+  // Seats face +z, toward the default camera; the scene draws each desk 0.62 m in front of
+  // its seat, so every seat keeps that strip clear of walls and of the other seats.
+  const slot = (id: string, x: number, z: number): Slot => ({ id, x, z, heading: 0 })
   const slots = isTeam
     ? Array.from({ length: seats }, (_, index) =>
         slot(
@@ -73,9 +75,9 @@ export function room(
         )
       )
     : [
-        slot('desk_main', geometry.x, geometry.z + 0.5),
-        slot('desk_guest_0', geometry.x - 1, geometry.z - 0.5),
-        slot('desk_guest_1', geometry.x + 1, geometry.z - 0.5)
+        slot('desk_main', geometry.x, geometry.z + 0.3),
+        slot('desk_guest_0', geometry.x - 1.15, geometry.z - 0.95),
+        slot('desk_guest_1', geometry.x + 1.15, geometry.z - 0.95)
       ]
   return {
     ...geometry,

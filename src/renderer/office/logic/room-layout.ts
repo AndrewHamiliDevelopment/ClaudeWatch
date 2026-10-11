@@ -7,14 +7,6 @@ type WalledRect = DooredRect & Pick<RoomGeometry, 'id'>
 export type WallSide = 'north' | 'south' | 'east' | 'west'
 export type WallsMode = 'up' | 'cutaway' | 'down'
 
-export interface DeskSlot {
-  slotId: string
-  x: number
-  z: number
-  // Yaw in radians; the character faces (sin heading, cos heading) on the XZ plane.
-  heading: number
-}
-
 export interface WallSegment {
   roomId: string
   x: number
@@ -30,7 +22,6 @@ export const WALL_HEIGHT_LOW = 0.25
 const DOOR_WIDTH = 1.1
 // Distance from a seated agent to the centre of its desk.
 export const DESK_REACH = 0.62
-const MAX_GUEST_DESKS = 4
 // Cosine above which a wall counts as facing the camera in cutaway.
 const CUTAWAY_FACING_THRESHOLD = 0.2
 
@@ -54,49 +45,10 @@ export function doorSide(room: DooredRect): WallSide {
   )
 }
 
-// Room-local frame: `back` points from the door into the room, `across` is perpendicular.
-function roomAxes(room: DooredRect): {
-  back: { x: number; z: number }
-  across: { x: number; z: number }
-  span: number
-  reach: number
-} {
+// Yaw of someone standing in the doorway and looking into the room.
+export function inwardHeading(room: DooredRect): number {
   const outward = SIDE_NORMAL[doorSide(room)]
-  const back = { x: -outward.x, z: -outward.z }
-  const isDoorOnZ = outward.z !== 0
-  return {
-    back,
-    across: { x: back.z, z: -back.x },
-    span: isDoorOnZ ? room.width : room.depth,
-    reach: isDoorOnZ ? room.depth : room.width
-  }
-}
-
-export function deskSlots(room: RoomGeometry): DeskSlot[] {
-  const { back, across, span, reach } = roomAxes(room)
-  const heading = Math.atan2(back.x, back.z)
-  const place = (slotId: string, acrossOffset: number, backOffset: number): DeskSlot => ({
-    slotId,
-    x: room.x + across.x * acrossOffset + back.x * backOffset,
-    z: room.z + across.z * acrossOffset + back.z * backOffset,
-    heading
-  })
-
-  const guestCount = room.kind === 'team' ? MAX_GUEST_DESKS : Math.min(MAX_GUEST_DESKS, 2)
-  const guestPositions = [
-    [-span * 0.28, -reach * 0.08],
-    [span * 0.28, -reach * 0.08],
-    [-span * 0.28, -reach * 0.3],
-    [span * 0.28, -reach * 0.3]
-  ]
-  return [
-    place('desk-0', 0, reach * 0.12),
-    ...guestPositions
-      .slice(0, guestCount)
-      .map(([acrossOffset, backOffset], index) =>
-        place(`guest-${index + 1}`, acrossOffset, backOffset)
-      )
-  ]
+  return Math.atan2(-outward.x, -outward.z)
 }
 
 const SIGN_WALL_OFFSET = 0.1

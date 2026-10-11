@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  deskSlots,
   doorSide,
+  inwardHeading,
   doorSignPlacement,
   roomWallSegments,
   wallHeight,
@@ -20,21 +20,12 @@ describe('doorSide', () => {
   })
 })
 
-describe('deskSlots', () => {
-  it('puts the main desk first and keeps every slot inside the room', () => {
-    const slots = deskSlots(room)
-    expect(slots[0].slotId).toBe('desk-0')
-    expect(slots.length).toBeGreaterThanOrEqual(3)
-    for (const slot of slots) {
-      expect(Math.abs(slot.x - room.x)).toBeLessThan(room.width / 2)
-      expect(Math.abs(slot.z - room.z)).toBeLessThan(room.depth / 2)
-    }
-  })
-
-  it('seats people facing away from the door, toward their desk', () => {
-    const [main] = deskSlots(room)
-    // Door is south (+z side); facing away means facing -z, heading = PI.
-    expect(Math.abs(Math.cos(main.heading) - -1)).toBeLessThan(1e-6)
+describe('inwardHeading', () => {
+  it('looks from the doorway into the room', () => {
+    // Door is south (+z side), so looking in means facing -z.
+    expect(Math.cos(inwardHeading(room))).toBeCloseTo(-1)
+    const northDoor = makeRoom({ id: 'r2', x: 0, z: 4, door: { x: 0, z: 1.5 } })
+    expect(Math.cos(inwardHeading(northDoor))).toBeCloseTo(1)
   })
 })
 

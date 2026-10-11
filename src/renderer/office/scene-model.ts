@@ -10,6 +10,14 @@ import type {
 
 // All lengths in metres, floor-local, 1 unit = 1 m, Y up. Plain data: Phase 6 maps the sim's LayoutMap into it.
 // The floor-local origin is the centre of the floor plate; room x/z is the room centre.
+export interface DeskSlot {
+  slotId: string
+  x: number
+  z: number
+  // Yaw in radians; the character faces (sin heading, cos heading) on the XZ plane.
+  heading: number
+}
+
 export interface RoomGeometry {
   id: string
   sessionKey: string | null
@@ -20,6 +28,8 @@ export interface RoomGeometry {
   door: { x: number; z: number }
   label: string
   kind: 'office' | 'team'
+  // Where the sim seats agents; the scene draws one desk in front of each.
+  seats: DeskSlot[]
 }
 
 // Offices within offices: a company zone holds its project offices, each holding one office per

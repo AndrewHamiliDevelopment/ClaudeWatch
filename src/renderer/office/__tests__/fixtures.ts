@@ -38,6 +38,7 @@ export function makeRoom(
     door: { x: 0, z: -1.5 },
     label: overrides.id,
     kind: 'office',
+    seats: [{ slotId: 'desk_main', x: 0, z: -3.7, heading: 0 }],
     ...overrides
   }
 }

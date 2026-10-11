@@ -2,7 +2,6 @@ import { isValidElement, type ReactNode } from 'react'
 import { expect, it } from 'vitest'
 import { BrassRoomDressing, BrassDesk } from './BrassKit'
 import { makeRoom } from '../__tests__/fixtures'
-import { deskSlots } from '../logic/room-layout'
 
 it('keeps the original boiler opposite the doorway rather than always in the same corner', () => {
   const room = makeRoom({ id: 'r1', x: 0, z: -4, door: { x: 0, z: -1.5 } })
@@ -23,9 +22,7 @@ function geometry(node: ReactNode): React.ReactElement<{ args: number[] }>[] {
 
 it('preserves the tapered brass stool and lamp proportions', () => {
   const room = makeRoom({ id: 'r1' })
-  const shapes = geometry(BrassDesk({ room, slot: deskSlots(room)[0] })).map(
-    (node) => node.props.args
-  )
+  const shapes = geometry(BrassDesk({ room, slot: room.seats[0] })).map((node) => node.props.args)
   expect(shapes).toContainEqual([0.2, 0.16, 0.32, 10])
   expect(shapes).toContainEqual([0.02, 0.05, 0.36, 6])
 })
