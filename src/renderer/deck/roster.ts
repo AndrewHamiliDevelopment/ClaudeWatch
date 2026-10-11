@@ -1,8 +1,9 @@
 import { projectKey } from '../../shared/office/project-key'
-import type { SessionRef, SessionUsage, TokenCounts } from '../../shared/office/types'
+import type { SessionRef } from '../../shared/office/types'
 import { GEM_SPECS } from '../office/logic/status-gem'
 import type { ClaudeInstance } from '../lib/types'
 import { timeAgo } from '../lib/utils'
+import { buildTokenLedger, sessionTokens } from './tokens'
 
 // Listed in roster order: whoever needs you first, the departed last.
 const AGENT_STATES = [
@@ -36,7 +37,9 @@ export interface Squad {
   crest: string
   agents: RosterAgent[]
   needsYouCount: number
+  // Every session of the project in the feed, whatever runs it; null until one is counted.
   tokens: number | null
+  isTokensPartial: boolean
 }
 
 export interface SquadTally {
@@ -48,16 +51,7 @@ export interface SquadTally {
 // A turn that ended this recently reads as "Done"; after that the agent is just idle.
 const DONE_WINDOW_MS = 10 * 60 * 1000
 
-export function sumCounts(counts: TokenCounts): number {
-  return counts.input + counts.output + counts.cacheWrite + counts.cacheRead
-}
-
-export function sessionTokens(usage: SessionUsage | null | undefined): number | null {
-  if (!usage) return null
-  return sumCounts(usage.own) + sumCounts(usage.subagents)
-}
-
-// Two-letter crests for a name, best first: outer initials, then the first letter with each
+export // Two-letter crests for a name, best first: outer initials, then the first letter with each
 // later word's initial, then with each later letter.
 function crestCandidates(projectName: string): string[] {
   const words = projectName
@@ -98,10 +92,12 @@ function stateOf(
   if (attention === 'error' || attention === 'limited') {
     return { state: attention, stateDetail: null }
   }
-  if (instance.status === 'active') {
-    return { state: 'working', stateDetail: session?.currentTool?.name ?? null }
+  // The feed knows a tool is running even while it waits on a subprocess and burns no CPU.
+  const isWorking = session ? session.activity !== 'idle' : instance.status === 'active'
+  if (isWorking) return { state: 'working', stateDetail: session?.currentTool?.name ?? null }
+  if (instance.status === 'stale' || instance.status === 'exited') {
+    return { state: instance.status, stateDetail: null }
   }
-  if (instance.status !== 'idle') return { state: instance.status, stateDetail: null }
 
   const idleSince = instance.lastBecameIdleAt ? new Date(instance.lastBecameIdleAt) : null
   if (idleSince && nowMs - idleSince.getTime() < DONE_WINDOW_MS) {
@@ -110,23 +106,24 @@ function stateOf(
   return { state: 'idle', stateDetail: null }
 }
 
-function pathSegments(projectPath: string): string[] {
-  return projectPath.split(/[\\/]/).filter(Boolean)
-}
+// An agent's worktree lives inside its project; the project is the folder above `.claude`.
+const WORKTREE_FOLDER = /[\\/]\.claude[\\/](?:\.worktree|worktrees)[\\/].*$/
 
 function emptySquad(instance: ClaudeInstance, session: SessionRef | undefined): Squad {
-  const segments = pathSegments(instance.projectPath)
+  const projectRoot = instance.projectPath.replace(WORKTREE_FOLDER, '')
+  const segments = projectRoot.split(/[\\/]/).filter(Boolean)
   const name = session?.projectLabel ?? segments[segments.length - 1] ?? instance.projectName
   return {
     // The feed keys a project by a hash of its root; hashing the path the same way keeps an
     // agent the feed has not picked up yet in its project's squad.
-    key: session?.projectKey ?? projectKey(instance.projectPath),
+    key: session?.projectKey ?? projectKey(projectRoot),
     name,
     company: session?.companyLabel ?? segments[segments.length - 2] ?? '',
     crest: crestFor(name),
     agents: [],
     needsYouCount: 0,
-    tokens: null
+    tokens: null,
+    isTokensPartial: false
   }
 }
 
@@ -166,12 +163,17 @@ export function buildSquads(
     const agent = toAgent(instance, session, nowMs)
     squad.agents.push(agent)
     if (agent.state === 'needs-you') squad.needsYouCount += 1
-    if (agent.tokens !== null) squad.tokens = (squad.tokens ?? 0) + agent.tokens
   }
 
   const squads = [...squadByKey.values()]
   assignCrests(squads)
+  const ledger = sessions ? buildTokenLedger(sessions) : null
   for (const squad of squads) {
+    squad.tokens = ledger?.projects.get(squad.key) ?? null
+    squad.isTokensPartial =
+      squad.tokens !== null &&
+      (ledger?.partialProjects.has(squad.key) === true ||
+        squad.agents.some((agent) => agent.tokens === null))
     squad.agents.sort(
       (a, b) =>
         AGENT_STATES.indexOf(a.state) - AGENT_STATES.indexOf(b.state) ||

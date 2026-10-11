@@ -5,7 +5,7 @@ import type {
   UsageWindows
 } from '../../../shared/accounts'
 import type { TokenCounts } from '../../../shared/office/types'
-import { sumCounts } from '../../deck/roster'
+import { sumCounts } from '../../deck/tokens'
 import type { LedgerRow } from '../GaugeWall'
 
 type UsageWindowKey = keyof UsageWindows

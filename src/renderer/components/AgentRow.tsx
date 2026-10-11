@@ -3,7 +3,8 @@ import { Bell, BellOff, Bot, ChevronDown, SquareTerminal } from 'lucide-react'
 import { useElapsedSeconds } from '../hooks/useElapsedSeconds'
 import { jumpToAgent } from '../deck/deck-api'
 import type { RosterAgent } from '../deck/roster'
-import { cn, formatCompactNumber, formatElapsedTime } from '../lib/utils'
+import { formatTokens } from '../deck/tokens'
+import { cn, formatElapsedTime } from '../lib/utils'
 import { BUTTON_QUIET_COMPACT_CLASS, ICON_BUTTON_CLASS } from './deck/deck-styles'
 import { StateMark } from './deck/StateMark'
 
@@ -127,7 +128,7 @@ function TokenCell({ tokens }: { tokens: number | null }) {
   }
   return (
     <span className="text-right font-semibold tabular-nums text-text-primary">
-      {formatCompactNumber(tokens)}
+      {formatTokens(tokens)}
       <span className="sr-only"> tokens</span>
     </span>
   )

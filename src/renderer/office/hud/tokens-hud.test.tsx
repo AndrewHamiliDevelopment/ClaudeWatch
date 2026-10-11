@@ -15,17 +15,20 @@ describe('tokens in the HUD', () => {
     setupHud()
     const totals = screen.getByRole('region', { name: 'Office totals' })
     expect(totals).toHaveTextContent('5 agents')
-    expect(totals).toHaveTextContent('157 tokens')
+    // One session is still being counted, so every total above it is a floor.
+    expect(totals).toHaveTextContent('157+ tokens')
   })
 
   it('shows tokens beside the agent count for the office, each company and each project', () => {
     setupHud()
     const offices = officesPanel()
     expect(within(offices).getByText('All offices').closest('li')).toHaveTextContent(
-      /5 agents.*157/
+      /5 agents.*157\+/
     )
     expect(
-      within(offices).getByRole('button', { name: 'ZKidz, 5 agents, 1 needs you, 157 tokens' })
+      within(offices).getByRole('button', {
+        name: 'ZKidz, 5 agents, 1 needs you, 157 or more tokens'
+      })
     ).toBeInTheDocument()
     expect(
       within(offices).getByRole('button', {

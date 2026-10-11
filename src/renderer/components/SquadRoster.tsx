@@ -3,7 +3,8 @@ import { Bot } from 'lucide-react'
 import { useSettings } from '../hooks/useSettings'
 import type { Squad } from '../deck/roster'
 import { agentCountLabel, needsYouLabel } from '../office/logic/floor-model'
-import { cn, formatCompactNumber } from '../lib/utils'
+import { formatTotal } from '../deck/tokens'
+import { cn } from '../lib/utils'
 import { AgentRow, ROSTER_COLUMNS_CLASS, ROSTER_COLUMNS_WITH_TOKENS_CLASS } from './AgentRow'
 import { Crest } from './deck/Plate'
 import { StateIcon } from './deck/StateMark'
@@ -95,8 +96,8 @@ function SquadSection({ squad, showTokens, mutedProjects, onToggleMute }: SquadS
         <span className="text-xs text-text-secondary">{agentCountLabel(squad.agents.length)}</span>
         {squad.tokens !== null && (
           <span className="min-w-14 text-right text-xs tabular-nums text-accent">
-            {formatCompactNumber(squad.tokens)}
-            <span className="sr-only"> tokens</span>
+            {formatTotal(squad.tokens, squad.isTokensPartial)}
+            <span className="sr-only">{squad.isTokensPartial ? ' or more tokens' : ' tokens'}</span>
           </span>
         )}
       </div>

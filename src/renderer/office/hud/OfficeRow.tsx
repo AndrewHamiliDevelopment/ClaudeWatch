@@ -5,13 +5,14 @@ import { agentCountLabel, needsYouLabel } from '../logic/floor-model'
 import type { OfficeProjectRow } from '../logic/zone-model'
 import type { OfficeTheme } from '../themes/types'
 import { ROW_CLASS } from './hud-styles'
-import { formatTokens } from './tokens'
+import { formatTotal } from '../../deck/tokens'
 
 type RowCounts = Pick<OfficeProjectRow, 'label' | 'zoneId' | 'agentCount' | 'attentionCount'>
 
-function rowName(row: RowCounts, tokens: number | undefined): string {
+function rowName(row: RowCounts, tokens: number | undefined, isPartial: boolean): string {
   const waiting = row.attentionCount > 0 ? `, ${needsYouLabel(row.attentionCount)}` : ''
-  const spent = tokens === undefined ? '' : `, ${formatTokens(tokens)} tokens`
+  const floor = isPartial ? ' or more' : ''
+  const spent = tokens === undefined ? '' : `, ${formatTotal(tokens, false)}${floor} tokens`
   return `${row.label}, ${agentCountLabel(row.agentCount)}${waiting}${spent}`
 }
 
@@ -19,6 +20,8 @@ interface ZoneButtonProps {
   row: RowCounts
   // Absent until one of the zone's sessions has been counted.
   tokens: number | undefined
+  // A session under this zone is still being counted, so the total is a floor.
+  isPartial: boolean
   focusedZoneId: string | null
   onFlyToZone: (zoneId: string) => void
   // The zone's name, set in the face its level uses.
@@ -26,12 +29,19 @@ interface ZoneButtonProps {
 }
 
 // Flies the camera to a company or project. A row without a zone yet is shown, not clickable.
-export function ZoneButton({ row, tokens, focusedZoneId, onFlyToZone, children }: ZoneButtonProps) {
+export function ZoneButton({
+  row,
+  tokens,
+  isPartial,
+  focusedZoneId,
+  onFlyToZone,
+  children
+}: ZoneButtonProps) {
   const isCurrent = row.zoneId !== null && row.zoneId === focusedZoneId
   return (
     <button
       type="button"
-      aria-label={rowName(row, tokens)}
+      aria-label={rowName(row, tokens, isPartial)}
       aria-current={isCurrent ? 'true' : undefined}
       disabled={row.zoneId === null}
       onClick={() => row.zoneId && onFlyToZone(row.zoneId)}
@@ -47,7 +57,7 @@ export function ZoneButton({ row, tokens, focusedZoneId, onFlyToZone, children }
       <span className="text-caption tabular-nums text-text-tertiary">{row.agentCount}</span>
       {tokens !== undefined && (
         <span className="min-w-[2.75rem] text-right text-xs tabular-nums text-accent">
-          {formatTokens(tokens)}
+          {formatTotal(tokens, isPartial)}
         </span>
       )}
     </button>

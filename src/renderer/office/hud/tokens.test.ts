@@ -1,14 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { SessionUsage, TokenCounts } from '../../../shared/office/types'
 import { makeSession } from '../__tests__/fixtures'
-import {
-  buildTokenLedger,
-  contextText,
-  formatTokens,
-  memberTokens,
-  tokensText,
-  usageParts
-} from './tokens'
+import { buildTokenLedger, formatTokens } from '../../deck/tokens'
+import { contextText, memberTokens, tokensText, usageParts } from './tokens'
 
 const counts = (input: number, output = 0, cacheWrite = 0, cacheRead = 0): TokenCounts => ({
   input,
@@ -98,6 +92,21 @@ describe('buildTokenLedger', () => {
     expect(ledger.projects.get('p_team')).toBe(7)
     expect(ledger.companies.get('c_zk')).toBe(157)
     expect(ledger.office).toBe(157)
+  })
+
+  it('marks every total that still has an uncounted session under it', () => {
+    const ledger = buildTokenLedger(sessions)
+    expect(ledger.partialProjects.has('p_cw')).toBe(true)
+    expect(ledger.partialProjects.has('p_team')).toBe(false)
+    expect(ledger.partialCompanies.has('c_zk')).toBe(true)
+    expect(ledger.isOfficePartial).toBe(true)
+    expect(buildTokenLedger([sessions[0], sessions[2]]).isOfficePartial).toBe(false)
+  })
+
+  it('writes a partial total as a floor', () => {
+    expect(tokensText(150, true)).toBe('150+')
+    expect(tokensText(150)).toBe('150')
+    expect(tokensText(null, true)).toBe('counting…')
   })
 
   it('leaves an office with nothing counted unknown, not 0', () => {
