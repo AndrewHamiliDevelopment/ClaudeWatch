@@ -24,7 +24,7 @@ export interface RoomGeometry {
 
 // Offices within offices: a company zone holds its project offices, each holding one office per
 // agent session (plus a team area for overflow subagents). Centre-based metres, like RoomGeometry.
-export type ZoneKind = 'company' | 'project' | 'office' | 'team'
+type ZoneKind = 'company' | 'project' | 'office' | 'team'
 
 export interface ZoneGeometry {
   id: string

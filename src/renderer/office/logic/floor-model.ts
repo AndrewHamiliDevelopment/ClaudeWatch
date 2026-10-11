@@ -27,7 +27,7 @@ export function summariseFloors(frame: OfficeFrame): FloorSummary[] {
 }
 
 // Rooms carry the session key, so lookups go through the room instead of guessing agentKey formats.
-export function roomForAgent(frame: OfficeFrame, agent: AgentView): RoomGeometry | undefined {
+function roomForAgent(frame: OfficeFrame, agent: AgentView): RoomGeometry | undefined {
   return frame.floors
     .find((floor) => floor.floorId === agent.floorId)
     ?.rooms.find((room) => room.id === agent.roomId)

@@ -7,7 +7,7 @@ const BANDS_NEAR_TO_FAR: readonly ZoomBand[] = ['desk', 'floor', 'building']
 export const BAND_ZOOM: Record<ZoomBand, number> = { desk: 90, floor: 34, building: 8 }
 
 const DEG_TO_RAD = Math.PI / 180
-export const ISO_ELEVATION_DEG = 35
+const ISO_ELEVATION_DEG = 35
 // camera-controls measures polar angle from straight up.
 export const ISO_POLAR = (90 - ISO_ELEVATION_DEG) * DEG_TO_RAD
 export const ISO_START_AZIMUTH = 45 * DEG_TO_RAD

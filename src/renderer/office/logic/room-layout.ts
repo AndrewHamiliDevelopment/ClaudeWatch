@@ -27,7 +27,7 @@ export interface WallSegment {
 // Low walls so the isometric view reads into every room; cutaway drops the near ones further.
 export const WALL_HEIGHT_FULL = 1.3
 export const WALL_HEIGHT_LOW = 0.25
-export const DOOR_WIDTH = 1.1
+const DOOR_WIDTH = 1.1
 // Distance from a seated agent to the centre of its desk.
 export const DESK_REACH = 0.62
 const MAX_GUEST_DESKS = 4

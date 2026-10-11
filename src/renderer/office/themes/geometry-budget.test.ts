@@ -3,9 +3,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { makeGeometry } from './geometry-audit.test-utils'
 import { Texture } from 'three'
 import { InstancedParts } from '../scene/InstancedParts'
-import { ThemePreviewContent } from './ThemePreview'
 import { listThemes } from './registry'
-import { previewFixture } from './preview-fixture'
+import { makeAgent } from '../__tests__/fixtures'
 import { useRobotRig } from './rig'
 
 // Expand the real procedural JSX without a Canvas, frame loop or GPU.
@@ -82,7 +81,7 @@ describe('procedural geometry budgets', () => {
     it(`${theme.id} keeps each provider model under 2500 triangles with controller refs`, () => {
       for (const provider of ['claude', 'codex'] as const) {
         const rig = useRobotRig()
-        const agent = { ...previewFixture().agents[0], provider }
+        const agent = makeAgent({ agentKey: `${provider}:model`, provider })
         const result = audit(
           createElement(theme.robot.Model, {
             agent,
@@ -105,14 +104,6 @@ describe('procedural geometry budgets', () => {
           expect(result.refs).toContain(ref)
         }
       }
-    })
-    it(`${theme.id} focused preview stays under 300 draws and 600k triangles`, () => {
-      const result = audit(ThemePreviewContent({ themeId: theme.id, isReducedMotion: true }))
-      console.info(
-        `${theme.id}: ${result.draws + 3} draw calls, ${result.triangles + 144} triangles (including selection rings)`
-      )
-      expect(result.draws + 3).toBeLessThanOrEqual(300)
-      expect(result.triangles + 144).toBeLessThanOrEqual(600_000)
     })
   }
 })

@@ -19,6 +19,7 @@ export interface ThemePalette {
   steam: string
 }
 
+// dead-code-allowed: plug-in contract type that each team's theme implements 2027-01-31
 export interface RobotSkin {
   label: string
   body: string
