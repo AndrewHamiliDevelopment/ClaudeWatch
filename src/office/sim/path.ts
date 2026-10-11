@@ -47,6 +47,24 @@ class Frontier {
   }
 }
 
+const SEARCH_RADIUS_CELLS = 8
+
+function nearestFree(
+  x: number,
+  z: number,
+  valid: (x: number, z: number) => boolean
+): [number, number] | null {
+  for (let radius = 0; radius <= SEARCH_RADIUS_CELLS; radius++) {
+    for (let dx = -radius; dx <= radius; dx++) {
+      for (let dz = -radius; dz <= radius; dz++) {
+        if (Math.max(Math.abs(dx), Math.abs(dz)) === radius && valid(x + dx, z + dz))
+          return [x + dx, z + dz]
+      }
+    }
+  }
+  return null
+}
+
 export function findPath(grid: NavGrid, from: Point, to: Point): Point[] {
   const cell = (point: Point) => [
     Math.round((point.x - grid.origin.x) / grid.cellSize),
@@ -62,8 +80,11 @@ export function findPath(grid: NavGrid, from: Point, to: Point): Point[] {
   }
   const valid = (x: number, z: number) =>
     x >= 0 && z >= 0 && x < grid.width && z < grid.height && !blocked[z * grid.width + x]
-  if (!valid(sx, sz) || !valid(tx, tz)) return []
-  const start = sz * grid.width + sx,
+  // A walker can be standing where a later layout built a wall: leave from the nearest free cell.
+  const origin = nearestFree(sx, sz, valid)
+  if (!origin || !valid(tx, tz)) return []
+  const isOnGrid = origin[0] === sx && origin[1] === sz
+  const start = origin[1] * grid.width + origin[0],
     target = tz * grid.width + tx
   const costs = new Float64Array(size).fill(Infinity)
   const previous = new Int32Array(size).fill(-1)
@@ -75,13 +96,15 @@ export function findPath(grid: NavGrid, from: Point, to: Point): Point[] {
   while ((current = open.pop()) !== undefined) {
     if (closed[current]) continue
     if (current === target) {
-      const path: Point[] = []
+      const cells: Point[] = []
       for (let id = target; id !== -1; id = previous[id])
-        path.push({
+        cells.push({
           x: grid.origin.x + (id % grid.width) * grid.cellSize,
           z: grid.origin.z + Math.floor(id / grid.width) * grid.cellSize
         })
-      return path.reverse()
+      cells.reverse()
+      // The ends are the real points, not their grid cells: seats sit between cells.
+      return [{ ...from }, ...cells.slice(isOnGrid ? 1 : 0, -1), { ...to }]
     }
     closed[current] = 1
     const x = current % grid.width,

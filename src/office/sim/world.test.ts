@@ -164,3 +164,32 @@ it('walks to a moved seat from where the agent is, not from the gate', () => {
   )
   expect({ x: after.x, z: after.z }).toEqual({ x: before.x, z: before.z })
 })
+it('keeps a team-area sitter in place when a new office is built over its old seat', () => {
+  const sim = new World({ now: () => 0 })
+  const worker = (id: string) => ({ id: `s${id}`, type: 'worker', activity: 'reading' as const })
+  const busy = { ...session('a'), subagents: ['0', '1', '2', '3'].map(worker) }
+  sim.apply({
+    type: 'hello',
+    v: 1,
+    snapshot: {
+      rev: 1,
+      generatedAtMs: 0,
+      sessions: [busy, session('b'), session('c'), session('d')],
+      sources: []
+    }
+  })
+  const before = sim.step(0).find((a) => a.agentKey === 'a#s3')!
+  sim.apply({ type: 'patch', v: 1, seq: 2, upserts: [session('e')], removed: [] })
+  const after = sim.step(0).find((a) => a.agentKey === 'a#s3')!
+  expect({ x: after.x, z: after.z }).toEqual({ x: before.x, z: before.z })
+})
+it('brings a new arrival to rest exactly on its seat', () => {
+  const sim = world()
+  for (let i = 0; i < 2000; i++) sim.step(100)
+  const [arrived] = sim.step(0)
+  const seat = sim
+    .layout()
+    .floors[0].rooms.find((r) => r.sessionKey === 'a')!
+    .slots.find((s) => s.id === 'desk_main')!
+  expect({ x: arrived.x, z: arrived.z }).toEqual({ x: seat.x, z: seat.z })
+})
