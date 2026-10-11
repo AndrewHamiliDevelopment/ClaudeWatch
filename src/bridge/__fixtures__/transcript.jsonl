@@ -1,0 +1,2 @@
+{"type":"assistant","message":{"content":[{"type":"text","text":"SECRET_PROMPT"},{"type":"tool_use","id":"a","name":"Read","input":{"path":"SECRET_INPUT"}},{"type":"tool_use","id":"b","name":"Edit","input":{"text":"SECRET_INPUT"}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"b","is_error":true,"content":"SECRET_RESULT"}]}}
