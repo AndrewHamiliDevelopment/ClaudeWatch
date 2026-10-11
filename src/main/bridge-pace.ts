@@ -4,7 +4,10 @@ interface WatchedWindow {
   isDestroyed(): boolean
   isVisible(): boolean
   isMinimized(): boolean
-  on(event: 'show' | 'hide' | 'minimize' | 'restore' | 'closed', listener: () => void): unknown
+  on(
+    event: 'show' | 'hide' | 'minimize' | 'restore' | 'closed' | 'ready-to-show',
+    listener: () => void
+  ): unknown
 }
 
 interface WindowSource {
@@ -14,7 +17,7 @@ interface WindowSource {
   ): unknown
 }
 
-const WINDOW_CHANGES = ['show', 'hide', 'minimize', 'restore', 'closed'] as const
+const WINDOW_CHANGES = ['show', 'hide', 'minimize', 'restore', 'closed', 'ready-to-show'] as const
 
 // Every window (dashboard, tray popover, Office) draws the bridge's data, so the bridge polls
 // live while any of them is on screen and slowly while none is. Notifications are not
@@ -32,6 +35,8 @@ export function paceBridgeByWindows(
   }
   app.on('browser-window-created', (_event, window) => {
     for (const change of WINDOW_CHANGES) window.on(change, update)
+    // A window created visible (the Office) never emits 'show', so it is looked at now.
+    update()
   })
   update()
 }

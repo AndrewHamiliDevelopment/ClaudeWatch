@@ -46,6 +46,22 @@ describe('paceBridgeByWindows', () => {
     expect(setPollInterval).toHaveBeenLastCalledWith(LIVE_POLL_MS)
   })
 
+  // The Office window is created visible: no 'show' event ever follows.
+  it('polls live for a window that is already on screen when it is created', () => {
+    const office = new FakeWindow()
+    office.visible = true
+    windows.push(office)
+    app.emit('browser-window-created', {}, office)
+    expect(setPollInterval).toHaveBeenLastCalledWith(LIVE_POLL_MS)
+  })
+
+  it('polls live once a window created hidden has drawn itself and is on screen', () => {
+    const office = open()
+    office.visible = true
+    office.emit('ready-to-show')
+    expect(setPollInterval).toHaveBeenLastCalledWith(LIVE_POLL_MS)
+  })
+
   it('slows down again once the last visible window is hidden, minimised or closed', () => {
     const [dashboard, popover, office] = [open(), open(), open()]
     for (const window of [dashboard, popover, office]) show(window)
