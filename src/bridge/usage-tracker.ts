@@ -42,6 +42,9 @@ export class UsageTracker {
   // Every teammate transcript a session has listed. A teammate leaves the roster when its
   // process exits, but what it spent stays in its lead's total until the lead itself leaves.
   private teammatePaths = new Map<string, Set<string>>()
+  // Sessions that left, each with the transcripts not yet read to their end: what one wrote
+  // after the last scan that saw it is on disk, and no later scan would list it.
+  private leaving = new Map<string, string[]>()
   private counted = new Set<string>()
   private behind = true
   private failed = false
@@ -57,16 +60,34 @@ export class UsageTracker {
   // Reads what was appended since the last scan, up to the byte budget. State for a transcript
   // that is no longer wanted is dropped here, so it stays bounded however long the bridge runs.
   // `onAdded` hears what every newly read line added. A transcript read again from its start
-  // is reported again, so the listener must count each line of a file once.
+  // is reported again, so the listener must count each line of a file once. With a listener, a
+  // session that left is read to its end before its state goes. A scan given no bytes reads
+  // nothing and still notes every transcript.
   async scan(
     sessions: ReadonlyMap<string, SessionFiles>,
-    onAdded?: (delta: TranscriptDelta) => void
+    onAdded?: (delta: TranscriptDelta) => void,
+    budgetBytes = this.budgetBytes
   ): Promise<void> {
+    if (onAdded) {
+      for (const [key, files] of this.sessions) {
+        if (!sessions.has(key))
+          this.leaving.set(key, [files.main, ...this.spawnedPaths(key, files)])
+      }
+    }
+    for (const key of sessions.keys()) this.leaving.delete(key)
     this.sessions = sessions
     for (const key of this.teammatePaths.keys())
       if (!sessions.has(key)) this.teammatePaths.delete(key)
     const wanted = new Map<string, number | null>()
     const owners = new Map<string, string>()
+    // Listed first, so a session that left is read before the budget goes to the live ones. A
+    // transcript a live session also lists (an orphaned teammate's) is reported under that one.
+    for (const [sessionKey, paths] of this.leaving) {
+      for (const path of paths) {
+        wanted.set(path, null)
+        owners.set(path, sessionKey)
+      }
+    }
     for (const [sessionKey, files] of sessions) {
       const listed = this.teammatePaths.get(sessionKey) ?? new Set<string>()
       for (const path of [...files.teammates.values()].flat()) listed.add(path)
@@ -80,9 +101,12 @@ export class UsageTracker {
     for (const path of this.files.keys()) if (!wanted.has(path)) this.files.delete(path)
     for (const key of this.counted) if (!sessions.has(key)) this.counted.delete(key)
 
-    let remaining = this.budgetBytes
-    this.behind = false
+    let remaining = budgetBytes
+    // A scan given no bytes has counted nothing, whatever it found.
+    this.behind = budgetBytes <= 0
     this.failed = false
+    // Transcripts this scan stopped short of the end of; one that is gone or unreadable is not held.
+    const unfinished = new Set<string>()
     for (const [path, knownSize] of wanted) {
       try {
         const size = knownSize ?? (await this.io.stat(path)).size
@@ -91,11 +115,18 @@ export class UsageTracker {
           onAdded && sessionKey !== undefined
             ? (increment: UsageIncrement): void => onAdded({ sessionKey, file: path, ...increment })
             : undefined
-        remaining -= await this.advance(path, size, remaining, report)
+        const { spent, isAtEnd } = await this.advance(path, size, remaining, report)
+        remaining -= spent
+        if (!isAtEnd) unfinished.add(path)
       } catch (error) {
         this.files.delete(path)
         if (!isMissing(error)) this.failed = true
       }
+    }
+    for (const [key, paths] of this.leaving) {
+      const unread = paths.filter((path) => unfinished.has(path))
+      if (unread.length) this.leaving.set(key, unread)
+      else this.leaving.delete(key)
     }
     for (const [key, files] of sessions) {
       if (!this.files.has(files.main)) this.counted.delete(key)
@@ -114,7 +145,7 @@ export class UsageTracker {
     size: number,
     budget: number,
     report?: (increment: UsageIncrement) => void
-  ): Promise<number> {
+  ): Promise<{ spent: number; isAtEnd: boolean }> {
     let file = this.files.get(path)
     // A file shorter than what was read was rewritten: count it again from the start.
     if (!file || size < file.offset) file = { offset: 0, fold: emptyFold(), hasReachedEnd: false }
@@ -124,7 +155,7 @@ export class UsageTracker {
       const window = Math.min(this.chunkBytes, budget - spent)
       if (window <= 0) {
         this.behind = true
-        return spent
+        return { spent, isAtEnd: false }
       }
       const read = await this.io.readFrom(path, file.offset, window)
       if (read.nextOffset > file.offset) {
@@ -140,14 +171,14 @@ export class UsageTracker {
       if (size - file.offset <= window) break
       if (window < this.chunkBytes) {
         this.behind = true
-        return spent
+        return { spent, isAtEnd: false }
       }
       // A line longer than a full read is skipped; what is left of it will not parse.
       file.offset += window
       spent += window
     }
     file.hasReachedEnd = true
-    return spent
+    return { spent, isAtEnd: true }
   }
 
   private spawnedPaths(sessionKey: string, files: SessionFiles): string[] {
@@ -201,6 +232,11 @@ export class UsageTracker {
   // True until a scan has read every transcript to its end within the byte budget.
   get isBehind(): boolean {
     return this.behind
+  }
+
+  // True while a session that left still has lines to report under its key.
+  isLeaving(key: string): boolean {
+    return this.leaving.has(key)
   }
 
   health(): SourceHealth {

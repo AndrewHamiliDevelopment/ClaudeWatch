@@ -103,3 +103,26 @@ it('posts added tokens to the parent as their own message, apart from the feed',
   mocks.options.mock.calls[0][0].onUsage(deltas)
   expect(postMessage).toHaveBeenCalledExactlyOnceWith({ type: 'usage', v: 1, deltas })
 })
+it('posts Codex totals to the parent as their own message too, and listens for neither in once mode', async () => {
+  mocks.start.mockResolvedValue(() => {})
+  const postMessage = vi.fn()
+  await main([], { postMessage, on: vi.fn() })
+  const totals = [
+    {
+      sessionKey: 'codex:a',
+      projectKey: 'p_1',
+      projectLabel: 'repo',
+      accountKey: null,
+      threadStartedAtMs: 5,
+      counts: { input: 1, output: 2, cacheWrite: 0, cacheRead: 0 }
+    }
+  ]
+  mocks.options.mock.calls[0][0].onCodexTotals(totals)
+  expect(postMessage).toHaveBeenCalledExactlyOnceWith({ type: 'codex-usage', v: 1, totals })
+
+  mocks.options.mockClear()
+  mocks.tick.mockResolvedValue(emptySnapshot())
+  vi.spyOn(process.stdout, 'write').mockReturnValue(true)
+  await main(['--once'])
+  expect(mocks.options.mock.calls[0][0]).not.toHaveProperty('onCodexTotals')
+})

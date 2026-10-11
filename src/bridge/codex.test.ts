@@ -156,6 +156,61 @@ it('keeps the last usage it read while output pushes the token count out of the 
   expect(await usage()).toMatchObject({ own: { input: 1300, cacheRead: 700 } })
 })
 
+// One Codex process in /repo with a rollout that holds a first total; `stop` ends the process.
+function endingSession() {
+  const rollout = '/codex/sessions/rollout-a.jsonl'
+  const meta = JSON.stringify({ type: 'session_meta', payload: { id: 'a', cwd: '/repo' } })
+  const files: Record<string, string | null> = {
+    [rollout]: `${meta}\n${tokenCount(1000, 700, 300)}\n`,
+    '/repo/.git': null
+  }
+  const io = fixtureIo(files)
+  let isRunning = true
+  io.exec = async (file) => {
+    if (!file.endsWith('ps')) return 'p42\nn/repo\n'
+    return isRunning ? '42 Sat Oct 10 15:29:12 2026 /bin/codex' : ''
+  }
+  return { rollout, files, io, stop: () => void (isRunning = false) }
+}
+
+it('reads a rollout once more when its process has gone, for the total the thread ended on', async () => {
+  const { rollout, files, io, stop } = endingSession()
+  expect((await collectCodex('/codex', io)).departed).toEqual([])
+
+  // Its last turn, written and the process gone before the next look.
+  files[rollout] += `${tokenCount(2000, 700, 300)}\n`
+  stop()
+  const tail = vi.spyOn(io, 'readTail')
+  const batch = await collectCodex('/codex', io)
+  expect(batch.sessions).toEqual([])
+  expect(batch.departed).toMatchObject([
+    { sessionKey: 'codex:a', projectLabel: 'repo', counts: { input: 1300, cacheRead: 700 } }
+  ])
+  expect(batch.sources[0].ok).toBe(true)
+
+  expect((await collectCodex('/codex', io)).departed).toEqual([])
+  expect(tail).toHaveBeenCalledTimes(1)
+})
+
+it('has no last total for a session whose rollout is gone, and says so when it cannot be read', async () => {
+  const gone = endingSession()
+  await collectCodex('/codex', gone.io)
+  delete gone.files[gone.rollout]
+  gone.stop()
+  const quiet = await collectCodex('/codex', gone.io)
+  expect([quiet.departed, quiet.sources[0].ok]).toEqual([[], true])
+
+  const denied = endingSession()
+  await collectCodex('/codex', denied.io)
+  denied.io.readTail = async () => {
+    throw Object.assign(new Error('denied'), { code: 'EACCES' })
+  }
+  denied.stop()
+  const failed = await collectCodex('/codex', denied.io)
+  expect(failed.departed).toEqual([])
+  expect(failed.sources[0]).toEqual({ id: 'codex', ok: false, detail: 'rollout read failed' })
+})
+
 it('says when the thread itself began, which a resumed session’s process does not', async () => {
   const meta = (extra: object): string =>
     JSON.stringify({ type: 'session_meta', payload: { id: 'a', cwd: '/repo', ...extra } })

@@ -1,11 +1,16 @@
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { type UsageDelta, USAGE_RETENTION_MS } from '../shared/accounts'
+import {
+  type CodexTotal,
+  codexTotalOf,
+  type UsageDelta,
+  USAGE_RETENTION_MS
+} from '../shared/accounts'
 import { LIVE_POLL_MS, QUIET_FEED_MS } from '../shared/office/pace'
 import type { FeedMessage, OfficeSnapshot } from '../shared/office/types'
 import { type BridgeIo, systemIo } from './io'
 import { type ClaudeBatch, collectClaude } from './registry'
-import { collectCodex } from './codex'
+import { type CodexBatch, collectCodex } from './codex'
 import { claimPanes, OrcaSource } from './orca'
 import { type ProcessRow, readProcessTable } from './process-table'
 import { diff, emptySnapshot, reduce } from './reducer'
@@ -20,6 +25,8 @@ export interface PollerOptions {
   now?: () => number
   // Hears the tokens every tick added, line by line, for whoever attributes them to an account.
   onUsage?: (deltas: UsageDelta[]) => void
+  // Hears every Codex total that changed, unheld: a Codex session keeps a running total, not lines.
+  onCodexTotals?: (totals: CodexTotal[]) => void
   // Whether a Codex session is given the hashed key of its account: only while accounts are watched.
   derivesAccounts?: boolean
 }
@@ -33,10 +40,16 @@ export class BridgePoller {
   private readonly teammates: TeammateSource
   private readonly usage: UsageTracker
   private readonly throttle = new UsageThrottle()
+  // The project of each session whose lines are still being reported: one that left is not in
+  // the tick that reads its last lines.
+  private readonly projects = new Map<string, Pick<UsageDelta, 'projectKey' | 'projectLabel'>>()
+  // Each live Codex session's total as last posted, so only a change is posted.
+  private readonly postedCodex = new Map<string, string>()
   private readonly roots: string[]
   private readonly codexRoot: string
   private readonly now: () => number
   private readonly onUsage: PollerOptions['onUsage']
+  private readonly onCodexTotals: PollerOptions['onCodexTotals']
   private readonly derivesAccounts: boolean
   private pending: Promise<OfficeSnapshot> | null = null
   constructor(options: PollerOptions = {}) {
@@ -48,6 +61,7 @@ export class BridgePoller {
     this.codexRoot = options.codexRoot ?? join(homedir(), '.codex')
     this.now = options.now ?? Date.now
     this.onUsage = options.onUsage
+    this.onCodexTotals = options.onCodexTotals
     this.derivesAccounts = options.derivesAccounts ?? false
   }
   tick(): Promise<OfficeSnapshot> {
@@ -72,13 +86,15 @@ export class BridgePoller {
       collectCodex(this.codexRoot, this.io, readProcesses, this.derivesAccounts, now),
       this.orca.poll(now)
     ])
-    // The first snapshot goes out with usage unknown, so no window waits on a first scan.
-    if (this.snapshot.rev > 0) await this.scanUsage(claude, now)
+    // The first snapshot goes out with usage unknown, so no window waits on a first scan: that
+    // scan reads nothing, and only notes the transcripts a session leaving before the next had.
+    await this.scanUsage(claude, now, this.snapshot.rev > 0 ? undefined : 0)
     this.orca.prune(claude.sessions)
     const enriched = claimPanes(
       await Promise.all(claude.sessions.map((session) => this.orca.enrich(session, now)))
     )
     const sessions = [...enriched.map((session) => this.usage.fill(session)), ...codex.sessions]
+    this.reportCodex(codex)
     this.throttle.prune(new Set(sessions.map((session) => session.key)))
     this.snapshot = reduce(this.snapshot, {
       now,
@@ -87,21 +103,41 @@ export class BridgePoller {
     })
     return this.snapshot
   }
-  private async scanUsage(claude: ClaudeBatch, now: number): Promise<void> {
-    if (!this.onUsage) return this.usage.scan(claude.transcripts)
+  // Tells of each Codex total the tick it is read, and of the one a session that left ended
+  // on: the snapshot holds a session's numbers for the display, and drops one that has left.
+  private reportCodex({ sessions, departed }: CodexBatch): void {
+    if (!this.onCodexTotals) return
+    const live = sessions.flatMap((session) => codexTotalOf(session) ?? [])
+    const changed = [...live, ...departed].filter(
+      (total) => this.postedCodex.get(total.sessionKey) !== JSON.stringify(total)
+    )
+    for (const total of changed) this.postedCodex.set(total.sessionKey, JSON.stringify(total))
+    const liveKeys = new Set(sessions.map((session) => session.key))
+    for (const key of this.postedCodex.keys()) if (!liveKeys.has(key)) this.postedCodex.delete(key)
+    if (changed.length) this.onCodexTotals(changed)
+  }
+
+  private async scanUsage(claude: ClaudeBatch, now: number, budgetBytes?: number): Promise<void> {
+    if (!this.onUsage) return this.usage.scan(claude.transcripts, undefined, budgetBytes)
+    for (const { key, projectKey, projectLabel } of claude.sessions)
+      this.projects.set(key, { projectKey, projectLabel })
     const added: TranscriptDelta[] = []
     // A first scan reads months of lines; the ledger would drop all but the last week of them.
     const oldestKept = now - USAGE_RETENTION_MS
-    await this.usage.scan(claude.transcripts, (delta) => {
-      if (delta.atMs > oldestKept) added.push(delta)
-    })
-    const sessions = new Map(claude.sessions.map((session) => [session.key, session]))
+    await this.usage.scan(
+      claude.transcripts,
+      (delta) => {
+        if (delta.atMs > oldestKept) added.push(delta)
+      },
+      budgetBytes
+    )
     const deltas = added.flatMap((delta): UsageDelta[] => {
-      const session = sessions.get(delta.sessionKey)
-      return session
-        ? [{ ...delta, projectKey: session.projectKey, projectLabel: session.projectLabel }]
-        : []
+      const project = this.projects.get(delta.sessionKey)
+      return project ? [{ ...delta, ...project }] : []
     })
+    const live = new Set(claude.sessions.map((session) => session.key))
+    for (const key of this.projects.keys())
+      if (!live.has(key) && !this.usage.isLeaving(key)) this.projects.delete(key)
     if (deltas.length) this.onUsage(deltas)
   }
   async start(post: (message: FeedMessage) => void): Promise<() => void> {

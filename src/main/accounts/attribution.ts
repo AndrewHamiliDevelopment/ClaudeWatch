@@ -1,10 +1,11 @@
 import { createHash } from 'crypto'
+import { isAccountKey } from '../../bridge/account-key'
 import { object } from '../../bridge/io'
 import { zeroCounts } from '../../shared/office/token-counts'
-import { type UsageDelta, USAGE_RETENTION_MS } from '../../shared/accounts'
-import type { SessionRef, TokenCounts } from '../../shared/office/types'
+import { type CodexTotal, type UsageDelta, USAGE_RETENTION_MS } from '../../shared/accounts'
+import type { TokenCounts } from '../../shared/office/types'
 import { upsertAccount, upsertClaudeAccount } from './account-records'
-import { isAmount, isPosition } from './amount'
+import { isAmount, isPosition, toCounts } from './amount'
 import type { IdentityRead } from './identity'
 import {
   addUsage,
@@ -56,25 +57,29 @@ export function toUsageDeltas(message: unknown): UsageDelta[] {
   if (usage?.type !== 'usage' || usage.v !== 1 || !Array.isArray(usage.deltas)) return []
   return usage.deltas.flatMap((value): UsageDelta[] => {
     const delta = object(value)
-    const counts = object(delta?.counts)
+    const counts = toCounts(delta?.counts)
     if (!delta || !counts || !isAmount(delta.atMs) || !isPosition(delta.position)) return []
     const { sessionKey, projectKey, projectLabel, file, atMs, position } = delta
-    const { input, output, cacheWrite, cacheRead } = counts
     if (!isLabel(sessionKey) || !isLabel(projectKey) || !isLabel(projectLabel) || !isLabel(file))
       return []
-    if (!isAmount(input) || !isAmount(output) || !isAmount(cacheWrite) || !isAmount(cacheRead))
-      return []
-    return [
-      {
-        sessionKey,
-        projectKey,
-        projectLabel,
-        file,
-        atMs,
-        position,
-        counts: { input, output, cacheWrite, cacheRead }
-      }
-    ]
+    return [{ sessionKey, projectKey, projectLabel, file, atMs, position, counts }]
+  })
+}
+
+// Codex totals posted beside the feed, checked the same way.
+export function toCodexTotals(message: unknown): CodexTotal[] {
+  const usage = object(message)
+  if (usage?.type !== 'codex-usage' || usage.v !== 1 || !Array.isArray(usage.totals)) return []
+  return usage.totals.flatMap((value): CodexTotal[] => {
+    const total = object(value)
+    const counts = toCounts(total?.counts)
+    if (!total || !counts) return []
+    const { sessionKey, projectKey, projectLabel, accountKey, threadStartedAtMs } = total
+    if (!isLabel(sessionKey) || !sessionKey.startsWith('codex:')) return []
+    if (!isLabel(projectKey) || !isLabel(projectLabel)) return []
+    if (accountKey !== null && !isAccountKey(accountKey)) return []
+    if (threadStartedAtMs !== null && !isAmount(threadStartedAtMs)) return []
+    return [{ sessionKey, projectKey, projectLabel, accountKey, threadStartedAtMs, counts }]
   })
 }
 
@@ -140,30 +145,30 @@ const CODEX_RETENTION_MS = 30 * 24 * 60 * 60 * 1000
 // highest total already counted goes to that account, exactly. True when the ledger changed.
 export function countCodexSessions(
   state: LedgerState,
-  sessions: readonly SessionRef[],
+  sessions: readonly CodexTotal[],
   now: number
 ): boolean {
   let hasChanged = false
   // A thread begun before this could hold tokens the ledger never saw being spent.
   const watchedSinceMs = Math.max(state.trackingSinceMs, now - CODEX_RETENTION_MS)
   for (const session of sessions) {
-    if (session.provider !== 'codex' || !session.usage) continue
-    const total = session.usage.own
+    const total = session.counts
     // By the thread's own age, not its process's: a resumed thread runs in a new process and
     // still carries its whole history. One of unknown age starts from what it already spent.
     const isWholeThreadWatched = (session.threadStartedAtMs ?? -Infinity) >= watchedSinceMs
     const counted =
-      state.codexSessions.get(session.key)?.counts ?? (isWholeThreadWatched ? zeroCounts() : total)
+      state.codexSessions.get(session.sessionKey)?.counts ??
+      (isWholeThreadWatched ? zeroCounts() : total)
     const added = pairwise(total, counted, (current, before) => Math.max(0, current - before))
     const hasGrown = Object.values(added).some((amount) => amount > 0)
-    if (!hasGrown && state.codexSessions.has(session.key)) continue
-    state.codexSessions.set(session.key, {
+    if (!hasGrown && state.codexSessions.has(session.sessionKey)) continue
+    state.codexSessions.set(session.sessionKey, {
       counts: pairwise(total, counted, Math.max),
       countedAtMs: now
     })
     hasChanged = true
     if (!hasGrown) continue
-    const accountKey = session.accountKey ?? null
+    const { accountKey } = session
     if (accountKey)
       upsertAccount(state, { key: accountKey, provider: 'codex' }, 'codex-rollout', now)
     addUsage(state, {

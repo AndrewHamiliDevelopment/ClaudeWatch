@@ -1,8 +1,21 @@
-import type { AccountsState, AliasResult, UsageDelta } from '../../shared/accounts'
+import {
+  type AccountsState,
+  type AliasResult,
+  type CodexTotal,
+  codexTotalOf,
+  type UsageDelta
+} from '../../shared/accounts'
 import type { OfficeSnapshot, SessionRef } from '../../shared/office/types'
 import { mergeOrcaAccounts, setAlias, upsertClaudeAccount } from './account-records'
 import { decorateSession, decorateSnapshot, officeAccounts, toAccountsState } from './accounts-view'
-import { countCodexSessions, countUsage, prune, recordIdentity, toUsageDeltas } from './attribution'
+import {
+  countCodexSessions,
+  countUsage,
+  prune,
+  recordIdentity,
+  toCodexTotals,
+  toUsageDeltas
+} from './attribution'
 import type { Identity, IdentityRead } from './identity'
 import { dayKey, emptyLedger, type LedgerState } from './ledger-state'
 import type { OrcaAccountList } from './orca-accounts'
@@ -41,6 +54,7 @@ export class AccountLedger {
   // False until the first look after watching began: until then no line can be attributed.
   private hasSampled = false
   private waiting: UsageDelta[] = []
+  private waitingTotals: CodexTotal[] = []
   private sampling: Promise<void> | null = null
   private isAskingOrca = false
   private orcaAskedAtMs = Number.NEGATIVE_INFINITY
@@ -48,8 +62,8 @@ export class AccountLedger {
   private saveTimer: NodeJS.Timeout | null = null
   private saveDueAtMs = 0
   private publishTimer: NodeJS.Timeout | null = null
-  // The sessions last shown, counted again at each look: the feed is silent while nothing changes.
-  private observed: readonly SessionRef[] = []
+  // The Codex totals last shown, counted again at each look: the feed is silent while nothing changes.
+  private observed: readonly CodexTotal[] = []
   private isUnsaved = false
   private hasLoadFailed = false
   private shownToOffice = JSON.stringify(null)
@@ -103,6 +117,7 @@ export class AccountLedger {
     this.state = null
     this.hasSampled = false
     this.waiting = []
+    this.waitingTotals = []
     this.publish()
   }
 
@@ -146,17 +161,25 @@ export class AccountLedger {
   ingestBridgeMessage(message: unknown): void {
     if (!this.isWatching) return
     const deltas = toUsageDeltas(message)
-    if (!deltas.length) return
+    const totals = toCodexTotals(message)
+    if (!deltas.length && !totals.length) return
     if (this.tracked) {
-      if (countUsage(this.tracked, deltas, Date.now())) this.counted()
+      const now = Date.now()
+      const hasCountedLines = countUsage(this.tracked, deltas, now)
+      if (countCodexSessions(this.tracked, totals, now) || hasCountedLines) this.counted()
       // Held only for a loaded ledger awaiting its first look. With no ledger they are dropped:
       // the bridge reports every live transcript again when it next starts.
-    } else if (this.state) this.waiting = this.waiting.concat(deltas)
+    } else if (this.state) {
+      this.waiting = this.waiting.concat(deltas)
+      this.waitingTotals = this.waitingTotals.concat(totals)
+    }
   }
 
+  // The feed's own numbers are held back for display, so a total may be older than one the
+  // bridge already posted beside it: an older total never lowers what is counted.
   observeSessions(sessions: readonly SessionRef[]): void {
-    this.observed = sessions
-    if (this.tracked && countCodexSessions(this.tracked, sessions, Date.now())) this.counted()
+    this.observed = sessions.flatMap((session) => codexTotalOf(session) ?? [])
+    if (this.tracked && countCodexSessions(this.tracked, this.observed, Date.now())) this.counted()
   }
 
   // The ledger once it can attribute: watching, loaded, and having looked at least once.
@@ -189,9 +212,11 @@ export class AccountLedger {
     const isFirstLook = !this.hasSampled
     this.hasSampled = true
     const hasCountedLines = countUsage(state, this.waiting, now)
-    this.waiting = []
     // Also what registers a Codex session shown before this look, or forgotten by the prune.
-    const hasCounted = countCodexSessions(state, this.observed, now) || hasCountedLines
+    const codexTotals = [...this.observed, ...this.waitingTotals]
+    this.waiting = []
+    this.waitingTotals = []
+    const hasCounted = countCodexSessions(state, codexTotals, now) || hasCountedLines
     if (before !== JSON.stringify([state.accounts, state.spans])) return this.changed()
     if (hasCounted) this.counted()
     if (isFirstLook || dayKey(now) !== this.shownDay) this.publish()
