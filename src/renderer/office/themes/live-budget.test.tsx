@@ -279,6 +279,23 @@ it('four companies alternating Neo Edo Steam and Violet Court stay inside the dr
   expect(result.triangles).toBeLessThanOrEqual(TRIANGLE_CEILING)
 })
 
+it.each([
+  ['Neo Edo Steam and Orbital Garrison', [EDO, 'orbital-garrison']],
+  ['Neo Edo Steam, Violet Court and Orbital Garrison', [EDO, 'violet-court', 'orbital-garrison']]
+])('four companies on %s stay inside the draw ceiling', (name, themeIds) => {
+  // An unregistered id would be measured as Neo Edo Steam.
+  for (const themeId of themeIds) expect(getTheme(themeId).id).toBe(themeId)
+  const result = measure({
+    ...twentyAgents(4),
+    floorTheme: getTheme(EDO),
+    themeIdFor: companyThemes(themeIds)
+  })
+  report(`${name}, 4 companies, 20 agents`, result)
+  expect(result.themeCount).toBe(themeIds.length)
+  expect(result.draws).toBeLessThanOrEqual(DRAW_CEILING)
+  expect(result.triangles).toBeLessThanOrEqual(TRIANGLE_CEILING)
+})
+
 it('a third theme that shares nothing still fits four companies inside the draw ceiling', () => {
   const result = measure({
     ...twentyAgents(4),
