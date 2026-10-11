@@ -117,3 +117,9 @@ Total **6h with Claude | 15h without** (2.5x): Phase 1 1|3, Phase 2 1.5|4, Phase
 - ASSUMPTION: the interim install replaces the app in `/Applications` rather than sitting beside it — chose this because login items and the single-instance lock work on one copy, and the old app is kept as a backup.
 - ASSUMPTION: local-database question skipped — ClaudeWatch has no data layer.
 - ASSUMPTION: version 1.3.0 (minor) — new feature and a major Electron upgrade, no breaking change for users.
+
+## Deviations
+
+- `src/main/bugfix-issues.test.ts` holds the new validator tests, because the existing `validateSettings` tests live there.
+- `src/main/office-window.ts` holds `opensOfficeOnStart`, so the start decision is testable without Electron.
+- The scope check lists 116 files that this work does not touch: 114 mode-only changes (100644 → 100755) and 2 deleted Xcode user-state files that were already in the working tree before the session. They are never staged.

@@ -23,12 +23,18 @@ function overlapArea(a: Bounds, b: Bounds): number {
   return width > 0 && height > 0 ? width * height : 0
 }
 
+export function isOnAnyDisplay(rect: Bounds, workAreas: readonly Bounds[]): boolean {
+  return workAreas.some((area) => overlapArea(rect, area) > 0)
+}
+
 // Reuses saved bounds only on a display that is still connected (an unplugged monitor would
-// leave the window off screen) and keeps the whole window inside that display's work area.
+// leave the window off screen) and keeps the whole window, at no less than its minimum size,
+// inside that display's work area.
 export function restoreBounds(
   saved: unknown,
   workAreas: readonly Bounds[],
-  fallback: Size
+  fallback: Size,
+  minimum: Size = { width: 0, height: 0 }
 ): Bounds | Size {
   if (!isBounds(saved)) return fallback
   const home = workAreas.reduce<Bounds | null>(
@@ -37,12 +43,40 @@ export function restoreBounds(
     null
   )
   if (!home) return fallback
-  const width = Math.min(saved.width, home.width)
-  const height = Math.min(saved.height, home.height)
+  const width = Math.min(Math.max(saved.width, minimum.width), home.width)
+  const height = Math.min(Math.max(saved.height, minimum.height), home.height)
   return {
     x: Math.min(Math.max(saved.x, home.x), home.x + home.width - width),
     y: Math.min(Math.max(saved.y, home.y), home.y + home.height - height),
     width,
     height
   }
+}
+
+interface MovableWindow {
+  on(event: 'moved' | 'resized' | 'close', listener: () => void): unknown
+  getNormalBounds(): Bounds
+  isDestroyed(): boolean
+}
+
+const SAVE_DELAY_MS = 300
+
+// Saves only what the user did. A window that opened at the default because its display was
+// unplugged, and was never moved, must not overwrite the place it is remembered at.
+export function rememberBounds(window: MovableWindow, save: (bounds: Bounds) => void): void {
+  let timer: ReturnType<typeof setTimeout> | null = null
+  const flush = (): void => {
+    if (!timer) return
+    clearTimeout(timer)
+    timer = null
+    // Normal bounds, so a maximised or full-screen window still reopens at its own size.
+    if (!window.isDestroyed()) save(window.getNormalBounds())
+  }
+  const touched = (): void => {
+    if (timer) clearTimeout(timer)
+    timer = setTimeout(flush, SAVE_DELAY_MS)
+  }
+  window.on('moved', touched)
+  window.on('resized', touched)
+  window.on('close', flush)
 }

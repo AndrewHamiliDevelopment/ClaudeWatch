@@ -11,7 +11,7 @@ import type { PermissionDecision, ProviderId } from '../shared/office/types'
 import { execFilePromise } from './platform/exec'
 import type { TerminalResolver } from './terminal-resolver'
 import type { SettingsStore } from './store'
-import { restoreBounds } from './window-bounds'
+import { rememberBounds, restoreBounds } from './window-bounds'
 
 // The app bundle's CLI, not whatever `orca` is first on PATH.
 const ORCA_CLI = '/Applications/Orca.app/Contents/Resources/bin/orca'
@@ -20,16 +20,18 @@ const ORCA_TIMEOUT_MS = 15_000
 type OfficeWindowStore = Pick<SettingsStore, 'getOfficeWindowBounds' | 'setOfficeWindowBounds'>
 
 const DEFAULT_SIZE = { width: 1280, height: 820 }
+const MINIMUM_SIZE = { width: 800, height: 560 }
 
 function createOfficeWindow(store: OfficeWindowStore): Electron.BrowserWindow {
   const window = createAppWindow({
     ...restoreBounds(
       store.getOfficeWindowBounds(),
       screen.getAllDisplays().map((display) => display.workArea),
-      DEFAULT_SIZE
+      DEFAULT_SIZE,
+      MINIMUM_SIZE
     ),
-    minWidth: 800,
-    minHeight: 560,
+    minWidth: MINIMUM_SIZE.width,
+    minHeight: MINIMUM_SIZE.height,
     title: 'ClaudeWatch Office',
     backgroundColor: '#0E0E10',
     titleBarStyle: 'hiddenInset',
@@ -41,8 +43,7 @@ function createOfficeWindow(store: OfficeWindowStore): Electron.BrowserWindow {
   } else {
     window.loadFile(join(__dirname, '../renderer/office.html'))
   }
-  // Normal bounds, so a maximised or full-screen window still reopens at its own size.
-  window.on('close', () => store.setOfficeWindowBounds(window.getNormalBounds()))
+  rememberBounds(window, (bounds) => store.setOfficeWindowBounds(bounds))
   return window
 }
 

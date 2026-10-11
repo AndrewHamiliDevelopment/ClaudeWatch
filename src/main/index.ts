@@ -95,7 +95,14 @@ function showDashboard(): void {
   }
 }
 
+// One copy only: a login item plus a manual start would otherwise run two Offices and two
+// bridges. Development runs are left alone so they can sit beside the installed app.
+const isOnlyInstance = !app.isPackaged || app.requestSingleInstanceLock()
+if (!isOnlyInstance) app.quit()
+app.on('second-instance', () => showDashboard())
+
 app.whenReady().then(() => {
+  if (!isOnlyInstance) return
   // Initialize store and settings
   const store = new SettingsStore()
   const settings = store.getSettings()
@@ -238,6 +245,9 @@ app.whenReady().then(() => {
 
 // Clean up tray before quitting to prevent "Object has been destroyed" errors
 app.on('before-quit', () => {
+  // Without this the hidden dashboard vetoes its own close and Cmd+Q leaves a process with
+  // no tray and no window.
+  app.isQuitting = true
   trayManager?.destroy()
   trayManager = null
 })

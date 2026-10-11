@@ -217,6 +217,26 @@ describe('SettingsStore', () => {
       expect(store.getSettings().openOfficeOnLaunch).toBe(false)
     })
 
+    it('starts from defaults when a stored group is missing or broken', () => {
+      const raw = store as unknown as { store: { set(key: string, value: unknown): void } }
+      raw.store.set('settings', { pollingIntervalMs: 5000, notifications: null })
+
+      const settings = store.getSettings()
+      expect(settings.pollingIntervalMs).toBe(5000)
+      expect(settings.notifications).toEqual(DEFAULT_SETTINGS.notifications)
+      expect(settings.theme).toBe(DEFAULT_SETTINGS.theme)
+    })
+
+    it('keeps the other notification choices when one is changed', () => {
+      store.setSettings({ notifications: { ...DEFAULT_SETTINGS.notifications, sound: false } })
+      const one = { onIdle: false } as typeof DEFAULT_SETTINGS.notifications
+      expect(store.setSettings({ notifications: one }).notifications).toEqual({
+        ...DEFAULT_SETTINGS.notifications,
+        sound: false,
+        onIdle: false
+      })
+    })
+
     it('remembers where the Office window was left', () => {
       expect(store.getOfficeWindowBounds()).toBeNull()
       store.setOfficeWindowBounds({ x: 40, y: 60, width: 1400, height: 900 })

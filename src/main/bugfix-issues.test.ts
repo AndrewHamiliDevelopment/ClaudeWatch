@@ -214,3 +214,27 @@ describe('validateSettings switches', () => {
     )
   })
 })
+
+describe('validateSettings types', () => {
+  const forge = (data: unknown) => validateSettings(data as Parameters<typeof validateSettings>[0])
+
+  it('drops any value whose type differs from its default', () => {
+    expect(forge({ pollingIntervalMs: 'abc', maxHistoryEntries: Number.NaN, theme: 7 })).toEqual({})
+    expect(forge({ notifications: null })).toEqual({})
+    expect(forge({ notifications: 'all' })).toEqual({})
+  })
+
+  it('checks the notification fields the same way', () => {
+    expect(
+      forge({
+        notifications: { sound: 'loud', cooldownSeconds: '30', mutedProjects: 'all', onIdle: false }
+      })
+    ).toEqual({ notifications: { onIdle: false } })
+    expect(forge({ notifications: { mutedProjects: ['/a', 5] } })).toEqual({ notifications: {} })
+  })
+
+  it('accepts only a known theme', () => {
+    expect(forge({ theme: 'neon' })).toEqual({})
+    expect(forge({ theme: 'light' })).toEqual({ theme: 'light' })
+  })
+})

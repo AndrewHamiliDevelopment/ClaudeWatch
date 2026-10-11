@@ -11,6 +11,7 @@ import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 import type { ClaudeInstance, InstanceUpdate, PromoStatus } from '../renderer/lib/types'
 import type { SettingsStore } from './store'
+import { isOnAnyDisplay } from './window-bounds'
 
 interface TrayManagerOptions {
   onOpenDashboard: () => void
@@ -193,11 +194,11 @@ export class TrayManager {
   }
 
   private isPositionOnScreen(x: number, y: number): boolean {
-    const displays = screen.getAllDisplays()
-    return displays.some((display) => {
-      const { x: dx, y: dy, width, height } = display.workArea
-      return x + 50 > dx && x < dx + width && y + 50 > dy && y < dy + height
-    })
+    // On screen means at least a 50 px corner of the popover can be grabbed.
+    return isOnAnyDisplay(
+      { x, y, width: 50, height: 50 },
+      screen.getAllDisplays().map((display) => display.workArea)
+    )
   }
 
   setPinned(pinned: boolean): void {

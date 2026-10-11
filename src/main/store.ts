@@ -11,6 +11,13 @@ interface StoreSchema {
   officeWindowBounds: Bounds | null
 }
 
+function defined<T extends object>(value: T | null | undefined): Partial<T> {
+  if (typeof value !== 'object' || value === null) return {}
+  return Object.fromEntries(
+    Object.entries(value).filter(([, entry]) => entry != null)
+  ) as Partial<T>
+}
+
 export class SettingsStore {
   private store: Store<StoreSchema>
 
@@ -28,28 +35,12 @@ export class SettingsStore {
   }
 
   getSettings(): AppSettings {
-    const stored = this.store.get('settings', DEFAULT_SETTINGS)
-    // Ensure new notification fields exist for users upgrading from older versions
-    if (stored.notifications.onTaskComplete === undefined) {
-      stored.notifications.onTaskComplete = DEFAULT_SETTINGS.notifications.onTaskComplete
-    }
-    if (stored.notifications.pingSound === undefined) {
-      stored.notifications.pingSound = DEFAULT_SETTINGS.notifications.pingSound
-    }
-    // Ensure minimizeToTray exists for users upgrading from older versions
-    if (stored.minimizeToTray === undefined) {
-      stored.minimizeToTray = DEFAULT_SETTINGS.minimizeToTray
-    }
-    if (stored.openOfficeOnLaunch === undefined) {
-      stored.openOfficeOnLaunch = DEFAULT_SETTINGS.openOfficeOnLaunch
-    }
-    // Ensure weeklyTokenTarget exists for users upgrading from older versions
-    if (stored.weeklyTokenTarget === undefined) {
-      stored.weeklyTokenTarget = DEFAULT_SETTINGS.weeklyTokenTarget
-    }
-    // Ensure mutedProjects exists for users upgrading from older versions
-    if (stored.notifications.mutedProjects === undefined) {
-      stored.notifications.mutedProjects = DEFAULT_SETTINGS.notifications.mutedProjects
+    const saved = this.store.get('settings', DEFAULT_SETTINGS)
+    // Defaults fill whatever an older version never saved, or a damaged file lost.
+    const stored: AppSettings = {
+      ...DEFAULT_SETTINGS,
+      ...defined(saved),
+      notifications: { ...DEFAULT_SETTINGS.notifications, ...defined(saved?.notifications) }
     }
     // Migrate cpuIdleThreshold from old default (1.0) to new default (3.0)
     if (stored.cpuIdleThreshold === 1.0) {
@@ -61,7 +52,11 @@ export class SettingsStore {
 
   setSettings(partial: Partial<AppSettings>): AppSettings {
     const current = this.getSettings()
-    const merged: AppSettings = { ...current, ...partial }
+    const merged: AppSettings = {
+      ...current,
+      ...partial,
+      notifications: { ...current.notifications, ...partial.notifications }
+    }
     this.store.set('settings', merged)
     return merged
   }
