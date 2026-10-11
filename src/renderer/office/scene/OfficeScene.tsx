@@ -57,6 +57,19 @@ export default function OfficeScene(props: OfficeSceneProps) {
     dots: new Map(),
     stacks: new Map()
   }))
+  // Serialising the floor is costly; redo it only when an input to the batches changes.
+  const { theme, floor, agents, selectedAgentKey, speakingAgentKey } = props
+  const revision = useMemo(
+    () =>
+      JSON.stringify([
+        theme.id,
+        floor,
+        selectedAgentKey,
+        speakingAgentKey,
+        agents.map((agent) => [agent.agentKey, agent.provider, agent.isSubagent])
+      ]),
+    [theme.id, floor, agents, selectedAgentKey, speakingAgentKey]
+  )
   const liveSessionKeys = useMemo(
     () => new Set(props.sessions.map((session) => session.key)),
     [props.sessions]
@@ -79,15 +92,7 @@ export default function OfficeScene(props: OfficeSceneProps) {
         <color attach="background" args={[SCENE_BACKGROUND]} />
         <hemisphereLight args={['#FFF3DD', '#3A3A40', 2.2]} />
         <directionalLight position={[10, 20, 6]} intensity={1.8} />
-        <BatchedScene
-          revision={JSON.stringify([
-            props.theme.id,
-            props.floor,
-            props.selectedAgentKey,
-            props.speakingAgentKey,
-            props.agents.map((agent) => [agent.agentKey, agent.provider, agent.isSubagent])
-          ])}
-        >
+        <BatchedScene revision={revision}>
           <FloorView
             theme={props.theme}
             floor={props.floor}

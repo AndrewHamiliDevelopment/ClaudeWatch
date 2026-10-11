@@ -75,7 +75,7 @@ function union(all: readonly Bounds[]): Bounds {
   }
 }
 
-function pad(bounds: Bounds, metres: number): Bounds {
+export function padBounds(bounds: Bounds, metres: number): Bounds {
   return {
     minX: bounds.minX - metres,
     maxX: bounds.maxX + metres,
@@ -103,11 +103,11 @@ function occupiedProjects(
 // rooms with sessions, else the whole plate.
 export function occupiedBounds(floor: FloorGeometry, liveSessionKeys: ReadonlySet<string>): Bounds {
   const projects = occupiedProjects(floor.zones, liveSessionKeys)
-  if (projects.length > 0) return pad(union(projects.map(boundsOfZone)), OCCUPIED_PADDING_M)
+  if (projects.length > 0) return padBounds(union(projects.map(boundsOfZone)), OCCUPIED_PADDING_M)
   const rooms = floor.rooms.filter(
     (room) => room.sessionKey && liveSessionKeys.has(room.sessionKey)
   )
-  if (rooms.length > 0) return pad(union(rooms.map(boundsOfZone)), OCCUPIED_PADDING_M)
+  if (rooms.length > 0) return padBounds(union(rooms.map(boundsOfZone)), OCCUPIED_PADDING_M)
   return boundsOfZone({ x: 0, z: 0, width: floor.width, depth: floor.depth })
 }
 

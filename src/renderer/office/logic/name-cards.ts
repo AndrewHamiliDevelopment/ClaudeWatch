@@ -1,6 +1,6 @@
 import type { AgentActivity, AgentView } from '../../../shared/office/types'
 import type { OfficeFrame } from '../scene-model'
-import { needsHuman, sessionForAgent } from './floor-model'
+import { agentCountLabel, needsHuman, needsYouLabel, sessionForAgent } from './floor-model'
 import { DESK_REACH } from './room-layout'
 import { GEM_SPECS } from './status-gem'
 
@@ -117,33 +117,35 @@ export function buildNameCards(
     .slice(0, MAX_NAME_CARDS)
 }
 
-function plural(count: number, one: string, many: string): string {
-  return `${count} ${count === 1 ? one : many}`
-}
-
 // One summary per project for the stacked badge shown when its cards crowd together.
 export function buildProjectStacks(frame: OfficeFrame, floorId: string): ProjectStack[] {
   const floor = frame.floors.find((candidate) => candidate.floorId === floorId)
-  const projectZones = (floor?.zones ?? []).flatMap((company) =>
-    company.children.filter((child) => child.kind === 'project')
-  )
-  const agents = frame.agents.filter((agent) => agent.floorId === floorId)
-  return projectZones.flatMap((zone) => {
-    const members = agents.filter(
-      (agent) => sessionForAgent(frame, agent)?.projectKey === zone.projectKey
-    )
-    if (!zone.projectKey || members.length === 0) return []
-    const waiting = members.filter(needsHuman).length
-    const parts = [zone.label, plural(members.length, 'agent', 'agents')]
-    if (waiting > 0) parts.push(`${waiting} ${waiting === 1 ? 'needs' : 'need'} you`)
-    return [
-      {
-        projectKey: zone.projectKey,
-        zoneId: zone.id,
-        x: zone.x,
-        z: zone.z,
-        text: parts.join(' · ')
-      }
-    ]
-  })
+  // Group once, so each project does not rescan every agent.
+  const membersByProject = new Map<string, AgentView[]>()
+  for (const agent of frame.agents) {
+    const projectKey =
+      agent.floorId === floorId ? sessionForAgent(frame, agent)?.projectKey : undefined
+    if (!projectKey) continue
+    const members = membersByProject.get(projectKey)
+    if (members) members.push(agent)
+    else membersByProject.set(projectKey, [agent])
+  }
+  return (floor?.zones ?? [])
+    .flatMap((company) => company.children.filter((child) => child.kind === 'project'))
+    .flatMap((zone) => {
+      const members = zone.projectKey ? membersByProject.get(zone.projectKey) : undefined
+      if (!zone.projectKey || !members) return []
+      const waiting = members.filter(needsHuman).length
+      const parts = [zone.label, agentCountLabel(members.length)]
+      if (waiting > 0) parts.push(needsYouLabel(waiting))
+      return [
+        {
+          projectKey: zone.projectKey,
+          zoneId: zone.id,
+          x: zone.x,
+          z: zone.z,
+          text: parts.join(' · ')
+        }
+      ]
+    })
 }

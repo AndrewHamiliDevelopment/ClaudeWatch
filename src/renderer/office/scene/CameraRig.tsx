@@ -13,7 +13,13 @@ import {
   type ZoomDirection
 } from '../logic/camera-bands'
 import type { CameraRequest } from '../logic/office-reducer'
-import { boundsOfZone, frameBounds, occupiedBounds, type Bounds } from '../logic/zone-framing'
+import {
+  boundsOfZone,
+  frameBounds,
+  occupiedBounds,
+  padBounds,
+  type Bounds
+} from '../logic/zone-framing'
 import { findZone } from '../logic/zone-model'
 import type { FloorGeometry } from '../scene-model'
 
@@ -34,15 +40,6 @@ interface CameraRigProps {
   request: CameraRequest | null
   isReducedMotion: boolean
   onBandChange: (band: ZoomBand) => void
-}
-
-function padded(bounds: Bounds): Bounds {
-  return {
-    minX: bounds.minX - ZONE_PADDING_M,
-    maxX: bounds.maxX + ZONE_PADDING_M,
-    minZ: bounds.minZ - ZONE_PADDING_M,
-    maxZ: bounds.maxZ + ZONE_PADDING_M
-  }
 }
 
 // Isometric orthographic camera: fixed 35° elevation, drag pans, wheel or -/= snap between three
@@ -154,7 +151,7 @@ export function CameraRig(props: CameraRigProps) {
         const zone = findZone(floor, request.zoneId)
         if (!zone) return
         rig.setBand('floor')
-        return rig.frame(padded(boundsOfZone(zone)), BAND_ZOOM.desk)
+        return rig.frame(padBounds(boundsOfZone(zone), ZONE_PADDING_M), BAND_ZOOM.desk)
       }
       case 'fly': {
         const agent = agents.find((candidate) => candidate.agentKey === request.agentKey)

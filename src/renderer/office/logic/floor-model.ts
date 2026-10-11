@@ -9,6 +9,15 @@ export interface FloorSummary {
   attentionCount: number
 }
 
+// Shared wording for counts in the Offices panel and the stacked project badge.
+export function agentCountLabel(count: number): string {
+  return `${count} ${count === 1 ? 'agent' : 'agents'}`
+}
+
+export function needsYouLabel(count: number): string {
+  return `${count} ${count === 1 ? 'needs' : 'need'} you`
+}
+
 export function needsHuman(agent: Pick<AgentView, 'attention'>): boolean {
   return agent.attention === 'permission' || agent.attention === 'question'
 }

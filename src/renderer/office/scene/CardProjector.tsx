@@ -1,5 +1,5 @@
 import { useFrame } from '@react-three/fiber'
-import { useMemo } from 'react'
+import { useMemo, useRef } from 'react'
 import { Vector3, type Camera } from 'three'
 import type { ZoomBand } from '../logic/camera-bands'
 import { cullCards, type CullCandidate } from '../logic/card-culling'
@@ -31,6 +31,13 @@ interface CardProjectorProps {
   selectedAgentKey: string | null
 }
 
+// Writes a snapshot slot and returns 1 if it changed, so the idle check allocates nothing.
+function store(snapshot: number[], index: number, value: number): number {
+  const hasChanged = snapshot[index] !== value
+  snapshot[index] = value
+  return hasChanged ? 1 : 0
+}
+
 function hideAll(elements: Map<string, HTMLElement>): void {
   for (const element of elements.values()) element.style.transform = OFFSCREEN
 }
@@ -46,6 +53,13 @@ export function CardProjector({
 }: CardProjectorProps) {
   const point = useMemo(() => new Vector3(), [])
   // Element sizes change only with band or selection, so measure once per combination.
+  const lastRef = useRef<{
+    view: number[]
+    cards: readonly NameCard[] | null
+    stacks: readonly ProjectStack[] | null
+    band: ZoomBand | null
+    selectedAgentKey: string | null
+  }>({ view: [], cards: null, stacks: null, band: null, selectedAgentKey: null })
   const sizes = useMemo(
     () => new WeakMap<HTMLElement, { key: string; width: number; height: number }>(),
     []
@@ -71,6 +85,34 @@ export function CardProjector({
   }
 
   useFrame(({ camera, size }) => {
+    // Cards only move when the camera, the viewport or the inputs change; skip idle frames.
+    const zoom = 'zoom' in camera && typeof camera.zoom === 'number' ? camera.zoom : 1
+    const { position, quaternion } = camera
+    const last = lastRef.current
+    const view = last.view
+    const hasMoved =
+      store(view, 0, position.x) |
+      store(view, 1, position.y) |
+      store(view, 2, position.z) |
+      store(view, 3, quaternion.x) |
+      store(view, 4, quaternion.y) |
+      store(view, 5, quaternion.z) |
+      store(view, 6, quaternion.w) |
+      store(view, 7, zoom) |
+      store(view, 8, size.width) |
+      store(view, 9, size.height)
+    const isSameView =
+      hasMoved === 0 &&
+      last.cards === cards &&
+      last.stacks === stacks &&
+      last.band === band &&
+      last.selectedAgentKey === selectedAgentKey
+    if (isSameView) return
+    last.cards = cards
+    last.stacks = stacks
+    last.band = band
+    last.selectedAgentKey = selectedAgentKey
+
     if (band === 'desk') {
       for (const card of cards) {
         const height = card.kind === 'card' ? CARD_HEIGHT : PILL_HEIGHT
