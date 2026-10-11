@@ -1,7 +1,7 @@
 import type { Vector } from '../primitives'
 import type { CourtCharacter, PilotFeature } from './cast'
 import { COURT } from './palette'
-import { box, turned, type PartSpec } from './Parts'
+import { box, turned, type PartSpec } from '../parts'
 
 type PilotJoint = 'base' | 'legs' | 'body' | 'leftArm' | 'rightArm' | 'head' | 'gear'
 type PilotParts = Record<PilotJoint, PartSpec[]>

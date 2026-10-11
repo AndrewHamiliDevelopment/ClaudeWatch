@@ -1,4 +1,4 @@
-import type { RosterEntry } from '../violet-court/cast'
+import type { RosterEntry } from '../types'
 import { GARRISON } from './palette'
 
 type Section = 'wing' | 'deck'

@@ -1,6 +1,6 @@
 import type { Vector } from '../primitives'
 import type { FloorProps, TowerProps } from '../types'
-import { box, Parts, turned, type PartSpec } from '../violet-court/Parts'
+import { box, Parts, turned, type PartSpec } from '../parts'
 import { ThemeTower } from '../WorldArchitecture'
 import { paperLantern } from './GroveRoom'
 import { GROVE, GROVE_PALETTE } from './palette'

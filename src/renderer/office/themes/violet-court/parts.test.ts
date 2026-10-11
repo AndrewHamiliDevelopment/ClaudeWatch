@@ -4,7 +4,7 @@ import { UNIT_SHAPES, type UnitShape } from '../unit-parts'
 import { COURT_CAST } from './cast'
 import { frameParts } from './frame-parts'
 import { COURT } from './palette'
-import type { PartSpec } from './Parts'
+import type { PartSpec } from '../parts'
 import { pilotParts } from './pilot-parts'
 import { COURT_FRAMES, type FrameKind } from './roster'
 

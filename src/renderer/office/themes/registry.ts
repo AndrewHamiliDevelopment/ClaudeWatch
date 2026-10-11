@@ -1,7 +1,8 @@
 import { brassWorkshop, neoEdoSteam } from './builtins'
 import { orbitalGarrison } from './orbital-garrison'
 import { quietGrove } from './quiet-grove'
-import type { OfficeTheme } from './types'
+import type { AgentView } from '../../../shared/office/types'
+import type { OfficeTheme, RosterEntry } from './types'
 import { violetCourt } from './violet-court'
 
 export const DEFAULT_THEME_ID = 'neo-edo-steam'
@@ -28,4 +29,15 @@ export function listThemes(): OfficeTheme[] {
 
 export function themeForTeam(): OfficeTheme {
   return getTheme(DEFAULT_THEME_ID)
+}
+
+// The character an agent plays in a theme, or null where the theme has no cast.
+// dead-code-allowed: hud/theme-character.ts takes this over in the lead's follow-up 2026-11-30
+export function themeCharacter(
+  themeId: string,
+  agent: Pick<AgentView, 'provider' | 'isSubagent'>,
+  bay: number
+): RosterEntry | null {
+  const roster = getTheme(themeId).roster
+  return roster?.entries()[roster.indexFor(agent, bay)] ?? null
 }

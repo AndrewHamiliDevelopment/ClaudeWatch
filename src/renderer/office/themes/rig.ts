@@ -1,5 +1,5 @@
 import { useRef } from 'react'
-import type { Group, Mesh, MeshStandardMaterial } from 'three'
+import type { Group, Mesh } from 'three'
 import { steamPuffs, type RobotMood, type RobotPose } from '../logic/character-pose'
 import type { RobotRig } from './types'
 
@@ -15,12 +15,7 @@ export function useRobotRig(): RobotRig {
     sensor: useRef<Group>(null),
     eye: useRef<Mesh>(null),
     thought: useRef<Group>(null),
-    puffs: [useRef<Mesh>(null), useRef<Mesh>(null), useRef<Mesh>(null)],
-    puffMaterials: [
-      useRef<MeshStandardMaterial>(null),
-      useRef<MeshStandardMaterial>(null),
-      useRef<MeshStandardMaterial>(null)
-    ]
+    puffs: [useRef<Mesh>(null), useRef<Mesh>(null), useRef<Mesh>(null)]
   }
 }
 
@@ -57,7 +52,5 @@ export function applyThemePose(
     if (!puff || !mesh.visible) return
     mesh.position.y = 1.12 + puff.y
     mesh.scale.setScalar(puff.scale)
-    const material = rig.puffMaterials[index]?.current
-    if (material) material.opacity = puff.opacity
   })
 }

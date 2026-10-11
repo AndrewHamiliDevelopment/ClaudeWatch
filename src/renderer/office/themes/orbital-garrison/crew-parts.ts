@@ -1,5 +1,5 @@
 import type { Vector } from '../primitives'
-import { box, turned, type PartSpec } from '../violet-court/Parts'
+import { box, turned, type PartSpec } from '../parts'
 import type { CrewFeature, GarrisonCharacter } from './cast'
 import { GARRISON } from './palette'
 

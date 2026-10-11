@@ -2,7 +2,7 @@ import type { FloorProps, ZoneProps } from '../types'
 import { CompanyGrounds, ProjectRoom } from '../ZoneArchitecture'
 import { pointedArch } from './CourtRoom'
 import { COURT, COURT_PALETTE } from './palette'
-import { box, Parts, type PartSpec } from './Parts'
+import { box, Parts, type PartSpec } from '../parts'
 
 // The company gate: a tall pointed arch with a violet banner on each post.
 const GATE: PartSpec[] = [

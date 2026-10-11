@@ -1,9 +1,10 @@
 import { useMemo } from 'react'
 import { moodFor } from '../../logic/character-pose'
 import { Matte } from '../../scene/InstancedParts'
+import { JointedFigure } from '../JointedFigure'
 import type { RobotModelProps } from '../types'
 import { UNIT_SHAPES, UnitPart } from '../unit-parts'
-import { Parts } from '../violet-court/Parts'
+import { Parts } from '../parts'
 import { GROVE_CAST } from './cast'
 import { GROVE } from './palette'
 import { castIndexFor } from './roster'
@@ -58,47 +59,29 @@ export function GroveSpirit({ agent, skin, rosterIndex, rig }: RobotModelProps) 
   const build = useMemo(() => spiritBuild(GROVE_CAST[castIndex]), [castIndex])
   const isAsking = moodFor(agent, false) === 'needs-you'
   return (
-    <>
-      <group ref={rig.base}>
-        <Parts parts={build.joints.base} />
-      </group>
-      {/* Hidden, never unmounted: a merged batch keeps drawing a mesh that leaves the tree. */}
-      <group name="needs-you-halo" visible={isAsking}>
-        <UnitPart
-          shape="cylinder"
-          at={[0, HALO.y, 0]}
-          size={[HALO.width, 0.006, HALO.width]}
-          color={GROVE.beacon}
-          glow
-        />
-      </group>
-      <group ref={rig.body}>
-        <group ref={rig.legs}>
-          <Parts parts={build.joints.legs} />
+    <JointedFigure
+      rig={rig}
+      joints={build.joints}
+      pivot={build.pivot}
+      eye={{ ...build.eye, color: skin.eye }}
+      effects={<GroveEffects rig={rig} crown={build.crown} />}
+      ground={
+        // Hidden, never unmounted: a merged batch keeps drawing a mesh that leaves the tree.
+        <group name="needs-you-halo" visible={isAsking}>
+          <UnitPart
+            shape="cylinder"
+            at={[0, HALO.y, 0]}
+            size={[HALO.width, 0.006, HALO.width]}
+            color={GROVE.beacon}
+            glow
+          />
         </group>
-        <Parts parts={build.joints.body} />
-        <group ref={rig.leftArm} position={build.pivot.leftArm}>
-          <Parts parts={build.joints.leftArm} />
+      }
+      inRightHand={
+        <group name="needs-you-beacon" visible={isAsking}>
+          <Parts parts={build.beacon} />
         </group>
-        <group ref={rig.rightArm} position={build.pivot.rightArm}>
-          <Parts parts={build.joints.rightArm} />
-          <group name="needs-you-beacon" visible={isAsking}>
-            <Parts parts={build.beacon} />
-          </group>
-        </group>
-        <group ref={rig.gear} position={build.pivot.gear}>
-          <Parts parts={build.joints.gear} />
-        </group>
-        <group ref={rig.head} position={build.pivot.head}>
-          <Parts parts={build.joints.head} />
-          {/* Sized geometry, not a unit part: the rig resets this mesh's scale to blink. */}
-          <mesh ref={rig.eye} position={build.eye.at}>
-            <boxGeometry args={build.eye.size} />
-            <Matte color={skin.eye} glow />
-          </mesh>
-        </group>
-        <GroveEffects rig={rig} crown={build.crown} />
-      </group>
-    </>
+      }
+    />
   )
 }

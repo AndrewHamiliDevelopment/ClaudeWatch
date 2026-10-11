@@ -6,16 +6,17 @@ import { CourtDesk, CourtDoorway, CourtRoomDressing, CourtRoomFloors } from './C
 import { CourtWalls } from './CourtWalls'
 import { CourtDistrict, CourtHangar, CourtTower } from './CourtWorld'
 import { COURT, COURT_PALETTE } from './palette'
-import { VIOLET_COURT_ID } from './roster'
+import { castIndexFor, VIOLET_COURT_ID, violetCourtRoster } from './roster'
 
-// dead-code-allowed: the cast and frames as { id, name, role } for the Office HUD 2026-12-31
-export { COURT_FRAMES, violetCourtRoster } from './roster'
+// The Office HUD still reads the cast from here; the theme's `roster` is the generic way in.
+export { violetCourtRoster } from './roster'
 
 export const violetCourt: OfficeTheme = {
   id: VIOLET_COURT_ID,
   label: 'Violet Court',
   description: 'A royal court in violet, black and gold: pilots at their desks, knights parked.',
   palette: COURT_PALETTE,
+  roster: { entries: violetCourtRoster, indexFor: castIndexFor },
   robot: {
     Model: CourtPilot,
     skins: {

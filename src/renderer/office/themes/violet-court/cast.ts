@@ -1,10 +1,8 @@
+import type { RosterEntry } from '../types'
 import { COURT } from './palette'
 
-export interface RosterEntry {
-  id: string
-  name: string
-  role: string
-}
+// The Office HUD still reads the type from here.
+export type { RosterEntry }
 
 type Faction = 'order' | 'corps'
 export type PilotFeature =
