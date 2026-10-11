@@ -25,10 +25,30 @@ function git(...args) {
   return execFileSync('git', args, { cwd: REPOSITORY, encoding: 'utf8' }).trim()
 }
 
-// The commit the bundle was built from, and whether tracked files had changed since.
+// What the bundle is built from: a change anywhere else does not make the bundle differ.
+const BUNDLE_INPUTS = [
+  'src',
+  'package.json',
+  'package-lock.json',
+  'vite.office-web.config.ts',
+  'vite.office-server.config.ts',
+  'tailwind.config.ts',
+  'postcss.config.js',
+  'scripts/sync-office-to-framework.mjs'
+]
+
+// The commit the bundle was built from, and whether its inputs had changed since.
 function sourceCommit() {
   try {
-    const dirty = git('-c', 'core.fileMode=false', 'status', '--porcelain', '--untracked-files=no')
+    const dirty = git(
+      '-c',
+      'core.fileMode=false',
+      'status',
+      '--porcelain',
+      '--untracked-files=no',
+      '--',
+      ...BUNDLE_INPUTS
+    )
     return { commit: git('rev-parse', 'HEAD'), dirty: dirty !== '' }
   } catch {
     return { commit: null, dirty: true }
