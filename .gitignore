@@ -20,3 +20,4 @@ docs/plans/*.html
 # Recordings are local-only demo artefacts
 recordings/
 *.tsbuildinfo
+.claude/worktrees/

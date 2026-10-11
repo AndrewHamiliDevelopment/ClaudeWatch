@@ -6,12 +6,12 @@ Validated: `node /tmp/cw-repro-2026-10-11/repro.mjs` printed `cd "/tmp/proj$(ech
 
 ## Ledger
 
-- [ ] Phase 0 — Base: branch, hotfix H1/H2 (TDD), real typecheck + lint, dependencies, build config, office contract
-- [ ] Phase 1 — Platform: Electron 44, one sandboxed window factory, strict CSP, navigation locks (Codex)
-- [ ] Phase 2 — Bridge: live session ingest and reducer in a utilityProcess (Codex)
-- [ ] Phase 3 — Sim: deterministic building layout and agent behaviour, pure TS (Codex)
+- [x] Phase 0 — Base: branch, hotfix H1/H2 (TDD), real typecheck + lint, dependencies, build config, office contract
+- [x] Phase 1 — Platform: Electron 44, one sandboxed window factory, strict CSP, navigation locks (Codex)
+- [x] Phase 2 — Bridge: live session ingest and reducer in a utilityProcess (Codex)
+- [x] Phase 3 — Sim: deterministic building layout and agent behaviour, pure TS (Codex)
 - [ ] Phase 4 — Scene: Office window renderer, R3F graybox building, HUD, list view (Claude @lena)
-- [ ] Phase 5 — Look-first room: standalone Sims 3-look test in `labs/office-slice/` (Claude @lena + Codex images)
+- [x] Phase 5 — ~~Look-first room (Sims 3 test)~~ cancelled 2026-10-11: owner changed the art direction to a simple isometric mecha-steampunk game; the look now lives in the Phase 4 scene
 - [ ] Phase 6 — Integration: wire bridge → Office window, merge worktrees, STEP 6 gates, review, E2E video
 
 ## Owner decisions (this round)
@@ -23,6 +23,15 @@ Validated: `node /tmp/cw-repro-2026-10-11/repro.mjs` printed `cd "/tmp/proj$(ech
 | Isolation             | Worktrees under `.claude/.worktree/`                                           |
 | Codex                 | Work in combination; Claude decides the split (below)                          |
 | Carried from research | Hybrid Orca accounts; floor = project; Sims 3 target; local only               |
+
+## Art direction change (owner, 2026-10-11)
+
+The owner replaced "close to The Sims 3" with a simple, animated, isometric game in a mecha-steampunk style, with timing to be tuned later. References: an isometric low-poly cubicle office with white name cards (status dot, NAME, role line) floating over each desk, and Upskwela's clean low-poly isometric rooms with small robots, arch doorways and room signs.
+
+- Agents are small brass/copper robots built from primitives (Claude amber eye, Codex teal eye); subagents are smaller apprentice bots.
+- Simple loops only: idle bob and blink, typing arms with a spinning back gear and a steam puff, head-down reading, slow-gear thinking, waving when it needs you.
+- Fixed isometric orthographic camera with zoom, pan and 90° rotation.
+- The Sims 3 fidelity ladder (L2/L3, Rocketbox, baked lighting, paid art) is dropped.
 
 ## Scope
 
