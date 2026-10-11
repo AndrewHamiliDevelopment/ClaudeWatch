@@ -15,6 +15,7 @@ Validated: `node /tmp/cw-repro-2026-10-11/repro.mjs` printed `cd "/tmp/proj$(ech
 - [x] Phase 4 — Scene (mecha-steampunk isometric game, merged 2df1352)
 - [ ] Phase 7 — Interactions: talk to an agent, answer Claude permission prompts, peek at its screen, start a new agent (main side 87f3e2e; UI with @lena)
 - [ ] Phase 8 — Themes: plug-in theme system (robot model + office kit + world per team); first theme Japanese steampunk with Code Geass-inspired samurai mechs; a bigger world (district, hangar, pagoda HQ tower) (Codex)
+- [ ] Phase 9 — One floor of companies: company zones (the folder holding each project) contain project offices, which contain one office per agent ("offices within offices"); review fixes (Codex world + bridge, me, @lena scene/HUD)
 - [ ] Phase 6 — Integration: wire bridge → Office window, merge worktrees, STEP 6 gates, review, E2E video
 
 ## Owner decisions (this round)
@@ -40,6 +41,12 @@ The owner replaced "close to The Sims 3" with a simple, animated, isometric game
 
 - Interactions, all user-initiated through Orca's CLI: talk (`orca terminal send`), answer Claude permission prompts only when the prompt is on screen (key 1 / Escape), peek at the last 40 screen lines (`orca terminal read --screen`, never stored), start a Claude or Codex agent in a project (`orca terminal create`, Terminal.app fallback). Plain-terminal sessions keep Jump to terminal.
 - Themes: the look becomes a plug-in (`OfficeTheme`: robot model, office kit, world) so later teams can bring their own models and offices. First theme: Japanese steampunk with original, Code Geass-inspired samurai mechs (no franchise names, logos or insignia). The environment grows into a district around each floor, a hangar bay for idle mechs, and a pagoda HQ tower showing all project floors.
+
+## One floor of companies (owner, 2026-10-11)
+
+The owner replaced floors-per-project with one big floor: each company (the folder that holds its projects, such as ZKidz or PropApp) is an isolated zone; each project is an office inside its company; each agent session has its own office inside the project office, with guest seats for subagents and a team area for overflow. Navigation becomes a Rooms panel; the pagoda tower is a landmark.
+
+Follow-up after this milestone (owner): sync the office into the zkidz-claude-team repository.
 
 ## Scope
 
