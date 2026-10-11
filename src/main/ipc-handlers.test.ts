@@ -273,6 +273,12 @@ it.each(['mute', 'unmute'])('updates the %s project list', (action) => {
     }
   })
 })
+it('mutes a project without changing the settings it read', () => {
+  const settings = structuredClone(DEFAULT_SETTINGS)
+  store.getSettings.mockReturnValueOnce(settings)
+  handlers['notifications:mute-project'](appEvent, '/project')
+  expect(settings.notifications.mutedProjects).toEqual([])
+})
 it.each([false, true, null])('forwards updates only to live windows: %s', (destroyed) => {
   const send = vi.fn()
   const window = destroyed === null ? null : { isDestroyed: () => destroyed, webContents: { send } }

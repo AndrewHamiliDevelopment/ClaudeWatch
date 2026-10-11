@@ -121,43 +121,33 @@ function openDefault(projectPath: string): Promise<{ success: boolean }> {
 
 type OpenerFn = (projectPath: string) => Promise<{ success: boolean }>
 
-const openerRegistry: Record<string, OpenerFn> = {
-  warp: openWarp,
-  iterm2: openITerm2,
-  'terminal-app': openTerminalApp,
-  vscode: openVSCode,
-  cursor: openCursor,
-  kitty: openKitty,
-  wezterm: openWezterm,
-  ghostty: openGhostty
+// One row per terminal app: what `open -a` calls it, and how a folder is opened in it when the
+// default will not do. A multiplexer or an unknown host has no row.
+const TERMINALS: Partial<Record<TerminalType, { app: string; open?: OpenerFn }>> = {
+  'terminal-app': { app: 'Terminal', open: openTerminalApp },
+  iterm2: { app: 'iTerm', open: openITerm2 },
+  warp: { app: 'Warp', open: openWarp },
+  alacritty: { app: 'Alacritty' },
+  kitty: { app: 'kitty', open: openKitty },
+  wezterm: { app: 'WezTerm', open: openWezterm },
+  hyper: { app: 'Hyper' },
+  ghostty: { app: 'Ghostty', open: openGhostty },
+  vscode: { app: 'Visual Studio Code', open: openVSCode },
+  cursor: { app: 'Cursor', open: openCursor }
 }
 
 export async function openTerminal(
   projectPath: string,
   terminalType?: TerminalType
 ): Promise<{ success: boolean }> {
-  const opener = (terminalType && openerRegistry[terminalType]) || openDefault
+  const opener = (terminalType && TERMINALS[terminalType]?.open) || openDefault
   return opener(projectPath)
-}
-
-// What `open -a` calls each terminal app. A multiplexer or an unknown host names none.
-const APP_NAMES: Partial<Record<TerminalType, string>> = {
-  'terminal-app': 'Terminal',
-  iterm2: 'iTerm',
-  warp: 'Warp',
-  alacritty: 'Alacritty',
-  kitty: 'kitty',
-  wezterm: 'WezTerm',
-  hyper: 'Hyper',
-  ghostty: 'Ghostty',
-  vscode: 'Visual Studio Code',
-  cursor: 'Cursor'
 }
 
 // Brings the terminal app forward and nothing more: no tab, no window, no keystroke. For a
 // caller that may not type, where `openTerminal` would type `cd` into the app.
 export function raiseTerminal(terminalType?: TerminalType): Promise<{ success: boolean }> {
-  const app = terminalType && APP_NAMES[terminalType]
+  const app = terminalType && TERMINALS[terminalType]?.app
   return app ? runCommand('/usr/bin/open', ['-a', app]) : Promise.resolve({ success: false })
 }
 
