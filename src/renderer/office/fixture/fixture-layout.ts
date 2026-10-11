@@ -51,6 +51,7 @@ export function layoutFloor(options: {
     rooms: options.sessions.map((session, index) =>
       roomFor(session, index, options.floorId, originX)
     ),
+    zones: [],
     elevator: { x: originX + LOBBY_WIDTH / 2, z: -(CORRIDOR_WIDTH / 2 + ROOM_DEPTH / 2) }
   }
 }

@@ -10,6 +10,9 @@ export function makeSession(overrides: Partial<SessionRef> & Pick<SessionRef, 'k
     cwd: '/tmp/project',
     projectKey: 'p_1',
     projectLabel: 'Project',
+    projectRoot: '/repo/app',
+    companyKey: 'c_test',
+    companyLabel: 'Test Co',
     worktree: null,
     host: 'terminal',
     orcaPaneKey: null,
@@ -49,6 +52,7 @@ export function makeFloor(
     depth: 16,
     corridor: { z: 0, width: 3 },
     rooms: [],
+    zones: [],
     elevator: { x: -8, z: 0 },
     ...overrides
   }

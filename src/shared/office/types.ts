@@ -39,6 +39,10 @@ export interface SessionRef {
   cwd: string
   projectKey: string
   projectLabel: string
+  projectRoot: string // main repo root (worktrees resolve to it)
+  // The company is the folder holding the project (e.g. ~/Work/ZKidz); it groups offices on the floor.
+  companyKey: string
+  companyLabel: string
   worktree: string | null
   host: SessionHost
   orcaPaneKey: string | null

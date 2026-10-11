@@ -1,4 +1,4 @@
-import { basename } from 'node:path'
+import { basename, dirname } from 'node:path'
 import type {
   AgentActivity,
   AgentAttention,
@@ -96,6 +96,9 @@ export async function collectCodex(
           cwd,
           projectKey: projectKey(project.root),
           projectLabel: basename(project.root),
+          projectRoot: project.root,
+          companyKey: projectKey(dirname(project.root)),
+          companyLabel: basename(dirname(project.root)),
           worktree: project.worktree,
           host: 'terminal',
           orcaPaneKey: null,

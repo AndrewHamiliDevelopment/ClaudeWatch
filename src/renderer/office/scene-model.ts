@@ -21,6 +21,25 @@ export interface RoomGeometry {
   kind: 'office' | 'team'
 }
 
+// Offices within offices: a company zone holds its project offices, each holding one office per
+// agent session (plus a team area for overflow subagents). Centre-based metres, like RoomGeometry.
+export type ZoneKind = 'company' | 'project' | 'office' | 'team'
+
+export interface ZoneGeometry {
+  id: string
+  kind: ZoneKind
+  label: string
+  x: number
+  z: number
+  width: number
+  depth: number
+  door: { x: number; z: number } | null
+  companyKey: string | null
+  projectKey: string | null
+  sessionKey: string | null
+  children: ZoneGeometry[]
+}
+
 export interface FloorGeometry {
   floorId: string
   label: string
@@ -29,6 +48,8 @@ export interface FloorGeometry {
   depth: number
   corridor: { z: number; width: number }
   rooms: RoomGeometry[]
+  // Company zones, outermost first; rooms are the leaf offices the current scene draws.
+  zones: ZoneGeometry[]
   elevator: { x: number; z: number }
 }
 

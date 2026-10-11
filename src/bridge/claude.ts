@@ -1,4 +1,4 @@
-import { basename } from 'node:path'
+import { basename, dirname } from 'node:path'
 import type { SessionRef, SubagentRef } from '../shared/office/types'
 import { projectKey } from '../shared/office/project-key'
 import type { RegistryEntry } from './registry'
@@ -22,6 +22,9 @@ export function sessionFromRegistry(
     cwd: entry.cwd,
     projectKey: projectKey(root),
     projectLabel: basename(root),
+    projectRoot: root,
+    companyKey: projectKey(dirname(root)),
+    companyLabel: basename(dirname(root)),
     worktree,
     host: 'terminal',
     orcaPaneKey: null,

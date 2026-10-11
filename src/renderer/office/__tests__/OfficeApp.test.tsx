@@ -43,6 +43,9 @@ const busyFrame = makeFrame({
       key: 'claude:a',
       name: 'office renderer',
       projectLabel: 'ClaudeWatch',
+      projectRoot: '/repo/app',
+      companyKey: 'c_test',
+      companyLabel: 'Test Co',
       activity: 'editing',
       currentTool: { name: 'Edit', category: 'edit' },
       subagents: [{ id: 's1', type: 'Explore', activity: 'reading' }],
@@ -52,6 +55,9 @@ const busyFrame = makeFrame({
       key: 'claude:b',
       name: 'listing search',
       projectLabel: 'PropApp',
+      projectRoot: '/repo/app',
+      companyKey: 'c_test',
+      companyLabel: 'Test Co',
       attention: 'permission',
       updatedAtMs: NOW - 5000
     })

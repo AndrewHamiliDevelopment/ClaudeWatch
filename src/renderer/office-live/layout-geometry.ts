@@ -45,6 +45,7 @@ export function toFloorGeometry(layout: LayoutMap, sessions: SessionRef[]): Floo
       rooms: floor.rooms
         .filter((room) => room.plate === plate)
         .map((room) => toRoomGeometry(room, labels)),
+      zones: [],
       elevator: { x: floor.elevator.x - X_OFFSET, z: floor.elevator.z }
     }))
   })
