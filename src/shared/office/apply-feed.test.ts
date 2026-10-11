@@ -55,6 +55,21 @@ describe('applyFeed', () => {
     expect(next?.rev).toBe(2)
   })
 
+  it('folds changed source health from a patch that changes no session', () => {
+    const start = snapshot([session('claude:a')])
+    const sources = [{ id: 'orca', ok: false, detail: 'unavailable' }]
+    const next = applyFeed(start, {
+      type: 'patch',
+      v: 1,
+      seq: 3,
+      upserts: [],
+      removed: [],
+      sources
+    })
+    expect(next?.sources).toEqual(sources)
+    expect(next?.sessions).toBe(start.sessions)
+  })
+
   it('keeps the same sessions array for an empty patch so memoised consumers skip work', () => {
     const start = snapshot([session('claude:a')])
     const next = applyFeed(start, { type: 'patch', v: 1, seq: 5, upserts: [], removed: [] })

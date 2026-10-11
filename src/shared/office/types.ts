@@ -69,7 +69,15 @@ export interface OfficeSnapshot {
 
 export type FeedMessage =
   | { type: 'hello'; v: 1; snapshot: OfficeSnapshot }
-  | { type: 'patch'; v: 1; seq: number; upserts: SessionRef[]; removed: string[] }
+  | {
+      type: 'patch'
+      v: 1
+      seq: number
+      upserts: SessionRef[]
+      removed: string[]
+      // Present only when a source's health changed.
+      sources?: SourceHealth[]
+    }
   | { type: 'resync' }
 
 // What the renderer draws for one agent; produced by the sim, never by raw events.

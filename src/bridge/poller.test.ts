@@ -26,7 +26,13 @@ it('posts hello followed by removal patches and stops scheduling', async () => {
   })
   live = false
   await vi.advanceTimersByTimeAsync(2000)
-  expect(messages[1]).toEqual({ type: 'patch', v: 1, seq: 1, upserts: [], removed: ['claude:a'] })
+  expect(messages[1]).toMatchObject({
+    type: 'patch',
+    v: 1,
+    seq: 1,
+    upserts: [],
+    removed: ['claude:a']
+  })
   stop()
   await vi.advanceTimersByTimeAsync(6000)
   expect(messages).toHaveLength(2)

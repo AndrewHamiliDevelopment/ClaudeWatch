@@ -82,6 +82,16 @@ describe('reducer and diff', () => {
     })
     expect(diff(next, next, 4)).toEqual({ type: 'patch', v: 1, seq: 4, upserts: [], removed: [] })
   })
+  it('carries source health in a patch only when it changed', () => {
+    const healthy = [{ id: 'orca', ok: true, detail: 'available' }]
+    const prev = reduce(emptySnapshot(), { now: 10, sessions: [session('a')], sources: healthy })
+    const same = reduce(prev, { now: 20, sessions: [session('a')], sources: healthy })
+    expect(diff(prev, same, 1)).not.toHaveProperty('sources')
+
+    const failing = [{ id: 'orca', ok: false, detail: 'unavailable' }]
+    const next = reduce(prev, { now: 20, sessions: [session('a')], sources: failing })
+    expect(diff(prev, next, 2)).toMatchObject({ upserts: [], removed: [], sources: failing })
+  })
   it('marks busy to idle done for two minutes, without sliding expiry', () => {
     const prev = reduce(emptySnapshot(), {
       now: 1000,

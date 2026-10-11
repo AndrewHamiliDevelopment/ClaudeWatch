@@ -8,8 +8,9 @@ export function applyFeed(
 ): OfficeSnapshot | null {
   if (message.type === 'hello') return message.snapshot
   if (message.type === 'resync' || current === null) return null
+  const sources = message.sources ?? current.sources
   if (message.upserts.length === 0 && message.removed.length === 0) {
-    return { ...current, rev: message.seq }
+    return { ...current, rev: message.seq, sources }
   }
 
   // A Map keeps existing keys in place and appends new ones, so floor order is stable.
@@ -17,5 +18,5 @@ export function applyFeed(
   for (const key of message.removed) byKey.delete(key)
   for (const session of message.upserts) byKey.set(session.key, session)
 
-  return { ...current, rev: message.seq, sessions: [...byKey.values()] }
+  return { ...current, rev: message.seq, sessions: [...byKey.values()], sources }
 }

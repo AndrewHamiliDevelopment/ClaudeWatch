@@ -41,6 +41,9 @@ export function diff(prev: OfficeSnapshot, next: OfficeSnapshot, seq: number): F
     v: 1,
     seq,
     upserts: next.sessions.filter((session) => old.get(session.key) !== JSON.stringify(session)),
-    removed: prev.sessions.filter((session) => !keys.has(session.key)).map((session) => session.key)
+    removed: prev.sessions
+      .filter((session) => !keys.has(session.key))
+      .map((session) => session.key),
+    ...(JSON.stringify(prev.sources) !== JSON.stringify(next.sources) && { sources: next.sources })
   }
 }
