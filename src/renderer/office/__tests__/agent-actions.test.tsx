@@ -113,6 +113,15 @@ describe('talk', () => {
     expect(within(inspector).getByText('Sent')).toBeInTheDocument()
   })
 
+  it('offers no message box while the agent has a dialog open, and says why', () => {
+    setup()
+    const inspector = selectAgent('listing search')
+    expect(within(inspector).queryByRole('textbox')).not.toBeInTheDocument()
+    expect(
+      within(inspector).getByText(/showing a prompt, and a message would answer it/)
+    ).toBeInTheDocument()
+  })
+
   it('explains the plain-terminal case instead of offering a box', () => {
     setup()
     const inspector = selectAgent('plain shell')

@@ -1,4 +1,4 @@
-import type { SessionRef } from '../../../shared/office/types'
+import type { InteractionFailure, SessionRef } from '../../../shared/office/types'
 import {
   canPeek,
   canRespond,
@@ -41,6 +41,11 @@ export function AgentActions({
     isOwnSession && isReviewing && canRespond({ ...session, attention: 'permission' })
   const { attention } = session
   const waitingOn = attention === 'permission' || attention === 'question' ? attention : null
+  // A typed message would answer the agent's open dialog (Enter confirms its default), so no box.
+  const talkBlocker = ((): InteractionFailure | null => {
+    if (isOwnSession && waitingOn) return 'prompt-on-screen'
+    return canTalk(target) ? null : 'not-in-orca'
+  })()
   return (
     <div className="flex flex-col gap-3">
       {isReviewOpen && (
@@ -59,10 +64,10 @@ export function AgentActions({
           onAction={canRespond(session) ? onReview : onFocusTerminal}
         />
       )}
-      {canTalk(target) ? (
-        <TalkBox agentKey={target.key} agentName={target.name} send={feed.send} onSent={onSent} />
+      {talkBlocker ? (
+        <p className="text-xs text-text-secondary">{failureMessage(talkBlocker)}</p>
       ) : (
-        <p className="text-xs text-text-secondary">{failureMessage('not-in-orca')}</p>
+        <TalkBox agentKey={target.key} agentName={target.name} send={feed.send} onSent={onSent} />
       )}
       {canPeek(target) && <PeekPanel agentKey={target.key} peek={feed.peek} />}
     </div>
