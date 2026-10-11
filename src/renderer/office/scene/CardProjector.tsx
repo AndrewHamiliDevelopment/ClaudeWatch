@@ -112,6 +112,9 @@ export function CardProjector({
     last.stacks = stacks
     last.band = band
     last.selectedAgentKey = selectedAgentKey
+    // camera-controls moves the camera after three last built its matrix, and the renderer only
+    // rebuilds it after this callback: without this the cards trail the canvas while it turns.
+    camera.updateMatrixWorld()
 
     if (band === 'desk') {
       for (const card of cards) {

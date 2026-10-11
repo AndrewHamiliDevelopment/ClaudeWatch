@@ -1,9 +1,8 @@
 export type ZoomBand = 'desk' | 'floor' | 'building'
 export type ZoomDirection = 'in' | 'out'
 
-const BANDS_NEAR_TO_FAR: readonly ZoomBand[] = ['desk', 'floor', 'building']
-
-// Orthographic zoom in screen pixels per metre for each band.
+// Orthographic zoom in screen pixels per metre: the desk fly-to, the scene's first frame and the
+// cap on the building overview.
 export const BAND_ZOOM: Record<ZoomBand, number> = { desk: 90, floor: 34, building: 8 }
 
 const DEG_TO_RAD = Math.PI / 180
@@ -14,15 +13,19 @@ export const ISO_START_AZIMUTH = 45 * DEG_TO_RAD
 const SNAP_STEP = 90 * DEG_TO_RAD
 const SNAP_EPSILON = 1e-6
 
-export function stepBand(band: ZoomBand, direction: ZoomDirection): ZoomBand {
-  const index = BANDS_NEAR_TO_FAR.indexOf(band) + (direction === 'out' ? 1 : -1)
-  return BANDS_NEAR_TO_FAR[Math.min(Math.max(index, 0), BANDS_NEAR_TO_FAR.length - 1)]
-}
+const DESK_ENTER_ZOOM = 55
+const DESK_LEAVE_ZOOM = 48
+// Fractions of the zoom that fits this floor, which runs from 8 px/m (a full plate) to 60 (one office).
+const BUILDING_ENTER_FIT = 0.8
+const BUILDING_LEAVE_FIT = 0.9
 
-// Zoom is multiplicative, so "nearest" is measured on a log scale.
-export function bandForZoom(zoom: number): ZoomBand {
-  const distance = (band: ZoomBand): number => Math.abs(Math.log(BAND_ZOOM[band] / zoom))
-  return BANDS_NEAR_TO_FAR.reduce((best, band) => (distance(band) < distance(best) ? band : best))
+// The band is a level of detail read off the zoom, never a zoom to snap to. Each threshold has
+// a gap between entering and leaving, so hovering on one does not flicker the cards.
+export function bandForZoom(zoom: number, previous: ZoomBand, floorFitZoom: number): ZoomBand {
+  if (zoom >= (previous === 'desk' ? DESK_LEAVE_ZOOM : DESK_ENTER_ZOOM)) return 'desk'
+  const buildingBelow =
+    floorFitZoom * (previous === 'building' ? BUILDING_LEAVE_FIT : BUILDING_ENTER_FIT)
+  return zoom < buildingBelow ? 'building' : 'floor'
 }
 
 // The four isometric corners sit at 45° + k·90°.
@@ -31,24 +34,6 @@ export function snapAzimuth(azimuth: number, direction: -1 | 1): number {
   const target =
     direction > 0 ? Math.floor(steps + SNAP_EPSILON) + 1 : Math.ceil(steps - SNAP_EPSILON) - 1
   return ISO_START_AZIMUTH + target * SNAP_STEP
-}
-
-// Trackpads fire dozens of wheel events per swipe; one swipe should move one band.
-export function createWheelStepper(options: {
-  threshold: number
-  cooldownMs: number
-}): (deltaY: number, nowMs: number) => ZoomDirection | null {
-  let accumulated = 0
-  let lockedUntilMs = -Infinity
-  return (deltaY, nowMs) => {
-    if (nowMs < lockedUntilMs) return null
-    accumulated += deltaY
-    if (Math.abs(accumulated) < options.threshold) return null
-    const direction: ZoomDirection = accumulated > 0 ? 'out' : 'in'
-    accumulated = 0
-    lockedUntilMs = nowMs + options.cooldownMs
-    return direction
-  }
 }
 
 export function buildingFraming(
