@@ -35,26 +35,28 @@ describe('createOrcaCli', () => {
 
     expect(await cli.exec(['terminal', 'list', '--json'])).toBe('{"ok":true}')
     expect(run.mock.calls.map(([bin, args]) => [bin, args])).toEqual([
-      ['/usr/bin/codesign', ['--verify', ORCA_APP]],
+      ['/usr/bin/codesign', ['--verify', '--deep', '--strict', ORCA_APP]],
       ['/usr/bin/codesign', ['-dv', ORCA_APP]],
       [ORCA_CLI, ['terminal', 'list', '--json']]
     ])
   })
 
-  it('verifies once per run, however many commands follow', async () => {
-    const cli = createOrcaCli(run)
+  it('verifies once for a burst of commands, and again after ten minutes', async () => {
+    let now = 1_000
+    const cli = createOrcaCli(run, () => now)
     await Promise.all([cli.exec(['status']), cli.exec(['terminal', 'list']), cli.raise()])
     await cli.exec(['status'])
-
     expect(programsRun().filter((bin) => bin === '/usr/bin/codesign')).toHaveLength(2)
+
+    // Orca updates itself in place; a check from long ago says nothing about today's bundle.
+    now += 10 * 60_000 + 1
+    await cli.exec(['status'])
+    expect(programsRun().filter((bin) => bin === '/usr/bin/codesign')).toHaveLength(4)
   })
 
-  it('raises Orca by bundle id', async () => {
+  it('raises the bundle that was verified, not whichever app claims its bundle id', async () => {
     expect(await createOrcaCli(run).raise()).toBe(true)
-    expect(run.mock.calls.at(-1)?.slice(0, 2)).toEqual([
-      '/usr/bin/open',
-      ['-b', 'com.stablyai.orca']
-    ])
+    expect(run.mock.calls.at(-1)?.slice(0, 2)).toEqual(['/usr/bin/open', ['-a', ORCA_APP]])
   })
 
   it.each([

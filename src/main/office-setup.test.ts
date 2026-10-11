@@ -144,11 +144,11 @@ describe('setupOffice', () => {
       ['/bin/ps', ['-o', 'lstart=', '-p', '4242']],
       ['/bin/ps', ['-E', '-o', 'command=', '-p', '4242']],
       ['/bin/ps', ['-o', 'lstart=', '-p', '4242']],
-      ['/usr/bin/codesign', ['--verify', ORCA_APP]],
+      ['/usr/bin/codesign', ['--verify', '--deep', '--strict', ORCA_APP]],
       ['/usr/bin/codesign', ['-dv', ORCA_APP]],
       [ORCA_CLI, ['terminal', 'list', '--json']],
       [ORCA_CLI, ['terminal', 'switch', '--terminal', 'term_a', '--json']],
-      ['/usr/bin/open', ['-b', 'com.stablyai.orca']]
+      ['/usr/bin/open', ['-a', ORCA_APP]]
     ])
     expect(openTerminal).not.toHaveBeenCalled()
   })

@@ -7,9 +7,10 @@ export const ORCA_CLI = `${ORCA_APP}/Contents/Resources/bin/orca`
 // (read from Orca 1.4.224).
 export const ORCA_TEAM_ID = '6CX3WHS9HZ'
 
-const ORCA_BUNDLE_ID = 'com.stablyai.orca'
 const CODESIGN = '/usr/bin/codesign'
 const ORCA_TIMEOUT_MS = 15_000
+// Orca updates itself in place, so a passed check is trusted for this long and no longer.
+const TRUST_MS = 10 * 60_000
 
 type RunProgram = (
   program: string,
@@ -24,7 +25,8 @@ interface OrcaCli {
 }
 
 async function assertSignedByOrca(run: RunProgram): Promise<void> {
-  await run(CODESIGN, ['--verify', ORCA_APP], { timeout: ORCA_TIMEOUT_MS })
+  // --deep --strict: the CLI is a script that starts code nested in the bundle.
+  await run(CODESIGN, ['--verify', '--deep', '--strict', ORCA_APP], { timeout: ORCA_TIMEOUT_MS })
   // codesign describes the signature on stderr, one `Key=value` per line.
   const { stderr } = await run(CODESIGN, ['-dv', ORCA_APP], { timeout: ORCA_TIMEOUT_MS })
   if (!stderr.split('\n').includes(`TeamIdentifier=${ORCA_TEAM_ID}`)) {
@@ -32,15 +34,19 @@ async function assertSignedByOrca(run: RunProgram): Promise<void> {
   }
 }
 
-// Nothing in the bundle runs until its seal and signing team have been checked, once per app
-// run. A failed check is not remembered, so an Orca installed later works without a restart.
-export function createOrcaCli(run: RunProgram): OrcaCli {
+// Nothing in the bundle runs until its seal and signing team have been checked. A failed check
+// is not remembered, so an Orca installed later works without a restart.
+export function createOrcaCli(run: RunProgram, now: () => number = Date.now): OrcaCli {
   let trusted: Promise<void> | null = null
+  let checkedAtMs = 0
   const assertTrusted = (): Promise<void> => {
-    trusted ??= assertSignedByOrca(run).catch((error: unknown) => {
-      trusted = null
-      throw error
-    })
+    if (!trusted || now() - checkedAtMs > TRUST_MS) {
+      checkedAtMs = now()
+      trusted = assertSignedByOrca(run).catch((error: unknown) => {
+        trusted = null
+        throw error
+      })
+    }
     return trusted
   }
   return {
@@ -48,11 +54,11 @@ export function createOrcaCli(run: RunProgram): OrcaCli {
       await assertTrusted()
       return (await run(ORCA_CLI, args, { timeout: ORCA_TIMEOUT_MS })).stdout
     },
-    // By bundle id, so another app that happens to be named "Orca" is never launched.
+    // By the path that was verified: a name or a bundle id could resolve to another copy.
     raise: async () => {
       try {
         await assertTrusted()
-        await run('/usr/bin/open', ['-b', ORCA_BUNDLE_ID], { timeout: ORCA_TIMEOUT_MS })
+        await run('/usr/bin/open', ['-a', ORCA_APP], { timeout: ORCA_TIMEOUT_MS })
         return true
       } catch {
         return false
