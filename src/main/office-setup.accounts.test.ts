@@ -37,7 +37,9 @@ const accounts = {
     sessions: snapshot.sessions.map(decorateSession),
     accounts: [ACCOUNT]
   }),
-  onOfficeChange: vi.fn(() => () => {})
+  onOfficeChange: vi.fn(() => () => {}),
+  isWatchingAccounts: false,
+  onWatchingChange: vi.fn((_listener: () => void) => () => {})
 }
 const bridge = { on: vi.fn(), kill: vi.fn() }
 const bridgeSays = (message: unknown): void => {
@@ -53,6 +55,7 @@ let office: ReturnType<typeof setupOffice>
 
 beforeEach(() => {
   vi.clearAllMocks()
+  accounts.isWatchingAccounts = false
   fork.mockReturnValue(bridge)
   office = setupOffice(
     { resolve: vi.fn() },
@@ -61,6 +64,14 @@ beforeEach(() => {
     accounts
   )
   office.start()
+})
+
+it('has the bridge derive Codex accounts only while accounts are watched, restarting it when that changes', () => {
+  expect(fork).toHaveBeenLastCalledWith(expect.any(String), [], expect.anything())
+  accounts.isWatchingAccounts = true
+  accounts.onWatchingChange.mock.calls[0][0]()
+  expect(bridge.kill).toHaveBeenCalledOnce()
+  expect(fork).toHaveBeenLastCalledWith(expect.any(String), ['--accounts'], expect.anything())
 })
 
 it('passes everything the bridge posts to the ledger, which keeps only token counts', () => {

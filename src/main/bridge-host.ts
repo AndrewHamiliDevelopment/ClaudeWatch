@@ -51,6 +51,14 @@ export class BridgeHost {
     this.restartDelayMs = FIRST_RESTART_DELAY_MS
   }
 
+  // Replaces a running bridge, whose sessions stop being facts; starts none when stopped.
+  restart(): void {
+    if (!this.running) return
+    this.stop()
+    for (const listener of this.listeners) listener({ type: 'resync' })
+    this.start()
+  }
+
   snapshot(): OfficeSnapshot | null {
     return this.latest
   }

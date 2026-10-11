@@ -61,11 +61,17 @@ export function setupOffice(
   terminalResolver: Pick<TerminalResolver, 'resolve'>,
   store: OfficeWindowStore,
   tracker: Pick<SessionTracker, 'getInstances'>,
-  accounts: OfficeAccounts & Pick<AccountLedger, 'ingestBridgeMessage' | 'observeSessions'>
+  accounts: OfficeAccounts &
+    Pick<
+      AccountLedger,
+      'ingestBridgeMessage' | 'observeSessions' | 'isWatchingAccounts' | 'onWatchingChange'
+    >
 ): Office {
   const bridge = new BridgeHost({
     spawn: () => {
-      const child = utilityProcess.fork(join(__dirname, 'bridge.js'), [], {
+      // The bridge derives a Codex session's account key only while accounts are watched.
+      const args = accounts.isWatchingAccounts ? ['--accounts'] : []
+      const child = utilityProcess.fork(join(__dirname, 'bridge.js'), args, {
         serviceName: 'ClaudeWatch Office Bridge'
       })
       // Token counts travel beside the feed, as their own message, and only the ledger reads them.
@@ -74,6 +80,7 @@ export function setupOffice(
     }
   })
   bridge.onMessage(() => accounts.observeSessions(bridge.snapshot()?.sessions ?? []))
+  accounts.onWatchingChange(() => bridge.restart())
   const host = withAccounts(bridge, accounts)
   const controller = new OfficeWindowController({
     host,

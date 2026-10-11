@@ -53,7 +53,8 @@ const lastUsage = new WeakMap<BridgeIo, Map<string, SessionUsage>>()
 export async function collectCodex(
   root: string,
   io: BridgeIo,
-  readProcesses = (): Promise<ProcessRow[]> => readProcessTable(io)
+  readProcesses = (): Promise<ProcessRow[]> => readProcessTable(io),
+  derivesAccounts = false
 ): Promise<{ sessions: SessionRef[]; sources: SourceHealth[] }> {
   const sessions: SessionRef[] = []
   const health: SourceHealth = { id: 'codex', ok: true, detail: 'empty' }
@@ -62,7 +63,7 @@ export async function collectCodex(
   const live = new Set<string>()
   try {
     const processes = codexProcesses(await readProcesses())
-    const rollouts = processes.length ? await findRollouts(root, io) : []
+    const rollouts = processes.length ? await findRollouts(root, io, derivesAccounts) : []
     const used = new Set<string>()
     for (const process of processes) {
       try {

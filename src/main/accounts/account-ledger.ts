@@ -43,6 +43,7 @@ export class AccountLedger {
   private shownDay = ''
   private readonly listeners = new Set<(state: AccountsState) => void>()
   private readonly officeListeners = new Set<() => void>()
+  private readonly watchingListeners = new Set<() => void>()
 
   constructor(private readonly options: AccountLedgerOptions) {
     this.isWatching = options.isWatching
@@ -62,9 +63,22 @@ export class AccountLedger {
     this.save()
   }
 
+  get isWatchingAccounts(): boolean {
+    return this.isWatching
+  }
+
+  // Fires after watching was switched on or off.
+  onWatchingChange(listener: () => void): () => void {
+    this.watchingListeners.add(listener)
+    return () => {
+      this.watchingListeners.delete(listener)
+    }
+  }
+
   setWatching(isWatching: boolean): void {
     if (isWatching === this.isWatching) return
     this.isWatching = isWatching
+    for (const listener of this.watchingListeners) listener()
     if (isWatching) {
       void this.sample().then(() => this.askOrca())
       return

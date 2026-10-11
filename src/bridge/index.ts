@@ -19,6 +19,7 @@ export async function main(args = process.argv.slice(2), port?: BridgePort): Pro
   }
   const poller = new BridgePoller({
     claudeRoots: roots,
+    ...(args.includes('--accounts') && { derivesAccounts: true }),
     // Only a parent listens for added tokens; a one-shot run prints the snapshot alone.
     ...(port && { onUsage: (deltas) => port.postMessage({ type: 'usage', v: 1, deltas }) })
   })

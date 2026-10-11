@@ -108,6 +108,21 @@ describe('BridgeHost', () => {
     expect(listener).toHaveBeenLastCalledWith({ type: 'resync' })
   })
 
+  it('replaces a running bridge on request, telling listeners to resync, and starts none when stopped', () => {
+    const listener = vi.fn()
+    host.onMessage(listener)
+    host.start()
+    spawned[0].emit('message', hello(3))
+    host.restart()
+    expect(spawned[0].kill).toHaveBeenCalledOnce()
+    expect(spawned).toHaveLength(2)
+    expect(host.snapshot()).toBeNull()
+    expect(listener).toHaveBeenLastCalledWith({ type: 'resync' })
+    host.stop()
+    host.restart()
+    expect(spawned).toHaveLength(2)
+  })
+
   it('kills the bridge on stop and does not restart it', () => {
     host.start()
     host.stop()

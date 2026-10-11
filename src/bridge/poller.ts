@@ -20,6 +20,8 @@ export interface PollerOptions {
   now?: () => number
   // Hears the tokens every tick added, line by line, for whoever attributes them to an account.
   onUsage?: (deltas: UsageDelta[]) => void
+  // Whether a Codex session is given the hashed key of its account: only while accounts are watched.
+  derivesAccounts?: boolean
 }
 export class BridgePoller {
   private snapshot = emptySnapshot()
@@ -35,6 +37,7 @@ export class BridgePoller {
   private readonly codexRoot: string
   private readonly now: () => number
   private readonly onUsage: PollerOptions['onUsage']
+  private readonly derivesAccounts: boolean
   private pending: Promise<OfficeSnapshot> | null = null
   constructor(options: PollerOptions = {}) {
     this.io = options.io ?? systemIo
@@ -45,6 +48,7 @@ export class BridgePoller {
     this.codexRoot = options.codexRoot ?? join(homedir(), '.codex')
     this.now = options.now ?? Date.now
     this.onUsage = options.onUsage
+    this.derivesAccounts = options.derivesAccounts ?? false
   }
   tick(): Promise<OfficeSnapshot> {
     if (this.pending) return this.pending
@@ -65,7 +69,7 @@ export class BridgePoller {
     const readProcesses = (): Promise<ProcessRow[]> => (processTable ??= readProcessTable(this.io))
     const [claude, codex, orca] = await Promise.all([
       collectClaude(this.roots, this.io, now, this.teammates, readProcesses),
-      collectCodex(this.codexRoot, this.io, readProcesses),
+      collectCodex(this.codexRoot, this.io, readProcesses, this.derivesAccounts),
       this.orca.poll(now)
     ])
     // The first snapshot goes out with usage unknown, so no window waits on a first scan.

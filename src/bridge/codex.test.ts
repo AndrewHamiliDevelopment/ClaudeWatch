@@ -183,7 +183,10 @@ it.each([
   })
   io.exec = async (file) =>
     file.endsWith('ps') ? '42 Sat Oct 10 15:29:12 2026 /bin/codex' : 'p42\nn/repo\n'
-  const [session] = (await collectCodex('/codex', io)).sessions
+  const [unwatched] = (await collectCodex('/codex', io)).sessions
+  expect(unwatched).toMatchObject({ key: 'codex:a', accountKey: null })
+  expect(unwatched.accountConfidence).toBeUndefined()
+  const [session] = (await collectCodex('/codex', io, undefined, true)).sessions
   const named = 'creator_account_id' in creator
   expect(session.key).toBe('codex:a')
   expect(session.accountKey).toBe(named ? accountKey('codex', 'acct_CANARY_ID') : null)
