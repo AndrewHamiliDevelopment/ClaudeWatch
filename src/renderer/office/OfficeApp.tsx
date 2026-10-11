@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useReducer, useState } from 'react'
 import { Plate } from '../components/deck/Plate'
-import { useNow, useOfficeTheme } from './hooks'
+import { useOfficeTheme } from './hooks'
 import { buildAttentionQueue } from './logic/attention-queue'
 import {
   bayForAgent,
@@ -48,7 +48,6 @@ export function OfficeApp({ feed }: { feed: OfficeFeed }) {
   const [hasWebGL] = useState(canCreateWebGL2)
   const [hasSceneFailed, setHasSceneFailed] = useState(false)
   const [metrics] = useState(createFrameMetrics)
-  const nowMs = useNow(1000)
   const [speakingAgentKey, setSpeakingAgentKey] = useState<string | null>(null)
   const { notice, focusTerminal, dismissNotice } = useFocusTerminal(feed)
 
@@ -65,17 +64,18 @@ export function OfficeApp({ feed }: { feed: OfficeFeed }) {
   const { theme, cycleTheme, cycled } = useOfficeTheme(focusedZone)
   const themeAssignments = useThemeAssignments()
 
-  const queue = useMemo(() => buildAttentionQueue(frame?.sessions ?? []), [frame])
+  // The feed keeps this array between its messages, while a frame arrives for every step.
+  const sessions = frame?.sessions
+  const queue = useMemo(() => buildAttentionQueue(sessions ?? []), [sessions])
   const announcement = useAttentionAnnouncement(queue)
   // The Tower stays as a landmark showing the building's totals; it no longer picks floors.
   const towerFloors = useMemo(() => (frame ? summariseFloors(frame) : []), [frame])
   const companies = useMemo(() => (frame ? buildOfficesTree(frame) : []), [frame])
-  const ledger = useMemo(() => buildTokenLedger(frame?.sessions ?? []), [frame])
+  const ledger = useMemo(() => buildTokenLedger(sessions ?? []), [sessions])
   const agentFacts = useMemo(
     () => (frame ? buildAgentFacts(frame) : new Map<string, AgentFacts>()),
     [frame]
   )
-  // Memoised on the frame: the 1 Hz clock re-renders the HUD and must not rebuild scene inputs.
   const floorId = state.focusedFloorId
   const floorAgents = useMemo(
     () => (frame ? frame.agents.filter((agent) => agent.floorId === floorId) : []),
@@ -108,8 +108,8 @@ export function OfficeApp({ feed }: { feed: OfficeFeed }) {
         )
       : null
   const reviewableKeys = useMemo(
-    () => new Set((frame?.sessions ?? []).filter(canRespond).map((session) => session.key)),
-    [frame]
+    () => new Set((sessions ?? []).filter(canRespond).map((session) => session.key)),
+    [sessions]
   )
 
   const focusSelected = useCallback(() => {
@@ -245,7 +245,6 @@ export function OfficeApp({ feed }: { feed: OfficeFeed }) {
               member={selectedMember}
               character={selectedCharacter}
               accounts={frame?.accounts}
-              nowMs={nowMs}
               canFly={!isShowingList}
               onFocusTerminal={focusSelected}
               onFly={() => dispatch({ type: 'fly-to-selected' })}

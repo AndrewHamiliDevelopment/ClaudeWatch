@@ -1,5 +1,5 @@
 import { Canvas } from '@react-three/fiber'
-import { useMemo, useState } from 'react'
+import { memo, useMemo, useState } from 'react'
 import type { AgentView, SessionRef } from '../../../shared/office/types'
 import type { FrameMetrics } from '../frame-metrics'
 import { usePrefersReducedMotion } from '../hooks'
@@ -51,7 +51,7 @@ const INITIAL_CAMERA_POSITION: [number, number, number] = [
 ]
 
 // Other floors are storeys in the building overview; only the focused plate has agents.
-export default function OfficeScene(props: OfficeSceneProps) {
+function OfficeScene(props: OfficeSceneProps) {
   const isReducedMotion = usePrefersReducedMotion()
   const [band, setBand] = useState<ZoomBand>('floor')
   const [anchors] = useState<CardAnchors>(() => ({
@@ -159,3 +159,6 @@ export default function OfficeScene(props: OfficeSceneProps) {
     </div>
   )
 }
+
+// Selecting, notices and the HUD's own state re-render the app; the scene follows its props.
+export default memo(OfficeScene)

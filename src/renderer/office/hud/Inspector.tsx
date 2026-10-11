@@ -15,6 +15,7 @@ import {
 import { Plate } from '../../components/deck/Plate'
 import { StateMark } from '../../components/deck/StateMark'
 import { stateOfAttention } from '../../deck/roster'
+import { useNow } from '../../hooks/useNow'
 import { formatElapsedTime } from '../../lib/utils'
 import { isTeammate, reachTarget } from '../logic/interactions'
 import { PROVIDER_LABEL } from '../office-palette'
@@ -33,7 +34,6 @@ interface InspectorProps {
   accounts?: readonly AccountRef[]
   // Who the agent plays in its office's theme, where that theme has a cast.
   character: RosterEntry | null
-  nowMs: number
   canFly: boolean
   onFocusTerminal: () => void
   onFly: () => void
@@ -53,13 +53,20 @@ function crewLine(session: SessionRef, member: SubagentRef | undefined): string 
   return `${isTeammate(member) ? 'Teammate' : 'Subagent'} of ${session.name}`
 }
 
+// Ticks here, so a passing second re-renders this row and not the Office around it.
+function ElapsedFact({ startedAtMs }: { startedAtMs: number | undefined }) {
+  const nowMs = useNow(1000)
+  const elapsedSeconds =
+    startedAtMs === undefined ? 0 : Math.max(0, Math.floor((nowMs - startedAtMs) / 1000))
+  return <Fact term="Elapsed" value={formatElapsedTime(elapsedSeconds)} />
+}
+
 export function Inspector({
   agent,
   session,
   member,
   accounts,
   character,
-  nowMs,
   canFly,
   onFocusTerminal,
   onFly,
@@ -68,9 +75,6 @@ export function Inspector({
 }: InspectorProps) {
   const mark = stateOfAttention(agent.attention, agent.activity)
   const account = accountText(session, accounts)
-  const startedAtMs = member?.startedAtMs ?? session?.startedAtMs
-  const elapsedSeconds =
-    startedAtMs === undefined ? 0 : Math.max(0, Math.floor((nowMs - startedAtMs) / 1000))
   return (
     <aside aria-label="Agent details">
       <Plate faceClassName="flex flex-col gap-3 p-3">
@@ -104,7 +108,7 @@ export function Inspector({
           {session && (
             <Fact term="Terminal" value={HOST_LABEL[reachTarget(session, member).host]} />
           )}
-          <Fact term="Elapsed" value={formatElapsedTime(elapsedSeconds)} />
+          <ElapsedFact startedAtMs={member?.startedAtMs ?? session?.startedAtMs} />
           {member && <MemberTokenFacts member={member} />}
           {!agent.isSubagent && session && <SessionTokenFacts session={session} />}
         </dl>
