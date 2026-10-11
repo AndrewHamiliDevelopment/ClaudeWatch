@@ -18,8 +18,14 @@ export interface MeshBatch {
   sources: SourceMesh[]
 }
 
+// Opt-in for identical coplanar decals (agent shadows): draw order among them cannot matter.
+export const SHARED_BATCH = 'sharedBatch'
+
 function batchKey(mesh: Mesh, material: Material): string | null {
-  if (material.transparent || !material.visible) return null
+  if (!material.visible) return null
+  const sharedBatch: unknown = mesh.userData[SHARED_BATCH]
+  if (typeof sharedBatch === 'string') return `shared:${sharedBatch}`
+  if (material.transparent) return null
   const geometry = mesh.geometry.toJSON()
   const shading = material.toJSON()
   // Textured signs and per-agent transparent effects keep their own draw and ordering.
@@ -58,6 +64,7 @@ export function createMeshBatches(root: Group): MeshBatch[] {
     )
     mesh.instanceMatrix.setUsage(DynamicDrawUsage)
     mesh.frustumCulled = false
+    mesh.renderOrder = first.renderOrder
     // Controller refs still mutate the originals; only their camera layer is disabled.
     for (const source of sources) source.mesh.layers.disable(0)
     root.add(mesh)

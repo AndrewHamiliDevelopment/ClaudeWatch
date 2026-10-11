@@ -1,6 +1,6 @@
 export { BrassRoomDressing } from './BrassRoomDressing'
+export { BrassWalls } from './BrassWalls'
 import { STEAM } from '../office-palette'
-import { Walls } from './BrassWalls'
 import { Elevator } from './BrassElevator'
 import { signTexture } from '../scene/textures'
 import { doorSignPlacement, DESK_REACH } from '../logic/room-layout'
@@ -9,9 +9,9 @@ import { BRASS } from './palettes'
 import { Batch, Box } from './primitives'
 import { MaintenanceHangar } from './Hangar'
 import { ThemeTower } from './WorldArchitecture'
-import type { DeskProps, FloorProps, RoomProps, TowerProps, WallsProps } from './types'
+import type { DeskProps, FloorProps, RoomProps, RoomsProps, TowerProps } from './types'
 
-export function BrassFloor({ floor }: FloorProps) {
+export function BrassSlab({ floor }: FloorProps) {
   return (
     <>
       <Box at={[0, -0.15, 0]} size={[floor.width + 1, 0.3, floor.depth + 1]} color={STEAM.slab} />
@@ -20,7 +20,14 @@ export function BrassFloor({ floor }: FloorProps) {
         size={[floor.width, 0.008, floor.corridor.width]}
         color={STEAM.iron}
       />
-      {floor.rooms.map((room) => (
+    </>
+  )
+}
+
+export function BrassRoomFloors({ rooms }: RoomsProps) {
+  return (
+    <>
+      {rooms.map((room) => (
         <Box
           key={room.id}
           at={[room.x, 0.008, room.z]}
@@ -30,10 +37,6 @@ export function BrassFloor({ floor }: FloorProps) {
       ))}
     </>
   )
-}
-
-export function BrassWalls({ floor, mode, isReducedMotion }: WallsProps) {
-  return <Walls rooms={floor.rooms} mode={mode} isReducedMotion={isReducedMotion} />
 }
 
 export function BrassDoorway({ room }: RoomProps) {

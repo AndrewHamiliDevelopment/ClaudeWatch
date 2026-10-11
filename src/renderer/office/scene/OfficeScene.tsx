@@ -5,6 +5,7 @@ import type { FrameMetrics } from '../frame-metrics'
 import { usePrefersReducedMotion } from '../hooks'
 import { BAND_ZOOM, ISO_POLAR, ISO_START_AZIMUTH, type ZoomBand } from '../logic/camera-bands'
 import type { NameCard, ProjectStack } from '../logic/name-cards'
+import { groupZonesByTheme, resolveTheme, useThemeAssignments } from '../logic/office-themes'
 import type { CameraRequest } from '../logic/office-reducer'
 import type { WallsMode } from '../logic/room-layout'
 import { SCENE_BACKGROUND } from '../office-palette'
@@ -14,13 +15,14 @@ import { FloorView } from './FloorView'
 import { CardProjector, type CardAnchors } from './CardProjector'
 import { NameCardLayer } from './NameCards'
 import { FrameGovernor, MetricsProbe } from './RenderLoop'
-import { Robot } from './Robot'
+import { RobotCrew } from './Robot'
 import { BatchedScene } from './BatchedScene'
 import { WorldView } from './WorldView'
 import { ZonePickers } from './ZonePickers'
 import type { OfficeTheme, TowerFloor } from '../themes/types'
 
 interface OfficeSceneProps {
+  // The floor's default: zones without a company or project theme inherit it.
   theme: OfficeTheme
   floors: readonly TowerFloor[]
   sessions: readonly SessionRef[]
@@ -59,16 +61,25 @@ export default function OfficeScene(props: OfficeSceneProps) {
   }))
   // Serialising the floor is costly; redo it only when an input to the batches changes.
   const { theme, floor, agents, selectedAgentKey, speakingAgentKey } = props
+  const assignments = useThemeAssignments()
+  const zoneGroups = useMemo(
+    () => groupZonesByTheme(floor, (zone) => resolveTheme(zone, assignments, theme.id)),
+    [floor, assignments, theme.id]
+  )
   const revision = useMemo(
     () =>
       JSON.stringify([
         theme.id,
+        zoneGroups.map((zoneGroup) => [
+          zoneGroup.themeId,
+          [...zoneGroup.companies, ...zoneGroup.projects, ...zoneGroup.rooms].map(({ id }) => id)
+        ]),
         floor,
         selectedAgentKey,
         speakingAgentKey,
         agents.map((agent) => [agent.agentKey, agent.provider, agent.isSubagent])
       ]),
-    [theme.id, floor, agents, selectedAgentKey, speakingAgentKey]
+    [theme.id, zoneGroups, floor, agents, selectedAgentKey, speakingAgentKey]
   )
   const liveSessionKeys = useMemo(
     () => new Set(props.sessions.map((session) => session.key)),
@@ -94,23 +105,22 @@ export default function OfficeScene(props: OfficeSceneProps) {
         <directionalLight position={[10, 20, 6]} intensity={1.8} />
         <BatchedScene revision={revision}>
           <FloorView
-            theme={props.theme}
-            floor={props.floor}
+            floorTheme={theme}
+            zoneGroups={zoneGroups}
+            floor={floor}
             wallsMode={props.wallsMode}
             isReducedMotion={isReducedMotion}
           />
-          {props.agents.map((agent) => (
-            <Robot
-              key={agent.agentKey}
-              theme={props.theme}
-              agent={agent}
-              isSelected={agent.agentKey === props.selectedAgentKey}
-              isSpeaking={agent.agentKey === props.speakingAgentKey}
-              isReducedMotion={isReducedMotion}
-              onSelect={props.onSelectAgent}
-              onFly={props.onFlyToAgent}
-            />
-          ))}
+          <RobotCrew
+            agents={agents}
+            zoneGroups={zoneGroups}
+            floorTheme={theme}
+            selectedAgentKey={selectedAgentKey}
+            speakingAgentKey={speakingAgentKey}
+            isReducedMotion={isReducedMotion}
+            onSelect={props.onSelectAgent}
+            onFly={props.onFlyToAgent}
+          />
         </BatchedScene>
         <WorldView theme={props.theme} floor={props.floor} floors={props.floors} band={band} />
         <ZonePickers

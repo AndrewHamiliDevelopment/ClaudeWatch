@@ -2,7 +2,7 @@ import { ROBOT_PALETTE } from '../office-palette'
 import { BrassFrame } from './BrassFrame'
 import * as brass from './BrassKit'
 import { SamuraiFrame } from './SamuraiFrame'
-import { EdoFloor } from './EdoFloor'
+import { EdoRoomFloors, EdoSlab } from './EdoFloor'
 import { EdoWalls } from './EdoWalls'
 import { EdoDesk, EdoDoorway, EdoElevator, EdoRoomDressing, EdoRoomSign } from './EdoRoom'
 import { EdoDistrict, EdoTower } from './EdoDistrict'
@@ -24,15 +24,17 @@ export const neoEdoSteam: OfficeTheme = {
     }
   },
   kit: {
-    Floor: EdoFloor,
-    Walls: EdoWalls,
-    Doorway: EdoDoorway,
-    Desk: EdoDesk,
-    RoomDressing: EdoRoomDressing,
-    Elevator: EdoElevator,
-    RoomSign: EdoRoomSign,
-    CompanyZone: EdoCompanyZone,
-    ProjectOffice: EdoProjectOffice
+    floor: { Slab: EdoSlab, Elevator: EdoElevator },
+    zone: {
+      CompanyZone: EdoCompanyZone,
+      ProjectOffice: EdoProjectOffice,
+      RoomFloors: EdoRoomFloors,
+      Walls: EdoWalls,
+      Doorway: EdoDoorway,
+      Desk: EdoDesk,
+      RoomDressing: EdoRoomDressing,
+      RoomSign: EdoRoomSign
+    }
   },
   world: { District: EdoDistrict, Hangar: EdoHangar, Tower: EdoTower }
 }
@@ -50,15 +52,17 @@ export const brassWorkshop: OfficeTheme = {
     }
   },
   kit: {
-    Floor: brass.BrassFloor,
-    Walls: brass.BrassWalls,
-    Doorway: brass.BrassDoorway,
-    Desk: brass.BrassDesk,
-    RoomDressing: brass.BrassRoomDressing,
-    Elevator: brass.BrassElevator,
-    RoomSign: brass.BrassRoomSign,
-    CompanyZone: BrassCompanyZone,
-    ProjectOffice: BrassProjectOffice
+    floor: { Slab: brass.BrassSlab, Elevator: brass.BrassElevator },
+    zone: {
+      CompanyZone: BrassCompanyZone,
+      ProjectOffice: BrassProjectOffice,
+      RoomFloors: brass.BrassRoomFloors,
+      Walls: brass.BrassWalls,
+      Doorway: brass.BrassDoorway,
+      Desk: brass.BrassDesk,
+      RoomDressing: brass.BrassRoomDressing,
+      RoomSign: brass.BrassRoomSign
+    }
   },
   world: { District: brass.BrassDistrict, Hangar: brass.BrassHangar, Tower: brass.BrassTower }
 }

@@ -46,6 +46,8 @@ export interface RobotRig {
 export interface RobotModelProps {
   agent: AgentView
   skin: RobotSkin
+  // The office bay of the agent's room: a stable pick from a theme's cast of characters.
+  rosterIndex: number
   rig: RobotRig
   isReducedMotion: boolean
 }
@@ -53,7 +55,11 @@ export interface RobotModelProps {
 export interface FloorProps {
   floor: FloorGeometry
 }
-export interface WallsProps extends FloorProps {
+// The rooms one theme owns on a floor that may mix themes.
+export interface RoomsProps {
+  rooms: readonly RoomGeometry[]
+}
+export interface WallsProps extends RoomsProps {
   mode: WallsMode
   isReducedMotion: boolean
 }
@@ -78,24 +84,36 @@ export interface TowerProps {
   floors: readonly TowerFloor[]
 }
 
+// Drawn once per floor, by the floor's default theme.
+// dead-code-allowed: plug-in contract type each theme's floor kit implements 2027-01-31
+export interface FloorKit {
+  Slab: ComponentType<FloorProps>
+  Elevator: ComponentType<FloorProps>
+}
+
+// Drawn per zone, by the theme that zone resolves to; several can share one floor.
+// dead-code-allowed: plug-in contract type each theme's zone kit implements 2027-01-31
+export interface ZoneKit {
+  // Offices within offices: a company's fenced grounds and a project's walled office.
+  CompanyZone: ComponentType<ZoneProps>
+  ProjectOffice: ComponentType<ZoneProps>
+  RoomFloors: ComponentType<RoomsProps>
+  Walls: ComponentType<WallsProps>
+  Doorway: ComponentType<RoomProps>
+  Desk: ComponentType<DeskProps>
+  RoomDressing: ComponentType<RoomProps>
+  RoomSign: ComponentType<RoomProps>
+}
+
 export interface OfficeTheme {
   id: string
   label: string
   description: string
   palette: ThemePalette
+  // Zone-scoped, like the zone kit: a robot wears the theme of its own room.
   robot: { Model: ComponentType<RobotModelProps>; skins: Record<ProviderId, RobotSkin> }
-  kit: {
-    Floor: ComponentType<FloorProps>
-    Walls: ComponentType<WallsProps>
-    Doorway: ComponentType<RoomProps>
-    Desk: ComponentType<DeskProps>
-    RoomDressing: ComponentType<RoomProps>
-    Elevator: ComponentType<FloorProps>
-    RoomSign: ComponentType<RoomProps>
-    // Offices within offices: a company's fenced grounds and a project's walled office.
-    CompanyZone: ComponentType<ZoneProps>
-    ProjectOffice: ComponentType<ZoneProps>
-  }
+  kit: { floor: FloorKit; zone: ZoneKit }
+  // Floor-scoped: one horizon, from the floor's default theme.
   world: {
     District: ComponentType<FloorProps>
     Hangar: ComponentType<FloorProps>
