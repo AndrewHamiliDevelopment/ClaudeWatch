@@ -52,7 +52,7 @@ const FAILURE_COPY: Record<InteractionFailure, string> = {
   'terminal-not-found': "Couldn't find this agent's Orca pane. It may have closed.",
   'no-permission-prompt': 'No permission prompt is showing for this agent right now.',
   'prompt-on-screen':
-    'This agent is showing a prompt, and a message would answer it. Review it or focus its terminal first.',
+    "This agent's terminal is not at its input line, so a message could answer a prompt instead. Focus its terminal first.",
   'prompt-changed': 'The prompt changed since you reviewed it. Review it again.',
   'unsupported-provider':
     'Answering prompts from the office works for Claude agents. Focus the terminal for Codex.',

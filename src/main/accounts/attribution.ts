@@ -1,6 +1,6 @@
 import { createHash } from 'crypto'
 import { object } from '../../bridge/io'
-import { zeroCounts } from '../../bridge/usage-fold'
+import { zeroCounts } from '../../shared/office/token-counts'
 import { type UsageDelta, USAGE_RETENTION_MS } from '../../shared/accounts'
 import type { SessionRef, TokenCounts } from '../../shared/office/types'
 import { upsertAccount, upsertClaudeAccount } from './account-records'

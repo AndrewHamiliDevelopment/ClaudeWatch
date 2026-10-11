@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import { isJsonObject } from '../../../shared/json-object'
 import { browserStorage } from '../../office-live/browser-storage'
 import type { FloorGeometry, RoomGeometry, ZoneGeometry } from '../scene-model'
 import { listThemes } from '../themes/registry'
@@ -33,10 +34,6 @@ export const EMPTY_THEME_ASSIGNMENTS: ThemeAssignments = {
 
 function isKnownTheme(themeId: string): boolean {
   return listThemes().some((theme) => theme.id === themeId)
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 // Own members only: a key such as "constructor" must not read Object.prototype.
@@ -89,7 +86,7 @@ export function groupZonesByTheme(
 }
 
 function knownThemeIds(value: unknown): ThemeIdsByKey {
-  if (!isRecord(value)) return {}
+  if (!isJsonObject(value)) return {}
   return Object.fromEntries(
     Object.entries(value).filter(
       (entry): entry is [string, string] => typeof entry[1] === 'string' && isKnownTheme(entry[1])
@@ -106,7 +103,7 @@ export function parseThemeAssignments(raw: string | null): ThemeAssignments {
   } catch {
     return EMPTY_THEME_ASSIGNMENTS
   }
-  if (!isRecord(stored) || stored.version !== STORAGE_VERSION) return EMPTY_THEME_ASSIGNMENTS
+  if (!isJsonObject(stored) || stored.version !== STORAGE_VERSION) return EMPTY_THEME_ASSIGNMENTS
   return {
     version: STORAGE_VERSION,
     companies: knownThemeIds(stored.companies),

@@ -1,16 +1,15 @@
 import type { UsageDelta } from '../shared/accounts'
+import { addCounts, zeroCounts } from '../shared/office/token-counts'
 import type { SessionRef, SessionUsage, SourceHealth, TokenCounts } from '../shared/office/types'
 import { type BridgeIo, isMissing } from './io'
 import type { AgentFile } from './subagents'
 import {
-  addCounts,
   contextTokens,
   emptyFold,
   foldLines,
   foldTotal,
   type UsageFold,
-  type UsageIncrement,
-  zeroCounts
+  type UsageIncrement
 } from './usage-fold'
 
 // What one line added to one transcript; the poller adds the session's project.

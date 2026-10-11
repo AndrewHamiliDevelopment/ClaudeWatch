@@ -1,6 +1,7 @@
 import { createHash } from 'crypto'
+import { parseAgentKey } from '../shared/office/agent-key'
+import { needsHuman } from '../shared/office/attention'
 import type {
-  AgentAttention,
   FocusResult,
   InteractionFailure,
   InteractionResult,
@@ -43,7 +44,6 @@ const PERMISSION_PROMPT = /Do you want to (proceed|make this edit|create|allow)|
 const DECISION_KEYS: Record<PermissionDecision, string> = { approve: '1', deny: '\u001b' }
 // Claude Code reports 'waiting' only while a dialog covers its prompt (a permission, a picker,
 // an MCP form), never for a turn that merely ended with a question: that one is idle.
-const WAITS_ON_DIALOG: ReadonlySet<AgentAttention> = new Set(['permission', 'question'])
 // The rule Claude Code draws directly above and below its input line.
 const RULE = /^─{8,}/
 // Status lines and a task list sit under Claude Code's input line; Codex shows a footer or two.
@@ -129,7 +129,7 @@ export class OfficeInteractions {
       return fail('invalid-input')
     }
     const attention = this.session(sessionKey)?.attention
-    if (attention && WAITS_ON_DIALOG.has(attention)) return fail('prompt-on-screen')
+    if (needsHuman(attention)) return fail('prompt-on-screen')
     return this.withTerminal(sessionKey, async ({ handle, agent }) => {
       // The snapshot is seconds old and says nothing of a teammate or a Codex agent, so the
       // screen decides. A dialog that opens between this read and the send is not caught.
@@ -250,15 +250,7 @@ export class OfficeInteractions {
   // The one reading of an agent key every action shares: a session, or one member of one
   // lead. A key with two readings (a repeated id, a session key holding '#') names no one.
   private resolve(agentKey: string): { session: SessionRef; member?: SubagentRef } | null {
-    const readings = (this.deps.snapshot()?.sessions ?? []).flatMap((session) => {
-      if (session.key === agentKey) return [{ session }]
-      if (!agentKey.startsWith(`${session.key}#`)) return []
-      const memberId = agentKey.slice(session.key.length + 1)
-      return session.subagents
-        .filter((member) => memberId !== '' && member.id === memberId)
-        .map((member) => ({ session, member }))
-    })
-    return readings.length === 1 ? readings[0] : null
+    return parseAgentKey(agentKey, this.deps.snapshot()?.sessions ?? [])
   }
 
   // A teammate has its own process and pane, in its own folder when the roster names one.

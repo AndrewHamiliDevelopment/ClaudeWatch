@@ -118,7 +118,7 @@ describe('talk', () => {
     const inspector = selectAgent('listing search')
     expect(within(inspector).queryByRole('textbox')).not.toBeInTheDocument()
     expect(
-      within(inspector).getByText(/showing a prompt, and a message would answer it/)
+      within(inspector).getByText(/not at its input line, so a message could answer a prompt/)
     ).toBeInTheDocument()
   })
 

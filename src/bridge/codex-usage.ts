@@ -1,6 +1,7 @@
 import type { SessionUsage } from '../shared/office/types'
 import { jsonObject, object } from './io'
-import { tokenCount, zeroCounts } from './usage-fold'
+import { zeroCounts } from '../shared/office/token-counts'
+import { tokenCount } from './usage-fold'
 
 // Codex keeps a running total for the thread in every `token_count` event, so the newest one
 // in the tail is the answer: no fold and no full scan. Cached tokens are part of its input.

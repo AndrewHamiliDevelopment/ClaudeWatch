@@ -14,7 +14,6 @@ export interface UsageIncrement {
 }
 
 // The bridge's usage readers and main/accounts/attribution.ts still import these from here.
-export { addCounts, zeroCounts }
 
 export function emptyFold(): UsageFold {
   return { closed: zeroCounts(), openId: null, open: zeroCounts() }
