@@ -4,7 +4,7 @@ export type ZoomDirection = 'in' | 'out'
 const BANDS_NEAR_TO_FAR: readonly ZoomBand[] = ['desk', 'floor', 'building']
 
 // Orthographic zoom in screen pixels per metre for each band.
-export const BAND_ZOOM: Record<ZoomBand, number> = { desk: 90, floor: 34, building: 16 }
+export const BAND_ZOOM: Record<ZoomBand, number> = { desk: 90, floor: 34, building: 8 }
 
 const DEG_TO_RAD = Math.PI / 180
 export const ISO_ELEVATION_DEG = 35
@@ -48,5 +48,31 @@ export function createWheelStepper(options: {
     accumulated = 0
     lockedUntilMs = nowMs + options.cooldownMs
     return direction
+  }
+}
+
+export function buildingFraming(
+  floor: { width: number; depth: number },
+  floorCount: number,
+  viewport: { width: number; height: number }
+) {
+  // World props reach 12 m beyond either side, 19 m north and 7 m south of the plate.
+  const width = floor.width + 24
+  const depth = floor.depth + 26
+  const height = Math.max(8, floorCount * 2.2 + 1)
+  const projectedWidth = (width + depth) / Math.SQRT2
+  const projectedHeight = projectedWidth * Math.cos(ISO_POLAR) + height * Math.sin(ISO_POLAR)
+  return {
+    target: [0, height / 2, -6] as [number, number, number],
+    projectedWidth,
+    projectedHeight,
+    zoom: Math.max(
+      0.1,
+      Math.min(
+        BAND_ZOOM.building,
+        viewport.width / (projectedWidth * 1.2),
+        viewport.height / (projectedHeight * 1.2)
+      )
+    )
   }
 }

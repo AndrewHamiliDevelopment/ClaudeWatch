@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   BAND_ZOOM,
+  buildingFraming,
   bandForZoom,
   createWheelStepper,
   ISO_POLAR,
@@ -42,4 +43,13 @@ describe('camera bands', () => {
     expect(step(200, 50)).toBeNull()
     expect(step(-80, 400)).toBe('in')
   })
+})
+
+it('fits the district, hangar and tall tower inside a small building viewport', () => {
+  const framing = buildingFraming({ width: 64, depth: 16 }, 12, { width: 800, height: 600 })
+  expect(framing.zoom).toBeLessThanOrEqual(BAND_ZOOM.building)
+  expect(framing.zoom * framing.projectedWidth).toBeLessThan(800)
+  expect(framing.zoom * framing.projectedHeight).toBeLessThan(600)
+  expect(framing.target[1]).toBeGreaterThan(0)
+  expect(framing.target[2]).toBeLessThan(0)
 })

@@ -1,3 +1,4 @@
+import { ParkedFrames } from './ParkedFrames'
 import { Batch, Box } from './primitives'
 import { EDO } from './palettes'
 import type { FloorProps, ThemePalette } from './types'
@@ -8,6 +9,7 @@ export function MaintenanceHangar({
 }: FloorProps & { palette?: ThemePalette }) {
   return (
     <group position={[floor.width / 2 + 5.5, 0, 0]}>
+      <ParkedFrames palette={palette} />
       <Box at={[0, -0.12, 0]} size={[6, 0.2, 7]} color={palette.ink} />
       <Batch
         color={palette.lacquer}

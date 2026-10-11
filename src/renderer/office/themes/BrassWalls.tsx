@@ -10,8 +10,8 @@ import {
 } from '../logic/room-layout'
 import { STEAM } from '../office-palette'
 import type { RoomGeometry } from '../scene-model'
-import { writeInstances, type InstancePlacement } from './instancing'
-import { Matte } from './InstancedParts'
+import { writeInstances, type InstancePlacement } from '../scene/instancing'
+import { Matte } from '../scene/InstancedParts'
 
 const WALL_THICKNESS = 0.16
 const PIPE_RADIUS = 0.07

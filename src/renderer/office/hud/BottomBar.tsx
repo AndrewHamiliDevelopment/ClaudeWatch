@@ -3,6 +3,8 @@ import type { WallsMode } from '../logic/room-layout'
 import { FOCUS_RING_CLASS, HUD_BUTTON_CLASS, KBD_CLASS, PANEL_CLASS } from './hud-styles'
 
 interface BottomBarProps {
+  themeLabel: string
+  onCycleTheme: () => void
   wallsMode: WallsMode
   isListView: boolean
   is3DAvailable: boolean
@@ -68,6 +70,13 @@ export function BottomBar(props: BottomBarProps) {
         isDisabled={!props.is3DAvailable}
         onClick={props.onToggleList}
       />
+      <button
+        type="button"
+        onClick={props.onCycleTheme}
+        className={cn(HUD_BUTTON_CLASS, FOCUS_RING_CLASS, 'flex items-center gap-1.5')}
+      >
+        Theme: {props.themeLabel} <kbd className={KBD_CLASS}>T</kbd>
+      </button>
       <ToggleButton
         label="Metrics"
         isPressed={props.isMetricsVisible}

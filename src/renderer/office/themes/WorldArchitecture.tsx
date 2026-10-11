@@ -21,11 +21,28 @@ export function Roof({ width, palette }: { width: number; palette: ThemePalette 
   )
 }
 
-export function ThemeTower({ floors, palette }: TowerProps & { palette: ThemePalette }) {
+export function ThemeTower({
+  floors,
+  palette,
+  onFocusFloor
+}: TowerProps & { palette: ThemePalette }) {
   return (
     <group>
       {towerLayout(floors).map((floor) => (
-        <group key={floor.floorId} position={[0, floor.y, 0]}>
+        <group
+          key={floor.floorId}
+          position={[0, floor.y, 0]}
+          onClick={(event) => {
+            event.stopPropagation()
+            onFocusFloor?.(floor.floorId)
+          }}
+          onPointerOver={() => {
+            if (onFocusFloor) document.body.style.cursor = 'pointer'
+          }}
+          onPointerOut={() => {
+            document.body.style.cursor = ''
+          }}
+        >
           <Box at={[0, 0.9, 0]} size={[floor.width, 1.8, floor.width]} color={palette.wood} />
           <Batch
             color={palette.paper}
@@ -48,7 +65,13 @@ export function ThemeTower({ floors, palette }: TowerProps & { palette: ThemePal
           />
           <mesh position={[0, 1.55, floor.width / 2 + 0.035]}>
             <planeGeometry args={[2.7, 0.32]} />
-            <meshBasicMaterial map={signTexture(`${floor.label} · ${floor.attentionCount}`)} />
+            <meshBasicMaterial map={signTexture(floor.label)} />
+          </mesh>
+          <mesh position={[0, 0.55, floor.width / 2 + 0.035]}>
+            <planeGeometry args={[2.7, 0.32]} />
+            <meshBasicMaterial
+              map={signTexture(`${floor.agentCount ?? 0} agents · ${floor.attentionCount} waiting`)}
+            />
           </mesh>
         </group>
       ))}

@@ -13,6 +13,7 @@ export function previewFixture() {
   const towerFloors: TowerFloor[] = frame.floors.map((f) => ({
     floorId: f.floorId,
     label: f.label,
+    agentCount: frame.agents.filter((a) => a.floorId === f.floorId).length,
     attentionCount: frame.agents.filter(
       (a) =>
         a.floorId === f.floorId &&

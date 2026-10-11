@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react'
 import type { AgentView } from '../../../shared/office/types'
 import {
   BAND_ZOOM,
+  buildingFraming,
   createWheelStepper,
   ISO_POLAR,
   snapAzimuth,
@@ -20,6 +21,7 @@ const WHEEL_COOLDOWN_MS = 320
 const { ACTION } = CameraControlsImpl
 
 interface CameraRigProps {
+  floorCount: number
   floor: FloorGeometry
   agents: readonly AgentView[]
   selectedAgentKey: string | null
@@ -32,6 +34,7 @@ interface CameraRigProps {
 // three zoom bands, Q/E turn 90°, fly-to cuts instead of gliding under prefers-reduced-motion.
 export function CameraRig({
   floor,
+  floorCount,
   agents,
   selectedAgentKey,
   request,
@@ -40,8 +43,22 @@ export function CameraRig({
 }: CameraRigProps) {
   const controlsRef = useRef<CameraControlsImpl>(null)
   const bandRef = useRef<ZoomBand>('floor')
-  const latestRef = useRef({ agents, selectedAgentKey, isAnimated: !isReducedMotion, onBandChange })
-  latestRef.current = { agents, selectedAgentKey, isAnimated: !isReducedMotion, onBandChange }
+  const size = useThree((state) => state.size)
+  const framing = buildingFraming(floor, floorCount, size)
+  const latestRef = useRef({
+    agents,
+    selectedAgentKey,
+    isAnimated: !isReducedMotion,
+    onBandChange,
+    framing
+  })
+  latestRef.current = {
+    agents,
+    selectedAgentKey,
+    isAnimated: !isReducedMotion,
+    onBandChange,
+    framing
+  }
   const domElement = useThree((state) => state.gl.domElement)
 
   useEffect(() => {
@@ -71,17 +88,37 @@ export function CameraRig({
     const selected = current.find((agent) => agent.agentKey === selectedKey)
     if (next === 'desk' && selected)
       void controls.moveTo(selected.x, LOOK_HEIGHT, selected.z, isAnimated)
-    if (next !== 'desk') void controls.moveTo(0, 0, 0, isAnimated)
-    void controls.zoomTo(BAND_ZOOM[next], isAnimated)
+    if (next === 'building') {
+      const overview = latestRef.current.framing
+      void controls.moveTo(...overview.target, isAnimated)
+      void controls.zoomTo(overview.zoom, isAnimated)
+    } else {
+      if (next === 'floor') void controls.moveTo(0, 0, 0, isAnimated)
+      void controls.zoomTo(BAND_ZOOM[next], isAnimated)
+    }
   }).current
 
   useEffect(() => {
     const controls = controlsRef.current
     if (!controls) return
     if (bandRef.current === 'desk') setBand('floor')
-    void controls.moveTo(0, 0, 0, latestRef.current.isAnimated)
-    void controls.zoomTo(BAND_ZOOM[bandRef.current], latestRef.current.isAnimated)
+    const overview = latestRef.current.framing
+    const target: [number, number, number] =
+      bandRef.current === 'building' ? overview.target : [0, 0, 0]
+    void controls.moveTo(...target, latestRef.current.isAnimated)
+    void controls.zoomTo(
+      bandRef.current === 'building' ? overview.zoom : BAND_ZOOM[bandRef.current],
+      latestRef.current.isAnimated
+    )
   }, [floor.floorId, setBand])
+
+  useEffect(() => {
+    const controls = controlsRef.current
+    if (!controls || bandRef.current !== 'building') return
+    const overview = latestRef.current.framing
+    void controls.moveTo(...overview.target, latestRef.current.isAnimated)
+    void controls.zoomTo(overview.zoom, latestRef.current.isAnimated)
+  }, [floorCount, size.width, size.height, floor.width, floor.depth])
 
   useEffect(() => {
     const step = createWheelStepper({ threshold: WHEEL_THRESHOLD, cooldownMs: WHEEL_COOLDOWN_MS })
@@ -122,7 +159,7 @@ export function CameraRig({
       makeDefault
       minPolarAngle={ISO_POLAR}
       maxPolarAngle={ISO_POLAR}
-      minZoom={BAND_ZOOM.building * 0.8}
+      minZoom={framing.zoom * 0.8}
       maxZoom={BAND_ZOOM.desk * 1.2}
       smoothTime={0.3}
     />

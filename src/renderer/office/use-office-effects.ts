@@ -12,7 +12,7 @@ export function useFeedSubscription(feed: OfficeFeed, dispatch: Dispatch<OfficeA
   )
 }
 
-function actionForCommand(command: OfficeCommand): OfficeAction {
+function actionForCommand(command: Exclude<OfficeCommand, { type: 'cycle-theme' }>): OfficeAction {
   switch (command.type) {
     case 'walls':
       return { type: 'walls-set', mode: command.mode }
@@ -37,17 +37,22 @@ function actionForCommand(command: OfficeCommand): OfficeAction {
   }
 }
 
-export function useOfficeHotkeys(dispatch: Dispatch<OfficeAction>, isListForced: boolean): void {
+export function useOfficeHotkeys(
+  dispatch: Dispatch<OfficeAction>,
+  isListForced: boolean,
+  onCycleTheme: () => void
+): void {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       const command = commandForKey(keyInputFrom(event))
       if (!command || (isListForced && command.type === 'toggle-list')) return
       event.preventDefault()
-      dispatch(actionForCommand(command))
+      if (command.type === 'cycle-theme') onCycleTheme()
+      else dispatch(actionForCommand(command))
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [dispatch, isListForced])
+  }, [dispatch, isListForced, onCycleTheme])
 }
 
 // One polite, atomic message per change so screen readers hear "Needs permission: PropApp › auth", not a bare count.

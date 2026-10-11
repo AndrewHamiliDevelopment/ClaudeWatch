@@ -1,11 +1,12 @@
+export { BrassRoomDressing } from './BrassRoomDressing'
 import { STEAM } from '../office-palette'
-import { Walls } from '../scene/Walls'
-import { Elevator } from '../scene/Elevator'
+import { Walls } from './BrassWalls'
+import { Elevator } from './BrassElevator'
 import { signTexture } from '../scene/textures'
 import { doorSignPlacement, DESK_REACH } from '../logic/room-layout'
 import { Matte } from '../scene/InstancedParts'
 import { BRASS } from './palettes'
-import { Batch, Box, Cylinder } from './primitives'
+import { Batch, Box } from './primitives'
 import { MaintenanceHangar } from './Hangar'
 import { ThemeTower } from './WorldArchitecture'
 import type { DeskProps, FloorProps, RoomProps, TowerProps, WallsProps } from './types'
@@ -71,28 +72,17 @@ export function BrassDesk({ slot }: DeskProps) {
         color={STEAM.crtScreen}
         glow
       />
-      <Cylinder
-        at={[0.42, 0.8, DESK_REACH + 0.12]}
-        radius={0.02}
-        height={0.36}
-        color={STEAM.brass}
-      />
+      <mesh position={[0.42, 0.8, DESK_REACH + 0.12]}>
+        <cylinderGeometry args={[0.02, 0.05, 0.36, 6]} />
+        <Matte color={STEAM.brass} />
+      </mesh>
       <mesh position={[0.42, 1, DESK_REACH + 0.12]}>
         <coneGeometry args={[0.11, 0.12, 8]} />
         <Matte color={STEAM.lampGlow} glow />
       </mesh>
-      <Cylinder at={[0, 0.16, 0]} radius={0.2} height={0.32} color={STEAM.copper} />
-    </group>
-  )
-}
-
-export function BrassRoomDressing({ room }: RoomProps) {
-  return (
-    <group position={[room.x + room.width / 2 - 0.55, 0, room.z + room.depth / 2 - 0.55]}>
-      <Cylinder at={[0, 0.475, 0]} radius={0.26} height={0.95} color={STEAM.copper} />
-      <mesh position={[0, 1.07, 0]}>
-        <sphereGeometry args={[0.13, 12, 8]} />
-        <Matte color={STEAM.cream} />
+      <mesh position={[0, 0.16, 0]}>
+        <cylinderGeometry args={[0.2, 0.16, 0.32, 10]} />
+        <Matte color={STEAM.copper} />
       </mesh>
     </group>
   )
