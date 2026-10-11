@@ -7,7 +7,6 @@ import {
   resolveTheme,
   type ThemeStorage
 } from './office-themes'
-import { getTheme } from '../themes/registry'
 
 const EDO = 'neo-edo-steam'
 const BRASS = 'brass-workshop'
@@ -88,10 +87,9 @@ describe('office theme store', () => {
       })
     })
     const store = createOfficeThemeStore(storage)
-    expect(store.getThemeFor({ companyKey: 'c_a', projectKey: 'p_a' }, getTheme(EDO)).id).toBe(
-      BRASS
-    )
-    expect(store.getThemeFor({ companyKey: 'c_b', projectKey: 'p_b' }, getTheme(EDO)).id).toBe(EDO)
+    const assignments = store.getAssignments()
+    expect(resolveTheme({ companyKey: 'c_a', projectKey: 'p_a' }, assignments, EDO)).toBe(BRASS)
+    expect(resolveTheme({ companyKey: 'c_b', projectKey: 'p_b' }, assignments, EDO)).toBe(EDO)
   })
   it('persists a company theme and a project override, and notifies subscribers', () => {
     const storage = memoryStorage()
@@ -113,9 +111,9 @@ describe('office theme store', () => {
     store.setCompanyTheme('c_a', BRASS)
     store.setProjectTheme('p_a', EDO)
     store.clearProjectTheme('p_a')
-    expect(store.getThemeFor({ companyKey: 'c_a', projectKey: 'p_a' }, getTheme(EDO)).id).toBe(
-      BRASS
-    )
+    expect(
+      resolveTheme({ companyKey: 'c_a', projectKey: 'p_a' }, store.getAssignments(), EDO)
+    ).toBe(BRASS)
     store.clearCompanyTheme('c_a')
     expect(store.getAssignments()).toEqual(EMPTY_THEME_ASSIGNMENTS)
   })

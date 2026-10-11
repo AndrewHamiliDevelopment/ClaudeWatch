@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Trash2, FileText } from 'lucide-react'
+import { deckApi } from '../deck/deck-api'
 import { crestFor } from '../deck/roster'
 import { formatElapsedTime, timeAgo } from '../lib/utils'
 import type { SessionHistoryEntry } from '../lib/types'
@@ -12,20 +13,22 @@ export function SessionHistory() {
   const [isConfirmingClear, setIsConfirmingClear] = useState(false)
 
   useEffect(() => {
-    if (typeof window === 'undefined' || !window.api) {
+    const api = deckApi()
+    if (!api) {
       setLoading(false)
       return
     }
 
-    window.api
+    api
       .getHistory()
       .then((entries) => setHistory(entries ?? []))
       .finally(() => setLoading(false))
   }, [])
 
   const handleClear = async () => {
-    if (typeof window === 'undefined' || !window.api) return
-    await window.api.clearHistory()
+    const api = deckApi()
+    if (!api) return
+    await api.clearHistory()
     setHistory([])
     setIsConfirmingClear(false)
   }

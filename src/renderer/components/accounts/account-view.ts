@@ -6,6 +6,7 @@ import type {
 } from '../../../shared/accounts'
 import { addCounts, sumCounts } from '../../../shared/office/token-counts'
 import type { TokenCounts } from '../../../shared/office/types'
+import { clamp } from '../../../shared/range'
 import { timeAgo } from '../../lib/utils'
 import type { LedgerRow } from '../GaugeWall'
 
@@ -88,7 +89,7 @@ export function readAccountLimit(limit: AccountLimit, nowMs: number): AccountLim
   const hasReset = limit.resetsAtMs !== null && limit.resetsAtMs <= nowMs
   const isOld = nowMs - limit.fetchedAtMs > OLD_READING_MS
   return {
-    percent: Math.min(100, Math.max(0, limit.usedPercent)),
+    percent: clamp(limit.usedPercent, [0, 100]),
     age: hasReset ? 'reset' : isOld ? 'old' : 'current',
     ageText: `as of ${timeAgo(new Date(limit.fetchedAtMs), nowMs)}`
   }

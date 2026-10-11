@@ -64,7 +64,7 @@ interface NotificationSettingsProps {
 }
 
 export function NotificationSettings({ notifications, onChange }: NotificationSettingsProps) {
-  const mutedProjects = notifications.mutedProjects ?? []
+  const { mutedProjects } = notifications
 
   const handleUnmute = (projectPath: string): void => {
     void window.api?.unmuteProject(projectPath).then(() =>

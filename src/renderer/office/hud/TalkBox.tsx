@@ -48,16 +48,15 @@ export function TalkBox({ agentKey, agentName, send, onSent }: TalkBoxProps) {
     void submit()
   }
 
-  const failure =
-    request.status === 'done' && !request.result.success ? request.result.reason : null
+  const failed = request.status === 'done' && !request.result.success ? request.result : null
   const statusText = localProblem
     ? failureMessage(localProblem)
     : isPending
       ? 'Sending…'
       : isSentVisible
         ? 'Sent'
-        : request.status === 'done' && !request.result.success
-          ? failureMessage(failure ?? undefined)
+        : failed
+          ? failureMessage(failed.reason)
           : ''
 
   return (

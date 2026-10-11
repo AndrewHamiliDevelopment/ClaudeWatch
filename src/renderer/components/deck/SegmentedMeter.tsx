@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react'
+import { clamp } from '../../../shared/range'
 import { cn } from '../../lib/utils'
 
 interface SegmentedMeterProps {
@@ -13,7 +14,6 @@ interface SegmentedMeterProps {
 
 type MeterStyle = CSSProperties & Record<'--fill' | '--mark', string>
 
-// dry-new: replaces three hand-rolled bars (dashboard limits, popover weekly, popover limits).
 export function SegmentedMeter({
   label,
   percent,
@@ -21,7 +21,7 @@ export function SegmentedMeter({
   markPercent,
   className
 }: SegmentedMeterProps) {
-  const clampedPercent = Math.min(100, Math.max(0, percent))
+  const clampedPercent = clamp(percent, [0, 100])
   const fillStyle: MeterStyle = {
     '--fill': `${clampedPercent}%`,
     '--mark': `${markPercent ?? 100}%`

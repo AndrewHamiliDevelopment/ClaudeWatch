@@ -1,3 +1,4 @@
+import { clamp } from '../../../shared/range'
 import type { FloorGeometry, ZoneGeometry } from '../scene-model'
 import { BAND_ZOOM, ISO_POLAR } from './camera-bands'
 
@@ -172,7 +173,7 @@ export function frameBounds(
     safeWidth / Math.max(maxX - minX, 0.01),
     safeHeight / Math.max(maxY - minY, 0.01)
   )
-  const zoom = Math.max(MIN_FRAME_ZOOM, Math.min(options.maxZoom ?? BAND_ZOOM.desk, fit))
+  const zoom = clamp(fit, [MIN_FRAME_ZOOM, options.maxZoom ?? BAND_ZOOM.desk])
 
   // Screen-metre position the target must have so the bounds' centre sits mid safe-area.
   const targetX = (minX + maxX) / 2 - (insets.left + safeWidth / 2 - viewport.width / 2) / zoom

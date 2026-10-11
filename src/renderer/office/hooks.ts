@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 
+import { browserStorage } from '../office-live/browser-storage'
 import { officeThemes, resolveTheme, useThemeAssignments } from './logic/office-themes'
 import type { ZoneGeometry } from './scene-model'
 import { getTheme, listThemes, themeForTeam } from './themes/registry'
@@ -19,15 +20,6 @@ export function usePrefersReducedMotion(): boolean {
     return () => query.removeEventListener('change', update)
   }, [])
   return isReduced
-}
-
-export function useNow(intervalMs: number): number {
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), intervalMs)
-    return () => clearInterval(timer)
-  }, [intervalMs])
-  return now
 }
 
 const THEME_STORAGE_KEY = 'claudewatch.office.theme'
@@ -50,12 +42,8 @@ export function useOfficeTheme(focusedZone?: ZoneGeometry) {
   const assignments = useThemeAssignments()
   const [hasChosenTheme, setHasChosenTheme] = useState(false)
   const [theme, setTheme] = useState(() => {
-    try {
-      const stored = localStorage.getItem(THEME_STORAGE_KEY)
-      return listThemes().find((candidate) => candidate.id === stored) ?? themeForTeam()
-    } catch {
-      return themeForTeam()
-    }
+    const stored = browserStorage()?.getItem(THEME_STORAGE_KEY)
+    return listThemes().find((candidate) => candidate.id === stored) ?? themeForTeam()
   })
   useEffect(() => {
     if (!hasChosenTheme) return
