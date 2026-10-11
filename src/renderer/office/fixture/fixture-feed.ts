@@ -4,6 +4,7 @@ import type {
   AgentAttention,
   CurrentTool,
   ProviderId,
+  SessionHost,
   SessionRef,
   SubagentRef
 } from '../../../shared/office/types'
@@ -13,6 +14,8 @@ import { agentsForFloor, layoutFloor } from './fixture-layout'
 interface FixtureSession {
   name: string
   provider: ProviderId
+  // Orca-hosted sessions let the preview exercise talk, peek and review.
+  host?: SessionHost
   // Script indexes advance one step every `period` ticks, offset by `offset`.
   period: number
   offset: number
@@ -57,6 +60,7 @@ const PROJECTS: readonly FixtureProject[] = [
       {
         name: 'office renderer',
         provider: 'claude',
+        host: 'orca',
         period: 3,
         offset: 0,
         subagentScript: [2, 3, 1, 0]
@@ -76,7 +80,7 @@ const PROJECTS: readonly FixtureProject[] = [
         offset: 1,
         attentionScript: ['none', 'error', 'error', 'none']
       },
-      { name: 'widget sync', provider: 'codex', period: 3, offset: 4 }
+      { name: 'widget sync', provider: 'codex', host: 'orca', period: 3, offset: 4 }
     ]
   },
   {
@@ -86,6 +90,7 @@ const PROJECTS: readonly FixtureProject[] = [
       {
         name: 'listing search',
         provider: 'claude',
+        host: 'orca',
         period: 3,
         offset: 1,
         attentionScript: ['permission', 'permission', 'permission', 'none', 'none']
@@ -116,6 +121,7 @@ const PROJECTS: readonly FixtureProject[] = [
       {
         name: 'auth migration',
         provider: 'claude',
+        host: 'orca',
         period: 2,
         offset: 7,
         attentionScript: ['none', 'none', 'none', 'permission']
@@ -191,7 +197,7 @@ function sessionFor(
     projectKey: projectKey(project.root),
     projectLabel: project.label,
     worktree: null,
-    host: 'terminal',
+    host: session.host ?? 'terminal',
     orcaPaneKey: null,
     activity,
     attention,

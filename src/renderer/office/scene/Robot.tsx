@@ -19,6 +19,7 @@ const THOUGHT_DOTS = [-0.09, 0, 0.09]
 interface RobotProps {
   agent: AgentView
   isSelected: boolean
+  isSpeaking: boolean
   isReducedMotion: boolean
   onSelect: (agentKey: string) => void
   onFly: (agentKey: string) => void
@@ -32,7 +33,14 @@ function phaseFor(key: string): number {
 
 // A small steampunk mecha from primitives: brass body, domed head with a visor eye, a back gear
 // that spins while working, two arms, a hover base and a head vent that puffs steam.
-export function Robot({ agent, isSelected, isReducedMotion, onSelect, onFly }: RobotProps) {
+export function Robot({
+  agent,
+  isSelected,
+  isSpeaking,
+  isReducedMotion,
+  onSelect,
+  onFly
+}: RobotProps) {
   const palette = ROBOT_PALETTE[agent.provider]
   const parts = {
     root: useRef<Group>(null),
@@ -191,6 +199,19 @@ export function Robot({ agent, isSelected, isReducedMotion, onSelect, onFly }: R
           ))}
         </group>
       </group>
+      {isSpeaking && (
+        // Speech puff after a message is sent; OfficeApp clears it after about 1.5 s.
+        <group position={[0.32, 1.32, 0]}>
+          <mesh scale={[0.24, 0.16, 0.08]}>
+            <sphereGeometry args={[1, 16, 10]} />
+            <meshBasicMaterial color={STEAM.steam} />
+          </mesh>
+          <mesh position={[-0.13, -0.13, 0]} scale={0.045}>
+            <sphereGeometry args={[1, 8, 6]} />
+            <meshBasicMaterial color={STEAM.steam} />
+          </mesh>
+        </group>
+      )}
       {/* Invisible, simple hit target: raycasting one capsule beats raycasting every part. */}
       <mesh
         position={[0, 0.6, 0]}

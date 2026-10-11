@@ -10,6 +10,9 @@ interface AttentionRailProps {
   nowMs: number
   onOpen: (sessionKey: string) => void
   onNext: () => void
+  // Sessions whose permission prompt can be answered from the office.
+  reviewableKeys: ReadonlySet<string>
+  onReview: (sessionKey: string) => void
 }
 
 export function AttentionRail({
@@ -17,7 +20,9 @@ export function AttentionRail({
   activeSessionKey,
   nowMs,
   onOpen,
-  onNext
+  onNext,
+  reviewableKeys,
+  onReview
 }: AttentionRailProps) {
   return (
     <section
@@ -52,14 +57,14 @@ export function AttentionRail({
               Math.max(0, Math.floor((nowMs - item.sinceMs) / 1000))
             )
             return (
-              <li key={item.sessionKey}>
+              <li key={item.sessionKey} className="flex items-start gap-1">
                 <button
                   type="button"
                   onClick={() => onOpen(item.sessionKey)}
                   aria-current={isActive ? 'true' : undefined}
                   className={cn(
                     FOCUS_RING_CLASS,
-                    'flex w-full flex-col gap-0.5 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-surface-hover',
+                    'flex min-w-0 flex-1 flex-col gap-0.5 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-surface-hover',
                     isActive && 'bg-accent-muted'
                   )}
                 >
@@ -71,6 +76,20 @@ export function AttentionRail({
                     {spec.label}, {item.projectLabel}, waiting {waitedFor}
                   </span>
                 </button>
+                {reviewableKeys.has(item.sessionKey) && (
+                  <button
+                    type="button"
+                    aria-label={`Review ${item.sessionName}`}
+                    onClick={() => onReview(item.sessionKey)}
+                    className={cn(
+                      HUD_BUTTON_CLASS,
+                      FOCUS_RING_CLASS,
+                      'mt-1 shrink-0 bg-surface-hover text-caption'
+                    )}
+                  >
+                    Review
+                  </button>
+                )}
               </li>
             )
           })}

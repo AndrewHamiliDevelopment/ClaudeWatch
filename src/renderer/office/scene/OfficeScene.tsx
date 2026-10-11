@@ -25,6 +25,9 @@ interface OfficeSceneProps {
   metrics: FrameMetrics
   onSelectAgent: (agentKey: string | null) => void
   onFlyToAgent: (agentKey: string) => void
+  reviewableKeys: ReadonlySet<string>
+  onReview: (sessionKey: string) => void
+  speakingAgentKey: string | null
 }
 
 // Orthographic distance only sets clipping, not size; zoom sets size.
@@ -68,6 +71,7 @@ export default function OfficeScene(props: OfficeSceneProps) {
             key={agent.agentKey}
             agent={agent}
             isSelected={agent.agentKey === props.selectedAgentKey}
+            isSpeaking={agent.agentKey === props.speakingAgentKey}
             isReducedMotion={isReducedMotion}
             onSelect={props.onSelectAgent}
             onFly={props.onFlyToAgent}
@@ -87,6 +91,8 @@ export default function OfficeScene(props: OfficeSceneProps) {
       </Canvas>
       <NameCardLayer
         cards={props.cards}
+        reviewableKeys={props.reviewableKeys}
+        onReview={props.onReview}
         band={band}
         selectedAgentKey={props.selectedAgentKey}
         anchors={anchors}
