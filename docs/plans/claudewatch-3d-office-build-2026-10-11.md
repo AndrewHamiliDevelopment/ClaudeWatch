@@ -12,6 +12,9 @@ Validated: `node /tmp/cw-repro-2026-10-11/repro.mjs` printed `cd "/tmp/proj$(ech
 - [x] Phase 3 — Sim: deterministic building layout and agent behaviour, pure TS (Codex)
 - [ ] Phase 4 — Scene: Office window renderer, R3F graybox building, HUD, list view (Claude @lena)
 - [x] Phase 5 — ~~Look-first room (Sims 3 test)~~ cancelled 2026-10-11: owner changed the art direction to a simple isometric mecha-steampunk game; the look now lives in the Phase 4 scene
+- [x] Phase 4 — Scene (mecha-steampunk isometric game, merged 2df1352)
+- [ ] Phase 7 — Interactions: talk to an agent, answer Claude permission prompts, peek at its screen, start a new agent (main side 87f3e2e; UI with @lena)
+- [ ] Phase 8 — Themes: plug-in theme system (robot model + office kit + world per team); first theme Japanese steampunk with Code Geass-inspired samurai mechs; a bigger world (district, hangar, pagoda HQ tower) (Codex)
 - [ ] Phase 6 — Integration: wire bridge → Office window, merge worktrees, STEP 6 gates, review, E2E video
 
 ## Owner decisions (this round)
@@ -32,6 +35,11 @@ The owner replaced "close to The Sims 3" with a simple, animated, isometric game
 - Simple loops only: idle bob and blink, typing arms with a spinning back gear and a steam puff, head-down reading, slow-gear thinking, waving when it needs you.
 - Fixed isometric orthographic camera with zoom, pan and 90° rotation.
 - The Sims 3 fidelity ladder (L2/L3, Rocketbox, baked lighting, paid art) is dropped.
+
+## Interaction and theme additions (owner, 2026-10-11)
+
+- Interactions, all user-initiated through Orca's CLI: talk (`orca terminal send`), answer Claude permission prompts only when the prompt is on screen (key 1 / Escape), peek at the last 40 screen lines (`orca terminal read --screen`, never stored), start a Claude or Codex agent in a project (`orca terminal create`, Terminal.app fallback). Plain-terminal sessions keep Jump to terminal.
+- Themes: the look becomes a plug-in (`OfficeTheme`: robot model, office kit, world) so later teams can bring their own models and offices. First theme: Japanese steampunk with original, Code Geass-inspired samurai mechs (no franchise names, logos or insignia). The environment grows into a district around each floor, a hangar bay for idle mechs, and a pagoda HQ tower showing all project floors.
 
 ## Scope
 
