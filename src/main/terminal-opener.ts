@@ -140,6 +140,27 @@ export async function openTerminal(
   return opener(projectPath)
 }
 
+// What `open -a` calls each terminal app. A multiplexer or an unknown host names none.
+const APP_NAMES: Partial<Record<TerminalType, string>> = {
+  'terminal-app': 'Terminal',
+  iterm2: 'iTerm',
+  warp: 'Warp',
+  alacritty: 'Alacritty',
+  kitty: 'kitty',
+  wezterm: 'WezTerm',
+  hyper: 'Hyper',
+  ghostty: 'Ghostty',
+  vscode: 'Visual Studio Code',
+  cursor: 'Cursor'
+}
+
+// Brings the terminal app forward and nothing more: no tab, no window, no keystroke. For a
+// caller that may not type, where `openTerminal` would type `cd` into the app.
+export function raiseTerminal(terminalType?: TerminalType): Promise<{ success: boolean }> {
+  const app = terminalType && APP_NAMES[terminalType]
+  return app ? runCommand('/usr/bin/open', ['-a', app]) : Promise.resolve({ success: false })
+}
+
 // Fallback for starting an agent when Orca is not running: a Terminal.app window in the folder.
 export function openTerminalRunning(
   projectPath: string,

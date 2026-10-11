@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { openTerminal, openTerminalRunning, assertOrcaTrusted } = vi.hoisted(() => ({
+const { openTerminal, openTerminalRunning, raiseTerminal, assertOrcaTrusted } = vi.hoisted(() => ({
   openTerminal: vi.fn(),
   openTerminalRunning: vi.fn(),
+  raiseTerminal: vi.fn(),
   assertOrcaTrusted: vi.fn()
 }))
-vi.mock('../main/terminal-opener', () => ({ openTerminal, openTerminalRunning }))
+vi.mock('../main/terminal-opener', () => ({ openTerminal, openTerminalRunning, raiseTerminal }))
 vi.mock('../shared/orca-bundle', async (original) => ({
   ...(await original<typeof import('../shared/orca-bundle')>()),
   assertOrcaTrusted
@@ -71,6 +72,15 @@ describe('createOfficeService', () => {
   const run = vi.fn()
   const terminalOf = vi.fn()
   let service: OfficeService
+  const host = {
+    snapshot: () => snapshot,
+    onMessage: (listener: (message: FeedMessage) => void) => {
+      feedListeners.add(listener)
+      return () => {
+        feedListeners.delete(listener)
+      }
+    }
+  }
   const commands = (): [string, string[]][] =>
     run.mock.calls.map(([program, args]) => [program, args])
 
@@ -84,19 +94,8 @@ describe('createOfficeService', () => {
     terminalOf.mockResolvedValue('iterm2')
     openTerminal.mockResolvedValue({ success: true })
     openTerminalRunning.mockResolvedValue({ success: true })
-    service = createOfficeService({
-      host: {
-        snapshot: () => snapshot,
-        onMessage: (listener) => {
-          feedListeners.add(listener)
-          return () => {
-            feedListeners.delete(listener)
-          }
-        }
-      },
-      run,
-      terminalOf
-    })
+    raiseTerminal.mockResolvedValue({ success: true })
+    service = createOfficeService({ host, run, terminalOf, isInteractive: true })
   })
 
   describe('the feed', () => {
@@ -230,6 +229,22 @@ describe('createOfficeService', () => {
       expect(await service.focus('claude:s1')).toEqual({ success: true, target: 'terminal' })
       expect(terminalOf).toHaveBeenCalledWith(4242)
       expect(openTerminal).toHaveBeenCalledWith('/repo/app', 'iterm2')
+      expect(raiseTerminal).not.toHaveBeenCalled()
+      expect(run).not.toHaveBeenCalled()
+    })
+
+    it('only brings that app forward when it may not type: no new tab, no cd', async () => {
+      const viewOnly = createOfficeService({ host, run, terminalOf, isInteractive: false })
+      snapshot = {
+        rev: 5,
+        generatedAtMs: 1,
+        sessions: [session({ host: 'terminal', orcaPaneKey: null })],
+        sources: []
+      }
+
+      expect(await viewOnly.focus('claude:s1')).toEqual({ success: true, target: 'terminal-app' })
+      expect(raiseTerminal).toHaveBeenCalledExactlyOnceWith('iterm2')
+      expect(openTerminal).not.toHaveBeenCalled()
       expect(run).not.toHaveBeenCalled()
     })
   })

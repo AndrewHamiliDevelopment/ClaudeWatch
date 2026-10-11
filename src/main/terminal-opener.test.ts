@@ -6,7 +6,7 @@ vi.mock('child_process', () => ({
   execFile: (...args: unknown[]) => mockExecFile(...args)
 }))
 
-import { openTerminal, openTerminalRunning } from './terminal-opener'
+import { openTerminal, openTerminalRunning, raiseTerminal } from './terminal-opener'
 
 type ExecCallback = (error: Error | null, stdout?: string, stderr?: string) => void
 
@@ -251,5 +251,47 @@ describe('openTerminalRunning', () => {
     expect(args.slice(2)).toEqual(['/tmp/a b"$(x)', 'codex'])
     expect(args[1]).toContain('quoted form of projectPath')
     expect(args[1]).not.toContain('$(x)')
+  })
+})
+
+describe('raiseTerminal', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockExecFile.mockImplementation(
+      (_cmd: string, _args: string[], _opts: unknown, cb: ExecCallback) => cb(null)
+    )
+  })
+
+  it.each([
+    ['terminal-app', 'Terminal'],
+    ['iterm2', 'iTerm'],
+    ['warp', 'Warp'],
+    ['ghostty', 'Ghostty'],
+    ['kitty', 'kitty'],
+    ['wezterm', 'WezTerm'],
+    ['alacritty', 'Alacritty'],
+    ['hyper', 'Hyper'],
+    ['vscode', 'Visual Studio Code'],
+    ['cursor', 'Cursor']
+  ] as const)('brings %s forward by its app name and does nothing else', async (type, app) => {
+    expect(await raiseTerminal(type)).toEqual({ success: true })
+    expect(mockExecFile.mock.calls.map(([program, args]) => [program, args])).toEqual([
+      ['/usr/bin/open', ['-a', app]]
+    ])
+  })
+
+  it.each(['tmux', 'screen', 'unknown', undefined] as const)(
+    'runs nothing for %s, which names no app to bring forward',
+    async (type) => {
+      expect(await raiseTerminal(type)).toEqual({ success: false })
+      expect(mockExecFile).not.toHaveBeenCalled()
+    }
+  )
+
+  it('reports an app that could not be brought forward', async () => {
+    mockExecFile.mockImplementation(
+      (_cmd: string, _args: string[], _opts: unknown, cb: ExecCallback) => cb(new Error('no app'))
+    )
+    expect(await raiseTerminal('warp')).toEqual({ success: false })
   })
 })

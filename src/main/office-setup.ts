@@ -84,7 +84,8 @@ export function setupOffice(
   const service = createOfficeService({
     host,
     run: execFilePromise,
-    terminalOf: async (pid) => (await terminalResolver.resolve(pid)).terminalType
+    terminalOf: async (pid) => (await terminalResolver.resolve(pid)).terminalType,
+    isInteractive: true
   })
   const paneFocus = new PaneFocus({
     instances: () => tracker.getInstances(),

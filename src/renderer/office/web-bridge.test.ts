@@ -3,6 +3,8 @@ import type { FeedMessage, OfficeSnapshot } from '../../shared/office/types'
 import { createWebBridge, takeLaunchToken } from './web-bridge'
 
 const TOKEN = 'k'.repeat(43)
+const CODE = 'c'.repeat(43)
+const TOKEN_KEY = 'claudewatch.office.token'
 const snapshot: OfficeSnapshot = { rev: 3, generatedAtMs: 1, sessions: [], sources: [] }
 const hello: FeedMessage = { type: 'hello', v: 1, snapshot }
 const patch: FeedMessage = { type: 'patch', v: 1, seq: 4, upserts: [], removed: [] }
@@ -28,17 +30,18 @@ describe('takeLaunchToken', () => {
     window.history.replaceState(null, '', '/')
   })
 
-  it('moves the token from the address to this tab’s storage and clears the address', () => {
-    window.history.replaceState(null, '', `/office.html#t=${TOKEN}`)
+  it('takes the launch code out of the address and keeps it nowhere', () => {
+    window.history.replaceState(null, '', `/office.html#t=${CODE}`)
 
-    expect(takeLaunchToken(window)).toBe(TOKEN)
+    expect(takeLaunchToken(window)).toBe(CODE)
     expect(window.location.hash).toBe('')
     expect(window.location.pathname).toBe('/office.html')
+    // The code works once, so a stored copy could only ever be refused.
+    expect(window.sessionStorage.length).toBe(0)
   })
 
-  it('finds the token again after a reload', () => {
-    window.history.replaceState(null, '', `/office.html#t=${TOKEN}`)
-    takeLaunchToken(window)
+  it('finds this tab’s session token after a reload', () => {
+    window.sessionStorage.setItem(TOKEN_KEY, TOKEN)
 
     expect(takeLaunchToken(window)).toBe(TOKEN)
   })
@@ -63,15 +66,81 @@ describe('createWebBridge', () => {
     vi.useFakeTimers()
     fetchMock.mockReset()
     vi.stubGlobal('fetch', fetchMock)
+    // A page that already holds its session token, as after a reload.
+    window.sessionStorage.setItem(TOKEN_KEY, TOKEN)
   })
 
   afterEach(() => {
     vi.unstubAllGlobals()
     vi.useRealTimers()
+    window.sessionStorage.clear()
+  })
+
+  describe('a page opened with a launch code', () => {
+    const session = (): Response => jsonReply({ success: true, token: TOKEN })
+
+    beforeEach(() => window.sessionStorage.clear())
+
+    it('trades the code once for a session token, which every call then carries', async () => {
+      fetchMock.mockImplementation(async (path: string) =>
+        path === '/api/session' ? session() : jsonReply({ success: true })
+      )
+      const bridge = createWebBridge(CODE)
+      await Promise.all([bridge.focus('claude:s1'), bridge.focus('claude:s2')])
+
+      expect(fetchMock.mock.calls.map(([path]) => path)).toEqual([
+        '/api/session',
+        '/api/focus',
+        '/api/focus'
+      ])
+      expect(sent(0).init).toMatchObject({
+        method: 'POST',
+        headers: { Authorization: `Bearer ${CODE}` }
+      })
+      expect(sent(1).init.headers).toMatchObject({ Authorization: `Bearer ${TOKEN}` })
+      // Kept for a reload of this tab; the code itself is kept nowhere.
+      expect(window.sessionStorage.getItem(TOKEN_KEY)).toBe(TOKEN)
+      expect(JSON.stringify({ ...window.sessionStorage })).not.toContain(CODE)
+    })
+
+    it('opens the feed with the session token, never with the code', async () => {
+      const feed = feedResponse()
+      fetchMock.mockImplementation(async (path: string) =>
+        path === '/api/session' ? session() : feed.response
+      )
+      const listener = vi.fn()
+      const bridge = createWebBridge(CODE)
+      bridge.onFeedMessage(listener)
+      await bridge.ready()
+      feed.write(`${JSON.stringify(hello)}\n`)
+
+      await vi.waitFor(() => expect(listener).toHaveBeenCalledWith(hello))
+      expect(sent(1).path).toBe('/api/feed')
+      expect(sent(1).init.headers).toEqual({ Authorization: `Bearer ${TOKEN}` })
+    })
+
+    it.each([
+      ['the code is refused', async () => new Response('', { status: 401 })],
+      ['the server is gone', () => Promise.reject(new TypeError('Failed to fetch'))],
+      ['the answer carries no token', async () => jsonReply({ success: true })],
+      ['the token is not a token', async () => jsonReply({ success: true, token: '<script>' })]
+    ])('makes no other call when %s, and says the feed is stale', async (_case, answer) => {
+      fetchMock.mockImplementation(answer)
+      const listener = vi.fn()
+      const bridge = createWebBridge(CODE)
+      bridge.onFeedMessage(listener)
+      await bridge.ready()
+
+      expect(await bridge.send('claude:s1', 'hi')).toEqual({ success: false })
+      await vi.advanceTimersByTimeAsync(5000)
+      expect(fetchMock.mock.calls.map(([path]) => path)).toEqual(['/api/session'])
+      expect(listener.mock.calls).toEqual([[{ type: 'resync' }]])
+      expect(window.sessionStorage.length).toBe(0)
+    })
   })
 
   describe('the feed', () => {
-    it('opens the feed with the launch token and delivers each message as it arrives', async () => {
+    it('opens the feed with the session token and delivers each message as it arrives', async () => {
       const feed = feedResponse()
       fetchMock.mockResolvedValue(feed.response)
       const listener = vi.fn()
@@ -131,6 +200,23 @@ describe('createWebBridge', () => {
       expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(3)
     })
 
+    it('leaves no abort listener behind for each wait between retries', async () => {
+      fetchMock.mockRejectedValue(new TypeError('Failed to fetch'))
+      const added = vi.spyOn(AbortSignal.prototype, 'addEventListener')
+      const removed = vi.spyOn(AbortSignal.prototype, 'removeEventListener')
+      const bridge = createWebBridge(TOKEN)
+      bridge.onFeedMessage(vi.fn())
+      await bridge.ready()
+
+      await vi.advanceTimersByTimeAsync(10_000)
+
+      const waits = added.mock.calls.filter(([type]) => type === 'abort').length
+      const released = removed.mock.calls.filter(([type]) => type === 'abort').length
+      expect(waits).toBeGreaterThanOrEqual(9)
+      // Only the wait in progress may still be listening.
+      expect(waits - released).toBeLessThanOrEqual(1)
+    })
+
     it.each([401, 403])('stops for good when the server answers %i', async (status) => {
       fetchMock.mockResolvedValue(new Response('', { status }))
       const listener = vi.fn()
@@ -164,7 +250,7 @@ describe('createWebBridge', () => {
   })
 
   describe('actions', () => {
-    it('posts each action as JSON with the launch token', async () => {
+    it('posts each action as JSON with the session token', async () => {
       fetchMock.mockImplementation(async () => jsonReply({ success: true }))
       const bridge = createWebBridge(TOKEN)
 

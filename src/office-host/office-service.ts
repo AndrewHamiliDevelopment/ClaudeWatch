@@ -3,7 +3,7 @@ import { OfficeInteractions, type PaneOwner } from '../main/office-interactions'
 import { createOrcaCli } from '../main/orca-cli'
 import { OrcaTerminals } from '../main/orca-terminals'
 import type { execFilePromise } from '../main/platform/exec'
-import { openTerminal, openTerminalRunning } from '../main/terminal-opener'
+import { openTerminal, openTerminalRunning, raiseTerminal } from '../main/terminal-opener'
 import type { TerminalType } from '../renderer/lib/types'
 import type {
   FeedMessage,
@@ -22,6 +22,8 @@ interface OfficeServiceDeps {
   run: typeof execFilePromise
   // The terminal app hosting that pid, for agents that run outside Orca.
   terminalOf: (pid: number) => Promise<TerminalType | undefined>
+  // False for a view-only page: then nothing here types, a `cd` into a terminal included.
+  isInteractive: boolean
 }
 
 // What the Office can do, whichever transport carries it. Arguments are `unknown` because
@@ -45,7 +47,12 @@ const isDecision = (value: unknown): value is PermissionDecision =>
   value === 'approve' || value === 'deny'
 const isProvider = (value: unknown): value is ProviderId => value === 'claude' || value === 'codex'
 
-export function createOfficeService({ host, run, terminalOf }: OfficeServiceDeps): OfficeService {
+export function createOfficeService({
+  host,
+  run,
+  terminalOf,
+  isInteractive
+}: OfficeServiceDeps): OfficeService {
   const orcaCli = createOrcaCli(run)
   const processStart = (pid: number): Promise<number | null> =>
     run('/bin/ps', ['-o', 'lstart=', '-p', String(pid)], PS_OPTIONS).then(
@@ -58,8 +65,12 @@ export function createOfficeService({ host, run, terminalOf }: OfficeServiceDeps
     openTerminalRunning,
     processStart,
     raiseOrca: orcaCli.raise,
-    openFolder: async (path, pid) =>
-      openTerminal(path, pid === null ? undefined : await terminalOf(pid))
+    openFolder: async (path, pid) => {
+      const terminal = pid === null ? undefined : await terminalOf(pid)
+      // Opening the folder types `cd` into the terminal app, which a view-only page may not.
+      if (isInteractive) return openTerminal(path, terminal)
+      return { ...(await raiseTerminal(terminal)), target: 'terminal-app' }
+    }
   })
 
   return {

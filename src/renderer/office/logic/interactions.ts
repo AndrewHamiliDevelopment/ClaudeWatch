@@ -71,6 +71,7 @@ export function focusMessage(result: FocusResult): string {
     return `Orca is in front, but not on this agent's pane. ${failureMessage(result.reason)}`
   }
   if (!result.success) return failureMessage(result.reason)
+  if (result.target === 'terminal-app') return "This agent's terminal app is in front."
   return result.target === 'terminal' ? "Opened a terminal at this agent's folder." : ''
 }
 

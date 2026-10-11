@@ -32,10 +32,11 @@ async function main(): Promise<void> {
     host,
     run: execFilePromise,
     // A fresh resolver each time: its cache is keyed by pid, and nothing here evicts a dead one.
-    terminalOf: async (pid) => (await new TerminalResolver().resolve(pid)).terminalType
+    terminalOf: async (pid) => (await new TerminalResolver().resolve(pid)).terminalType,
+    isInteractive: args.interactive
   })
 
-  const token = createLaunchToken()
+  const launchCode = createLaunchToken()
   let launchFile: string | null = null
   const removeLaunchFile = async (): Promise<void> => {
     if (launchFile) await rm(launchFile, { force: true })
@@ -48,7 +49,7 @@ async function main(): Promise<void> {
   }
   const server = createOfficeServer({
     files,
-    token,
+    launchCode,
     service,
     bridge: host,
     interactive: args.interactive,
@@ -60,8 +61,8 @@ async function main(): Promise<void> {
   process.once('SIGTERM', () => void shutdown())
 
   const { port } = await server.listen(args.port)
-  launchFile = await writeLaunchFile(LAUNCH_FOLDER, port, token)
-  // The token is in the launch file only: it is never printed and never an argument.
+  launchFile = await writeLaunchFile(LAUNCH_FOLDER, port, launchCode)
+  // The launch code is in the launch file only: it is never printed and never an argument.
   process.stdout.write(
     `ClaudeWatch Office (${args.interactive ? 'interactive' : 'view-only'}) on http://127.0.0.1:${port}\n` +
       `Open ${pathToFileURL(launchFile).href}\n`

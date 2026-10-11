@@ -22,9 +22,15 @@ export const SECURITY_HEADERS: Readonly<Record<string, string>> = {
   'Cache-Control': 'no-store'
 }
 
+// Where the page trades its one-time launch code for the session token.
+export const SESSION_PATH = '/api/session'
+
 interface GuardConfig {
   port: number
-  token: string
+  // Null once it has been traded: from then on nothing opens a session.
+  launchCode: string | null
+  // Null until the code has been traded: until then no other call is served.
+  sessionToken: string | null
 }
 
 interface GuardedRequest {
@@ -59,7 +65,12 @@ export function guardRequest(request: GuardedRequest, config: GuardConfig): Guar
   const fetchSite = headers['sec-fetch-site']
   if (fetchSite !== undefined && fetchSite !== 'same-origin') return refuse(403)
 
+  const isTrade = path === SESSION_PATH
+  if (isTrade && method !== 'POST') return refuse(405)
+  // Each credential opens one door only: the code its trade, the token everything else.
+  const expected = isTrade ? config.launchCode : config.sessionToken
   const [scheme, presented] = (headers.authorization ?? '').split(' ')
-  if (scheme !== 'Bearer' || !isLaunchToken(config.token, presented)) return refuse(401)
+  if (scheme !== 'Bearer' || expected === null || !isLaunchToken(expected, presented))
+    return refuse(401)
   return { allowed: true, path, isApi: true }
 }

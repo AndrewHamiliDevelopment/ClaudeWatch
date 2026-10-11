@@ -1,7 +1,8 @@
 export interface ServerArgs {
   // 0 lets the system pick a free port.
   port: number
-  // Off by default: a view-only page can watch and jump, never type into a terminal.
+  // Off by default: a view-only page can watch, and can bring an agent's pane or terminal
+  // app forward. It types nothing anywhere, not even a `cd`.
   interactive: boolean
 }
 

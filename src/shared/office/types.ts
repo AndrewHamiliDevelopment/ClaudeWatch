@@ -169,9 +169,10 @@ export interface PeekResult extends InteractionResult {
 }
 
 // Where a focus request landed: the agent's exact pane, only the Orca app (the pane could not
-// be proven to be the agent's), or a terminal opened at the session's folder.
+// be proven to be the agent's), a terminal opened at the session's folder, or only the
+// terminal app brought forward (a view-only page, which may type nothing).
 export interface FocusResult extends InteractionResult {
-  target?: 'pane' | 'app' | 'terminal'
+  target?: 'pane' | 'app' | 'terminal' | 'terminal-app'
 }
 
 export type PermissionDecision = 'approve' | 'deny'

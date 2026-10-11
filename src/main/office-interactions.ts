@@ -21,8 +21,12 @@ interface OfficeInteractionsDeps {
   processStart: (pid: number) => Promise<number | null>
   // Brings Orca's window forward; false when it could not.
   raiseOrca: () => Promise<boolean>
-  // Opens the folder in the terminal app hosting that pid: the route for agents outside Orca.
-  openFolder: (path: string, pid: number | null) => Promise<{ success: boolean }>
+  // Shows the agent outside Orca: opens its folder in the terminal app hosting that pid, or,
+  // for a caller that may not type, only brings that app forward and says so in `target`.
+  openFolder: (
+    path: string,
+    pid: number | null
+  ) => Promise<{ success: boolean; target?: 'terminal' | 'terminal-app' }>
 }
 
 // The process a pane must be proven to belong to before anything touches it: a session, or a
@@ -196,12 +200,14 @@ export class OfficeInteractions {
     return focused
   }
 
-  // Never types. A pane that cannot be proven to be this agent's is not switched to: Orca
+  // Types nothing into Orca. A pane that cannot be proven to be this agent's is not switched to: Orca
   // alone comes forward, and the result says why.
   private async focusNow(owner: PaneOwner): Promise<FocusResult> {
     if (owner.host !== 'orca') {
       const opened = await this.deps.openFolder(owner.cwd, owner.pid)
-      return opened.success ? { success: true, target: 'terminal' } : { success: false }
+      return opened.success
+        ? { success: true, target: opened.target ?? 'terminal' }
+        : { success: false }
     }
     // A child agent shares its parent's pane, so the bridge leaves it without a pane key.
     const pane = owner.orcaPaneKey

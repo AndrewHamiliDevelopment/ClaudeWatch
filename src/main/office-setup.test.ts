@@ -18,7 +18,11 @@ vi.mock('electron', () => ({
 }))
 vi.mock('@electron-toolkit/utils', () => ({ is: { dev: false } }))
 vi.mock('./platform/exec', () => ({ execFilePromise }))
-vi.mock('./terminal-opener', () => ({ openTerminal, openTerminalRunning: vi.fn() }))
+vi.mock('./terminal-opener', () => ({
+  openTerminal,
+  openTerminalRunning: vi.fn(),
+  raiseTerminal: vi.fn()
+}))
 vi.mock('../shared/orca-bundle', async (original) => ({
   ...(await original<typeof import('../shared/orca-bundle')>()),
   assertOrcaTrusted

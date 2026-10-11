@@ -12,6 +12,7 @@ type OfficeBridgeApi = NonNullable<Window['officeBridge']>
 
 const TOKEN_KEY = 'claudewatch.office.token'
 const TOKEN_FRAGMENT = /^#t=([A-Za-z0-9_-]{43})$/
+const SESSION_TOKEN = /^[A-Za-z0-9_-]{43}$/
 const FEED_RETRY_MS = 1000
 
 // Listing every reason keeps this in step with the contract: a new one fails to compile here.
@@ -27,18 +28,18 @@ const FAILURES: Record<InteractionFailure, true> = {
   'invalid-input': true,
   'not-permitted': true
 }
-const FOCUS_TARGETS = ['pane', 'app', 'terminal'] as const
+const FOCUS_TARGETS = ['pane', 'app', 'terminal', 'terminal-app'] as const
 
-// The token the standalone server put in the launch address, or null when the page was not
-// launched by it. It moves to this tab's storage so a reload keeps it and the address loses it.
+// What this page can show the standalone server: the one-time code in its launch address,
+// taken out of the address at once, or the session token this tab stored after trading one.
+// Null when the page was not launched by the server.
 export function takeLaunchToken(
   page: Pick<Window, 'location' | 'history' | 'sessionStorage'>
 ): string | null {
-  const launched = TOKEN_FRAGMENT.exec(page.location.hash)?.[1]
-  if (!launched) return page.sessionStorage.getItem(TOKEN_KEY)
-  page.sessionStorage.setItem(TOKEN_KEY, launched)
+  const launchCode = TOKEN_FRAGMENT.exec(page.location.hash)?.[1]
+  if (!launchCode) return page.sessionStorage.getItem(TOKEN_KEY)
   page.history.replaceState(null, '', page.location.pathname + page.location.search)
-  return launched
+  return launchCode
 }
 
 function parseFeedLine(line: string): FeedMessage | null {
@@ -81,18 +82,49 @@ function toPeekResult(reply: unknown): PeekResult {
 
 function pause(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve) => {
-    const timer = setTimeout(resolve, ms)
-    signal.addEventListener('abort', () => {
+    // One signal serves every retry, so each wait takes its listener away again.
+    const finish = (): void => {
       clearTimeout(timer)
+      signal.removeEventListener('abort', finish)
       resolve()
-    })
+    }
+    const timer = setTimeout(finish, ms)
+    signal.addEventListener('abort', finish)
   })
 }
 
+// Trades the launch code for the session token and stores it for a reload of this tab.
+// Null when the server refuses: the code works once, so there is nothing to retry.
+async function openSession(launchCode: string): Promise<string | null> {
+  try {
+    const response = await fetch('/api/session', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${launchCode}` }
+    })
+    const token = field(await response.json(), 'token')
+    if (typeof token !== 'string' || !SESSION_TOKEN.test(token)) return null
+    window.sessionStorage.setItem(TOKEN_KEY, token)
+    return token
+  } catch {
+    return null
+  }
+}
+
 // The preload's bridge, for a page served by the standalone Office server: the feed is one
-// long response read line by line, and every call carries the launch token in a header.
-export function createWebBridge(token: string): OfficeBridgeApi {
-  const authorization = { Authorization: `Bearer ${token}` }
+// long response read line by line, and every call carries the session token in a header.
+// `credential` is what takeLaunchToken found: this tab's stored token, or a launch code.
+export function createWebBridge(credential: string): OfficeBridgeApi {
+  let sessionToken = window.sessionStorage.getItem(TOKEN_KEY) === credential ? credential : null
+  const opening = sessionToken
+    ? null
+    : openSession(credential).then((token) => {
+        sessionToken = token
+      })
+  // Null when no session could be opened: then nothing is sent.
+  const authorization = async (): Promise<{ Authorization: string } | null> => {
+    if (opening) await opening
+    return sessionToken ? { Authorization: `Bearer ${sessionToken}` } : null
+  }
   const listeners = new Set<(message: FeedMessage) => void>()
   let feed: AbortController | null = null
 
@@ -102,8 +134,10 @@ export function createWebBridge(token: string): OfficeBridgeApi {
 
   // Resolves when the stream ends: true when reconnecting could help.
   async function readFeed(signal: AbortSignal): Promise<boolean> {
-    const response = await fetch('/api/feed', { headers: authorization, signal })
-    // The token is per launch: once it is refused, no retry from this page can succeed.
+    const headers = await authorization()
+    // The token is per launch: without one, or once it is refused, no retry can succeed.
+    if (!headers) return false
+    const response = await fetch('/api/feed', { headers, signal })
     if (response.status === 401 || response.status === 403) return false
     const reader = response.ok ? response.body?.getReader() : undefined
     if (!reader) return true
@@ -134,9 +168,11 @@ export function createWebBridge(token: string): OfficeBridgeApi {
 
   async function post(path: string, body: object): Promise<unknown> {
     try {
+      const headers = await authorization()
+      if (!headers) return null
       const response = await fetch(path, {
         method: 'POST',
-        headers: { ...authorization, 'Content-Type': 'application/json' },
+        headers: { ...headers, 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
       })
       return await response.json()

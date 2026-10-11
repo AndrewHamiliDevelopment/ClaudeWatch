@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { guardRequest, SECURITY_HEADERS } from './http-guard'
 
 const TOKEN = 'k'.repeat(43)
-const config = { port: 5199, token: TOKEN }
+const CODE = 'c'.repeat(43)
+const config = { port: 5199, launchCode: CODE, sessionToken: TOKEN }
 const HOST = '127.0.0.1:5199'
 const ORIGIN = 'http://127.0.0.1:5199'
 const bearer = { authorization: `Bearer ${TOKEN}` }
@@ -81,6 +82,39 @@ describe('guardRequest', () => {
     expect(guardRequest({ method: 'GET', url: '/api/feed', headers }, config)).toEqual({
       allowed: false,
       status: 401
+    })
+  })
+
+  describe('the launch code and the session token', () => {
+    const post = (
+      url: string,
+      credential: string,
+      at: Parameters<typeof guardRequest>[1] = config
+    ): unknown =>
+      guardRequest(
+        {
+          method: 'POST',
+          url,
+          headers: { ...actionHeaders(), authorization: `Bearer ${credential}` }
+        },
+        at
+      )
+    const refused = { allowed: false, status: 401 }
+
+    it('takes the code only where it is traded, and the token everywhere else', () => {
+      expect(post('/api/session', CODE)).toMatchObject({ allowed: true, path: '/api/session' })
+      expect(post('/api/session', TOKEN)).toEqual(refused)
+      expect(post('/api/focus', TOKEN)).toMatchObject({ allowed: true })
+      expect(post('/api/focus', CODE)).toEqual(refused)
+    })
+
+    it('takes neither once the code is spent, or before a session exists', () => {
+      const spent = { ...config, launchCode: null }
+      const unopened = { ...config, sessionToken: null }
+      expect(post('/api/session', CODE, spent)).toEqual(refused)
+      expect(post('/api/focus', TOKEN, unopened)).toEqual(refused)
+      expect(post('/api/focus', 'null', unopened)).toEqual(refused)
+      expect(post('/api/focus', '', unopened)).toEqual(refused)
     })
   })
 

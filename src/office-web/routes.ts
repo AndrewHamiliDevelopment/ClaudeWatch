@@ -14,7 +14,8 @@ type ApiService = Pick<
 type Body = Record<string, unknown>
 type Route = (service: ApiService, body: Body) => Promise<InteractionResult>
 
-// Jumping to an agent's terminal types nothing, so a view-only page may do it.
+// A view-only page may jump to an agent: the service it is given switches panes and brings
+// apps forward, and types nothing (it is built with `isInteractive: false`).
 const VIEW_ROUTES: Readonly<Record<string, Route>> = {
   '/api/focus': (service, { agentKey }) => service.focus(agentKey)
 }
@@ -27,9 +28,8 @@ const INTERACTIVE_ROUTES: Readonly<Record<string, Route>> = {
   '/api/start': (service, { projectKey, provider }) => service.startAgent(projectKey, provider)
 }
 
-const FAILED = { success: false }
-// Not yet a reason in the shared contract, so the page shows its general failure wording.
-const NOT_PERMITTED = { success: false, reason: 'not-permitted' }
+const FAILED: InteractionResult = { success: false }
+const NOT_PERMITTED: InteractionResult = { success: false, reason: 'not-permitted' }
 
 export interface ApiOptions {
   service: ApiService

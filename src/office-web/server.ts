@@ -1,16 +1,19 @@
 import { createServer, STATUS_CODES, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { guardRequest, SECURITY_HEADERS } from './http-guard'
+import { guardRequest, SECURITY_HEADERS, SESSION_PATH } from './http-guard'
+import { createLaunchToken } from './launch-token'
 import { createApi, type ApiOptions } from './routes'
 import type { StaticFile } from './static-files'
 
 interface OfficeServerOptions extends Omit<ApiOptions, 'onWatchers'> {
   files: ReadonlyMap<string, StaticFile>
-  token: string
+  // What the launch address carries. It is traded once for a session token and then refused,
+  // so a copy left in browser history opens nothing.
+  launchCode: string
   // How long the server may sit with no page watching before onIdle is called.
   idleMs: number
   onIdle: () => void
-  // Called once, at the first call that carried the launch token.
+  // Called once, when the launch code is traded.
   onFirstUse: () => void
 }
 
@@ -19,15 +22,29 @@ export interface OfficeServer {
   close(): Promise<void>
 }
 
+// Any local program or page can open sockets here, so they are few and cannot idle half-sent.
+// A feed is a finished request with an open-ended response: these waits do not end it.
+export const SERVER_LIMITS = {
+  maxConnections: 32,
+  headersTimeoutMs: 10_000,
+  requestTimeoutMs: 30_000,
+  // How often Node looks for connections past those two waits.
+  checkEveryMs: 5_000
+}
+
 function refuse(response: ServerResponse, status: number): void {
   response.writeHead(status, { 'Content-Type': 'text/plain; charset=utf-8' })
   response.end(STATUS_CODES[status])
 }
 
-export function createOfficeServer(options: OfficeServerOptions): OfficeServer {
-  const { files, token, idleMs, onIdle, onFirstUse } = options
+export function createOfficeServer(
+  options: OfficeServerOptions,
+  limits = SERVER_LIMITS
+): OfficeServer {
+  const { files, idleMs, onIdle, onFirstUse } = options
   let port = 0
-  let isUsed = false
+  let launchCode: string | null = options.launchCode
+  let sessionToken: string | null = null
   let isClosed = false
   let idleTimer: NodeJS.Timeout | null = null
 
@@ -37,23 +54,36 @@ export function createOfficeServer(options: OfficeServerOptions): OfficeServer {
   }
   const api = createApi({ ...options, onWatchers: countIdleTime })
 
-  const server = createServer((request, response) => {
-    for (const [name, value] of Object.entries(SECURITY_HEADERS)) response.setHeader(name, value)
-    const verdict = guardRequest(request, { port, token })
-    if (!verdict.allowed) return refuse(response, verdict.status)
-    if (!verdict.isApi) {
-      // A lookup by exact path: nothing a request says is ever joined to a folder.
-      const file = files.get(verdict.path)
-      if (!file) return refuse(response, 404)
-      response.writeHead(200, { 'Content-Type': file.contentType })
-      return response.end(file.body)
+  // The guard has matched the launch code. It is spent before anything is sent, so two
+  // racing requests cannot both be answered with a token.
+  function openSession(response: ServerResponse): void {
+    launchCode = null
+    sessionToken = createLaunchToken()
+    onFirstUse()
+    response.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
+    response.end(JSON.stringify({ success: true, token: sessionToken }))
+  }
+
+  const server = createServer(
+    { connectionsCheckingInterval: limits.checkEveryMs },
+    (request, response) => {
+      for (const [name, value] of Object.entries(SECURITY_HEADERS)) response.setHeader(name, value)
+      const verdict = guardRequest(request, { port, launchCode, sessionToken })
+      if (!verdict.allowed) return refuse(response, verdict.status)
+      if (!verdict.isApi) {
+        // A lookup by exact path: nothing a request says is ever joined to a folder.
+        const file = files.get(verdict.path)
+        if (!file) return refuse(response, 404)
+        response.writeHead(200, { 'Content-Type': file.contentType })
+        return response.end(file.body)
+      }
+      if (verdict.path === SESSION_PATH) return openSession(response)
+      api(request, response, verdict.path).catch(() => response.destroy())
     }
-    if (!isUsed) {
-      isUsed = true
-      onFirstUse()
-    }
-    api(request, response, verdict.path).catch(() => response.destroy())
-  })
+  )
+  server.maxConnections = limits.maxConnections
+  server.headersTimeout = limits.headersTimeoutMs
+  server.requestTimeout = limits.requestTimeoutMs
 
   return {
     listen: (requestedPort) =>
