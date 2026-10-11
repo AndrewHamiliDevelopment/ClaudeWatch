@@ -18,6 +18,9 @@ interface WindowSource {
 }
 
 const WINDOW_CHANGES = ['show', 'hide', 'minimize', 'restore', 'closed', 'ready-to-show'] as const
+// Electron does not report every way a window ends up on screen (seen at start-up, after the
+// Dock icon is hidden), so the events give the quick answer and this slow look the sure one.
+const RECHECK_MS = 5000
 
 // Every window (dashboard, tray popover, Office) draws the bridge's data, so the bridge polls
 // live while any of them is on screen and slowly while none is. Notifications are not
@@ -39,4 +42,5 @@ export function paceBridgeByWindows(
     update()
   })
   update()
+  setInterval(update, RECHECK_MS).unref()
 }

@@ -62,6 +62,24 @@ describe('paceBridgeByWindows', () => {
     expect(setPollInterval).toHaveBeenLastCalledWith(LIVE_POLL_MS)
   })
 
+  // Seen with the dashboard at start-up: on screen, and no event had said so.
+  it('notices within seconds a window that came on screen without any event', () => {
+    vi.useFakeTimers()
+    try {
+      app.removeAllListeners()
+      setPollInterval.mockReset()
+      paceBridgeByWindows(app, () => windows, setPollInterval)
+      const dashboard = open()
+      dashboard.visible = true
+      expect(setPollInterval).toHaveBeenLastCalledWith(BACKGROUND_POLL_MS)
+
+      vi.advanceTimersByTime(5000)
+      expect(setPollInterval).toHaveBeenLastCalledWith(LIVE_POLL_MS)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('slows down again once the last visible window is hidden, minimised or closed', () => {
     const [dashboard, popover, office] = [open(), open(), open()]
     for (const window of [dashboard, popover, office]) show(window)
