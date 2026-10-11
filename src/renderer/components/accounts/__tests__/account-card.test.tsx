@@ -128,7 +128,8 @@ describe('renaming an account', () => {
     submit(await openRename(), '  Night shift ')
     expect(setAccountAlias).toHaveBeenCalledWith(lanternWorks.key, 'Night shift')
     await waitFor(() => expect(screen.queryByRole('textbox')).not.toBeInTheDocument())
-    expect(screen.getByRole('button', { name: 'Rename Side' })).toHaveFocus()
+    // Focus returns in an effect, which can run a moment after the field is gone.
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Rename Side' })).toHaveFocus())
   })
 
   it('restores the default name when the field is cleared', async () => {
