@@ -10,11 +10,10 @@ Validated: `node /tmp/cw-repro-2026-10-11/repro.mjs` printed `cd "/tmp/proj$(ech
 - [x] Phase 1 — Platform: Electron 44, one sandboxed window factory, strict CSP, navigation locks (Codex)
 - [x] Phase 2 — Bridge: live session ingest and reducer in a utilityProcess (Codex)
 - [x] Phase 3 — Sim: deterministic building layout and agent behaviour, pure TS (Codex)
-- [ ] Phase 4 — Scene: Office window renderer, R3F graybox building, HUD, list view (Claude @lena)
 - [x] Phase 5 — ~~Look-first room (Sims 3 test)~~ cancelled 2026-10-11: owner changed the art direction to a simple isometric mecha-steampunk game; the look now lives in the Phase 4 scene
 - [x] Phase 4 — Scene (mecha-steampunk isometric game, merged 2df1352)
-- [ ] Phase 7 — Interactions: talk to an agent, answer Claude permission prompts, peek at its screen, start a new agent (main side 87f3e2e; UI with @lena)
-- [ ] Phase 8 — Themes: plug-in theme system (robot model + office kit + world per team); first theme Japanese steampunk with Code Geass-inspired samurai mechs; a bigger world (district, hangar, pagoda HQ tower) (Codex)
+- [x] Phase 7 — Interactions: talk to an agent, answer Claude permission prompts, peek at its screen, start a new agent (main side 87f3e2e; UI with @lena; security review passed after the fingerprint and pane-ownership fixes)
+- [x] Phase 8 — Themes: plug-in theme system (robot model + office kit + world per team); first theme Japanese steampunk with Code Geass-inspired samurai mechs; a bigger world (district, hangar, pagoda HQ tower) (Codex)
 - [ ] Phase 9 — One floor of companies: company zones (the folder holding each project) contain project offices, which contain one office per agent ("offices within offices"); review fixes (Codex world + bridge, me, @lena scene/HUD)
 - [ ] Phase 6 — Integration: wire bridge → Office window, merge worktrees, STEP 6 gates, review, E2E video
 
@@ -47,6 +46,24 @@ The owner replaced "close to The Sims 3" with a simple, animated, isometric game
 The owner replaced floors-per-project with one big floor: each company (the folder that holds its projects, such as ZKidz or PropApp) is an isolated zone; each project is an office inside its company; each agent session has its own office inside the project office, with guest seats for subagents and a team area for overflow. Navigation becomes a Rooms panel; the pagoda tower is a landmark.
 
 Follow-up after this milestone (owner): sync the office into the zkidz-claude-team repository.
+
+### Close-out fixes (2026-10-11)
+
+Found by the second review round, the Codex passes and the owner watching the office. Each was reproduced before the fix.
+
+| Finding                                                           | Root cause                                                                                                                               | Fix                                                                                                                      |
+| ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Robots stood between desks with their backs to the viewer (owner) | `src/office/sim/rooms.ts` seated agents at its own coordinates facing north while `logic/room-layout.ts` drew desks from a second layout | Rooms carry the sim's seats; the scene draws one desk in front of each; seats face the default camera (daa2cc7)          |
+| The map could not be rotated with the mouse (owner)               | Both mouse buttons panned; rotation existed only as the unlabelled Q/E keys                                                              | Right-drag rotates, plus Rotate buttons in the bottom bar                                                                |
+| At desk zoom the camera could end up over bare ground             | The camera only moved on a request; offices re-packed underneath it                                                                      | The camera follows the selected agent's office; the preview keeps its layout between ticks                               |
+| A subagent walked in again when a sibling finished (QA #3)        | Seats were assigned by sorted position                                                                                                   | Sticky seats (e6b3a82)                                                                                                   |
+| Input could reach a pane whose agent had exited (Codex)           | Only the folder was checked                                                                                                              | Orca must report the session's agent in the pane, and the session's own process must still be running (a237c46, df10b7b) |
+| A permission review could be answered twice (Codex)               | The fingerprint was reusable                                                                                                             | One answer per review, bound to session and terminal incarnation (a237c46)                                               |
+| Health banner never updated after load (Codex)                    | Feed patches carried no source health                                                                                                    | Patches carry it when it changes (9862f00)                                                                               |
+| Bridge could be asked to open a credential store or any program   | Guard was by convention only                                                                                                             | The IO boundary refuses them, symlinks included (fba3a31, df10b7b)                                                       |
+| A dead bridge left stale sessions marked connected (Codex)        | The host kept its last snapshot                                                                                                          | Snapshot dropped and the Office told to resync (df10b7b)                                                                 |
+
+Known residual, accepted: Orca has no conditional send, so a prompt replaced in the instant between the screen read and the key press is not caught. The bridge still reads each Claude process's environment through `ps -E` to find its Orca pane and keeps three keys; Orca exposes no pid-to-pane mapping.
 
 ## Scope
 
