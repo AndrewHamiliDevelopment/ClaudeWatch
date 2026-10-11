@@ -12,3 +12,11 @@ coverage/
 widget-build/
 build/widget/
 release-notes.md
+# HTML review twins generated from docs/plans/*.md
+docs/plans/*.html
+# Agent worktrees and plan workspaces stay local
+.claude/.worktree/
+.superpowers/
+# Recordings are local-only demo artefacts
+recordings/
+*.tsbuildinfo

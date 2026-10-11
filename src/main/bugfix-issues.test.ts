@@ -77,7 +77,7 @@ describe('Issue #5: Concurrent poll guard', () => {
       })
     } as unknown as ProcessMonitor
 
-    tracker = new SessionTracker(monitor, { maxHistoryEntries: 5 })
+    tracker = new SessionTracker(monitor, { maxHistoryEntries: 5, staleThresholdMinutes: 30 })
   })
 
   afterEach(() => {
@@ -193,7 +193,7 @@ describe('Issue #10: shared execFilePromise', () => {
 // ─── ISSUE #16: notification.sound setting never applied ───
 describe('Issue #16: notification sound setting', () => {
   // We re-import to get fresh mocks
-  const { mockShow: mockShow16, MockNotification: MockNotification16 } = vi.hoisted(() => {
+  const { mockShow: _mockShow16, MockNotification: _MockNotification16 } = vi.hoisted(() => {
     const mockShow = vi.fn()
     const MockNotification = vi.fn().mockImplementation(() => ({
       show: mockShow,

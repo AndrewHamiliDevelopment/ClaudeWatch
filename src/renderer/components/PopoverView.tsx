@@ -41,6 +41,13 @@ const statusIcons: Record<ClaudeInstance['status'], typeof Activity> = {
   exited: XCircle
 }
 
+const statusIconColors: Record<ClaudeInstance['status'], string> = {
+  active: 'text-status-active',
+  idle: 'text-status-idle',
+  stale: 'text-text-tertiary',
+  exited: 'text-status-exited'
+}
+
 interface GroupedInstances {
   recentlyCompleted: ClaudeInstance[]
   inProgress: ClaudeInstance[]
@@ -395,13 +402,10 @@ function PopoverInstanceRow({
 
       {/* Status icon */}
       <StatusIcon
-        className={cn('h-3 w-3 shrink-0', {
-          'text-emerald-400': !!iconOverride,
-          'text-status-active': !iconOverride && instance.status === 'active',
-          'text-status-idle': !iconOverride && instance.status === 'idle',
-          'text-text-tertiary': !iconOverride && instance.status === 'stale',
-          'text-status-exited': !iconOverride && instance.status === 'exited'
-        })}
+        className={cn(
+          'h-3 w-3 shrink-0',
+          iconOverride ? 'text-emerald-400' : statusIconColors[instance.status]
+        )}
         aria-label={instance.status}
       />
     </div>

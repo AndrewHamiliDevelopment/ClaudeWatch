@@ -2,13 +2,14 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { useUpdater } from '../hooks/useUpdater'
 import type { UpdaterStatusPayload } from '../lib/types'
+import { mockApi } from './api-mock'
 
 describe('useUpdater', () => {
   let statusCallback: ((payload: UpdaterStatusPayload) => void) | null = null
 
   beforeEach(() => {
     statusCallback = null
-    window.api = {
+    window.api = mockApi({
       getInstances: vi.fn(),
       getSettings: vi.fn(),
       setSettings: vi.fn(),
@@ -27,7 +28,7 @@ describe('useUpdater', () => {
           statusCallback = null
         }
       })
-    }
+    })
   })
 
   afterEach(() => {

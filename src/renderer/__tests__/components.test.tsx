@@ -1,9 +1,9 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { StatusBadge } from '../components/StatusBadge'
 import { ProjectTag } from '../components/ProjectTag'
 import { InstanceList } from '../components/InstanceList'
-import { Header, type ViewType } from '../components/Header'
+import { Header } from '../components/Header'
 import type { ClaudeInstance } from '../lib/types'
 
 const mockInstance = (overrides: Partial<ClaudeInstance> = {}): ClaudeInstance => ({

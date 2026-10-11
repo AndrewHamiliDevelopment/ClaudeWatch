@@ -68,7 +68,7 @@ export function setupIpcHandlers(options: IpcHandlerOptions): void {
   } = options
 
   const beginQuit = (): void => {
-    ;(app as Electron.App & { isQuitting?: boolean }).isQuitting = true
+    app.isQuitting = true
   }
 
   ipcMain.handle('instances:get', () => {

@@ -6,7 +6,7 @@
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
     "outDir": "./out",
-    "rootDir": "./src",
+    "rootDir": ".",
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/main/*"]
@@ -19,5 +19,12 @@
     "resolveJsonModule": true,
     "isolatedModules": true
   },
-  "include": ["src/main/**/*", "src/preload/**/*", "electron.vite.config.ts"]
+  "include": [
+    "src/main/**/*",
+    "src/preload/**/*",
+    "src/renderer/lib/**/*",
+    "src/bridge/**/*",
+    "src/shared/**/*",
+    "electron.vite.config.ts"
+  ]
 }

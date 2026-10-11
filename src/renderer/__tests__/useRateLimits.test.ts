@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { useRateLimits } from '../hooks/useRateLimits'
 import type { RateLimits } from '../lib/types'
+import { mockApi } from './api-mock'
 
 describe('useRateLimits', () => {
   let rateLimitsCallback: ((data: RateLimits) => void) | null = null
@@ -17,7 +18,7 @@ describe('useRateLimits', () => {
 
   beforeEach(() => {
     rateLimitsCallback = null
-    window.api = {
+    window.api = mockApi({
       getInstances: vi.fn(),
       getSettings: vi.fn(),
       setSettings: vi.fn(),
@@ -48,7 +49,7 @@ describe('useRateLimits', () => {
       sendTestNotification: vi.fn(),
       muteProject: vi.fn(),
       unmuteProject: vi.fn()
-    }
+    })
   })
 
   afterEach(() => {

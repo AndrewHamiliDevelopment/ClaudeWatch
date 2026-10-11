@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { SettingsStore } from './store'
-import type { AppSettings, SessionHistoryEntry, DEFAULT_SETTINGS } from '../renderer/lib/types'
+import type { SessionHistoryEntry } from '../renderer/lib/types'
+import { DEFAULT_SETTINGS } from '../renderer/lib/types'
 
 // Mock electron-store
 vi.mock('electron-store', () => {
@@ -56,6 +57,7 @@ describe('SettingsStore', () => {
     it('should update nested notification settings', () => {
       const updated = store.setSettings({
         notifications: {
+          ...DEFAULT_SETTINGS.notifications,
           onIdle: false,
           onExited: true,
           onError: true,

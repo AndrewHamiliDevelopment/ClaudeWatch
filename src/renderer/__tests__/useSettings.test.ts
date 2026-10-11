@@ -3,6 +3,7 @@ import { renderHook, act, waitFor } from '@testing-library/react'
 import { useSettings } from '../hooks/useSettings'
 import type { AppSettings } from '../lib/types'
 import { DEFAULT_SETTINGS } from '../lib/types'
+import { mockApi } from './api-mock'
 
 const mockSettings: AppSettings = {
   ...DEFAULT_SETTINGS,
@@ -12,7 +13,7 @@ const mockSettings: AppSettings = {
 
 describe('useSettings', () => {
   beforeEach(() => {
-    window.api = {
+    window.api = mockApi({
       getInstances: vi.fn(),
       getSettings: vi.fn().mockResolvedValue(mockSettings),
       setSettings: vi.fn().mockImplementation(async (partial) => ({
@@ -24,7 +25,7 @@ describe('useSettings', () => {
       openDashboard: vi.fn(),
       quit: vi.fn(),
       onInstancesUpdate: vi.fn().mockReturnValue(() => {})
-    }
+    })
   })
 
   afterEach(() => {

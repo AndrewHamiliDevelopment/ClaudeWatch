@@ -2,15 +2,24 @@ import Store from 'electron-store'
 import type { AppSettings, SessionHistoryEntry } from '../renderer/lib/types'
 import { DEFAULT_SETTINGS } from '../renderer/lib/types'
 
+interface StoreSchema {
+  settings: AppSettings
+  history: SessionHistoryEntry[]
+  popoverPinned: boolean
+  popoverPosition: { x: number; y: number } | null
+}
+
 export class SettingsStore {
-  private store: InstanceType<typeof Store>
+  private store: Store<StoreSchema>
 
   constructor() {
-    this.store = new Store({
+    this.store = new Store<StoreSchema>({
       name: 'claudewatch',
       defaults: {
         settings: DEFAULT_SETTINGS,
-        history: [] as SessionHistoryEntry[]
+        history: [],
+        popoverPinned: false,
+        popoverPosition: null
       }
     })
   }

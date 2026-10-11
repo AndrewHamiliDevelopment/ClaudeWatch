@@ -59,10 +59,9 @@ function createWindow(store: SettingsStore): BrowserWindow {
   })
 
   // Hide to tray instead of minimizing to dock (when enabled)
-  win.on('minimize', (event) => {
+  win.on('minimize', () => {
     const settings = store.getSettings()
     if (settings.minimizeToTray) {
-      event.preventDefault()
       // Defer hide to next tick so Electron finishes processing the event
       process.nextTick(() => {
         if (!win.isDestroyed()) {
@@ -258,9 +257,11 @@ process.on('SIGINT', () => {
   app.quit()
 })
 
-// Extend app type for isQuitting flag
-declare module 'electron' {
-  interface App {
-    isQuitting?: boolean
+// Extend app type for isQuitting flag; Electron's `App` lives in the global namespace.
+declare global {
+  namespace Electron {
+    interface App {
+      isQuitting?: boolean
+    }
   }
 }

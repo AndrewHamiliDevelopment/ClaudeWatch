@@ -1,12 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { WidgetStatsWriter, createWidgetStatsWriter } from './widget-stats-writer'
 import type { ClaudeInstance, InstanceUpdate } from '../renderer/lib/types'
-import { readFile, rm, access } from 'fs/promises'
+import { readFile, rm } from 'fs/promises'
 import { join } from 'path'
 import { tmpdir } from 'os'
-
-// Use a temp directory for tests instead of real App Group container
-const TEST_CONTAINER = join(tmpdir(), 'claudewatch-test-widget')
 
 vi.mock('os', async () => {
   const actual = await vi.importActual<typeof import('os')>('os')

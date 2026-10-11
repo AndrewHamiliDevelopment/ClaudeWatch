@@ -9,7 +9,10 @@ export default defineConfig({
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
     exclude: ['node_modules', 'out'],
     environmentMatchGlobs: [
-      ['src/main/**/*.test.ts', 'node']
+      ['src/main/**/*.test.ts', 'node'],
+      ['src/bridge/**/*.test.ts', 'node'],
+      ['src/shared/**/*.test.ts', 'node'],
+      ['src/office/sim/**/*.test.ts', 'node']
     ],
     coverage: {
       provider: 'v8',

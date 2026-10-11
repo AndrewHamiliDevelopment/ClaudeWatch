@@ -154,7 +154,10 @@ describe('setupIpcHandlers', () => {
         'notifications:send-test',
         'notifications:mute-project',
         'notifications:unmute-project',
-        'terminal:open'
+        'terminal:open',
+        'popover:set-pinned',
+        'popover:get-pinned',
+        'popover:close'
       ]
 
       for (const channel of expectedChannels) {
