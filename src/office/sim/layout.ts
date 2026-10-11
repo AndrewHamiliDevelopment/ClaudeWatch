@@ -1,14 +1,22 @@
 import type { SessionRef } from '../../shared/office/types'
-import { room, type FloorLayout } from './rooms'
-import { allocateRoom } from './allocation'
-export type { FloorLayout, RoomLayout, Slot } from './rooms'
+import { bounds, type FloorLayout, type ZoneLayout } from './rooms'
+import { packCompanies, RESERVATION_MS } from './allocation'
+import { populateRooms, positionProjects, refreshProjects } from './projects'
+export type { FloorLayout, RoomLayout, Slot, ZoneLayout } from './rooms'
 
 export interface LayoutMap {
   version: 1
   floors: FloorLayout[]
   reservations: Record<
     string,
-    { floorId: string; plate: number; bay: number; releasedAtMs: number | null }
+    {
+      floorId: string
+      plate: number
+      bay: number
+      companyKey: string
+      projectKey: string
+      releasedAtMs: number | null
+    }
   >
 }
 
@@ -17,62 +25,94 @@ export function buildLayout(
   saved: LayoutMap | undefined,
   nowMs: number
 ): LayoutMap {
-  const layout: LayoutMap = saved
+  // Older persisted maps used one floor per project and cannot preserve the new hierarchy.
+  const layout: LayoutMap = saved?.floors[0]?.zones
     ? structuredClone(saved)
     : { version: 1, floors: [], reservations: {} }
-  const active = new Set(sessions.map((s) => s.key))
-  for (const [key, reservation] of Object.entries(layout.reservations)) {
-    if (!active.has(key)) reservation.releasedAtMs ??= nowMs
-    if (reservation.releasedAtMs !== null && nowMs - reservation.releasedAtMs >= 86400000)
-      delete layout.reservations[key]
-  }
-  for (const floor of layout.floors) floor.rooms = floor.rooms.filter((r) => r.kind === 'team')
   const ordered = [...sessions].sort(
     (a, b) =>
+      a.companyKey.localeCompare(b.companyKey) ||
       a.projectKey.localeCompare(b.projectKey) ||
-      (a.worktree ?? '~').localeCompare(b.worktree ?? '~') ||
       a.key.localeCompare(b.key)
   )
-  for (const session of ordered) {
-    let floor = layout.floors.find((f) => f.id === session.projectKey)
-    if (!floor) {
-      floor = {
-        id: session.projectKey,
-        label: session.projectLabel,
-        rooms: [],
-        elevator: { id: 'elevator', x: 0, z: 0, heading: 0 }
-      }
-      layout.floors.push(floor)
+  const active = new Map(ordered.map((s) => [s.key, s]))
+  for (const [key, reservation] of Object.entries(layout.reservations)) {
+    const current = active.get(key)
+    if (
+      current &&
+      (current.companyKey !== reservation.companyKey ||
+        current.projectKey !== reservation.projectKey)
+    ) {
+      delete layout.reservations[key]
+      continue
     }
-    let reservation: LayoutMap['reservations'][string] | undefined =
-      layout.reservations[session.key]
-    if (reservation && reservation.floorId !== floor.id) {
-      delete layout.reservations[session.key]
-      reservation = undefined
-    }
-    if (!reservation) {
-      reservation = allocateRoom(session, ordered, floor, layout)
-      layout.reservations[session.key] = reservation
-    }
-    reservation.releasedAtMs = null
-    floor.rooms.push(
-      room(floor.id, reservation.plate, reservation.bay, session.key, session.worktree)
-    )
-    const overflow = ordered
-      .filter((s) => s.projectKey === floor.id)
-      .reduce((n, s) => n + Math.max(0, s.subagents.length - 4), 0)
-    while (floor.rooms.filter((r) => r.kind === 'team').length * 12 < overflow) {
-      let plate = reservation.plate
-      while (
-        Object.values(layout.reservations).some(
-          (r) => r.floorId === floor.id && r.plate === plate && r.bay === 15
-        ) ||
-        floor.rooms.some((r) => r.kind === 'team' && r.plate === plate)
-      )
-        plate++
-      floor.rooms.push(room(floor.id, plate, 15, null, null))
-    }
+    if (current) reservation.releasedAtMs = null
+    else reservation.releasedAtMs ??= nowMs
+    if (reservation.releasedAtMs !== null && nowMs - reservation.releasedAtMs >= RESERVATION_MS)
+      delete layout.reservations[key]
   }
-  for (const floor of layout.floors) floor.rooms.sort((a, b) => a.plate - b.plate || a.bay - b.bay)
+  const floor = layout.floors[0] ?? {
+    id: 'hq',
+    label: 'Headquarters',
+    width: 12,
+    depth: 12,
+    rooms: [],
+    zones: [],
+    elevator: { id: 'entrance', x: 0, z: 0, heading: 0 }
+  }
+  layout.floors = [floor]
+  floor.label =
+    new Set(ordered.map((s) => s.projectKey)).size === 1 ? ordered[0].projectLabel : 'Headquarters'
+  const previousProjects = new Set(floor.zones.flatMap((c) => c.children.map((p) => p.id)))
+  const activeCompanies = new Set(ordered.map((s) => s.companyKey))
+  floor.zones = floor.zones.filter((company) => {
+    if (activeCompanies.has(company.companyKey)) company.releasedAtMs = null
+    else company.releasedAtMs ??= nowMs
+    return company.releasedAtMs === null || nowMs - company.releasedAtMs < RESERVATION_MS
+  })
+  for (const session of ordered) {
+    if (floor.zones.some((c) => c.companyKey === session.companyKey)) continue
+    const company: ZoneLayout = {
+      ...bounds(0, 0, 63, 87),
+      id: `company:${session.companyKey}`,
+      kind: 'company',
+      label: session.companyLabel,
+      companyKey: session.companyKey,
+      projectKey: null,
+      sessionKey: null,
+      capacity: 4,
+      index: -1,
+      releasedAtMs: null,
+      children: []
+    }
+    floor.zones.push(company)
+  }
+  floor.zones.sort((a, b) => a.id.localeCompare(b.id))
+  for (const company of floor.zones) {
+    const members = ordered.filter((s) => s.companyKey === company.companyKey)
+    if (members.length) company.label = members[0].companyLabel
+    refreshProjects(company, members, layout, nowMs)
+    positionProjects(company, previousProjects)
+  }
+  packCompanies(floor.zones)
+  floor.rooms = floor.zones.flatMap((company) => {
+    company.door = { x: company.x - company.width / 2 + 1.5, z: company.z - company.depth / 2 }
+    positionProjects(company, previousProjects)
+    return populateRooms(
+      company,
+      ordered.filter((s) => s.companyKey === company.companyKey),
+      layout
+    )
+  })
+  floor.width = Math.max(
+    floor.width,
+    12,
+    ...floor.zones.map((c) => 2 * (Math.abs(c.x) + c.width / 2 + 3))
+  )
+  floor.depth = Math.max(
+    floor.depth,
+    12,
+    ...floor.zones.map((c) => 2 * (Math.abs(c.z) + c.depth / 2 + 3))
+  )
   return layout
 }

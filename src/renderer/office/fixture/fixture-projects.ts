@@ -1,0 +1,146 @@
+import type {
+  AgentActivity,
+  AgentAttention,
+  CurrentTool,
+  ProviderId,
+  SessionHost
+} from '../../../shared/office/types'
+
+export interface FixtureSession {
+  name: string
+  provider: ProviderId
+  // Orca-hosted sessions let the preview exercise talk, peek and review.
+  host?: SessionHost
+  // Script indexes advance one step every `period` ticks, offset by `offset`.
+  period: number
+  offset: number
+  attentionScript?: readonly AgentAttention[]
+  subagentScript?: readonly number[]
+}
+
+export interface FixtureProject {
+  label: string
+  root: string
+  sessions: readonly FixtureSession[]
+}
+
+export const ACTIVITY_SCRIPT: readonly AgentActivity[] = [
+  'editing',
+  'reading',
+  'running',
+  'thinking',
+  'editing',
+  'searching',
+  'idle',
+  'delegating'
+]
+
+export const TOOL_FOR_ACTIVITY: Record<AgentActivity, CurrentTool | null> = {
+  idle: null,
+  thinking: null,
+  reading: { name: 'Read', category: 'read' },
+  editing: { name: 'Edit', category: 'edit' },
+  running: { name: 'Bash', category: 'run' },
+  searching: { name: 'Grep', category: 'read' },
+  delegating: { name: 'Task', category: 'agent' }
+}
+
+export const SUBAGENT_TYPES = ['Explore', 'code-reviewer', 'test-runner', 'Plan'] as const
+
+export const PROJECTS: readonly FixtureProject[] = [
+  {
+    label: 'Customer portal',
+    root: '/Users/dev/PropApp/customer-portal',
+    sessions: [{ name: 'portal UI', provider: 'codex', period: 3, offset: 1 }]
+  },
+  {
+    label: 'ClaudeWatch',
+    root: '/Users/dev/ZKidz/ClaudeWatch',
+    sessions: [
+      {
+        name: 'office renderer',
+        provider: 'claude',
+        host: 'orca',
+        period: 3,
+        offset: 0,
+        subagentScript: [4, 3, 1, 0]
+      },
+      { name: 'bridge reducer', provider: 'codex', period: 4, offset: 2 },
+      {
+        name: 'statusline tee',
+        provider: 'claude',
+        period: 2,
+        offset: 5,
+        attentionScript: ['none', 'none', 'question', 'question', 'none', 'done']
+      },
+      {
+        name: 'electron upgrade',
+        provider: 'claude',
+        period: 5,
+        offset: 1,
+        attentionScript: ['none', 'error', 'error', 'none']
+      },
+      { name: 'widget sync', provider: 'codex', host: 'orca', period: 3, offset: 4 }
+    ]
+  },
+  {
+    label: 'PropApp',
+    root: '/Users/dev/PropApp/propapp-v2',
+    sessions: [
+      {
+        name: 'listing search',
+        provider: 'claude',
+        host: 'orca',
+        period: 3,
+        offset: 1,
+        attentionScript: ['permission', 'permission', 'permission', 'none', 'none']
+      },
+      {
+        name: 'stripe webhooks',
+        provider: 'claude',
+        period: 4,
+        offset: 3,
+        subagentScript: [1, 1, 2, 0]
+      },
+      { name: 'map clustering', provider: 'codex', period: 2, offset: 0 },
+      {
+        name: 'agent dashboard',
+        provider: 'claude',
+        period: 5,
+        offset: 6,
+        attentionScript: ['none', 'limited', 'limited']
+      },
+      { name: 'image pipeline', provider: 'claude', period: 3, offset: 2 },
+      {
+        name: 'e2e suite',
+        provider: 'codex',
+        period: 4,
+        offset: 5,
+        attentionScript: ['none', 'none', 'done']
+      },
+      {
+        name: 'auth migration',
+        provider: 'claude',
+        host: 'orca',
+        period: 2,
+        offset: 5,
+        attentionScript: ['none', 'none', 'none', 'permission']
+      },
+      { name: 'i18n strings', provider: 'claude', period: 6, offset: 3 }
+    ]
+  },
+  {
+    label: 'zkidz-claude-team',
+    root: '/Users/dev/ZKidz/zkidz-claude-team',
+    sessions: [
+      { name: 'skill gates', provider: 'claude', period: 3, offset: 2, subagentScript: [0, 1, 1] },
+      {
+        name: 'installer',
+        provider: 'codex',
+        period: 4,
+        offset: 1,
+        attentionScript: ['question', 'none', 'none']
+      }
+    ]
+  }
+]

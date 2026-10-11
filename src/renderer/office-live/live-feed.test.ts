@@ -120,7 +120,8 @@ describe('createLiveFeed', () => {
       v: 1,
       snapshot: { rev: 1, generatedAtMs: 1, sessions: [session('claude:a')], sources: [] }
     })
-    vi.advanceTimersByTime(10_000)
+    // Robots walk from the arrival gate across the floor first; give them time to sit down.
+    vi.advanceTimersByTime(300_000)
     const settled = frames.length
     vi.advanceTimersByTime(5_000)
     expect(frames).toHaveLength(settled)

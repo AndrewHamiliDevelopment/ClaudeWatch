@@ -20,10 +20,10 @@ it('clamps a ten second delta to one second of walking', () => {
 })
 it('leaves after removal and disappears at the elevator', () => {
   const sim = world()
-  for (let i = 0; i < 100; i++) sim.step(100)
+  for (let i = 0; i < 1000; i++) sim.step(100)
   sim.apply({ type: 'patch', v: 1, seq: 1, upserts: [], removed: ['a'] })
   expect(sim.step(0)).toHaveLength(1)
-  for (let i = 0; i < 100; i++) sim.step(100)
+  for (let i = 0; i < 1000; i++) sim.step(100)
   expect(sim.step(0)).toEqual([])
 })
 it('creates distinct subagent views', () => {
@@ -42,7 +42,7 @@ it('creates distinct subagent views', () => {
   const guests = sim.step(0).filter((a) => a.isSubagent)
   expect(guests).toHaveLength(6)
   expect(guests.map((a) => a.agentKey)).toContain('a#5')
-  expect(guests.filter((a) => a.slotId.startsWith('team_seat'))).toHaveLength(2)
+  expect(guests.filter((a) => a.slotId.startsWith('team_seat'))).toHaveLength(4)
 })
 
 it('uses fixed ticks and protects returned layout data', () => {
@@ -53,4 +53,38 @@ it('uses fixed ticks and protects returned layout data', () => {
   const layout = sim.layout()
   layout.floors.length = 0
   expect(sim.layout().floors).toHaveLength(1)
+})
+
+it('applies the bridge first seq=1 patch after hello rev=1, then rejects duplicates', () => {
+  const sim = new World({ now: () => 0 })
+  // BridgePoller.start emits the first tick (rev=1) before starting its seq counter at zero.
+  sim.apply({
+    type: 'hello',
+    v: 1,
+    snapshot: { rev: 1, generatedAtMs: 0, sessions: [session('a')], sources: [] }
+  })
+  expect(sim.revision()).toBe(1)
+  sim.apply({
+    type: 'patch',
+    v: 1,
+    seq: 1,
+    upserts: [{ ...session('a'), attention: 'permission' }],
+    removed: []
+  })
+  expect(sim.step(0)[0].attention).toBe('permission')
+  sim.apply({ type: 'patch', v: 1, seq: 1, upserts: [session('a')], removed: [] })
+  expect(sim.step(0)[0].attention).toBe('permission')
+})
+
+it('arrives from the same gate for all 60 agents across four companies', () => {
+  const sim = new World({ now: () => 0 })
+  const sessions = Array.from({ length: 60 }, (_, i) => ({
+    ...session(`s${i}`, `p_${i % 12}`),
+    companyKey: `c_${i % 4}`,
+    companyLabel: `Company ${i % 4}`
+  }))
+  sim.apply({ type: 'hello', v: 1, snapshot: { rev: 1, generatedAtMs: 0, sessions, sources: [] } })
+  expect(sim.step(0)).toHaveLength(60)
+  for (const view of sim.step(0))
+    expect({ x: view.x, z: view.z, floorId: view.floorId }).toEqual({ x: 0, z: 0, floorId: 'hq' })
 })

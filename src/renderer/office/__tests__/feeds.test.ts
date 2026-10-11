@@ -5,12 +5,17 @@ import type { OfficeFrame } from '../scene-model'
 describe('buildFixtureFrame', () => {
   const frame = buildFixtureFrame(0, 1_000_000)
 
-  it('animates 3 projects with up to 8 sessions each', () => {
-    expect(frame.floors).toHaveLength(3)
-    for (const floor of frame.floors) {
-      const sessionRooms = floor.rooms.filter((room) => room.sessionKey !== null)
-      expect(sessionRooms.length).toBeGreaterThan(0)
-      expect(sessionRooms.length).toBeLessThanOrEqual(8)
+  it('puts every company, project and agent office on one floor', () => {
+    expect(frame.floors).toHaveLength(1)
+    const [floor] = frame.floors
+    expect(floor.zones.length).toBeGreaterThanOrEqual(2)
+    for (const company of floor.zones) {
+      expect(company.kind).toBe('company')
+      for (const project of company.children.filter((zone) => zone.kind === 'project')) {
+        const offices = project.children.filter((zone) => zone.kind === 'office')
+        expect(offices.length).toBeGreaterThan(0)
+        expect(offices.length).toBeLessThanOrEqual(8)
+      }
     }
   })
 

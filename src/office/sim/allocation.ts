@@ -1,44 +1,57 @@
-import type { SessionRef } from '../../shared/office/types'
-import type { FloorLayout, LayoutMap } from './layout'
+import type { Bounds, ZoneLayout } from './rooms'
 
-export function allocateRoom(
-  session: SessionRef,
-  sessions: SessionRef[],
-  floor: FloorLayout,
-  layout: LayoutMap
-): LayoutMap['reservations'][string] {
-  const wing =
-    session.worktree === null
-      ? [session]
-      : sessions.filter((s) => s.projectKey === floor.id && s.worktree === session.worktree)
-  const existing = wing.flatMap((s) =>
-    layout.reservations[s.key] ? [layout.reservations[s.key]] : []
+export const RESERVATION_MS = 24 * 60 * 60 * 1000
+export const COMPANY_CORRIDOR = 3
+export const PROJECT_STRIDE_X = 30
+export const PROJECT_STRIDE_Z = 42
+
+export function overlaps(a: Bounds, b: Bounds, gap = 0): boolean {
+  return (
+    Math.abs(a.x - b.x) < (a.width + b.width) / 2 + gap &&
+    Math.abs(a.z - b.z) < (a.depth + b.depth) / 2 + gap
   )
-  let index = existing.length ? Math.max(...existing.map((r) => r.plate * 16 + r.bay)) + 1 : 0
-  const pending = wing.filter((s) => !layout.reservations[s.key])
-  const capacity = pending.some((s) => s.subagents.length > 4) ? 15 : 16
-  const occupied = (index: number) => {
-    const plate = Math.floor(index / 16),
-      bay = index % 16
-    return (
-      Object.values(layout.reservations).some(
-        (r) => r.floorId === floor.id && r.plate === plate && r.bay === bay
-      ) || floor.rooms.some((r) => r.kind === 'team' && r.plate === plate && r.bay === bay)
-    )
-  }
-  while (true) {
-    const plate = Math.floor(index / 16),
-      bay = index % 16
-    const size = Math.min(pending.length, existing.length ? capacity - bay : capacity)
-    const fits =
-      size > 0 &&
-      bay + size <= 16 &&
-      Array.from({ length: size }, (_, offset) => index + offset).every(
-        (candidate) =>
-          !occupied(candidate) &&
-          !(candidate % 16 === 15 && pending.some((s) => s.subagents.length > 4))
-      )
-    if (fits) return { floorId: floor.id, plate, bay, releasedAtMs: null }
-    index++
+}
+
+export function reserveCapacity(count: number, previous = 0): number {
+  return Math.max(previous, 4, Math.ceil(count / 4) * 4)
+}
+
+export function nextBay(occupied: number[]): number {
+  const used = new Set(occupied)
+  let bay = 0
+  while (used.has(bay)) bay++
+  return bay
+}
+
+// Use a fixed two-column company grid; expand its pitch only if growth causes a collision.
+export function packCompanies(companies: ZoneLayout[]): void {
+  const width = Math.max(63, ...companies.map((c) => c.width))
+  const depth = Math.max(87, ...companies.map((c) => c.depth))
+  const placed = companies.filter((c) => c.index !== -1)
+  const collision = placed.some((a, i) =>
+    placed.slice(i + 1).some((b) => overlaps(a, b, COMPANY_CORRIDOR))
+  )
+  const pending = collision ? companies : companies.filter((c) => c.index === -1)
+  const occupied = collision ? [] : [...placed]
+  for (const company of pending) {
+    let index = 0
+    while (true) {
+      const column = index % 2
+      const row = Math.floor(index / 2)
+      const left = column === 0 ? 3 : -width - 3
+      const top =
+        row % 2 === 0
+          ? 3 + Math.floor(row / 2) * (depth + 3)
+          : -depth - 3 - Math.floor(row / 2) * (depth + 3)
+      const candidate = { ...company, x: left + company.width / 2, z: top + company.depth / 2 }
+      if (!occupied.some((c) => overlaps(c, candidate, COMPANY_CORRIDOR))) {
+        company.x = candidate.x
+        company.z = candidate.z
+        company.index = index
+        occupied.push(company)
+        break
+      }
+      index++
+    }
   }
 }
