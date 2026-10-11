@@ -1,5 +1,5 @@
 // Contract between the bridge (truth), the office sim and the office renderer.
-// Frozen for milestone 1: change it only together with every consumer.
+// Change it only together with every consumer; additions stay optional until all of them read it.
 
 export type ProviderId = 'claude' | 'codex'
 
@@ -24,10 +24,37 @@ export interface CurrentTool {
   category: ToolCategory
 }
 
+// Tokens counted from the transcript since the session began. Numbers only, never text.
+export interface TokenUsage {
+  input: number
+  output: number
+  cacheRead: number
+  cacheCreation: number
+}
+
 export interface SubagentRef {
   id: string
   type: string
   activity: AgentActivity
+  // A teammate is an agent-team member with its own process and pane; a subagent runs inside
+  // its parent. Absent means subagent.
+  kind?: 'subagent' | 'teammate'
+  name?: string // the teammate's own name, e.g. "lena-b5-themes"
+  pid?: number | null
+  startedAtMs?: number
+  orcaPaneKey?: string | null
+  tokens?: TokenUsage | null
+}
+
+export type AccountConfidence = 'exact' | 'inferred' | 'unattributed'
+
+// An account as the Office may show it: a label and a plan, never an email or an id.
+export interface AccountRef {
+  key: string
+  provider: ProviderId
+  label: string
+  plan: string | null
+  isActive: boolean
 }
 
 export interface SessionRef {
@@ -52,6 +79,9 @@ export interface SessionRef {
   subagents: SubagentRef[]
   startedAtMs: number
   updatedAtMs: number
+  tokens?: TokenUsage | null
+  accountKey?: string | null
+  accountConfidence?: AccountConfidence
 }
 
 export interface SourceHealth {
@@ -65,6 +95,7 @@ export interface OfficeSnapshot {
   generatedAtMs: number
   sessions: SessionRef[]
   sources: SourceHealth[]
+  accounts?: AccountRef[]
 }
 
 export type FeedMessage =
@@ -116,6 +147,12 @@ export interface PeekResult extends InteractionResult {
   lines: string[]
   // Identifies exactly what was shown; respond() refuses if the screen no longer matches it.
   fingerprint?: string
+}
+
+// Where a focus request landed: the agent's exact pane, only the Orca app (the pane could not
+// be proven to be the agent's), or a terminal opened at the session's folder.
+export interface FocusResult extends InteractionResult {
+  target?: 'pane' | 'app' | 'terminal'
 }
 
 export type PermissionDecision = 'approve' | 'deny'
