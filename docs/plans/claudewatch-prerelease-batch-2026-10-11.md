@@ -30,7 +30,7 @@ Validated (B8): with six teammates running, `node out/main/bridge.js --once` rep
 - [x] Phase 3 — Camera: continuous zoom toward the cursor, inertial pan, interaction frame policy (B0) (merged e039129: cursor drift during zoom 1,565–2,449 px to 0.01 px, pan gain 2.0 to 1.0, name cards 0 px behind while rotating, two-finger scroll pans instead of zooming; headless Chromium on the real GPU)
 - [x] Phase 4 — Theme engine: a theme per company with a project override (B5) (merged 898cdf7; two themes on one floor measure 245 to 264 draw calls, three measure 283 to 292, ceiling 300)
 - [x] Phase 5 — Dashboard and popover redesign, "Dispatch Deck", with the Open Office button (B2, B1) (merged 5f7403f, wired to the real preload in eb95d99; the built app on live sessions shows the hold lane, squads, tokens by project and Open Office with 0 console errors)
-- [ ] Phase 6 — Office HUD redesign: tokens, teammates, theme picker and focus in the HUD (B2, B3, B4, B5)
+- [x] Phase 6 — Office HUD redesign: tokens, teammates, theme picker and focus in the HUD (B2, B3, B4, B5) (merged 94a2105, then 94e3a14, d874a89, d5d77fb: tokens per office, project, agent and teammate; theme picker per company and project; Focus terminal through the feed on every host; talk and peek reach a teammate's own pane; zoom and fit buttons; 0 console errors on the preview)
 - [ ] Phase 7 — Accounts: ledger, attribution, Accounts view (B6)
 - [ ] Phase 8 — Three themes: Violet Court, Orbital Garrison, Quiet Grove (B5)
 - [x] Phase 9 — Standalone Office: loopback web host and web bridge in ClaudeWatch (B7) (merged edb65a4: `npm run build:office-web` emits 10 files, 1.44 MB, largest 383,551 bytes; view-only server on 127.0.0.1 refused a request without the token and a POST to an action route; 26 guards each have a test that fails when the guard is removed)
@@ -126,6 +126,10 @@ Fixed in session, outside the phase file lists:
 - `src/main/auto-updater.ts`, `src/renderer/hooks/useUpdater.ts`, `src/renderer/lib/types.ts` (ad11ba2): the updater payload is a union keyed by status, so the hook no longer casts it.
 - `src/main/orca-cli.ts` and its tests (35511af): the signature gate verifies nested code, re-checks after ten minutes and raises the verified path.
 - `src/renderer/office/themes/violet-court/{frame-parts,roster}.ts` (67f02c5): the crimson frame lost its single oversized clawed arm, which the themes study lists as a design to stay clear of.
+- `src/main/office-interactions.ts`, `src/main/office-setup.ts`, `src/preload/office.ts`, `src/renderer/office-live/live-feed.ts`, `src/renderer/office/{scene-model,web-bridge,use-office-effects}.ts`, `src/renderer/office/fixture/fixture-feed.ts` (94e3a14, d874a89): talk and peek resolve a teammate's own terminal; the older `jump` call is removed everywhere now that `focus` replaces it.
+- `src/shared/office/feed-message.ts`, `src/main/bridge-host.ts`, `electron-builder.yml` (6494a4b): one feed-message check for both hosts; the web bundle stays out of the packaged app.
+- `src/renderer/deck/roster.ts` (fa02c77): unique crests per roster.
+- `src/renderer/office/scene/NameCards.tsx`, `src/renderer/components/deck/WorkOrderSlip.tsx` (d5d77fb): paper name tag for an agent that needs the owner.
 - `README.md`, `package.json` (cdaccf5): the release section and the Node version.
 
 ## Not in this batch
