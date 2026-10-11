@@ -103,7 +103,7 @@ Estimate: 30h with Claude | 80h without.
 
 ### Phase 3 — Sim (Codex)
 
-`src/office/sim/`: `layout.ts` (floor per `projectKey`, 6×6 m bays, 16 rooms per plate, wings per worktree, up to 4 guest desks then a team room; deterministic from ids, persisted map), `behaviour.ts` (per-agent FSM: arrive, work-at-desk, read, run, think, needs-you, done, leave; minimum dwell 1.5 s; burst coalescing), `path.ts` (grid A* with 0.25 m sub-grid and named slots), `world.ts` (fixed tick, clamped delta, `AgentView[]` out). Pure TS, no three imports.
+`src/office/sim/`: `layout.ts` (floor per `projectKey`, 6×6 m bays, 16 rooms per plate, wings per worktree, up to 4 guest desks then a team room; deterministic from ids, persisted map), `behaviour.ts` (per-agent FSM: arrive, work-at-desk, read, run, think, needs-you, done, leave; minimum dwell 1.5 s; burst coalescing), `path.ts` (grid A\* with 0.25 m sub-grid and named slots), `world.ts` (fixed tick, clamped delta, `AgentView[]` out). Pure TS, no three imports.
 
 Verify: `npx vitest run src/office/sim` exits 0, including a 60-agent determinism test and a dwell test.
 Estimate: 24h with Claude | 60h without.
@@ -175,3 +175,20 @@ Budget: T3 (5 active / 12 total Agent dispatches). Claude agents: @lena (Phase 4
 - ASSUMPTION: no writes to `~/.claude` or `~/.codex` (no hook plugin, no statusline) — chose zero-install sources so the office can ship without touching your Claude setup.
 - ASSUMPTION: local database question skipped — ClaudeWatch has no data layer.
 - ASSUMPTION: tests stay colocated as `*.test.ts`, matching the repo's existing convention.
+
+## Deviations
+
+Phase 0 turned `npm run typecheck` and `npm run lint` from no-ops into real checks. These files were changed only to clear the 31 type errors and 66 lint problems that surfaced (FIX-IN-SESSION), plus the real popover icon bug the typecheck caught:
+
+- `.gitignore` — ignore agent worktrees, plan workspaces, recordings, `*.tsbuildinfo`
+- `tsconfig.node.json`, `tsconfig.web.json` — `rootDir: "."` and include `src/shared`, `src/bridge`, `src/office`, `src/renderer/lib`
+- `src/renderer/env.d.ts` — `window.api` typed from the preload's `api` object (the stale duplicate `src/preload/index.d.ts` is deleted)
+- `src/renderer/components/PopoverView.tsx` — status icon received the class `[object Object]`; now a status→class map
+- `src/main/store.ts` — typed `Store<StoreSchema>`
+- `src/main/widget-sync.ts` — dependencies narrowed with `Pick<>` so tests do not need full class instances
+- `src/main/process-monitor.ts` — `terminalResolver` narrowed to `Pick<TerminalResolver, 'resolve'>`
+- `src/main/platform/darwin.ts`, `src/main/sound-player.ts` — unused imports and callback params removed
+- `src/main/bugfix-issues.test.ts`, `src/main/ipc-handlers.test.ts`, `src/main/notifications.test.ts`, `src/main/process-monitor.test.ts`, `src/main/rate-limit-reader.test.ts`, `src/main/sound-player.test.ts`, `src/main/store.test.ts`, `src/main/terminal-opener.test.ts`, `src/main/widget-stats-writer.test.ts`, `src/main/widget-sync.test.ts` — fixtures updated to current types, `Function` replaced with a typed callback, the IPC channel list updated for the popover channels added in `0d58b01`
+- `src/renderer/__tests__/components.test.tsx`, `useInstances.test.ts`, `usePromoStatus.test.ts`, `useRateLimits.test.ts`, `useSettings.test.ts`, `useUpdater.test.ts`, `useUsage.test.ts` — mocks moved to the shared `api-mock.ts`, fixtures updated
+
+The 135 mode-only changes (100644 → 100755) and 2 deleted Xcode user files in the working tree predate this session and are not part of this branch.
