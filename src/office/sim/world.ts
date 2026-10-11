@@ -86,10 +86,10 @@ export class World {
         z: slot.z,
         heading: slot.heading
       }
-      // A seat that moved is walked to from where the agent stands. Sessions already running
-      // when the office opens are at their desks; only later arrivals walk in from the gate.
-      const isSeated = existing && existing.state !== 'leaving'
-      const route = isSeated ? paths.get(existing.view, slot) : []
+      // A robot already on the floor (seat moved, or it was walking out when its session came
+      // back) walks from where it stands. Sessions already running when the office opens are
+      // at their desks; only later arrivals walk in from the gate.
+      const route = existing ? paths.get(existing.view, slot) : []
       const entrance = message.type === 'hello' ? [] : paths.via(elevator, door, slot)
       const agent = createAgent(session, destination, route.length ? route : entrance)
       agent.view.isSubagent = isSubagent

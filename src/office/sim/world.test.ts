@@ -193,3 +193,25 @@ it('brings a new arrival to rest exactly on its seat', () => {
     .slots.find((s) => s.id === 'desk_main')!
   expect({ x: arrived.x, z: arrived.z }).toEqual({ x: seat.x, z: seat.z })
 })
+it('turns a robot that was walking out back to its desk when its session returns', () => {
+  const sim = new World({ now: () => 0 })
+  const hello = (rev: number, sessions: ReturnType<typeof session>[]) =>
+    sim.apply({ type: 'hello', v: 1, snapshot: { rev, generatedAtMs: 0, sessions, sources: [] } })
+  hello(1, [session('a')])
+  sim.apply({ type: 'patch', v: 1, seq: 2, upserts: [], removed: ['a'] })
+  for (let i = 0; i < 20; i++) sim.step(100)
+  const leaving = sim.step(0)[0]
+
+  // The bridge restarts and the session is there again.
+  sim.apply({ type: 'resync' })
+  hello(1, [session('a')])
+  const back = sim.step(0)
+  expect(back).toHaveLength(1)
+  expect({ x: back[0].x, z: back[0].z }).toEqual({ x: leaving.x, z: leaving.z })
+  for (let i = 0; i < 200; i++) sim.step(100)
+  const seat = sim
+    .layout()
+    .floors[0].rooms.find((r) => r.sessionKey === 'a')!
+    .slots.find((s) => s.id === 'desk_main')!
+  expect(sim.step(0)[0]).toMatchObject({ x: seat.x, z: seat.z })
+})
