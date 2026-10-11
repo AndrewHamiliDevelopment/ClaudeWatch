@@ -55,11 +55,54 @@ function makeHistoryEntry(overrides: Partial<SessionHistoryEntry> = {}): Session
 describe('NotificationManager', () => {
   let settings: AppSettings
   let manager: NotificationManager
+  const onFocus = vi.fn()
 
   beforeEach(() => {
     vi.clearAllMocks()
     settings = JSON.parse(JSON.stringify(DEFAULT_SETTINGS))
-    manager = new NotificationManager(() => settings)
+    manager = new NotificationManager(() => settings, onFocus)
+  })
+
+  describe('clicking a notification', () => {
+    type Listener = () => void
+    const listenersOf = (event: string): Listener[] =>
+      MockNotification.mock.results.flatMap((shown) =>
+        (shown.value.on.mock.calls as [string, Listener][])
+          .filter(([name]) => name === event)
+          .map(([, listener]) => listener)
+      )
+
+    beforeEach(() => {
+      mockIsSupported.mockReturnValue(true)
+      settings.notifications = {
+        ...settings.notifications,
+        onTaskComplete: true,
+        onIdle: true,
+        onExited: true,
+        doNotDisturb: false
+      }
+    })
+
+    it('jumps to the agent that finished its task', () => {
+      manager.notifyTaskComplete(makeInstance({ pid: 4242 }))
+      expect(onFocus).not.toHaveBeenCalled()
+
+      listenersOf('click')[0]()
+      expect(onFocus).toHaveBeenCalledExactlyOnceWith(4242)
+    })
+
+    it('jumps to the agent that went idle', () => {
+      manager.notifyIdle(makeInstance({ pid: 77 }))
+      listenersOf('click')[0]()
+      expect(onFocus).toHaveBeenCalledExactlyOnceWith(77)
+    })
+
+    it('has nowhere to jump for a session that ended, or for the test notification', () => {
+      manager.notifyExited(makeHistoryEntry())
+      manager.sendTest()
+      expect(MockNotification).toHaveBeenCalledTimes(2)
+      expect(listenersOf('click')).toHaveLength(0)
+    })
   })
 
   describe('notifyTaskComplete', () => {

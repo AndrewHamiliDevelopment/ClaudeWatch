@@ -8,6 +8,7 @@ import type {
   PromoStatus,
   RateLimits
 } from '../renderer/lib/types'
+import type { FocusResult, OfficeSnapshot } from '../shared/office/types'
 
 const api = {
   getInstances: (): Promise<InstanceUpdate> => ipcRenderer.invoke('instances:get'),
@@ -22,6 +23,14 @@ const api = {
   clearHistory: (): Promise<{ success: boolean }> => ipcRenderer.invoke('history:clear'),
 
   openDashboard: (): Promise<{ success: boolean }> => ipcRenderer.invoke('app:open-dashboard'),
+
+  openOffice: (): Promise<{ success: boolean }> => ipcRenderer.invoke('app:open-office'),
+
+  // What the Office shows right now; null until its bridge has reported.
+  getOfficeSnapshot: (): Promise<OfficeSnapshot | null> => ipcRenderer.invoke('office:snapshot'),
+
+  // Jumps to a tracked session's terminal: its exact Orca pane when it runs in Orca.
+  focusSession: (pid: number): Promise<FocusResult> => ipcRenderer.invoke('session:focus', pid),
 
   quit: (): Promise<void> => ipcRenderer.invoke('app:quit'),
 

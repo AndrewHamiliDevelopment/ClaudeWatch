@@ -1,5 +1,6 @@
 import { createHash } from 'crypto'
 import type {
+  FocusResult,
   InteractionFailure,
   InteractionResult,
   OfficeSnapshot,
@@ -12,11 +13,22 @@ import type { AgentCommand, OrcaTerminals, PaneTerminal } from './orca-terminals
 
 interface OfficeInteractionsDeps {
   snapshot: () => OfficeSnapshot | null
-  orca: Pick<OrcaTerminals, 'handleFor' | 'sendPrompt' | 'sendKey' | 'screen' | 'create'>
+  orca: Pick<OrcaTerminals, 'handleFor' | 'sendPrompt' | 'sendKey' | 'screen' | 'create' | 'focus'>
   openTerminalRunning: (path: string, command: AgentCommand) => Promise<{ success: boolean }>
   // When the process with this pid started (epoch ms), or null when no such process runs.
   processStart: (pid: number) => Promise<number | null>
+  // Brings Orca's window forward; false when it could not.
+  raiseOrca: () => Promise<boolean>
+  // Opens the folder in the terminal app hosting that pid: the route for agents outside Orca.
+  openFolder: (path: string, pid: number | null) => Promise<{ success: boolean }>
 }
+
+// The process a pane must be proven to belong to before anything touches it: a session, or a
+// teammate with its own process and pane inside its lead's folder.
+export type PaneOwner = Pick<
+  SessionRef,
+  'provider' | 'cwd' | 'projectRoot' | 'host' | 'pid' | 'startedAtMs' | 'orcaPaneKey'
+>
 
 const MAX_PROMPT_LENGTH = 4000
 const PEEK_LINES = 40
@@ -50,16 +62,18 @@ const isWithin = (path: string, folder: string): boolean =>
   path === folder || path.startsWith(`${folder.replace(/\/+$/, '')}/`)
 // The pane must be in this session's folder and still running its agent: once the agent
 // exits the pane is a shell, and typed text would run as a command.
-const paneServes = (terminal: PaneTerminal, session: SessionRef): boolean =>
-  (terminal.worktreePath === session.projectRoot || isWithin(session.cwd, terminal.worktreePath)) &&
+const paneServes = (terminal: PaneTerminal, owner: PaneOwner): boolean =>
+  (terminal.worktreePath === owner.projectRoot || isWithin(owner.cwd, terminal.worktreePath)) &&
   terminal.agent !== null &&
-  ORCA_AGENTS[session.provider].includes(terminal.agent)
+  ORCA_AGENTS[owner.provider].includes(terminal.agent)
 
 // Everything the office can do to a running agent goes through here, and only on a
 // user's click: talk, answer a permission prompt, peek at the screen, start a new agent.
 export class OfficeInteractions {
   // The screen each session's owner last looked at; an answer spends it.
   private readonly reviews = new Map<string, { fingerprint: string; incarnationId: string }>()
+  // Jumps run one at a time, so two quick clicks end on the second agent.
+  private lastFocus: Promise<unknown> = Promise.resolve()
 
   constructor(private readonly deps: OfficeInteractionsDeps) {}
 
@@ -135,24 +149,83 @@ export class OfficeInteractions {
     }
   }
 
+  // Jumps to an agent's pane. `agentKey` is a session key, or `${sessionKey}#${subagentId}`.
+  async focus(agentKey: string): Promise<FocusResult> {
+    const owner = this.ownerOf(agentKey)
+    return owner ? this.focusProcess(owner) : fail('unknown-session')
+  }
+
+  focusProcess(owner: PaneOwner): Promise<FocusResult> {
+    const focused = this.lastFocus.then(() => this.focusNow(owner))
+    this.lastFocus = focused.catch(() => undefined)
+    return focused
+  }
+
+  // Never types. A pane that cannot be proven to be this agent's is not switched to: Orca
+  // alone comes forward, and the result says why.
+  private async focusNow(owner: PaneOwner): Promise<FocusResult> {
+    if (owner.host !== 'orca') {
+      const opened = await this.deps.openFolder(owner.cwd, owner.pid)
+      return opened.success ? { success: true, target: 'terminal' } : { success: false }
+    }
+    // A child agent shares its parent's pane, so the bridge leaves it without a pane key.
+    const pane = owner.orcaPaneKey
+      ? await this.withPane(owner, async ({ handle }) =>
+          (await this.deps.orca.focus(handle)) ? { success: true } : fail('orca-unavailable')
+        )
+      : fail('terminal-not-found')
+    // Orca's switch does not raise its window, and a hidden window should open on the pane.
+    if (!(await this.deps.raiseOrca())) return fail(pane.reason ?? 'orca-unavailable')
+    return pane.success ? { success: true, target: 'pane' } : { ...pane, target: 'app' }
+  }
+
+  private ownerOf(agentKey: string): PaneOwner | null {
+    const session = this.session(agentKey)
+    if (session) return session
+    for (const lead of this.deps.snapshot()?.sessions ?? []) {
+      if (!agentKey.startsWith(`${lead.key}#`)) continue
+      const member = lead.subagents.find((s) => s.id === agentKey.slice(lead.key.length + 1))
+      if (!member) continue
+      // A subagent lives in its parent's process and pane; a teammate has its own of both.
+      if (member.kind !== 'teammate') return lead
+      return {
+        provider: lead.provider,
+        cwd: lead.cwd,
+        projectRoot: lead.projectRoot,
+        host: member.orcaPaneKey ? 'orca' : lead.host,
+        pid: member.pid ?? null,
+        // NaN equals no start time, so a teammate reported without one is never proven live.
+        startedAtMs: member.startedAtMs ?? Number.NaN,
+        orcaPaneKey: member.orcaPaneKey ?? null
+      }
+    }
+    return null
+  }
+
   private session(sessionKey: string): SessionRef | undefined {
     return this.deps.snapshot()?.sessions.find((s) => s.key === sessionKey)
   }
 
-  // Resolves the pane's terminal fresh each time: Orca handles go stale across reloads.
   private async withTerminal(
     sessionKey: string,
     action: (terminal: PaneTerminal) => Promise<InteractionResult>
   ): Promise<InteractionResult> {
     const session = this.session(sessionKey)
-    if (!session) return fail('unknown-session')
-    if (session.host !== 'orca' || !session.orcaPaneKey) return fail('not-in-orca')
+    return session ? this.withPane(session, action) : fail('unknown-session')
+  }
+
+  // Resolves the pane's terminal fresh each time: Orca handles go stale across reloads.
+  private async withPane(
+    owner: PaneOwner,
+    action: (terminal: PaneTerminal) => Promise<InteractionResult>
+  ): Promise<InteractionResult> {
+    if (owner.host !== 'orca' || !owner.orcaPaneKey) return fail('not-in-orca')
     // The snapshot is a few seconds old: the agent may have exited, or its pid been reused.
-    if (session.pid === null || (await this.deps.processStart(session.pid)) !== session.startedAtMs)
+    if (owner.pid === null || (await this.deps.processStart(owner.pid)) !== owner.startedAtMs)
       return fail('unknown-session')
     try {
-      const terminal = await this.deps.orca.handleFor(session.orcaPaneKey)
-      if (!terminal || !paneServes(terminal, session)) return fail('terminal-not-found')
+      const terminal = await this.deps.orca.handleFor(owner.orcaPaneKey)
+      if (!terminal || !paneServes(terminal, owner)) return fail('terminal-not-found')
       return await action(terminal)
     } catch {
       return fail('orca-unavailable')

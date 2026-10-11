@@ -7,15 +7,22 @@ import { assertTrustedSender, createAppWindow } from './window-factory'
 import { openTerminal, openTerminalRunning } from './terminal-opener'
 import { OfficeInteractions } from './office-interactions'
 import { OrcaTerminals } from './orca-terminals'
-import type { PermissionDecision, ProviderId } from '../shared/office/types'
+import { createOrcaCli } from './orca-cli'
+import { PaneFocus } from './pane-focus'
+import { parseOrcaEnvironment } from '../bridge/orca'
+import type {
+  FocusResult,
+  OfficeSnapshot,
+  PermissionDecision,
+  ProviderId
+} from '../shared/office/types'
 import { execFilePromise } from './platform/exec'
+import type { SessionTracker } from './session-tracker'
 import type { TerminalResolver } from './terminal-resolver'
 import type { SettingsStore } from './store'
 import { rememberBounds, restoreBounds } from './window-bounds'
 
-// The app bundle's CLI, not whatever `orca` is first on PATH.
-const ORCA_CLI = '/Applications/Orca.app/Contents/Resources/bin/orca'
-const ORCA_TIMEOUT_MS = 15_000
+const PS_OPTIONS = { timeout: 5000, env: { LC_ALL: 'C', TZ: 'UTC' } }
 
 type OfficeWindowStore = Pick<SettingsStore, 'getOfficeWindowBounds' | 'setOfficeWindowBounds'>
 
@@ -47,12 +54,21 @@ function createOfficeWindow(store: OfficeWindowStore): Electron.BrowserWindow {
   return window
 }
 
+export interface Office {
+  open: () => void
+  // The bridge runs from start to stop, with or without the Office window.
+  start: () => void
+  stop: () => void
+  snapshot: () => OfficeSnapshot | null
+  // Jumps to the terminal of a process the session tracker lists; `pid` may be renderer input.
+  focusSession: (pid: unknown) => Promise<FocusResult>
+}
+
 export function setupOffice(
   terminalResolver: Pick<TerminalResolver, 'resolve'>,
-  store: OfficeWindowStore
-): {
-  open: () => void
-} {
+  store: OfficeWindowStore,
+  tracker: Pick<SessionTracker, 'getInstances'>
+): Office {
   const host = new BridgeHost({
     spawn: () =>
       utilityProcess.fork(join(__dirname, 'bridge.js'), [], {
@@ -61,32 +77,38 @@ export function setupOffice(
   })
   const controller = new OfficeWindowController({
     host,
-    createWindow: () => createOfficeWindow(store),
-    openTerminal,
-    resolveTerminalType: async (pid) => (await terminalResolver.resolve(pid)).terminalType,
-    activateOrca: () =>
-      execFilePromise('open', ['-a', 'Orca']).then(
-        () => ({ success: true }),
-        () => ({ success: false })
-      )
+    createWindow: () => createOfficeWindow(store)
   })
 
+  const orcaCli = createOrcaCli(execFilePromise)
+  // The bridge's own process identity: `ps` start time, read in C locale and UTC.
+  const processStart = (pid: number): Promise<number | null> =>
+    execFilePromise('/bin/ps', ['-o', 'lstart=', '-p', String(pid)], PS_OPTIONS).then(
+      ({ stdout }) => Date.parse(`${stdout.trim()} UTC`) || null,
+      () => null
+    )
   const interactions = new OfficeInteractions({
     snapshot: () => host.snapshot(),
-    orca: new OrcaTerminals(async (args) => {
-      const { stdout } = await execFilePromise(ORCA_CLI, args, { timeout: ORCA_TIMEOUT_MS })
-      return stdout
-    }),
+    orca: new OrcaTerminals(orcaCli.exec),
     openTerminalRunning,
-    // The bridge's own process identity: `ps` start time, read in C locale and UTC.
-    processStart: (pid) =>
-      execFilePromise('/bin/ps', ['-o', 'lstart=', '-p', String(pid)], {
-        timeout: 5000,
-        env: { LC_ALL: 'C', TZ: 'UTC' }
-      }).then(
-        ({ stdout }) => Date.parse(`${stdout.trim()} UTC`) || null,
-        () => null
+    processStart,
+    raiseOrca: orcaCli.raise,
+    openFolder: async (path, pid) =>
+      openTerminal(
+        path,
+        pid === null ? undefined : (await terminalResolver.resolve(pid)).terminalType
       )
+  })
+  const paneFocus = new PaneFocus({
+    instances: () => tracker.getInstances(),
+    processStart,
+    // `ps -E` prints the whole environment; the parser keeps the pane key and drops the rest.
+    paneKeyOf: (pid) =>
+      execFilePromise('/bin/ps', ['-E', '-o', 'command=', '-p', String(pid)], PS_OPTIONS).then(
+        ({ stdout }) => parseOrcaEnvironment(stdout).paneKey,
+        () => null
+      ),
+    focusProcess: (owner) => interactions.focusProcess(owner)
   })
   const asString = (value: unknown): string => (typeof value === 'string' ? value : '')
   const isDecision = (value: unknown): value is PermissionDecision =>
@@ -120,11 +142,19 @@ export function setupOffice(
     assertTrustedSender(event, 'office.html')
     controller.ready()
   })
-  ipcMain.handle('office:jump', (event, sessionKey: unknown) => {
-    assertTrustedSender(event, 'office.html')
-    if (typeof sessionKey !== 'string') return { success: false }
-    return controller.jump(sessionKey)
-  })
+  // 'office:jump' is the HUD's older name for the same routine.
+  for (const channel of ['office:focus', 'office:jump']) {
+    ipcMain.handle(channel, (event, agentKey: unknown) => {
+      assertTrustedSender(event, 'office.html')
+      return interactions.focus(asString(agentKey))
+    })
+  }
 
-  return { open: () => controller.open() }
+  return {
+    open: () => controller.open(),
+    start: () => host.start(),
+    stop: () => host.stop(),
+    snapshot: () => host.snapshot(),
+    focusSession: (pid) => paneFocus.focus(pid)
+  }
 }

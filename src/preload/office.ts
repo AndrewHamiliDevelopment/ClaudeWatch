@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type {
   FeedMessage,
+  FocusResult,
   InteractionResult,
   PeekResult,
   PermissionDecision,
@@ -22,6 +23,9 @@ const officeBridge = {
 
   jump: (sessionKey: string): Promise<{ success: boolean }> =>
     ipcRenderer.invoke('office:jump', sessionKey),
+
+  // `agentKey` is a session key, or `${sessionKey}#${subagentId}` for a teammate.
+  focus: (agentKey: string): Promise<FocusResult> => ipcRenderer.invoke('office:focus', agentKey),
 
   send: (sessionKey: string, text: string): Promise<InteractionResult> =>
     ipcRenderer.invoke('office:send', sessionKey, text),

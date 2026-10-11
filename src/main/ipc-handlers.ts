@@ -12,6 +12,7 @@ import type { RateLimitReader } from './rate-limit-reader'
 import type { NotificationManager } from './notifications'
 import type { AppSettings, TerminalType } from '../renderer/lib/types'
 import type { TrayManager } from './tray'
+import type { Office } from './office-setup'
 
 // One rule set for what a valid setting is, shared with the store's read path.
 export const validateSettings = conformSettings
@@ -51,6 +52,9 @@ interface IpcHandlerOptions {
   >
   notifications?: Pick<NotificationManager, 'isSupported' | 'sendTest'>
   onOpenDashboard: () => void
+  onOpenOffice: Office['open']
+  focusSession: Office['focusSession']
+  getOfficeSnapshot: Office['snapshot']
   getTrayManager?: () => TrayManager | null
 }
 
@@ -64,6 +68,9 @@ export function setupIpcHandlers(options: IpcHandlerOptions): void {
     rateLimitReader,
     notifications,
     onOpenDashboard,
+    onOpenOffice,
+    focusSession,
+    getOfficeSnapshot,
     getTrayManager
   } = options
 
@@ -117,6 +124,17 @@ export function setupIpcHandlers(options: IpcHandlerOptions): void {
     onOpenDashboard()
     return { success: true }
   })
+
+  handle('app:open-office', () => {
+    onOpenOffice()
+    return { success: true }
+  })
+
+  // What the Office shows, for the dashboard and popover; null until the bridge reports.
+  handle('office:snapshot', () => getOfficeSnapshot())
+
+  // The pid is the renderer's word only: focusSession acts on tracked processes alone.
+  handle('session:focus', (_event: Electron.IpcMainInvokeEvent, pid: unknown) => focusSession(pid))
 
   handle('app:quit', () => {
     beginQuit()

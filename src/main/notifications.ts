@@ -2,11 +2,33 @@ import { Notification } from 'electron'
 import type { AppSettings, ClaudeInstance, SessionHistoryEntry } from '../renderer/lib/types'
 import { formatDuration } from './format-utils'
 
+const MAX_HELD_NOTIFICATIONS = 20
+
 export class NotificationManager {
   private getSettings: () => AppSettings
+  // Electron drops a notification, and with it the click, once its object is collected.
+  private readonly awaitingClick = new Set<Notification>()
 
-  constructor(settingsGetter: () => AppSettings) {
+  constructor(
+    settingsGetter: () => AppSettings,
+    private readonly onFocus: (pid: number) => void
+  ) {
     this.getSettings = settingsGetter
+  }
+
+  private focusOnClick(notification: Notification, pid: number): void {
+    const release = (): boolean => this.awaitingClick.delete(notification)
+    notification.on('click', () => {
+      release()
+      this.onFocus(pid)
+    })
+    notification.on('close', release)
+    this.awaitingClick.add(notification)
+    // macOS does not always report a dismissal, so the oldest make room.
+    for (const oldest of this.awaitingClick) {
+      if (this.awaitingClick.size <= MAX_HELD_NOTIFICATIONS) break
+      this.awaitingClick.delete(oldest)
+    }
   }
 
   /** Check whether native notifications are supported on this platform */
@@ -66,6 +88,7 @@ export class NotificationManager {
       body: `${instance.projectName} \u2014 ran for ${instance.elapsedTime}`,
       silent: true // Always silent — we handle sound separately via SoundPlayer
     })
+    this.focusOnClick(notification, instance.pid)
     notification.show()
   }
 
@@ -100,6 +123,7 @@ export class NotificationManager {
       body: `${instance.projectName} \u2014 ran for ${instance.elapsedTime}`,
       silent: !settings.notifications.sound
     })
+    this.focusOnClick(notification, instance.pid)
     notification.show()
   }
 
