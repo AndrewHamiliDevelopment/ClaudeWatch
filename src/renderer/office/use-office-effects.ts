@@ -66,12 +66,6 @@ export function useOfficeHotkeys(
 
 const FOCUS_FAILED: FocusResult = { success: false }
 
-// The Electron window's bridge answers until the live feed forwards focus itself.
-function requestFocus(feed: OfficeFeed, agentKey: string): Promise<FocusResult> {
-  if (feed.focus) return feed.focus(agentKey)
-  return window.officeBridge?.focus(agentKey) ?? Promise.resolve(FOCUS_FAILED)
-}
-
 // Brings an agent's terminal forward. `notice` says where that landed whenever it was not
 // the agent's own pane; it stays until dismissed or the next request.
 export function useFocusTerminal(feed: OfficeFeed) {
@@ -79,7 +73,8 @@ export function useFocusTerminal(feed: OfficeFeed) {
   const focusTerminal = useCallback(
     (agentKey: string): void => {
       setNotice('')
-      void requestFocus(feed, agentKey)
+      void feed
+        .focus(agentKey)
         .catch(() => FOCUS_FAILED)
         .then((result) => setNotice(focusMessage(result)))
     },

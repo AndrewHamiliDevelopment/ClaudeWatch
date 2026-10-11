@@ -2,6 +2,7 @@ import { World } from '../../office/sim/world'
 import type { LayoutMap } from '../../office/sim/layout'
 import { applyFeed } from '../../shared/office/apply-feed'
 import type {
+  FocusResult,
   FeedMessage,
   InteractionResult,
   OfficeSnapshot,
@@ -15,7 +16,7 @@ import { toFloorGeometry } from './layout-geometry'
 export interface FeedSource {
   ready(): Promise<void>
   onFeedMessage(listener: (message: FeedMessage) => void): () => void
-  jump(sessionKey: string): Promise<{ success: boolean }>
+  focus(agentKey: string): Promise<FocusResult>
   send(sessionKey: string, text: string): Promise<InteractionResult>
   respond(
     sessionKey: string,
@@ -112,9 +113,7 @@ export function createLiveFeed(
         }
       }
     },
-    jump(sessionKey) {
-      void source.jump(sessionKey)
-    },
+    focus: (agentKey) => source.focus(agentKey),
     send: (sessionKey, text) => source.send(sessionKey, text),
     respond: (sessionKey, decision, fingerprint) =>
       source.respond(sessionKey, decision, fingerprint),

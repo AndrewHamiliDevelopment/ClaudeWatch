@@ -16,7 +16,7 @@ function mockFeed(overrides: Partial<OfficeFeed> = {}) {
       push = listener
       return () => undefined
     },
-    jump: vi.fn(),
+    focus: vi.fn().mockResolvedValue({ success: true }),
     send: vi.fn(async (): Promise<InteractionResult> => ({ success: true })),
     respond: vi.fn(async (): Promise<InteractionResult> => ({ success: true })),
     peek: vi.fn(

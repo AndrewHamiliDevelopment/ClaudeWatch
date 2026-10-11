@@ -47,9 +47,6 @@ export function createFixtureFeed(options: { tickMs?: number } = {}): OfficeFeed
       }, tickMs)
       return () => clearInterval(timer)
     },
-    jump(sessionKey) {
-      console.info(`[office preview] jump to terminal for ${sessionKey}`)
-    },
     // Codex agents answer the way an unproven pane does, so the preview shows that message too.
     focus: async (agentKey) =>
       agentKey.startsWith('codex:')

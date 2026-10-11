@@ -21,9 +21,6 @@ const officeBridge = {
     }
   },
 
-  jump: (sessionKey: string): Promise<{ success: boolean }> =>
-    ipcRenderer.invoke('office:jump', sessionKey),
-
   // `agentKey` is a session key, or `${sessionKey}#${subagentId}` for a teammate.
   focus: (agentKey: string): Promise<FocusResult> => ipcRenderer.invoke('office:focus', agentKey),
 

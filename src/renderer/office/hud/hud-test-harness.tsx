@@ -151,7 +151,6 @@ export function setupHud(focusResult: FocusResult = { success: true, target: 'pa
       push = listener
       return () => undefined
     },
-    jump: vi.fn(),
     focus,
     send,
     respond: vi.fn(async (): Promise<InteractionResult> => ({ success: true })),

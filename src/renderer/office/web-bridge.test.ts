@@ -173,15 +173,13 @@ describe('createWebBridge', () => {
       await bridge.start('p_app', 'codex')
       await bridge.peek('claude:s1')
       await bridge.focus('claude:s1#lena')
-      await bridge.jump('claude:s1')
 
       expect(fetchMock.mock.calls.map(([path, init]) => [path, JSON.parse(init.body)])).toEqual([
         ['/api/send', { sessionKey: 'claude:s1', text: 'run the tests' }],
         ['/api/respond', { sessionKey: 'claude:s1', decision: 'deny', fingerprint: 'f1' }],
         ['/api/start', { projectKey: 'p_app', provider: 'codex' }],
         ['/api/peek', { sessionKey: 'claude:s1' }],
-        ['/api/focus', { agentKey: 'claude:s1#lena' }],
-        ['/api/focus', { agentKey: 'claude:s1' }]
+        ['/api/focus', { agentKey: 'claude:s1#lena' }]
       ])
       expect(sent().init).toMatchObject({
         method: 'POST',

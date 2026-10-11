@@ -109,7 +109,8 @@ describe('setupOffice', () => {
     })
   })
 
-  it.each(['office:focus', 'office:jump'])('%s answers the Office page only', async (channel) => {
+  it('office:focus answers the Office page only', async () => {
+    const channel = 'office:focus'
     for (const event of [pageEvent('index.html'), { senderFrame: null }, null]) {
       expect(() => handlers[channel](event, 'claude:s1')).toThrow('Untrusted IPC sender')
     }
@@ -119,18 +120,15 @@ describe('setupOffice', () => {
     })
   })
 
-  it.each(['office:focus', 'office:jump'])(
-    '%s runs no program for a key the bridge never reported',
-    async (channel) => {
-      for (const agentKey of ['claude:nope', 'claude:nope#lena', 4242, null, { key: 'x' }]) {
-        expect(await handlers[channel](officeEvent, agentKey)).toEqual({
-          success: false,
-          reason: 'unknown-session'
-        })
-      }
-      expect(execFilePromise).not.toHaveBeenCalled()
+  it('office:focus runs no program for a key the bridge never reported', async () => {
+    for (const agentKey of ['claude:nope', 'claude:nope#lena', 4242, null, { key: 'x' }]) {
+      expect(await handlers['office:focus'](officeEvent, agentKey)).toEqual({
+        success: false,
+        reason: 'unknown-session'
+      })
     }
-  )
+    expect(execFilePromise).not.toHaveBeenCalled()
+  })
 
   it('runs no program for a pid the tracker does not list', async () => {
     expect(await office.focusSession(1)).toEqual({ success: false, reason: 'unknown-session' })

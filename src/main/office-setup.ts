@@ -111,13 +111,10 @@ export function setupOffice(
     assertTrustedSender(event, 'office.html')
     controller.ready()
   })
-  // 'office:jump' is the HUD's older name for the same routine.
-  for (const channel of ['office:focus', 'office:jump']) {
-    ipcMain.handle(channel, (event, agentKey: unknown) => {
-      assertTrustedSender(event, 'office.html')
-      return service.focus(agentKey)
-    })
-  }
+  ipcMain.handle('office:focus', (event, agentKey: unknown) => {
+    assertTrustedSender(event, 'office.html')
+    return service.focus(agentKey)
+  })
 
   return {
     open: () => controller.open(),

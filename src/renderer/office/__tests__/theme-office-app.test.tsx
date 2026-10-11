@@ -55,7 +55,7 @@ const feed: OfficeFeed = {
     listener(frame)
     return () => undefined
   },
-  jump: vi.fn(),
+  focus: vi.fn().mockResolvedValue({ success: true }),
   send: vi.fn(),
   respond: vi.fn(),
   peek: vi.fn(),

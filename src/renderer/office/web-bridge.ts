@@ -162,7 +162,6 @@ export function createWebBridge(token: string): OfficeBridgeApi {
       }
     },
     focus,
-    jump: focus,
     send: async (sessionKey, text) => toResult(await post('/api/send', { sessionKey, text })),
     respond: async (sessionKey, decision, fingerprint) =>
       toResult(await post('/api/respond', { sessionKey, decision, fingerprint })),

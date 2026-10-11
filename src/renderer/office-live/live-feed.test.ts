@@ -47,7 +47,7 @@ describe('createLiveFeed', () => {
           listener = null
         }
       }),
-      jump: vi.fn().mockResolvedValue({ success: true }),
+      focus: vi.fn().mockResolvedValue({ success: true, target: 'pane' }),
       send: vi.fn().mockResolvedValue({ success: true }),
       respond: vi.fn().mockResolvedValue({ success: true }),
       peek: vi.fn().mockResolvedValue({ success: true, lines: ['ok'] }),
@@ -140,9 +140,10 @@ describe('createLiveFeed', () => {
     expect(setItem).toHaveBeenCalledTimes(1)
   })
 
-  it('forwards jump requests to the bridge', () => {
-    createLiveFeed(source, { storage: store }).jump('claude:a')
-    expect(source.jump).toHaveBeenCalledWith('claude:a')
+  it('forwards a focus request to the bridge and returns where it landed', async () => {
+    const landed = await createLiveFeed(source, { storage: store }).focus('claude:a#lena')
+    expect(source.focus).toHaveBeenCalledWith('claude:a#lena')
+    expect(landed).toEqual({ success: true, target: 'pane' })
   })
 
   it('forwards talk, respond, peek and start to the bridge and returns its answer', async () => {

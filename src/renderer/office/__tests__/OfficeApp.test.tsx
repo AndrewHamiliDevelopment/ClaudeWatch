@@ -14,7 +14,6 @@ function controllableFeed() {
       push = listener
       return () => undefined
     },
-    jump: vi.fn(),
     focus: vi.fn().mockResolvedValue({ success: true, target: 'pane' }),
     send: vi.fn().mockResolvedValue({ success: true }),
     respond: vi.fn().mockResolvedValue({ success: true }),
