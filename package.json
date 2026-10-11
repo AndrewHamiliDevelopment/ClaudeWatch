@@ -25,7 +25,8 @@
     "publish:local": "npm run build && npm run build:widget && npm run clean:dist-temp && CSC_IDENTITY_AUTO_DISCOVERY=true node scripts/build-mac.js",
     "release:patch": "npm version patch && npm run publish:local",
     "release:minor": "npm version minor && npm run publish:local",
-    "release:major": "npm version major && npm run publish:local"
+    "release:major": "npm version major && npm run publish:local",
+    "office:preview": "vite --config vite.office-preview.config.ts"
   },
   "keywords": [
     "electron",
@@ -37,13 +38,11 @@
   "author": "Angelo",
   "license": "MIT",
   "devDependencies": {
-    "@electron-toolkit/tsconfig": "^1.0.1",
     "@eslint/js": "^9.39.0",
     "@react-three/drei": "~10.7.9",
     "@react-three/fiber": "~9.8.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
-    "@testing-library/user-event": "^14.6.1",
     "@types/node": "^22.0.0",
     "@types/react": "~19.3.0",
     "@types/react-dom": "~19.3.0",
@@ -67,7 +66,6 @@
     "vitest": "^3.2.4"
   },
   "dependencies": {
-    "@electron-toolkit/preload": "^3.0.0",
     "@electron-toolkit/utils": "^3.0.0",
     "electron-store": "^10.0.0",
     "electron-updater": "^6.0.0",

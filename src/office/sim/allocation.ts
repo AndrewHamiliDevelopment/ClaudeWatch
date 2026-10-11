@@ -1,7 +1,7 @@
 import type { Bounds, ZoneLayout } from './rooms'
 
 export const RESERVATION_MS = 24 * 60 * 60 * 1000
-export const COMPANY_CORRIDOR = 3
+const COMPANY_CORRIDOR = 3
 export const PROJECT_STRIDE_X = 30
 export const PROJECT_STRIDE_Z = 42
 

@@ -56,7 +56,7 @@ function determineStatus(
   return 'active'
 }
 
-export function getPlatformDetector(): PlatformDetector {
+function getPlatformDetector(): PlatformDetector {
   if (process.platform === 'win32') {
     return new Win32Detector()
   }

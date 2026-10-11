@@ -1,7 +1,7 @@
 import type { BridgeIo } from './io'
 import type { RegistryEntry } from './registry'
 
-export function collapseWhitespace(value: string): string {
+function collapseWhitespace(value: string): string {
   return value.trim().replace(/\s+/g, ' ')
 }
 export async function isLive(entry: RegistryEntry, io: BridgeIo): Promise<boolean> {

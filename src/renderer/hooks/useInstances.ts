@@ -5,7 +5,7 @@ export type StatusFilter = 'all' | 'active' | 'idle' | 'exited'
 
 const RECENT_WINDOW_MS = 10 * 60 * 1000 // 10 minutes
 
-export interface GroupedInstances {
+interface GroupedInstances {
   recentlyCompleted: ClaudeInstance[]
   inProgress: ClaudeInstance[]
   waiting: ClaudeInstance[]

@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process'
 import { open, readFile, readdir, stat } from 'node:fs/promises'
 
-export interface FileInfo {
+interface FileInfo {
   directory: boolean
   mtimeMs: number
   size: number

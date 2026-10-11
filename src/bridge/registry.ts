@@ -18,7 +18,7 @@ import { resolveProject } from './project-root'
 import { parseTranscript, transcriptPath } from './transcript-tail'
 import { collectSubagents } from './subagents'
 
-export function parseRegistry(text: string): RegistryEntry | null {
+function parseRegistry(text: string): RegistryEntry | null {
   const record = jsonObject(text)
   if (
     !record ||

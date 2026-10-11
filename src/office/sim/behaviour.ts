@@ -6,7 +6,7 @@ import type {
 } from '../../shared/office/types'
 import type { Point } from './path'
 
-export type AgentState = 'arriving' | 'working' | 'needs_you' | 'done' | 'leaving'
+type AgentState = 'arriving' | 'working' | 'needs_you' | 'done' | 'leaving'
 export interface AgentRecord {
   view: AgentView
   state: AgentState
