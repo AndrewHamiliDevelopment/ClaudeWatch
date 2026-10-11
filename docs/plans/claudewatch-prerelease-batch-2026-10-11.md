@@ -25,15 +25,15 @@ Validated (B8): with six teammates running, `node out/main/bridge.js --once` rep
 ## Ledger
 
 - [x] Phase 0 — Contract: optional fields for teammates, tokens, accounts and focus in `src/shared/office/types.ts` (31d253b); this plan
-- [x] Phase 1 — Data: teammates in the Office (B8) and token counters per session, subagent and teammate (B3) (merged 4f69ee5: the live bridge reports token totals for six Claude sessions and this session's three running agents; no process-backed teammate was alive to observe, that path is proven on real transcripts with stand-in roster rows)
+- [x] Phase 1 — Data: teammates in the Office (B8) and token counters per session, subagent and teammate (B3) (merged 4f69ee5: the live bridge reports token totals for six Claude sessions and this session's three running agents; a process-backed teammate was then observed live under its lead with its name, pid, Orca pane key and its own token count)
 - [x] Phase 2 — Orca: exact pane focus (B4), an Open Office entry for the dashboard (B1, main side), one Orca binary and a signature check (merged 00c068f, gate fix 35511af; live check passed: the built app focused this session's own Orca pane by process id and returned `target: pane`, and a stale handle returns `terminal_handle_stale` with exit 1)
-- [ ] Phase 3 — Camera: continuous zoom toward the cursor, inertial pan, interaction frame policy (B0)
+- [x] Phase 3 — Camera: continuous zoom toward the cursor, inertial pan, interaction frame policy (B0) (merged e039129: cursor drift during zoom 1,565–2,449 px to 0.01 px, pan gain 2.0 to 1.0, name cards 0 px behind while rotating, two-finger scroll pans instead of zooming; headless Chromium on the real GPU)
 - [x] Phase 4 — Theme engine: a theme per company with a project override (B5) (merged 898cdf7; two themes on one floor measure 245 to 264 draw calls, three measure 283 to 292, ceiling 300)
 - [x] Phase 5 — Dashboard and popover redesign, "Dispatch Deck", with the Open Office button (B2, B1) (merged 5f7403f, wired to the real preload in eb95d99; the built app on live sessions shows the hold lane, squads, tokens by project and Open Office with 0 console errors)
 - [ ] Phase 6 — Office HUD redesign: tokens, teammates, theme picker and focus in the HUD (B2, B3, B4, B5)
 - [ ] Phase 7 — Accounts: ledger, attribution, Accounts view (B6)
 - [ ] Phase 8 — Three themes: Violet Court, Orbital Garrison, Quiet Grove (B5)
-- [ ] Phase 9 — Standalone Office: loopback web host and web bridge in ClaudeWatch (B7)
+- [x] Phase 9 — Standalone Office: loopback web host and web bridge in ClaudeWatch (B7) (merged edb65a4: `npm run build:office-web` emits 10 files, 1.44 MB, largest 383,551 bytes; view-only server on 127.0.0.1 refused a request without the token and a POST to an action route; 26 guards each have a test that fails when the guard is removed)
 - [ ] Phase 10 — zkidz-claude-team: vendored Office bundle and the `zkoffice` command (B7)
 - [x] Phase 11 — Release readiness: notarisation switch, changelog, README, clean-clone check (cdaccf5: the builder skips notarisation when its credentials are absent and does not fail; README now describes the local release; Node version declared)
 - [ ] Phase 12 — Integration: gates, QA and security review, second review, cleanup pass, dead-code scan, demo, notes
@@ -113,6 +113,8 @@ Total **153h with AI | 408h without**. Phases 1 to 5 run in parallel, then 6 to 
 - ASSUMPTION: the framework repo carries a **prebuilt bundle** with each file under that repo's commit-size guard, so the guard is not overridden.
 - ASSUMPTION: writers work in worktrees under `.claude/.worktree/`; no local-database question, the app has no data layer.
 - ASSUMPTION: the bridge runs for the whole life of the app, not only while the Office window is open — chose this because the dashboard's "Needs you" lane, tray rows, notification clicks and the accounts ledger all read it.
+- ASSUMPTION: the fly-to frame target (worst frame at or under 34 ms) is left at the measured 36 and 43 ms on two of six fly-tos — chose this because the only known lever is caching the batch key per material, and a material's colour changes in place when a theme changes, so a cached key could batch two different colours together. One dropped frame per fly-to is the smaller harm.
+- ASSUMPTION: view-only on the web page still allows "focus this agent's pane" — chose this because it types nothing into a terminal.
 - ASSUMPTION: no CI workflow is added — chose this because none was asked for; the README no longer claims one.
 - ASSUMPTION: nothing is pushed for ClaudeWatch without Angelo's word; the framework repo follows its own standing merge rule.
 
