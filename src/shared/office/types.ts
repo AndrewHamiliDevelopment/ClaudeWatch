@@ -91,6 +91,7 @@ export type InteractionFailure =
   | 'orca-unavailable'
   | 'terminal-not-found'
   | 'no-permission-prompt'
+  | 'prompt-changed'
   | 'unsupported-provider'
   | 'invalid-input'
 
@@ -101,6 +102,8 @@ export interface InteractionResult {
 
 export interface PeekResult extends InteractionResult {
   lines: string[]
+  // Identifies exactly what was shown; respond() refuses if the screen no longer matches it.
+  fingerprint?: string
 }
 
 export type PermissionDecision = 'approve' | 'deny'

@@ -21,7 +21,11 @@ const DECISION_DONE: Record<PermissionDecision, string> = {
 interface PermissionPanelProps {
   session: SessionRef
   peek: (sessionKey: string) => Promise<PeekResult>
-  respond: (sessionKey: string, decision: PermissionDecision) => Promise<InteractionResult>
+  respond: (
+    sessionKey: string,
+    decision: PermissionDecision,
+    fingerprint: string
+  ) => Promise<InteractionResult>
   onClose: () => void
 }
 
@@ -42,13 +46,24 @@ export function PermissionPanel({ session, peek, respond, onClose }: PermissionP
     if (hasAnswered && session.attention !== 'permission') onClose()
   }, [hasAnswered, session.attention, onClose])
 
-  const decide = (choice: PermissionDecision): void => {
-    setDecision(choice)
-    void sendAnswer(() => respond(session.key, choice))
-  }
-
   const screenResult = screen.status === 'done' ? screen.result : null
-  const canDecide = Boolean(screenResult?.success) && answer.status !== 'pending' && !hasAnswered
+
+  // The answer is bound to the screen the owner saw; if it changed, re-read it for a fresh review.
+  const decide = (choice: PermissionDecision): void => {
+    const fingerprint = screenResult?.fingerprint
+    if (!fingerprint) return
+    setDecision(choice)
+    void sendAnswer(async () => {
+      const result = await respond(session.key, choice, fingerprint)
+      if (result.reason === 'prompt-changed') void loadScreen(() => peek(session.key))
+      return result
+    })
+  }
+  const canDecide =
+    Boolean(screenResult?.success && screenResult.fingerprint) &&
+    screen.status !== 'pending' &&
+    answer.status !== 'pending' &&
+    !hasAnswered
   const statusText =
     screen.status === 'pending'
       ? 'Reading the prompt…'

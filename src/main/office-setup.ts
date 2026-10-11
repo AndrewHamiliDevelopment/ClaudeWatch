@@ -70,10 +70,17 @@ export function setupOffice(terminalResolver: Pick<TerminalResolver, 'resolve'>)
     assertTrustedSender(event)
     return interactions.send(asString(sessionKey), asString(text))
   })
-  ipcMain.handle('office:respond', (event, sessionKey: unknown, decision: unknown) => {
-    assertTrustedSender(event)
-    return interactions.respond(asString(sessionKey), asString(decision) as PermissionDecision)
-  })
+  ipcMain.handle(
+    'office:respond',
+    (event, sessionKey: unknown, decision: unknown, fingerprint: unknown) => {
+      assertTrustedSender(event)
+      return interactions.respond(
+        asString(sessionKey),
+        asString(decision) as PermissionDecision,
+        asString(fingerprint)
+      )
+    }
+  )
   ipcMain.handle('office:peek', (event, sessionKey: unknown) => {
     assertTrustedSender(event)
     return interactions.peek(asString(sessionKey))

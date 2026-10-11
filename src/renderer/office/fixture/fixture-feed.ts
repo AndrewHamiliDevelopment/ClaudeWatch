@@ -249,6 +249,7 @@ export function createFixtureFeed(options: { tickMs?: number } = {}): OfficeFeed
     respond: async () => ({ success: true }),
     peek: async () => ({
       success: true,
+      fingerprint: 'preview-screen',
       lines: [
         '$ npm test',
         '',

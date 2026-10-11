@@ -1,3 +1,4 @@
+import { createHash } from 'crypto'
 import type {
   InteractionFailure,
   InteractionResult,
@@ -26,6 +27,16 @@ const AGENT_TITLES: Record<ProviderId, string> = {
 }
 
 const fail = (reason: InteractionFailure): InteractionResult => ({ success: false, reason })
+
+// The last PEEK_LINES rendered lines without trailing blanks: what the owner sees in the office.
+function visibleLines(screen: string[]): string[] {
+  let end = screen.length
+  while (end > 0 && !screen[end - 1].trim()) end--
+  return screen.slice(Math.max(0, end - PEEK_LINES), end)
+}
+
+const fingerprintOf = (lines: string[]): string =>
+  createHash('sha256').update(lines.join('\n')).digest('hex')
 const isPrintable = (text: string): boolean => !/\p{Cc}/u.test(text)
 
 // Everything the office can do to a running agent goes through here, and only on a
@@ -44,15 +55,24 @@ export class OfficeInteractions {
     })
   }
 
-  async respond(sessionKey: string, decision: PermissionDecision): Promise<InteractionResult> {
+  // Answers only the prompt the owner reviewed: if the screen changed since peek, nothing is sent.
+  async respond(
+    sessionKey: string,
+    decision: PermissionDecision,
+    reviewedFingerprint: string
+  ): Promise<InteractionResult> {
     if (!Object.hasOwn(DECISION_KEYS, decision)) return fail('invalid-input')
+    if (typeof reviewedFingerprint !== 'string' || !reviewedFingerprint) {
+      return fail('invalid-input')
+    }
     const session = this.session(sessionKey)
     if (!session) return fail('unknown-session')
     if (session.provider !== 'claude') return fail('unsupported-provider')
     if (session.attention !== 'permission') return fail('no-permission-prompt')
     return this.withTerminal(sessionKey, async (handle) => {
-      const screen = await this.deps.orca.screen(handle)
-      if (!PERMISSION_PROMPT.test(screen.join('\n'))) return fail('no-permission-prompt')
+      const lines = visibleLines(await this.deps.orca.screen(handle))
+      if (!PERMISSION_PROMPT.test(lines.join('\n'))) return fail('no-permission-prompt')
+      if (fingerprintOf(lines) !== reviewedFingerprint) return fail('prompt-changed')
       await this.deps.orca.sendKey(handle, DECISION_KEYS[decision])
       return { success: true }
     })
@@ -61,13 +81,12 @@ export class OfficeInteractions {
   async peek(sessionKey: string): Promise<PeekResult> {
     let lines: string[] = []
     const outcome = await this.withTerminal(sessionKey, async (handle) => {
-      const screen = await this.deps.orca.screen(handle)
-      let end = screen.length
-      while (end > 0 && !screen[end - 1].trim()) end--
-      lines = screen.slice(Math.max(0, end - PEEK_LINES), end)
+      lines = visibleLines(await this.deps.orca.screen(handle))
       return { success: true }
     })
-    return { ...outcome, lines }
+    return outcome.success
+      ? { ...outcome, lines, fingerprint: fingerprintOf(lines) }
+      : { ...outcome, lines }
   }
 
   async start(projectKey: string, provider: ProviderId): Promise<InteractionResult> {

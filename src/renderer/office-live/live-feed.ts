@@ -17,7 +17,11 @@ export interface FeedSource {
   onFeedMessage(listener: (message: FeedMessage) => void): () => void
   jump(sessionKey: string): Promise<{ success: boolean }>
   send(sessionKey: string, text: string): Promise<InteractionResult>
-  respond(sessionKey: string, decision: PermissionDecision): Promise<InteractionResult>
+  respond(
+    sessionKey: string,
+    decision: PermissionDecision,
+    fingerprint: string
+  ): Promise<InteractionResult>
   peek(sessionKey: string): Promise<PeekResult>
   start(projectKey: string, provider: ProviderId): Promise<InteractionResult>
 }
@@ -93,7 +97,8 @@ export function createLiveFeed(
       void source.jump(sessionKey)
     },
     send: (sessionKey, text) => source.send(sessionKey, text),
-    respond: (sessionKey, decision) => source.respond(sessionKey, decision),
+    respond: (sessionKey, decision, fingerprint) =>
+      source.respond(sessionKey, decision, fingerprint),
     peek: (sessionKey) => source.peek(sessionKey),
     start: (projectKey, provider) => source.start(projectKey, provider)
   }

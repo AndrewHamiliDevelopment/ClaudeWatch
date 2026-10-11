@@ -47,11 +47,11 @@ describe('office preload', () => {
 
   it('routes talk, respond, peek and start to their own channels', async () => {
     await api.send('claude:a', 'hi')
-    await api.respond('claude:a', 'approve')
+    await api.respond('claude:a', 'approve', 'fp')
     await api.peek('claude:a')
     await api.start('p_app', 'claude')
     expect(ipcRenderer.invoke).toHaveBeenCalledWith('office:send', 'claude:a', 'hi')
-    expect(ipcRenderer.invoke).toHaveBeenCalledWith('office:respond', 'claude:a', 'approve')
+    expect(ipcRenderer.invoke).toHaveBeenCalledWith('office:respond', 'claude:a', 'approve', 'fp')
     expect(ipcRenderer.invoke).toHaveBeenCalledWith('office:peek', 'claude:a')
     expect(ipcRenderer.invoke).toHaveBeenCalledWith('office:start', 'p_app', 'claude')
   })

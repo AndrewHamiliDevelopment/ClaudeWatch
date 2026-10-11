@@ -102,11 +102,11 @@ describe('createLiveFeed', () => {
   it('forwards talk, respond, peek and start to the bridge and returns its answer', async () => {
     const feed = createLiveFeed(source, { storage: store })
     expect(await feed.send('claude:a', 'hi')).toEqual({ success: true })
-    expect(await feed.respond('claude:a', 'deny')).toEqual({ success: true })
+    expect(await feed.respond('claude:a', 'deny', 'fp')).toEqual({ success: true })
     expect(await feed.peek('claude:a')).toEqual({ success: true, lines: ['ok'] })
     expect(await feed.start('p_app', 'codex')).toEqual({ success: true })
     expect(source.send).toHaveBeenCalledWith('claude:a', 'hi')
-    expect(source.respond).toHaveBeenCalledWith('claude:a', 'deny')
+    expect(source.respond).toHaveBeenCalledWith('claude:a', 'deny', 'fp')
     expect(source.start).toHaveBeenCalledWith('p_app', 'codex')
   })
 })

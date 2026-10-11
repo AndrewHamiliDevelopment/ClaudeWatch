@@ -103,16 +103,49 @@ describe('OfficeInteractions', () => {
       snapshot.sessions = [session({ attention: 'permission' })]
     })
 
-    it('approves with key 1 and denies with Escape when a permission prompt is on screen', async () => {
-      expect(await interactions.respond('claude:s1', 'approve')).toEqual({ success: true })
+    const reviewed = async (): Promise<string> =>
+      (await interactions.peek('claude:s1')).fingerprint!
+
+    it('approves with key 1 and denies with Escape for the prompt the owner reviewed', async () => {
+      const fingerprint = await reviewed()
+      expect(await interactions.respond('claude:s1', 'approve', fingerprint)).toEqual({
+        success: true
+      })
       expect(orca.sendKey).toHaveBeenLastCalledWith('term_a', '1')
-      expect(await interactions.respond('claude:s1', 'deny')).toEqual({ success: true })
+      expect(await interactions.respond('claude:s1', 'deny', fingerprint)).toEqual({
+        success: true
+      })
       expect(orca.sendKey).toHaveBeenLastCalledWith('term_a', '\u001b')
     })
 
+    it('sends nothing when a different prompt replaced the reviewed one', async () => {
+      const fingerprint = await reviewed()
+      orca.screen.mockResolvedValue([
+        'Bash command',
+        '  rm -rf build',
+        'Do you want to proceed?',
+        '❯ 1. Yes',
+        '  2. No'
+      ])
+      expect(await interactions.respond('claude:s1', 'approve', fingerprint)).toEqual({
+        success: false,
+        reason: 'prompt-changed'
+      })
+      expect(orca.sendKey).not.toHaveBeenCalled()
+    })
+
+    it('requires the fingerprint of a reviewed screen', async () => {
+      expect(await interactions.respond('claude:s1', 'approve', '')).toEqual({
+        success: false,
+        reason: 'invalid-input'
+      })
+      expect(orca.sendKey).not.toHaveBeenCalled()
+    })
+
     it('sends nothing when the screen shows no permission prompt', async () => {
+      const fingerprint = await reviewed()
       orca.screen.mockResolvedValue(['$ vim notes.md'])
-      expect(await interactions.respond('claude:s1', 'approve')).toEqual({
+      expect(await interactions.respond('claude:s1', 'approve', fingerprint)).toEqual({
         success: false,
         reason: 'no-permission-prompt'
       })
@@ -121,12 +154,12 @@ describe('OfficeInteractions', () => {
 
     it('refuses sessions that are not waiting for permission, and Codex sessions', async () => {
       snapshot.sessions = [session({ attention: 'none' })]
-      expect(await interactions.respond('claude:s1', 'approve')).toEqual({
+      expect(await interactions.respond('claude:s1', 'approve', 'f')).toEqual({
         success: false,
         reason: 'no-permission-prompt'
       })
       snapshot.sessions = [session({ provider: 'codex', attention: 'permission' })]
-      expect(await interactions.respond('claude:s1', 'approve')).toEqual({
+      expect(await interactions.respond('claude:s1', 'approve', 'f')).toEqual({
         success: false,
         reason: 'unsupported-provider'
       })
@@ -134,7 +167,7 @@ describe('OfficeInteractions', () => {
     })
 
     it('rejects an unknown decision', async () => {
-      expect(await interactions.respond('claude:s1', 'maybe' as 'approve')).toEqual({
+      expect(await interactions.respond('claude:s1', 'maybe' as 'approve', 'f')).toEqual({
         success: false,
         reason: 'invalid-input'
       })
@@ -144,7 +177,11 @@ describe('OfficeInteractions', () => {
   describe('peek', () => {
     it('returns the last rendered screen lines without trailing blanks', async () => {
       orca.screen.mockResolvedValue(['a', 'b', '', '  '])
-      expect(await interactions.peek('claude:s1')).toEqual({ success: true, lines: ['a', 'b'] })
+      expect(await interactions.peek('claude:s1')).toEqual({
+        success: true,
+        lines: ['a', 'b'],
+        fingerprint: expect.stringMatching(/^[0-9a-f]{64}$/)
+      })
     })
 
     it('caps the result at 40 lines', async () => {

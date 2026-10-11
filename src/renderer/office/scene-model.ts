@@ -42,7 +42,11 @@ export interface OfficeFeed {
   subscribe(listener: (frame: OfficeFrame) => void): () => void
   jump(sessionKey: string): void
   send(sessionKey: string, text: string): Promise<InteractionResult>
-  respond(sessionKey: string, decision: PermissionDecision): Promise<InteractionResult>
+  respond(
+    sessionKey: string,
+    decision: PermissionDecision,
+    fingerprint: string
+  ): Promise<InteractionResult>
   peek(sessionKey: string): Promise<PeekResult>
   start(projectKey: string, provider: ProviderId): Promise<InteractionResult>
 }

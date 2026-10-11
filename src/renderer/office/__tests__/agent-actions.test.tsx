@@ -19,7 +19,9 @@ function mockFeed(overrides: Partial<OfficeFeed> = {}) {
     jump: vi.fn(),
     send: vi.fn(async (): Promise<InteractionResult> => ({ success: true })),
     respond: vi.fn(async (): Promise<InteractionResult> => ({ success: true })),
-    peek: vi.fn(async (): Promise<PeekResult> => ({ success: true, lines: SCREEN })),
+    peek: vi.fn(
+      async (): Promise<PeekResult> => ({ success: true, lines: SCREEN, fingerprint: 'fp-1' })
+    ),
     start: vi.fn(async (): Promise<InteractionResult> => ({ success: true })),
     ...overrides
   }
@@ -155,7 +157,7 @@ describe('permission review', () => {
       'Do you want to proceed?'
     )
     fireEvent.click(within(panel).getByRole('button', { name: 'Approve' }))
-    expect(feed.respond).toHaveBeenCalledWith('claude:b', 'approve')
+    expect(feed.respond).toHaveBeenCalledWith('claude:b', 'approve', 'fp-1')
     expect(await within(panel).findByText(/Approved/)).toBeInTheDocument()
     expect(screen.getByRole('region', { name: 'Permission request' })).toBeInTheDocument()
     push(officeFrame('none'))
@@ -185,6 +187,20 @@ describe('permission review', () => {
     expect(
       within(queue).queryByRole('button', { name: 'Review widget sync' })
     ).not.toBeInTheDocument()
+  })
+
+  it('re-reads the screen when the prompt changed since it was reviewed', async () => {
+    const { feed } = setup({
+      respond: vi.fn(async () => ({ success: false, reason: 'prompt-changed' as const }))
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Review listing search' }))
+    const panel = await screen.findByRole('region', { name: 'Permission request' })
+    await within(panel).findByLabelText('Screen excerpt')
+    fireEvent.click(within(panel).getByRole('button', { name: 'Approve' }))
+    expect(
+      await within(panel).findByText('The prompt changed since you reviewed it. Review it again.')
+    ).toBeInTheDocument()
+    await waitFor(() => expect(feed.peek).toHaveBeenCalledTimes(2))
   })
 
   it('reports a denied respond failure in words', async () => {

@@ -26,8 +26,12 @@ const officeBridge = {
   send: (sessionKey: string, text: string): Promise<InteractionResult> =>
     ipcRenderer.invoke('office:send', sessionKey, text),
 
-  respond: (sessionKey: string, decision: PermissionDecision): Promise<InteractionResult> =>
-    ipcRenderer.invoke('office:respond', sessionKey, decision),
+  respond: (
+    sessionKey: string,
+    decision: PermissionDecision,
+    fingerprint: string
+  ): Promise<InteractionResult> =>
+    ipcRenderer.invoke('office:respond', sessionKey, decision, fingerprint),
 
   peek: (sessionKey: string): Promise<PeekResult> => ipcRenderer.invoke('office:peek', sessionKey),
 

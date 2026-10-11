@@ -25,6 +25,7 @@ const FAILURE_COPY: Record<InteractionFailure, string> = {
   'orca-unavailable': "Orca isn't responding. Check that it's running.",
   'terminal-not-found': "Couldn't find this agent's Orca pane. It may have closed.",
   'no-permission-prompt': 'No permission prompt is showing for this agent right now.',
+  'prompt-changed': 'The prompt changed since you reviewed it. Review it again.',
   'unsupported-provider':
     'Answering prompts from the office works for Claude agents. Jump to the terminal for Codex.',
   'invalid-input': 'Type a message first (up to 4000 characters).',
