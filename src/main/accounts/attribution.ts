@@ -4,6 +4,7 @@ import { zeroCounts } from '../../bridge/usage-fold'
 import type { UsageDelta } from '../../shared/accounts'
 import type { SessionRef, TokenCounts } from '../../shared/office/types'
 import { upsertAccount, upsertClaudeAccount } from './account-records'
+import { isAmount } from './amount'
 import type { IdentityRead } from './identity'
 import { addUsage, dayKey, type LedgerState, RETENTION_MS } from './ledger-state'
 
@@ -39,8 +40,6 @@ function accountAt(state: LedgerState, atMs: number): string | null {
   return span?.accountKey ?? null
 }
 
-const isAmount = (value: unknown): value is number =>
-  typeof value === 'number' && Number.isFinite(value) && value >= 0
 const isLabel = (value: unknown): value is string => typeof value === 'string' && value.length > 0
 
 // The bridge is another process: what it posts is checked before any of it is counted.

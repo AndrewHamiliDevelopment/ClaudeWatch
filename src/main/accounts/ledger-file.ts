@@ -16,7 +16,6 @@ const OWNER_ONLY = 0o600
 
 // The ledger holds email addresses, so only its owner may read it. Written whole to a
 // temporary file and renamed, synchronously: the last save happens while the app is quitting.
-// dry-new: settings-file.ts writes ~/.claude/settings.json async, keeps a .bak and that file's mode.
 export function saveLedger(path: string, state: LedgerState): void {
   const temporary = `${path}.${process.pid}.tmp`
   try {

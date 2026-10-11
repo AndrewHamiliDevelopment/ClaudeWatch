@@ -1,6 +1,7 @@
 import { object } from '../../bridge/io'
 import type { AccountLimit, AccountSource } from '../../shared/accounts'
 import type { AccountConfidence, ProviderId, TokenCounts } from '../../shared/office/types'
+import { amountOrNull, isAmount } from './amount'
 import {
   type AccountRecord,
   bucketId,
@@ -12,8 +13,6 @@ import {
 const VERSION = 1
 const MAX_TEXT_LENGTH = 512
 
-const isAmount = (value: unknown): value is number =>
-  typeof value === 'number' && Number.isFinite(value) && value >= 0
 const isText = (value: unknown): value is string =>
   typeof value === 'string' && value.length > 0 && value.length <= MAX_TEXT_LENGTH
 const isOneOf =
@@ -25,7 +24,6 @@ const isSource = isOneOf<AccountSource>(['default-login', 'orca', 'codex-rollout
 const isConfidence = isOneOf<AccountConfidence>(['exact', 'inferred', 'unattributed'])
 
 const textOrNull = (value: unknown): string | null => (isText(value) ? value : null)
-const amountOrNull = (value: unknown): number | null => (isAmount(value) ? value : null)
 const items = (value: unknown): unknown[] => (Array.isArray(value) ? value : [])
 // A stored map is a list of [key, value] pairs with a text key.
 const pairs = (value: unknown): [string, unknown][] =>
