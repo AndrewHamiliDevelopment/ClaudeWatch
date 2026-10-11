@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FeedMessage, OfficeSnapshot } from '../../shared/office/types'
-import { createWebBridge, takeLaunchToken } from './web-bridge'
+import { createWebBridge, isViewOnlyPage, takeLaunchToken } from './web-bridge'
 
 const TOKEN = 'k'.repeat(43)
 const CODE = 'c'.repeat(43)
@@ -38,6 +38,20 @@ describe('takeLaunchToken', () => {
     expect(window.location.pathname).toBe('/office.html')
     // The code works once, so a stored copy could only ever be refused.
     expect(window.sessionStorage.length).toBe(0)
+  })
+
+  it('remembers for this tab that the server launched it view-only', () => {
+    window.history.replaceState(null, '', `/office.html#t=${CODE}&view`)
+
+    expect(takeLaunchToken(window)).toBe(CODE)
+    expect(window.location.hash).toBe('')
+    expect(isViewOnlyPage(window)).toBe(true)
+  })
+
+  it('takes a page launched without the mark as interactive', () => {
+    window.history.replaceState(null, '', `/office.html#t=${CODE}`)
+    takeLaunchToken(window)
+    expect(isViewOnlyPage(window)).toBe(false)
   })
 
   it('finds this tab’s session token after a reload', () => {

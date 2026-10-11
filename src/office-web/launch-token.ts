@@ -13,12 +13,14 @@ export function isLaunchToken(expected: string, presented: string | undefined): 
 
 // The page the launcher opens. The token rides in the URL fragment, which browsers never send
 // to a server and which never shows in `ps` or shell history the way an argument would.
+// `&view` only tells the page which controls to leave out; the server refuses them regardless.
 export async function writeLaunchFile(
   folder: string,
   port: number,
-  token: string
+  token: string,
+  isInteractive: boolean
 ): Promise<string> {
-  const address = `http://127.0.0.1:${port}/office.html#t=${token}`
+  const address = `http://127.0.0.1:${port}/office.html#t=${token}${isInteractive ? '' : '&view'}`
   const path = join(folder, `launch-${port}.html`)
   await mkdir(folder, { recursive: true, mode: 0o700 })
   await chmod(folder, 0o700)

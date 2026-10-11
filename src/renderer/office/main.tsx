@@ -6,7 +6,7 @@ import { createLiveFeed, type FeedSource } from '../office-live/live-feed'
 import { NotConnected, type OfficeSurface } from '../office-live/NotConnected'
 import { OfficeApp } from './OfficeApp'
 import type { OfficeFeed } from './scene-model'
-import { createWebBridge, takeLaunchToken } from './web-bridge'
+import { createWebBridge, isViewOnlyPage, takeLaunchToken } from './web-bridge'
 
 const surface: OfficeSurface = /\bElectron\//.test(window.navigator.userAgent) ? 'app' : 'web'
 // The scripted office is for `npm run office:preview` alone, a development server opened in a
@@ -28,7 +28,11 @@ function findBridge(onLost: () => void): FeedSource | null {
 // Null when nothing can reach the agents: the page says so and never invents an office.
 async function resolveFeed(onLost: () => void): Promise<OfficeFeed | null> {
   const bridge = findBridge(onLost)
-  if (bridge) return createLiveFeed(bridge, { storage: browserStorage() })
+  if (bridge) {
+    const feed = createLiveFeed(bridge, { storage: browserStorage() })
+    // Only a tab the standalone server launched can be view-only; the app's window never is.
+    return window.officeBridge || !isViewOnlyPage(window) ? feed : { ...feed, isViewOnly: true }
+  }
   if (!isPreviewBuild) return null
   const { createFixtureFeed } = await import('./fixture/fixture-feed')
   return createFixtureFeed()

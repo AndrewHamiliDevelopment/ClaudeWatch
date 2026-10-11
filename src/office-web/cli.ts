@@ -63,7 +63,7 @@ async function main(): Promise<void> {
   process.once('SIGTERM', () => void shutdown())
 
   const { port } = await server.listen(args.port)
-  launchFile = await writeLaunchFile(LAUNCH_FOLDER, port, launchCode)
+  launchFile = await writeLaunchFile(LAUNCH_FOLDER, port, launchCode, args.interactive)
   // The launch code is in the launch file only: it is never printed and never an argument.
   process.stdout.write(
     `ClaudeWatch Office (${args.interactive ? 'interactive' : 'view-only'}) on http://127.0.0.1:${port}\n` +

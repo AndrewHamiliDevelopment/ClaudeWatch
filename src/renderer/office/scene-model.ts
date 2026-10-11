@@ -80,6 +80,8 @@ export interface OfficeFrame {
 }
 
 export interface OfficeFeed {
+  // Set by a page that may only watch: the HUD then leaves out what would be refused.
+  isViewOnly?: boolean
   subscribe(listener: (frame: OfficeFrame) => void): () => void
   // `agentKey` is a session key, or `${sessionKey}#${memberId}` for a subagent or teammate.
   focus(agentKey: string): Promise<FocusResult>

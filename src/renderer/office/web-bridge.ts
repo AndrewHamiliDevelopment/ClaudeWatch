@@ -13,7 +13,8 @@ import { isFeedMessage } from '../../shared/office/feed-message'
 type OfficeBridgeApi = NonNullable<Window['officeBridge']>
 
 const TOKEN_KEY = 'claudewatch.office.token'
-const TOKEN_FRAGMENT = /^#t=([A-Za-z0-9_-]{43})$/
+const VIEW_ONLY_KEY = 'claudewatch.office.view-only'
+const TOKEN_FRAGMENT = /^#t=([A-Za-z0-9_-]{43})(&view)?$/
 const SESSION_TOKEN = /^[A-Za-z0-9_-]{43}$/
 const FEED_RETRY_MS = 1000
 // This many tries in a row with no answer, and the server is taken to have stopped.
@@ -25,10 +26,17 @@ const LOST_AFTER_TRIES = 10
 export function takeLaunchToken(
   page: Pick<Window, 'location' | 'history' | 'sessionStorage'>
 ): string | null {
-  const launchCode = TOKEN_FRAGMENT.exec(page.location.hash)?.[1]
+  const [, launchCode, viewOnlyMark] = TOKEN_FRAGMENT.exec(page.location.hash) ?? []
   if (!launchCode) return page.sessionStorage.getItem(TOKEN_KEY)
+  if (viewOnlyMark) page.sessionStorage.setItem(VIEW_ONLY_KEY, '1')
+  else page.sessionStorage.removeItem(VIEW_ONLY_KEY)
   page.history.replaceState(null, '', page.location.pathname + page.location.search)
   return launchCode
+}
+
+// Whether the server launched this tab view-only: a hint for what to offer, never a permission.
+export function isViewOnlyPage(page: Pick<Window, 'sessionStorage'>): boolean {
+  return page.sessionStorage.getItem(VIEW_ONLY_KEY) === '1'
 }
 
 function parseFeedLine(line: string): FeedMessage | null {

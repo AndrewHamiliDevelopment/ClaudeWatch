@@ -107,9 +107,11 @@ export function OfficeApp({ feed }: { feed: OfficeFeed }) {
           bayForAgent(frame, selectedAgent)
         )
       : null
+  const isViewOnly = feed.isViewOnly === true
   const reviewableKeys = useMemo(
-    () => new Set((sessions ?? []).filter(canRespond).map((session) => session.key)),
-    [sessions]
+    () =>
+      new Set(isViewOnly ? [] : (sessions ?? []).filter(canRespond).map((session) => session.key)),
+    [sessions, isViewOnly]
   )
 
   const focusSelected = useCallback(() => {
@@ -186,7 +188,7 @@ export function OfficeApp({ feed }: { feed: OfficeFeed }) {
             defaultTheme={theme}
             focusedZoneId={state.focusedZoneId}
             onFlyToZone={flyToZone}
-            onStart={(projectKey, provider) => feed.start(projectKey, provider)}
+            onStart={isViewOnly ? null : (projectKey, provider) => feed.start(projectKey, provider)}
           />
           <AttentionRail
             queue={queue}

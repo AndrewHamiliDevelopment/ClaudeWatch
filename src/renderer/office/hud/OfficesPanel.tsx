@@ -21,7 +21,8 @@ interface OfficesPanelProps {
   defaultTheme: OfficeTheme
   focusedZoneId: string | null
   onFlyToZone: (zoneId: string) => void
-  onStart: (projectKey: string, provider: ProviderId) => Promise<InteractionResult>
+  // Null where the page may only watch: then no office offers a new agent.
+  onStart: ((projectKey: string, provider: ProviderId) => Promise<InteractionResult>) | null
 }
 
 function ownThemeId(themeIds: Readonly<Record<string, string>>, key: string): string | null {
@@ -143,7 +144,7 @@ export function OfficesPanel({
                             buttonRef={refFor(themeMenuId)}
                           />
                           {/* Starting an agent needs a running session's folder; an emptied office has none. */}
-                          {project.agentCount > 0 && (
+                          {onStart && project.agentCount > 0 && (
                             <button
                               type="button"
                               ref={refFor(agentMenuId)}
@@ -169,7 +170,7 @@ export function OfficesPanel({
                             onDismiss={() => closeMenu(themeMenuId)}
                           />
                         )}
-                        {openMenuId === agentMenuId && (
+                        {onStart && openMenuId === agentMenuId && (
                           <NewAgentMenu
                             floorLabel={project.label}
                             onStart={(provider) => onStart(project.projectKey, provider)}

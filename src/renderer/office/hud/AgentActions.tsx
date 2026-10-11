@@ -36,8 +36,10 @@ export function AgentActions({
     isOwnSession && isReviewing && canRespond({ ...session, attention: 'permission' })
   const { attention } = session
   const waitingOn = needsHuman(attention) ? attention : null
+  const isViewOnly = feed.isViewOnly === true
   // A typed message would answer the agent's open dialog (Enter confirms its default), so no box.
   const talkBlocker = ((): InteractionFailure | null => {
+    if (isViewOnly) return 'not-permitted'
     if (isOwnSession && waitingOn) return 'prompt-on-screen'
     return reachBlocker(target)
   })()
@@ -56,7 +58,7 @@ export function AgentActions({
           attention={waitingOn}
           sessionName={session.name}
           sinceMs={session.updatedAtMs}
-          onAction={canRespond(session) ? onReview : onFocusTerminal}
+          onAction={!isViewOnly && canRespond(session) ? onReview : onFocusTerminal}
         />
       )}
       {talkBlocker ? (
@@ -64,7 +66,9 @@ export function AgentActions({
       ) : (
         <TalkBox agentKey={target.key} agentName={target.name} send={feed.send} onSent={onSent} />
       )}
-      {reachBlocker(target) === null && <PeekPanel agentKey={target.key} peek={feed.peek} />}
+      {!isViewOnly && reachBlocker(target) === null && (
+        <PeekPanel agentKey={target.key} peek={feed.peek} />
+      )}
     </div>
   )
 }
