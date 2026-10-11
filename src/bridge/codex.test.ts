@@ -1,6 +1,7 @@
 import { expect, it, vi } from 'vitest'
 import { accountKey } from './account-key'
-import { collectCodex, parseCodexProcesses, parseCodexActivity } from './codex'
+import { collectCodex, codexProcesses, parseCodexActivity } from './codex'
+import { parseProcessTable } from './process-table'
 import { parseCodexUsage } from './codex-usage'
 import { fixtureIo } from './__fixtures__/helpers'
 
@@ -54,8 +55,10 @@ it('reports Codex usage as unknown when the tail holds no token count', () => {
 it('selects only CLI argv[0], excluding app-server and helpers', () => {
   const start = 'Sat Oct 10 15:29:12 2026'
   expect(
-    parseCodexProcesses(
-      `42 ${start} /opt/bin/codex --model test\n43 ${start} codex app-server\n44 ${start} codex exec hello\n45 ${start} node /bin/codex\n46 ${start} codex app-server-helper\n47 ${start} codex --config x app-server`
+    codexProcesses(
+      parseProcessTable(
+        `42 ${start} /opt/bin/codex --model test\n43 ${start} codex app-server\n44 ${start} codex exec hello\n45 ${start} node /bin/codex\n46 ${start} codex app-server-helper\n47 ${start} codex --config x app-server`
+      )
     )
   ).toEqual([
     { pid: 42, startedAtMs: Date.parse(`${start} UTC`) },
@@ -102,6 +105,33 @@ it('matches cwd using only rollout headers then tails the newest match', async (
   expect(tail).toHaveBeenCalledTimes(1)
   expect(batch.sources[0].ok).toBe(true)
 })
+it('asks where a Codex process runs once, and reads its rollout again only when the file changed', async () => {
+  const meta = JSON.stringify({ type: 'session_meta', payload: { id: 'a', cwd: '/repo' } })
+  const files: Record<string, string | null> = {
+    '/codex/sessions/rollout-a.jsonl': `${meta}\n`,
+    '/repo/.git': null
+  }
+  const io = fixtureIo(files)
+  let startedAt = 'Sat Oct 10 15:29:12 2026'
+  const exec = vi.fn(async (program: string) =>
+    program.endsWith('ps') ? `42 ${startedAt} /bin/codex` : 'p42\nn/repo\n'
+  )
+  io.exec = exec
+  const tail = vi.spyOn(io, 'readTail')
+  const folderAsks = (): number =>
+    exec.mock.calls.filter(([program]) => program.endsWith('lsof')).length
+  await collectCodex('/codex', io)
+  expect((await collectCodex('/codex', io)).sessions).toHaveLength(1)
+  expect([folderAsks(), tail.mock.calls.length]).toEqual([1, 1])
+  files['/codex/sessions/rollout-a.jsonl'] += `${tokenCount(1000, 700, 300)}\n`
+  expect((await collectCodex('/codex', io)).sessions[0].usage?.own.input).toBe(300)
+  expect([folderAsks(), tail.mock.calls.length]).toEqual([1, 2])
+  // Another process under the same pid is asked about afresh.
+  startedAt = 'Sun Oct 11 15:29:12 2026'
+  await collectCodex('/codex', io)
+  expect(folderAsks()).toBe(2)
+})
+
 it('keeps the last usage it read while output pushes the token count out of the tail', async () => {
   const meta = JSON.stringify({ type: 'session_meta', payload: { id: 'a', cwd: '/repo' } })
   const files: Record<string, string | null> = {
@@ -180,7 +210,10 @@ it.each([
   })
   io.exec = async (file) =>
     file.endsWith('ps') ? '42 Sat Oct 10 15:29:12 2026 /bin/codex' : 'p42\nn/repo\n'
-  const [session] = (await collectCodex('/codex', io)).sessions
+  const [unwatched] = (await collectCodex('/codex', io)).sessions
+  expect(unwatched).toMatchObject({ key: 'codex:a', accountKey: null })
+  expect(unwatched.accountConfidence).toBeUndefined()
+  const [session] = (await collectCodex('/codex', io, undefined, true)).sessions
   const named = 'creator_account_id' in creator
   expect(session.key).toBe('codex:a')
   expect(session.accountKey).toBe(named ? accountKey('codex', 'acct_CANARY_ID') : null)

@@ -1,6 +1,6 @@
-import { ipcMain, BrowserWindow, app, shell } from 'electron'
+import { BrowserWindow, app, shell } from 'electron'
 import { isAbsolute, join } from 'path'
-import { assertTrustedSender } from './window-factory'
+import { handleTrusted } from './window-factory'
 import { conformSettings } from './settings-shape'
 import { openTerminal } from './terminal-opener'
 import type { SessionTracker } from './session-tracker'
@@ -84,12 +84,8 @@ export function setupIpcHandlers(options: IpcHandlerOptions): void {
     accounts
   } = options
 
-  const handle = (channel: string, listener: Parameters<typeof ipcMain.handle>[1]): void => {
-    ipcMain.handle(channel, (event, ...args) => {
-      assertTrustedSender(event, 'index.html')
-      return listener(event, ...args)
-    })
-  }
+  const handle = (channel: string, listener: Parameters<typeof handleTrusted>[2]): void =>
+    handleTrusted('index.html', channel, listener)
 
   const beginQuit = (): void => {
     app.isQuitting = true
@@ -223,12 +219,14 @@ export function setupIpcHandlers(options: IpcHandlerOptions): void {
     'notifications:mute-project',
     (_event: Electron.IpcMainInvokeEvent, projectPath: string) => {
       const settings = store.getSettings()
-      const mutedProjects = settings.notifications.mutedProjects ?? []
-      if (!mutedProjects.includes(projectPath)) {
-        mutedProjects.push(projectPath)
-      }
+      const { mutedProjects } = settings.notifications
       store.setSettings({
-        notifications: { ...settings.notifications, mutedProjects }
+        notifications: {
+          ...settings.notifications,
+          mutedProjects: mutedProjects.includes(projectPath)
+            ? mutedProjects
+            : [...mutedProjects, projectPath]
+        }
       })
       return { success: true }
     }
@@ -238,9 +236,7 @@ export function setupIpcHandlers(options: IpcHandlerOptions): void {
     'notifications:unmute-project',
     (_event: Electron.IpcMainInvokeEvent, projectPath: string) => {
       const settings = store.getSettings()
-      const mutedProjects = (settings.notifications.mutedProjects ?? []).filter(
-        (p) => p !== projectPath
-      )
+      const mutedProjects = settings.notifications.mutedProjects.filter((p) => p !== projectPath)
       store.setSettings({
         notifications: { ...settings.notifications, mutedProjects }
       })
@@ -276,6 +272,17 @@ export function setupIpcHandlers(options: IpcHandlerOptions): void {
     if (!tray) return { success: false }
     tray.closePopover()
     return { success: true }
+  })
+}
+
+// The accounts state carries email addresses: it is pushed to the dashboard window and no other.
+export function forwardAccountsToDashboard(
+  accounts: Pick<AccountLedger, 'onChange'>,
+  getDashboard: () => BrowserWindow | null
+): void {
+  accounts.onChange((state) => {
+    const window = getDashboard()
+    if (window && !window.isDestroyed()) window.webContents.send('accounts:update', state)
   })
 }
 

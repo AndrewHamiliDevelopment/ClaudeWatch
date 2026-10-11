@@ -9,6 +9,20 @@ const PLAN_NAMES: Readonly<Record<string, string>> = {
 const ACRONYMS: Readonly<Record<string, string>> = { ai: 'AI', api: 'API' }
 const MAX_NAME_LENGTH = 40
 
+// Controls, line breaks, and the marks that reorder or hide the text beside them.
+const UNSAFE_IN_A_NAME = /[\p{Cc}\u2028\u2029\u202a-\u202e\u2066-\u2069]/u
+const AT_SIGN = /[@\uff20\ufe6b]/u
+
+export const isSafeName = (name: string): boolean => !UNSAFE_IN_A_NAME.test(name)
+
+// What the Office may show of a name, or null when it shows none of it. A name with an at-sign
+// may hold an address, and no mask covers every shape of one, so it is not used at all.
+export function officeLabel(name: string): string | null {
+  const trimmed = name.trim()
+  if (!trimmed || AT_SIGN.test(trimmed) || !isSafeName(trimmed)) return null
+  return [...trimmed].slice(0, MAX_NAME_LENGTH).join('')
+}
+
 // "fableWeekly", "seven_day_sonnet", "team-premium": the words of an id, lower-cased.
 function wordsOf(id: string): string[] {
   return id

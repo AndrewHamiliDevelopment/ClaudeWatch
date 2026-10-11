@@ -22,6 +22,79 @@ describe('Claude registry', () => {
     expect(read.mock.calls.flat().some((path) => path.endsWith('.key'))).toBe(false)
     expect(io.exec).toHaveBeenCalledWith('/bin/ps', ['-o', 'lstart=', '-p', '42'])
   })
+  it('proves a session live from the process table without asking ps about its pid', async () => {
+    const io = fixtureIo({ [file]: JSON.stringify(entry), '/repo/.git': null })
+    const exec = vi.fn(async (_program: string, args: string[]) =>
+      args[0] === '-xo' ? `   42 ${entry.procStart} claude\n` : ''
+    )
+    io.exec = exec
+    expect((await collectClaude([root], io, 1000)).sessions).toHaveLength(1)
+    expect(exec.mock.calls.filter(([, args]) => args.includes('lstart='))).toEqual([])
+  })
+  it('drops a pid the process table lists under another start time, without a second ask', async () => {
+    const io = fixtureIo({ [file]: JSON.stringify(entry), '/repo/.git': null })
+    const exec = vi.fn(async (_program: string, args: string[]) =>
+      args[0] === '-xo' ? '   42 Sun Oct 11 15:29:12 2026 claude\n' : entry.procStart
+    )
+    io.exec = exec
+    expect((await collectClaude([root], io, 1000)).sessions).toEqual([])
+    expect(exec.mock.calls.filter(([, args]) => args.includes('lstart='))).toEqual([])
+  })
+  it('reads a transcript tail again only when the file changed, and afresh for a session that came back', async () => {
+    const transcript = `${root}/projects/-repo/a.jsonl`
+    const files: Record<string, string | null> = {
+      [file]: JSON.stringify(entry),
+      '/repo/.git': null,
+      [transcript]: 'x\n'
+    }
+    const io = fixtureIo(files)
+    let live = true
+    io.exec = async (_program, args) => (args.includes('lstart=') && live ? entry.procStart : '')
+    const readTail = vi.spyOn(io, 'readTail')
+    await collectClaude([root], io, 1000)
+    await collectClaude([root], io, 3000)
+    expect(readTail).toHaveBeenCalledTimes(1)
+    files[transcript] += 'y\n'
+    await collectClaude([root], io, 5000)
+    expect(readTail).toHaveBeenCalledTimes(2)
+    live = false
+    await collectClaude([root], io, 7000)
+    live = true
+    await collectClaude([root], io, 9000)
+    expect(readTail).toHaveBeenCalledTimes(3)
+  })
+  it('looks for a folder’s project once a minute, not on every tick', async () => {
+    const io = fixtureIo({ [file]: JSON.stringify(entry), '/repo/.git': null })
+    io.exec = async (_program, args) => (args.includes('lstart=') ? entry.procStart : '')
+    const stat = vi.spyOn(io, 'stat')
+    const lookups = (): number => stat.mock.calls.filter(([path]) => path === '/repo/.git').length
+    await collectClaude([root], io, 1000)
+    await collectClaude([root], io, 3000)
+    expect(lookups()).toBe(1)
+    await collectClaude([root], io, 61_000)
+    expect(lookups()).toBe(2)
+  })
+  it('collects sessions side by side and still lists them in registry order', async () => {
+    const io = fixtureIo({
+      [file]: JSON.stringify(entry),
+      [`${root}/sessions/43.json`]: JSON.stringify({ ...entry, pid: 43, sessionId: 'b' }),
+      '/repo/.git': null,
+      [`${root}/projects/-repo/a.jsonl`]: '',
+      [`${root}/projects/-repo/b.jsonl`]: ''
+    })
+    io.exec = async (_program, args) =>
+      args[0] === '-xo' ? `42 ${entry.procStart} claude\n43 ${entry.procStart} claude\n` : ''
+    // The first session's tail is held back until the second's has been asked for.
+    let secondAsked = (): void => {}
+    const untilSecondAsked = new Promise<void>((resolve) => (secondAsked = resolve))
+    io.readTail = async (path) => {
+      if (path.endsWith('/b.jsonl')) secondAsked()
+      else await untilSecondAsked
+      return ''
+    }
+    const batch = await collectClaude([root], io, 1000)
+    expect(batch.sessions.map((session) => session.sessionId)).toEqual(['a', 'b'])
+  })
   it('treats a missing root as healthy and empty', async () => {
     const batch = await collectClaude([root], fixtureIo(), 1000)
     expect(batch.sessions).toEqual([])
@@ -61,11 +134,11 @@ describe('Claude registry', () => {
   it('collapses whitespace in starts and treats missing pids as dead', async () => {
     const io = fixtureIo()
     io.exec = async () => 'Sat  Oct 10 15:29:12 2026\n'
-    expect(await isLive(entry, io)).toBe(true)
+    expect(await isLive(entry, io, [])).toBe(true)
     io.exec = async () => {
       throw missing()
     }
-    expect(await isLive(entry, io)).toBe(false)
+    expect(await isLive(entry, io, [])).toBe(false)
   })
 })
 

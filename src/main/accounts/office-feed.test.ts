@@ -1,7 +1,34 @@
 import { describe, expect, it } from 'vitest'
 import { session } from '../../bridge/__fixtures__/helpers'
 import type { FeedMessage, OfficeSnapshot, SessionRef } from '../../shared/office/types'
-import { withAccounts } from './office-feed'
+import { withAccounts, withoutAccounts } from './office-feed'
+
+it('strips every account from a feed that has no ledger behind it', () => {
+  const codex: SessionRef = {
+    ...session('c'),
+    key: 'codex:c',
+    provider: 'codex',
+    accountKey: 'codex:cccccccccccc',
+    accountConfidence: 'exact'
+  }
+  const snapshot: OfficeSnapshot = { rev: 1, generatedAtMs: 1, sessions: [codex], sources: [] }
+  const listeners = new Set<(message: FeedMessage) => void>()
+  const feed = withoutAccounts({
+    snapshot: () => snapshot,
+    onMessage: (listener) => {
+      listeners.add(listener)
+      return () => listeners.delete(listener)
+    }
+  })
+  const received: FeedMessage[] = []
+  feed.onMessage((message) => received.push(message))
+  for (const listener of listeners) {
+    listener({ type: 'hello', v: 1, snapshot })
+    listener({ type: 'patch', v: 1, seq: 2, upserts: [codex], removed: [] })
+  }
+  expect(JSON.stringify([feed.snapshot(), received])).not.toMatch(/cccccccccccc|exact/)
+  expect(feed.snapshot()?.sessions[0]).toMatchObject({ key: 'codex:c', accountKey: null })
+})
 
 const ACCOUNT = {
   key: 'claude:aaaaaaaaaaaa',

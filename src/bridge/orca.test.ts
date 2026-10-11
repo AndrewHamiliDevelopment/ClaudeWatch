@@ -99,15 +99,36 @@ describe('Orca polling', () => {
       expect(io.exec).toHaveBeenCalledTimes(5)
     }
   )
-  it('asks a healthy Orca at most once a minute, since each ask checks its whole bundle', async () => {
+  it('asks a healthy Orca at most once in five minutes, since each ask checks its whole bundle', async () => {
     const io = fixtureIo({ [ORCA_CLI]: '' })
     io.exec = vi.fn(async () => '{"ok":true,"data":[]}')
     const source = new OrcaSource(io)
     expect((await source.poll(0)).ok).toBe(true)
-    await source.poll(59_999)
+    await source.poll(299_999)
     expect(io.exec).toHaveBeenCalledTimes(1)
-    await source.poll(60_000)
+    await source.poll(300_000)
     expect(io.exec).toHaveBeenCalledTimes(2)
+  })
+  it.each([
+    ['a failing Orca again at once', false, 2],
+    ['a healthy Orca no sooner', true, 1]
+  ])('asks %s when a session first shows a pane key', async (_case, isUp, asks) => {
+    const io = fixtureIo({ [ORCA_CLI]: '' })
+    const ps = psOf('claude', 'ORCA_PANE_KEY=p')
+    const exec = vi.fn(async (file: string, args: string[]) => {
+      if (!file.endsWith('orca')) return ps(file, args)
+      if (!isUp) throw missing()
+      return '{"ok":true,"data":[]}'
+    })
+    io.exec = exec
+    const source = new OrcaSource(io)
+    await source.poll(0)
+    await source.enrich(session('a'), 1000)
+    await source.poll(2000)
+    // The same pane key seen again tells nothing new.
+    await source.enrich(session('a'), 3000)
+    await source.poll(4000)
+    expect(exec.mock.calls.filter(([file]) => file === ORCA_CLI)).toHaveLength(asks)
   })
   it('reads each new pid’s environment once', async () => {
     const io = fixtureIo({ [ORCA_CLI]: '' })

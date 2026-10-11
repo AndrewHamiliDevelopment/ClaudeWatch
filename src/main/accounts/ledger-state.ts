@@ -49,10 +49,6 @@ export interface LedgerState {
   limits: Map<string, AccountLimit[]>
 }
 
-// How long a quiet transcript or a closed span is remembered. A line older than this in a
-// transcript the ledger has no place for is not counted, which keeps forgetting safe.
-export const RETENTION_MS = 7 * 24 * 60 * 60 * 1000
-
 export function emptyLedger(now: number): LedgerState {
   return {
     trackingSinceMs: now,
@@ -73,6 +69,15 @@ export function dayKey(atMs: number): string {
   const twoDigits = (value: number): string => String(value).padStart(2, '0')
   return `${date.getFullYear()}-${twoDigits(date.getMonth() + 1)}-${twoDigits(date.getDate())}`
 }
+
+// The first of the seven local days the Accounts view counts as its week, today included.
+export function weekStartKey(now: number): string {
+  const date = new Date(now)
+  return dayKey(new Date(date.getFullYear(), date.getMonth(), date.getDate() - 6).getTime())
+}
+
+// The day of a bucket holding everything older than that week. It sorts before any real day.
+export const FOLDED_DAY = '0000-00-00'
 
 export const bucketId = (bucket: Omit<UsageBucket, 'counts'>): string =>
   [bucket.accountKey ?? '', bucket.day, bucket.projectKey, bucket.confidence].join('|')

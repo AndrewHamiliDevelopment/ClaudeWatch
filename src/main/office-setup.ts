@@ -1,9 +1,9 @@
-import { ipcMain, screen, utilityProcess } from 'electron'
+import { screen, utilityProcess } from 'electron'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 import { BridgeHost } from './bridge-host'
 import { OfficeWindowController } from './office-window'
-import { assertTrustedSender, createAppWindow } from './window-factory'
+import { createAppWindow, handleTrusted } from './window-factory'
 import { PaneFocus } from './pane-focus'
 import { readOrcaEnvironment } from '../bridge/orca'
 import { createOfficeService, PS_OPTIONS } from '../office-host/office-service'
@@ -61,11 +61,17 @@ export function setupOffice(
   terminalResolver: Pick<TerminalResolver, 'resolve'>,
   store: OfficeWindowStore,
   tracker: Pick<SessionTracker, 'getInstances'>,
-  accounts: OfficeAccounts & Pick<AccountLedger, 'ingestBridgeMessage' | 'observeSessions'>
+  accounts: OfficeAccounts &
+    Pick<
+      AccountLedger,
+      'ingestBridgeMessage' | 'observeSessions' | 'isWatchingAccounts' | 'onWatchingChange'
+    >
 ): Office {
   const bridge = new BridgeHost({
     spawn: () => {
-      const child = utilityProcess.fork(join(__dirname, 'bridge.js'), [], {
+      // The bridge derives a Codex session's account key only while accounts are watched.
+      const args = accounts.isWatchingAccounts ? ['--accounts'] : []
+      const child = utilityProcess.fork(join(__dirname, 'bridge.js'), args, {
         serviceName: 'ClaudeWatch Office Bridge'
       })
       // Token counts travel beside the feed, as their own message, and only the ledger reads them.
@@ -74,6 +80,7 @@ export function setupOffice(
     }
   })
   bridge.onMessage(() => accounts.observeSessions(bridge.snapshot()?.sessions ?? []))
+  accounts.onWatchingChange(() => bridge.restart())
   const host = withAccounts(bridge, accounts)
   const controller = new OfficeWindowController({
     host,
@@ -101,33 +108,20 @@ export function setupOffice(
     focusProcess: service.focusProcess
   })
 
-  ipcMain.handle('office:send', (event, sessionKey: unknown, text: unknown) => {
-    assertTrustedSender(event, 'office.html')
-    return service.send(sessionKey, text)
-  })
-  ipcMain.handle(
-    'office:respond',
-    (event, sessionKey: unknown, decision: unknown, fingerprint: unknown) => {
-      assertTrustedSender(event, 'office.html')
-      return service.respond(sessionKey, decision, fingerprint)
-    }
+  const handle = (channel: string, listener: Parameters<typeof handleTrusted>[2]): void =>
+    handleTrusted('office.html', channel, listener)
+  handle('office:send', (_event, sessionKey: unknown, text: unknown) =>
+    service.send(sessionKey, text)
   )
-  ipcMain.handle('office:peek', (event, sessionKey: unknown) => {
-    assertTrustedSender(event, 'office.html')
-    return service.peek(sessionKey)
-  })
-  ipcMain.handle('office:start', (event, projectKey: unknown, provider: unknown) => {
-    assertTrustedSender(event, 'office.html')
-    return service.startAgent(projectKey, provider)
-  })
-  ipcMain.handle('office:ready', (event) => {
-    assertTrustedSender(event, 'office.html')
-    controller.ready()
-  })
-  ipcMain.handle('office:focus', (event, agentKey: unknown) => {
-    assertTrustedSender(event, 'office.html')
-    return service.focus(agentKey)
-  })
+  handle('office:respond', (_event, sessionKey: unknown, decision: unknown, fingerprint: unknown) =>
+    service.respond(sessionKey, decision, fingerprint)
+  )
+  handle('office:peek', (_event, sessionKey: unknown) => service.peek(sessionKey))
+  handle('office:start', (_event, projectKey: unknown, provider: unknown) =>
+    service.startAgent(projectKey, provider)
+  )
+  handle('office:ready', () => controller.ready())
+  handle('office:focus', (_event, agentKey: unknown) => service.focus(agentKey))
 
   return {
     open: () => controller.open(),

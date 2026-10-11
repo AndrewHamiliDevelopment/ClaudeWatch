@@ -1,11 +1,12 @@
 import { createHash } from 'crypto'
 import { object } from '../../bridge/io'
 import { zeroCounts } from '../../bridge/usage-fold'
-import type { UsageDelta } from '../../shared/accounts'
+import { type UsageDelta, USAGE_RETENTION_MS } from '../../shared/accounts'
 import type { SessionRef, TokenCounts } from '../../shared/office/types'
 import { upsertAccount, upsertClaudeAccount } from './account-records'
+import { isAmount } from './amount'
 import type { IdentityRead } from './identity'
-import { addUsage, dayKey, type LedgerState, RETENTION_MS } from './ledger-state'
+import { addUsage, dayKey, FOLDED_DAY, type LedgerState, weekStartKey } from './ledger-state'
 
 // Samples closer together than this were taken by one unbroken watch, so a change between
 // them happened then. Further apart, nobody saw when it happened.
@@ -39,8 +40,6 @@ function accountAt(state: LedgerState, atMs: number): string | null {
   return span?.accountKey ?? null
 }
 
-const isAmount = (value: unknown): value is number =>
-  typeof value === 'number' && Number.isFinite(value) && value >= 0
 const isLabel = (value: unknown): value is string => typeof value === 'string' && value.length > 0
 
 // The bridge is another process: what it posts is checked before any of it is counted.
@@ -77,7 +76,7 @@ const transcriptId = (file: string): string =>
 // transcript again from its first line whenever it re-reads it, so a line counts only if it is
 // newer than the last one counted from the same file. True when anything was added.
 export function countUsage(state: LedgerState, deltas: UsageDelta[], now: number): boolean {
-  const floor = Math.max(state.trackingSinceMs, now - RETENTION_MS)
+  const floor = Math.max(state.trackingSinceMs, now - USAGE_RETENTION_MS)
   // Where each file stood before this batch: lines that share a timestamp arrive together.
   const countedUpTo = new Map<string, { id: string; atMs: number }>()
   let hasAdded = false
@@ -163,10 +162,18 @@ export function countCodexSessions(
 
 export function prune(state: LedgerState, now: number): void {
   for (const [id, atMs] of state.files) {
-    if (atMs < now - RETENTION_MS) state.files.delete(id)
+    if (atMs < now - USAGE_RETENTION_MS) state.files.delete(id)
   }
   for (const [key, { countedAtMs }] of state.codexSessions) {
     if (countedAtMs < now - CODEX_RETENTION_MS) state.codexSessions.delete(key)
   }
-  state.spans = state.spans.filter(({ toMs }) => toMs === null || toMs >= now - RETENTION_MS)
+  state.spans = state.spans.filter(({ toMs }) => toMs === null || toMs >= now - USAGE_RETENTION_MS)
+  // The view shows today, its week and the total since tracking began, so days before the week
+  // are kept as one bucket per account, project and confidence and the file stops growing daily.
+  const weekStart = weekStartKey(now)
+  for (const [id, bucket] of state.buckets) {
+    if (bucket.day >= weekStart || bucket.day === FOLDED_DAY) continue
+    state.buckets.delete(id)
+    addUsage(state, { ...bucket, day: FOLDED_DAY })
+  }
 }

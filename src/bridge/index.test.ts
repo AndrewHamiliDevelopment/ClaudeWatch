@@ -41,6 +41,12 @@ it('prints exactly one JSON snapshot and does not start polling in once mode', a
     claudeRoots: [join(homedir(), '.claude'), resolve('./extra')]
   })
 })
+it('derives Codex account keys only when started with --accounts', async () => {
+  mocks.tick.mockResolvedValue(emptySnapshot())
+  vi.spyOn(process.stdout, 'write').mockReturnValue(true)
+  await main(['--once', '--accounts'])
+  expect(mocks.options).toHaveBeenCalledWith(expect.objectContaining({ derivesAccounts: true }))
+})
 it('keeps ticking in once mode until tokens are counted, and prints only the last snapshot', async () => {
   const snapshots = [1, 2, 3].map((rev) => ({ ...emptySnapshot(), rev }))
   for (const snapshot of snapshots) mocks.tick.mockResolvedValueOnce(snapshot)

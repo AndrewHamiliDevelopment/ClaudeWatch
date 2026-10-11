@@ -7,6 +7,7 @@ export interface Rollout {
   id: string
   cwd: string
   mtimeMs: number
+  size: number
   // When the thread was first created, however often it has been resumed since.
   startedAtMs: number | null
   // The account the session was created under, hashed here so its id never leaves this file.
@@ -15,11 +16,17 @@ export interface Rollout {
 interface CachedRollout {
   mtimeMs: number
   size: number
+  derived: boolean
   rollout: Rollout | null
 }
 const caches = new WeakMap<BridgeIo, Map<string, Map<string, CachedRollout>>>()
 
-export async function findRollouts(root: string, io: BridgeIo): Promise<Rollout[]> {
+// An account key is derived only when asked for: with accounts unwatched, no identity value is.
+export async function findRollouts(
+  root: string,
+  io: BridgeIo,
+  derivesAccounts = false
+): Promise<Rollout[]> {
   let roots = caches.get(io)
   if (!roots) caches.set(io, (roots = new Map()))
   let cache = roots.get(root)
@@ -46,7 +53,12 @@ export async function findRollouts(root: string, io: BridgeIo): Promise<Rollout[
         if (!/^rollout-.*\.jsonl$/.test(file)) continue
         seen.add(path)
         const cached = entries.get(path)
-        if (cached && cached.mtimeMs === info.mtimeMs && cached.size === info.size) {
+        if (
+          cached &&
+          cached.mtimeMs === info.mtimeMs &&
+          cached.size === info.size &&
+          cached.derived === derivesAccounts
+        ) {
           if (cached.rollout) rollouts.push(cached.rollout)
           continue
         }
@@ -66,12 +78,21 @@ export async function findRollouts(root: string, io: BridgeIo): Promise<Rollout[
             id: meta.id,
             cwd: meta.cwd,
             mtimeMs: info.mtimeMs,
+            size: info.size,
             startedAtMs: Number.isFinite(startedAtMs) ? startedAtMs : null,
-            accountKey: typeof creator === 'string' && creator ? accountKey('codex', creator) : null
+            accountKey:
+              derivesAccounts && typeof creator === 'string' && creator
+                ? accountKey('codex', creator)
+                : null
           }
           rollouts.push(rollout)
         }
-        entries.set(path, { mtimeMs: info.mtimeMs, size: info.size, rollout })
+        entries.set(path, {
+          mtimeMs: info.mtimeMs,
+          size: info.size,
+          derived: derivesAccounts,
+          rollout
+        })
       } catch (error) {
         if (!isMissing(error)) throw error
       }

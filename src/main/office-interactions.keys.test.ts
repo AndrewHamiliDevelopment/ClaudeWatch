@@ -48,6 +48,9 @@ const inProcess: SubagentRef = { id: 'x', type: 'Explore', activity: 'reading' }
 const UNKNOWN = { success: false, reason: 'unknown-session' }
 
 // One agent key must mean one thing to focus, talk and peek, or nothing at all.
+// Claude Code between turns: its input line between two rules.
+const IDLE_SCREEN = ['⏺ Done.', '─'.repeat(40), '❯', '─'.repeat(40)]
+
 describe('OfficeInteractions agent keys', () => {
   let snapshot: OfficeSnapshot
   const orca = {
@@ -79,7 +82,7 @@ describe('OfficeInteractions agent keys', () => {
     orca.handleFor.mockImplementation(async (paneKey: string) =>
       paneKey === 'tab2:leaf2' ? pane({ handle: 'term_mate', agent: 'claude-agent-teams' }) : pane()
     )
-    orca.screen.mockResolvedValue(['⏺ Done.', '❯ '])
+    orca.screen.mockResolvedValue(IDLE_SCREEN)
     orca.focus.mockResolvedValue(true)
     raiseOrca.mockResolvedValue(true)
     openFolder.mockResolvedValue({ success: true })
@@ -143,7 +146,7 @@ describe('OfficeInteractions agent keys', () => {
   it('issues a review only for a key that respond accepts: a session, never a teammate', async () => {
     snapshot.sessions = [session({ subagents: [teammate()] })]
     const peeked = await interactions.peek('claude:s1#x')
-    expect(peeked).toEqual({ success: true, lines: ['⏺ Done.', '❯ '] })
+    expect(peeked).toEqual({ success: true, lines: IDLE_SCREEN })
     expect((await interactions.peek('claude:s1')).fingerprint).toMatch(/^[0-9a-f]{64}$/)
   })
 

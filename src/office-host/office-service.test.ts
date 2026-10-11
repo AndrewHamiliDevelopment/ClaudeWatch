@@ -86,7 +86,7 @@ describe('createOfficeService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    screen = ['⏺ Done.', '❯ ']
+    screen = ['⏺ Done.', '─'.repeat(40), '❯', '─'.repeat(40)]
     assertOrcaTrusted.mockResolvedValue(undefined)
     snapshot = { rev: 4, generatedAtMs: 1, sessions: [session()], sources: [] }
     feedListeners = new Set()

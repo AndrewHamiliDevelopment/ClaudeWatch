@@ -65,6 +65,21 @@ describe('the Orca bundle check', () => {
     expect(execFile).toHaveBeenCalledTimes(2)
   })
 
+  it('verifies again early for a caller that needs more trust than is left', async () => {
+    let now = 0
+    const assertTrusted = createOrcaTrust(() => now)
+    await assertTrusted()
+    now = ORCA_TRUST_MS - 500
+    await assertTrusted()
+    expect(execFile).toHaveBeenCalledOnce()
+    await assertTrusted(1000)
+    expect(execFile).toHaveBeenCalledTimes(2)
+    // The fresh check then serves the calls that follow.
+    now += 200
+    await assertTrusted()
+    expect(execFile).toHaveBeenCalledTimes(2)
+  })
+
   it('trusts a passed check for seconds, not minutes', () => {
     expect(ORCA_TRUST_MS).toBeLessThanOrEqual(5_000)
   })

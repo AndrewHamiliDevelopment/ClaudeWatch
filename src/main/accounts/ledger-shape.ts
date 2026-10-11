@@ -1,6 +1,9 @@
+import { isAccountKey } from '../../bridge/account-key'
 import { object } from '../../bridge/io'
 import type { AccountLimit, AccountSource } from '../../shared/accounts'
 import type { AccountConfidence, ProviderId, TokenCounts } from '../../shared/office/types'
+import { isAlias } from './account-records'
+import { amountOrNull, isAmount } from './amount'
 import {
   type AccountRecord,
   bucketId,
@@ -12,8 +15,6 @@ import {
 const VERSION = 1
 const MAX_TEXT_LENGTH = 512
 
-const isAmount = (value: unknown): value is number =>
-  typeof value === 'number' && Number.isFinite(value) && value >= 0
 const isText = (value: unknown): value is string =>
   typeof value === 'string' && value.length > 0 && value.length <= MAX_TEXT_LENGTH
 const isOneOf =
@@ -25,7 +26,6 @@ const isSource = isOneOf<AccountSource>(['default-login', 'orca', 'codex-rollout
 const isConfidence = isOneOf<AccountConfidence>(['exact', 'inferred', 'unattributed'])
 
 const textOrNull = (value: unknown): string | null => (isText(value) ? value : null)
-const amountOrNull = (value: unknown): number | null => (isAmount(value) ? value : null)
 const items = (value: unknown): unknown[] => (Array.isArray(value) ? value : [])
 // A stored map is a list of [key, value] pairs with a text key.
 const pairs = (value: unknown): [string, unknown][] =>
@@ -44,7 +44,8 @@ function toCounts(value: unknown): TokenCounts | null {
 
 function toAccount(value: unknown): AccountRecord[] {
   const account = object(value)
-  if (!account || !isText(account.key) || !isProvider(account.provider)) return []
+  // The key travels to the Office as it is, so one that is not a key is not kept.
+  if (!account || !isAccountKey(account.key) || !isProvider(account.provider)) return []
   if (!isAmount(account.firstSeenMs)) return []
   return [
     {
@@ -54,7 +55,7 @@ function toAccount(value: unknown): AccountRecord[] {
       organizationUuid: textOrNull(account.organizationUuid),
       organizationName: textOrNull(account.organizationName),
       plan: textOrNull(account.plan),
-      alias: textOrNull(account.alias),
+      alias: isAlias(account.alias) ? account.alias : null,
       orcaAccountId: textOrNull(account.orcaAccountId),
       sources: items(account.sources).filter(isSource),
       firstSeenMs: account.firstSeenMs
@@ -64,7 +65,7 @@ function toAccount(value: unknown): AccountRecord[] {
 
 function toSpan(value: unknown): IdentitySpan[] {
   const span = object(value)
-  if (!span || !isText(span.accountKey) || !isAmount(span.fromMs)) return []
+  if (!span || !isAccountKey(span.accountKey) || !isAmount(span.fromMs)) return []
   if (span.toMs !== null && !isAmount(span.toMs)) return []
   return [{ accountKey: span.accountKey, fromMs: span.fromMs, toMs: span.toMs }]
 }
@@ -124,7 +125,7 @@ export function fromStored(data: unknown): LedgerState | null {
     trackingSinceMs: stored.trackingSinceMs,
     sampledAtMs: amountOrNull(stored.sampledAtMs),
     accounts: items(stored.accounts).flatMap(toAccount),
-    codexDefaultKey: textOrNull(stored.codexDefaultKey),
+    codexDefaultKey: isAccountKey(stored.codexDefaultKey) ? stored.codexDefaultKey : null,
     spans: items(stored.spans).flatMap(toSpan),
     buckets: new Map(
       items(stored.buckets)

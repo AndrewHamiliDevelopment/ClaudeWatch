@@ -22,7 +22,13 @@ const SAMPLE_INTERVAL_MS = 15_000
 const ORCA_INTERVAL_MS = 5 * 60_000
 // Opening the Accounts view asks Orca again, but each ask starts Orca's command line.
 const ORCA_MIN_GAP_MS = 30_000
+// A name the owner typed, or a change of sign-in, is written within this long.
 const SAVE_DELAY_MS = 30_000
+// Counted tokens wait longer: after a crash the bridge reports every live transcript again and
+// they are counted again. Only what a session spent and then exited within the wait is lost.
+const USAGE_SAVE_DELAY_MS = 2 * 60_000
+// Tokens are counted on every tick; the dashboard is told of them this often.
+const PUBLISH_DELAY_MS = 5_000
 
 // Watches which account is signed in, files token usage under it and keeps the totals on
 // disk. With `watchAccounts` off it reads, counts and writes nothing.
@@ -37,12 +43,17 @@ export class AccountLedger {
   private orcaAskedAtMs = Number.NEGATIVE_INFINITY
   private timers: NodeJS.Timeout[] = []
   private saveTimer: NodeJS.Timeout | null = null
+  private saveDueAtMs = 0
+  private publishTimer: NodeJS.Timeout | null = null
+  // The sessions last shown, counted again at each look: the feed is silent while nothing changes.
+  private observed: readonly SessionRef[] = []
   private isUnsaved = false
   private hasLoadFailed = false
   private shownToOffice = JSON.stringify(null)
   private shownDay = ''
   private readonly listeners = new Set<(state: AccountsState) => void>()
   private readonly officeListeners = new Set<() => void>()
+  private readonly watchingListeners = new Set<() => void>()
 
   constructor(private readonly options: AccountLedgerOptions) {
     this.isWatching = options.isWatching
@@ -59,12 +70,27 @@ export class AccountLedger {
   stop(): void {
     for (const timer of this.timers) clearInterval(timer)
     this.timers = []
+    if (this.publishTimer) clearTimeout(this.publishTimer)
+    this.publishTimer = null
     this.save()
+  }
+
+  get isWatchingAccounts(): boolean {
+    return this.isWatching
+  }
+
+  // Fires after watching was switched on or off.
+  onWatchingChange(listener: () => void): () => void {
+    this.watchingListeners.add(listener)
+    return () => {
+      this.watchingListeners.delete(listener)
+    }
   }
 
   setWatching(isWatching: boolean): void {
     if (isWatching === this.isWatching) return
     this.isWatching = isWatching
+    for (const listener of this.watchingListeners) listener()
     if (isWatching) {
       void this.sample().then(() => this.askOrca())
       return
@@ -119,14 +145,15 @@ export class AccountLedger {
     const deltas = toUsageDeltas(message)
     if (!deltas.length) return
     if (this.tracked) {
-      if (countUsage(this.tracked, deltas, Date.now())) this.changed()
+      if (countUsage(this.tracked, deltas, Date.now())) this.counted()
       // Held only for a loaded ledger awaiting its first look. With no ledger they are dropped:
       // the bridge reports every live transcript again when it next starts.
     } else if (this.state) this.waiting = this.waiting.concat(deltas)
   }
 
   observeSessions(sessions: readonly SessionRef[]): void {
-    if (this.tracked && countCodexSessions(this.tracked, sessions, Date.now())) this.changed()
+    this.observed = sessions
+    if (this.tracked && countCodexSessions(this.tracked, sessions, Date.now())) this.counted()
   }
 
   // The ledger once it can attribute: watching, loaded, and having looked at least once.
@@ -156,10 +183,13 @@ export class AccountLedger {
     prune(state, now)
     const isFirstLook = !this.hasSampled
     this.hasSampled = true
-    const hasCounted = countUsage(state, this.waiting, now)
+    const hasCountedLines = countUsage(state, this.waiting, now)
     this.waiting = []
-    if (hasCounted || before !== JSON.stringify([state.accounts, state.spans])) this.changed()
-    else if (isFirstLook || dayKey(now) !== this.shownDay) this.publish()
+    // Also what registers a Codex session shown before this look, or forgotten by the prune.
+    const hasCounted = countCodexSessions(state, this.observed, now) || hasCountedLines
+    if (before !== JSON.stringify([state.accounts, state.spans])) return this.changed()
+    if (hasCounted) this.counted()
+    if (isFirstLook || dayKey(now) !== this.shownDay) this.publish()
   }
 
   private load(): boolean {
@@ -200,9 +230,25 @@ export class AccountLedger {
   }
 
   private changed(): void {
-    this.isUnsaved = true
-    this.saveTimer ??= setTimeout(() => this.save(), SAVE_DELAY_MS)
+    this.saveWithin(SAVE_DELAY_MS)
     this.publish()
+  }
+
+  // Tokens were counted and nothing else changed: the Office hears at once of an account that
+  // came with them, the dashboard's totals follow in one batch.
+  private counted(): void {
+    this.saveWithin(USAGE_SAVE_DELAY_MS)
+    this.publishToOffice()
+    this.publishTimer ??= setTimeout(() => this.publish(), PUBLISH_DELAY_MS)
+  }
+
+  private saveWithin(delayMs: number): void {
+    this.isUnsaved = true
+    const dueAtMs = Date.now() + delayMs
+    if (this.saveTimer && this.saveDueAtMs <= dueAtMs) return
+    if (this.saveTimer) clearTimeout(this.saveTimer)
+    this.saveDueAtMs = dueAtMs
+    this.saveTimer = setTimeout(() => this.save(), delayMs)
   }
 
   private save(): void {
@@ -218,9 +264,18 @@ export class AccountLedger {
   }
 
   private publish(): void {
-    const view = this.view()
+    if (this.publishTimer) clearTimeout(this.publishTimer)
+    this.publishTimer = null
     this.shownDay = dayKey(Date.now())
-    for (const listener of this.listeners) listener(view)
+    // The view walks every bucket: it is built only for somebody.
+    if (this.listeners.size) {
+      const view = this.view()
+      for (const listener of this.listeners) listener(view)
+    }
+    this.publishToOffice()
+  }
+
+  private publishToOffice(): void {
     const office = JSON.stringify(this.tracked && officeAccounts(this.tracked))
     if (office === this.shownToOffice) return
     this.shownToOffice = office

@@ -44,12 +44,13 @@ const DECISION_KEYS: Record<PermissionDecision, string> = { approve: '1', deny: 
 // Claude Code reports 'waiting' only while a dialog covers its prompt (a permission, a picker,
 // an MCP form), never for a turn that merely ended with a question: that one is idle.
 const WAITS_ON_DIALOG: ReadonlySet<AgentAttention> = new Set(['permission', 'question'])
-// One row of a numbered choice list, boxed or not: its pointer if it is the highlighted row,
-// and its number.
-const CHOICE_ROW = /^[\s│|]*([❯›>]\s*)?(\d+)\.\s+\S/
-// A highlighted row counts as a dialog only with a neighbouring number this close, so a typed
-// message that begins "1." is not taken for one.
-const CHOICE_NEIGHBOUR_LINES = 6
+// The rule Claude Code draws directly above and below its input line.
+const RULE = /^─{8,}/
+// Status lines and a task list sit under Claude Code's input line; Codex shows a footer or two.
+const CLAUDE_FOOTER_LINES = 24
+const CODEX_FOOTER_LINES = 4
+// A highlighted row of a picker or dialog, boxed or not.
+const POINTER_ROW = /^[\s│|]*[❯›]\s/
 const AGENT_TITLES: Record<ProviderId, string> = {
   claude: 'New Claude agent',
   codex: 'New Codex agent'
@@ -70,20 +71,32 @@ function visibleLines(screen: string[]): string[] {
   return screen.slice(Math.max(0, end - PEEK_LINES), end)
 }
 
-// A selection dialog: a highlighted numbered row beside the next or previous number. Enter
-// confirms the highlighted row and a digit picks one, so typed text would answer it.
-function showsChoiceDialog(screen: string[]): boolean {
-  const rows = screen.map((line) => CHOICE_ROW.exec(line))
-  return rows.some((row, index) => {
-    if (!row?.[1]) return false
-    const near = rows.slice(
-      Math.max(0, index - CHOICE_NEIGHBOUR_LINES),
-      index + CHOICE_NEIGHBOUR_LINES + 1
+// True only when the bottom of the screen is the agent's own input line, in a shape read off
+// live panes; a dialog, a picker or any screen not recognised is not one, so nothing is typed.
+// Claude Code: `❯` in the first column, alone or before a draft, a rule directly above and below.
+// Codex: `›` in the first column before its placeholder or a draft, never a numbered row, with
+// only indented footer lines under it, one of them the shortcuts hint.
+function showsInputLine(agent: string | null, screen: string[]): boolean {
+  if (ORCA_AGENTS.codex.some((name) => name === agent)) {
+    const at = screen.findLastIndex((line) => /^›\s/.test(line))
+    const footer = screen.slice(at + 1)
+    return (
+      at >= 0 &&
+      !/^›\s*\d+[.)]/.test(screen[at]) &&
+      footer.length <= CODEX_FOOTER_LINES &&
+      footer.every((line) => /^\s{2}\S/.test(line)) &&
+      footer.some((line) => /^\s+\? for shortcuts/.test(line))
     )
-    return near.some(
-      (other) => other && !other[1] && Math.abs(Number(other[2]) - Number(row[2])) === 1
-    )
-  })
+  }
+  const at = screen.findLastIndex((line) => /^❯(\s|$)/.test(line))
+  const footer = screen.slice(at + 2)
+  return (
+    at > 0 &&
+    RULE.test(screen[at - 1]) &&
+    RULE.test(screen[at + 1] ?? '') &&
+    footer.length <= CLAUDE_FOOTER_LINES &&
+    !footer.some((line) => POINTER_ROW.test(line))
+  )
 }
 
 const fingerprintOf = (lines: string[]): string =>
@@ -117,12 +130,11 @@ export class OfficeInteractions {
     }
     const attention = this.session(sessionKey)?.attention
     if (attention && WAITS_ON_DIALOG.has(attention)) return fail('prompt-on-screen')
-    return this.withTerminal(sessionKey, async ({ handle }) => {
+    return this.withTerminal(sessionKey, async ({ handle, agent }) => {
       // The snapshot is seconds old and says nothing of a teammate or a Codex agent, so the
       // screen decides. A dialog that opens between this read and the send is not caught.
-      const screen = await this.deps.orca.screen(handle)
-      if (PERMISSION_PROMPT.test(screen.join('\n')) || showsChoiceDialog(screen))
-        return fail('prompt-on-screen')
+      const screen = visibleLines(await this.deps.orca.screen(handle))
+      if (!showsInputLine(agent, screen)) return fail('prompt-on-screen')
       await this.deps.orca.sendPrompt(handle, prompt)
       return { success: true }
     })

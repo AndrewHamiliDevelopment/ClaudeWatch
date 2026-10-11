@@ -1,6 +1,7 @@
 import { jsonObject, object } from '../../bridge/io'
 import type { AccountLimit } from '../../shared/accounts'
 import type { OrcaExec } from '../orca-terminals'
+import { amountOrNull } from './amount'
 
 interface OrcaAccountRow {
   id: string
@@ -27,23 +28,21 @@ const UNSCOPED_WINDOWS = new Set(['session', 'weekly'])
 
 const text = (value: unknown): string | null =>
   typeof value === 'string' && value.length > 0 && value.length <= MAX_VALUE_LENGTH ? value : null
-const amount = (value: unknown): number | null =>
-  typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null
 
 function toLimits(reading: Record<string, unknown> | null): AccountLimit[] {
-  const fetchedAtMs = amount(reading?.updatedAt)
+  const fetchedAtMs = amountOrNull(reading?.updatedAt)
   if (!reading || fetchedAtMs === null) return []
   return Object.entries(reading).flatMap(([name, value]): AccountLimit[] => {
     const window = object(value)
-    const usedPercent = amount(window?.usedPercent)
-    const windowMinutes = amount(window?.windowMinutes)
+    const usedPercent = amountOrNull(window?.usedPercent)
+    const windowMinutes = amountOrNull(window?.windowMinutes)
     if (!window || usedPercent === null || !windowMinutes) return []
     return [
       {
         windowMinutes,
         scope: UNSCOPED_WINDOWS.has(name) ? null : name,
         usedPercent,
-        resetsAtMs: amount(window.resetsAt),
+        resetsAtMs: amountOrNull(window.resetsAt),
         source: 'orca-cache',
         fetchedAtMs
       }

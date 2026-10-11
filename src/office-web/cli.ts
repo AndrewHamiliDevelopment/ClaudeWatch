@@ -3,6 +3,7 @@ import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { BridgePoller } from '../bridge/poller'
+import { withoutAccounts } from '../main/accounts'
 import { BridgeHost } from '../main/bridge-host'
 import { execFilePromise } from '../main/platform/exec'
 import { TerminalResolver } from '../main/terminal-resolver'
@@ -29,7 +30,8 @@ async function main(): Promise<void> {
   const files = await loadStaticFiles(dirname(fileURLToPath(import.meta.url)))
   const host = new BridgeHost({ spawn: () => new PollerProcess(new BridgePoller()) })
   const service = createOfficeService({
-    host,
+    // This page has no ledger: no session carries an account, whatever the bridge reports.
+    host: withoutAccounts(host),
     run: execFilePromise,
     // A fresh resolver each time: its cache is keyed by pid, and nothing here evicts a dead one.
     terminalOf: async (pid) => (await new TerminalResolver().resolve(pid)).terminalType,

@@ -1,4 +1,5 @@
 import { DEFAULT_SETTINGS, type AppSettings } from '../renderer/lib/types'
+import { isJsonObject } from '../shared/json-object'
 import { clamp } from '../shared/range'
 import { COOLDOWN_SECONDS_RANGE, SETTING_RANGES } from '../shared/settings-ranges'
 
@@ -9,9 +10,7 @@ function hasShapeOf(value: unknown, standard: unknown): boolean {
     return Array.isArray(value) && value.every((item) => typeof item === 'string')
   }
   if (typeof standard === 'number') return typeof value === 'number' && Number.isFinite(value)
-  if (typeof standard === 'object' && standard !== null) {
-    return typeof value === 'object' && value !== null && !Array.isArray(value)
-  }
+  if (isJsonObject(standard)) return isJsonObject(value)
   return typeof value === typeof standard
 }
 

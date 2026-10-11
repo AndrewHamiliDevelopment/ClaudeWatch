@@ -1,5 +1,6 @@
 import type { FeedMessage, OfficeSnapshot } from '../../shared/office/types'
 import type { AccountLedger } from './account-ledger'
+import { decorateSession, decorateSnapshot } from './accounts-view'
 
 interface FeedSource {
   snapshot(): OfficeSnapshot | null
@@ -7,6 +8,15 @@ interface FeedSource {
 }
 
 export type OfficeAccounts = Pick<AccountLedger, 'decorate' | 'decorateSession' | 'onOfficeChange'>
+
+// For a host with no ledger behind it: every session leaves without an account, exactly as
+// when accounts are not watched.
+export const withoutAccounts = (host: FeedSource): FeedSource =>
+  withAccounts(host, {
+    decorate: (snapshot) => decorateSnapshot(null, snapshot),
+    decorateSession: (session) => decorateSession(null, session),
+    onOfficeChange: () => () => {}
+  })
 
 // The bridge knows sessions and main knows accounts: this is the bridge's feed with each
 // session's account, and the list of accounts, added on the way to the Office and dashboard.

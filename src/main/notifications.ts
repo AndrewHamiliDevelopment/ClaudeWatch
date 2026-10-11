@@ -52,9 +52,7 @@ export class NotificationManager {
   }
 
   private isProjectMuted(projectPath: string): boolean {
-    const settings = this.getSettings()
-    const mutedProjects = settings.notifications.mutedProjects ?? []
-    return mutedProjects.includes(projectPath)
+    return this.getSettings().notifications.mutedProjects.includes(projectPath)
   }
 
   notifyTaskComplete(instance: ClaudeInstance): void {

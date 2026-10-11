@@ -77,7 +77,9 @@ describe('setupOffice', () => {
     observeSessions: vi.fn(),
     decorate: unchanged,
     decorateSession: unchanged,
-    onOfficeChange: () => () => {}
+    onOfficeChange: () => () => {},
+    isWatchingAccounts: false,
+    onWatchingChange: () => () => {}
   }
   const commands = (): [string, string[]][] =>
     execFilePromise.mock.calls.map(([program, args]) => [program, args])
