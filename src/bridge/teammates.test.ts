@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest'
-import { PROCESS_TABLE_ARGS } from './process-table'
-import { parseTeammateProcesses, TeammateSource, type TeammateProcess } from './teammates'
+import { parseProcessTable, PROCESS_TABLE_ARGS } from './process-table'
+import { teammateProcesses, TeammateSource, type TeammateProcess } from './teammates'
 import { fixtureIo } from './__fixtures__/helpers'
 
 const lead = '6a654bca-1111-2222-3333-444444444444'
@@ -76,7 +76,7 @@ it('reads agent id and parent session from process rows and nothing else', () =>
     `93145 ${start} /versions/2.1.296 --parent-session-id ${lead}`,
     `93146 ${start} /versions/2.1.296 --resume`
   ].join('\n')
-  expect(parseTeammateProcesses(rows)).toEqual([
+  expect(teammateProcesses(parseProcessTable(rows))).toEqual([
     { pid: 93143, startedAtMs, agentId: `lena-b0@${team}`, parentSessionId: lead }
   ])
 })

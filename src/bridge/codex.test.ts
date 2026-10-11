@@ -1,6 +1,7 @@
 import { expect, it, vi } from 'vitest'
 import { accountKey } from './account-key'
-import { collectCodex, parseCodexProcesses, parseCodexActivity } from './codex'
+import { collectCodex, codexProcesses, parseCodexActivity } from './codex'
+import { parseProcessTable } from './process-table'
 import { parseCodexUsage } from './codex-usage'
 import { fixtureIo } from './__fixtures__/helpers'
 
@@ -54,8 +55,10 @@ it('reports Codex usage as unknown when the tail holds no token count', () => {
 it('selects only CLI argv[0], excluding app-server and helpers', () => {
   const start = 'Sat Oct 10 15:29:12 2026'
   expect(
-    parseCodexProcesses(
-      `42 ${start} /opt/bin/codex --model test\n43 ${start} codex app-server\n44 ${start} codex exec hello\n45 ${start} node /bin/codex\n46 ${start} codex app-server-helper\n47 ${start} codex --config x app-server`
+    codexProcesses(
+      parseProcessTable(
+        `42 ${start} /opt/bin/codex --model test\n43 ${start} codex app-server\n44 ${start} codex exec hello\n45 ${start} node /bin/codex\n46 ${start} codex app-server-helper\n47 ${start} codex --config x app-server`
+      )
     )
   ).toEqual([
     { pid: 42, startedAtMs: Date.parse(`${start} UTC`) },

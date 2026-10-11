@@ -1,5 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { BridgePoller } from './poller'
+import * as processTable from './process-table'
 import { fixtureIo, registryEntry } from './__fixtures__/helpers'
 import type { FeedMessage } from '../shared/office/types'
 
@@ -244,6 +245,32 @@ it('shows a teammate under its lead with its own pane, then its tokens', async (
   const third = (await poller.tick()).sessions[0]
   expect(third.subagents).toEqual([])
   expect(third.usage).toMatchObject(whileAlive)
+})
+
+it('parses the process table once per tick, however many sources read it', async () => {
+  const lead = '6a654bca-1111-2222-3333-444444444444'
+  const team = 'session-6a654bca'
+  const entry = { ...registryEntry(), sessionId: lead }
+  const io = fixtureIo({
+    '/claude/sessions/42.json': JSON.stringify(entry),
+    '/repo/.git': null,
+    [`/claude/teams/${team}/config.json`]: JSON.stringify({
+      leadSessionId: lead,
+      members: [{ agentId: `lena-b0@${team}`, name: 'lena-b0', agentType: 'lena', cwd: '/repo' }]
+    })
+  })
+  io.exec = async (_file, args) =>
+    args[0] === '-xo'
+      ? `42 ${entry.procStart} claude\n93143 ${entry.procStart} claude --agent-id lena-b0@${team} --parent-session-id ${lead}\n`
+      : args.includes('lstart=')
+        ? entry.procStart
+        : 'claude'
+  // The reader parses what it reads, so one call is one parse for both sources.
+  const parse = vi.spyOn(processTable, 'readProcessTable')
+  const poller = new BridgePoller({ io, claudeRoots: ['/claude'], codexRoot: '/codex' })
+  expect((await poller.tick()).sessions[0].subagents).toHaveLength(1)
+  expect(parse).toHaveBeenCalledTimes(1)
+  parse.mockRestore()
 })
 
 it('reads one process table per tick for the Claude and Codex sources together', async () => {

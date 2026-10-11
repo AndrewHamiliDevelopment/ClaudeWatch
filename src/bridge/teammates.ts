@@ -1,7 +1,7 @@
 import { join } from 'node:path'
 import type { AgentActivity, SubagentRef } from '../shared/office/types'
 import { type BridgeIo, isLabel, isMissing, jsonObject, object } from './io'
-import { parseProcessTable } from './process-table'
+import type { ProcessRow } from './process-table'
 import { listAgentFiles } from './subagents'
 import { newestTeammateTranscripts, type TranscriptFile } from './teammate-transcripts'
 import { toolActivity } from './tool-category'
@@ -36,9 +36,9 @@ const MAX_SEARCH_DELAY_MS = 5 * 60_000
 const FRESH_MS = 60000
 
 // A teammate is its own process, started with the agent id and its lead's session id as flags.
-export function parseTeammateProcesses(output: string): TeammateProcess[] {
+export function teammateProcesses(rows: ProcessRow[]): TeammateProcess[] {
   const teammates: TeammateProcess[] = []
-  for (const { pid, startedAtMs, argv } of parseProcessTable(output)) {
+  for (const { pid, startedAtMs, argv } of rows) {
     const flagValue = (flag: string): string | undefined =>
       argv.includes(flag) ? argv[argv.indexOf(flag) + 1] : undefined
     const agentId = flagValue('--agent-id')

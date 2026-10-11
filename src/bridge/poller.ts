@@ -7,7 +7,7 @@ import { type BridgeIo, systemIo } from './io'
 import { type ClaudeBatch, collectClaude } from './registry'
 import { collectCodex } from './codex'
 import { claimPanes, OrcaSource } from './orca'
-import { PROCESS_TABLE_ARGS } from './process-table'
+import { type ProcessRow, readProcessTable } from './process-table'
 import { diff, emptySnapshot, reduce } from './reducer'
 import { TeammateSource } from './teammates'
 import { UsageThrottle } from './usage-throttle'
@@ -59,13 +59,13 @@ export class BridgePoller {
   }
   private async ingest(): Promise<OfficeSnapshot> {
     const now = this.now()
-    // One process table serves both sources: it is the tick's most expensive read.
-    let processTable: Promise<string> | undefined
-    const readProcessTable = (): Promise<string> =>
-      (processTable ??= this.io.exec('/bin/ps', PROCESS_TABLE_ARGS))
+    // One process table, read and parsed once, serves both sources: it is the tick's most
+    // expensive read.
+    let processTable: Promise<ProcessRow[]> | undefined
+    const readProcesses = (): Promise<ProcessRow[]> => (processTable ??= readProcessTable(this.io))
     const [claude, codex, orca] = await Promise.all([
-      collectClaude(this.roots, this.io, now, this.teammates, readProcessTable),
-      collectCodex(this.codexRoot, this.io, readProcessTable),
+      collectClaude(this.roots, this.io, now, this.teammates, readProcesses),
+      collectCodex(this.codexRoot, this.io, readProcesses),
       this.orca.poll(now)
     ])
     // The first snapshot goes out with usage unknown, so no window waits on a first scan.

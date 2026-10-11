@@ -22,6 +22,24 @@ describe('Claude registry', () => {
     expect(read.mock.calls.flat().some((path) => path.endsWith('.key'))).toBe(false)
     expect(io.exec).toHaveBeenCalledWith('/bin/ps', ['-o', 'lstart=', '-p', '42'])
   })
+  it('proves a session live from the process table without asking ps about its pid', async () => {
+    const io = fixtureIo({ [file]: JSON.stringify(entry), '/repo/.git': null })
+    const exec = vi.fn(async (_program: string, args: string[]) =>
+      args[0] === '-xo' ? `   42 ${entry.procStart} claude\n` : ''
+    )
+    io.exec = exec
+    expect((await collectClaude([root], io, 1000)).sessions).toHaveLength(1)
+    expect(exec.mock.calls.filter(([, args]) => args.includes('lstart='))).toEqual([])
+  })
+  it('drops a pid the process table lists under another start time, without a second ask', async () => {
+    const io = fixtureIo({ [file]: JSON.stringify(entry), '/repo/.git': null })
+    const exec = vi.fn(async (_program: string, args: string[]) =>
+      args[0] === '-xo' ? '   42 Sun Oct 11 15:29:12 2026 claude\n' : entry.procStart
+    )
+    io.exec = exec
+    expect((await collectClaude([root], io, 1000)).sessions).toEqual([])
+    expect(exec.mock.calls.filter(([, args]) => args.includes('lstart='))).toEqual([])
+  })
   it('treats a missing root as healthy and empty', async () => {
     const batch = await collectClaude([root], fixtureIo(), 1000)
     expect(batch.sessions).toEqual([])
@@ -61,11 +79,11 @@ describe('Claude registry', () => {
   it('collapses whitespace in starts and treats missing pids as dead', async () => {
     const io = fixtureIo()
     io.exec = async () => 'Sat  Oct 10 15:29:12 2026\n'
-    expect(await isLive(entry, io)).toBe(true)
+    expect(await isLive(entry, io, [])).toBe(true)
     io.exec = async () => {
       throw missing()
     }
-    expect(await isLive(entry, io)).toBe(false)
+    expect(await isLive(entry, io, [])).toBe(false)
   })
 })
 

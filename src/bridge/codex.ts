@@ -11,10 +11,10 @@ import { type BridgeIo, jsonObject, object } from './io'
 import { resolveProject } from './project-root'
 import { findRollouts } from './codex-rollouts'
 import { parseCodexUsage } from './codex-usage'
-import { parseProcessTable, PROCESS_TABLE_ARGS } from './process-table'
+import { type ProcessRow, readProcessTable } from './process-table'
 
-export function parseCodexProcesses(output: string): { pid: number; startedAtMs: number }[] {
-  return parseProcessTable(output)
+export function codexProcesses(rows: ProcessRow[]): { pid: number; startedAtMs: number }[] {
+  return rows
     .filter(
       ({ argv }) =>
         basename(argv[0]) === 'codex' &&
@@ -53,7 +53,7 @@ const lastUsage = new WeakMap<BridgeIo, Map<string, SessionUsage>>()
 export async function collectCodex(
   root: string,
   io: BridgeIo,
-  readProcessTable = (): Promise<string> => io.exec('/bin/ps', PROCESS_TABLE_ARGS)
+  readProcesses = (): Promise<ProcessRow[]> => readProcessTable(io)
 ): Promise<{ sessions: SessionRef[]; sources: SourceHealth[] }> {
   const sessions: SessionRef[] = []
   const health: SourceHealth = { id: 'codex', ok: true, detail: 'empty' }
@@ -61,7 +61,7 @@ export async function collectCodex(
   if (!known) lastUsage.set(io, (known = new Map()))
   const live = new Set<string>()
   try {
-    const processes = parseCodexProcesses(await readProcessTable())
+    const processes = codexProcesses(await readProcesses())
     const rollouts = processes.length ? await findRollouts(root, io) : []
     const used = new Set<string>()
     for (const process of processes) {

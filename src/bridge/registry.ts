@@ -23,13 +23,8 @@ import { sessionFromRegistry, sessionFromTeammate } from './claude'
 import { resolveProject } from './project-root'
 import { parseTranscript, transcriptPath } from './transcript-tail'
 import { listAgentFiles, liveSubagents } from './subagents'
-import { PROCESS_TABLE_ARGS } from './process-table'
-import {
-  parseTeammateProcesses,
-  type Teammate,
-  type TeammateProcess,
-  TeammateSource
-} from './teammates'
+import { type ProcessRow, readProcessTable } from './process-table'
+import { type Teammate, type TeammateProcess, teammateProcesses, TeammateSource } from './teammates'
 import type { SessionFiles } from './usage-tracker'
 
 function parseRegistry(text: string): RegistryEntry | null {
@@ -74,15 +69,17 @@ export async function collectClaude(
   io: BridgeIo,
   now: number,
   teammates = new TeammateSource(io),
-  readProcessTable = (): Promise<string> => io.exec('/bin/ps', PROCESS_TABLE_ARGS)
+  readProcesses = (): Promise<ProcessRow[]> => readProcessTable(io)
 ): Promise<ClaudeBatch> {
   const sessions: SessionRef[] = []
   const sources: SourceHealth[] = []
   const transcripts = new Map<string, SessionFiles>()
   // Read at most once per tick.
-  let processTable: Promise<TeammateProcess[]> | undefined
+  let processTable: Promise<ProcessRow[]> | undefined
+  const table = (): Promise<ProcessRow[]> => (processTable ??= readProcesses())
+  let teammateTable: Promise<TeammateProcess[]> | undefined
   const processes = (): Promise<TeammateProcess[]> =>
-    (processTable ??= readProcessTable().then(parseTeammateProcesses))
+    (teammateTable ??= table().then(teammateProcesses))
   const uniqueRoots = [...new Set(roots)]
   const liveSessionIds = new Set<string>()
   for (const root of uniqueRoots) {
@@ -92,7 +89,8 @@ export async function collectClaude(
       for (const file of files.filter((name) => /^\d+\.json$/.test(name))) {
         try {
           const entry = parseRegistry(await io.readText(join(root, 'sessions', file)))
-          if (!entry || !(await isLive(entry, io))) continue
+          // An unreadable table proves nothing either way: each pid is then asked about.
+          if (!entry || !(await isLive(entry, io, await table().catch(() => [])))) continue
           liveSessionIds.add(entry.sessionId)
           const project = await resolveProject(entry.cwd, io)
           const path = await transcriptPath(root, entry.cwd, entry.sessionId, io)
