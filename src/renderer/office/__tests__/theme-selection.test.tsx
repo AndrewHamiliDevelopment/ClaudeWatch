@@ -49,6 +49,7 @@ it('exposes the current theme and cycles from the BottomBar', () => {
       onToggleMetrics={vi.fn()}
       themeLabel="Neo Edo Steam"
       onCycleTheme={cycle}
+      onRotate={vi.fn()}
     />
   )
   fireEvent.click(screen.getByRole('button', { name: /Theme: Neo Edo Steam/ }))

@@ -114,6 +114,14 @@ describe('frameBounds', () => {
     }
   })
 
+  it('still fits the safe area at a free, non-snapped rotation', () => {
+    const bounds: Bounds = { minX: 20, maxX: 44, minZ: -30, maxZ: -6 }
+    for (const azimuth of [0.3, 1.2217, 2.9, -1.9]) {
+      const framing = frameBounds(bounds, VIEWPORT, { azimuth })
+      expectInsideSafeArea(bounds, { ...framing, azimuth })
+    }
+  })
+
   it('does not zoom a single office closer than the floor band allows', () => {
     const framing = frameBounds({ minX: -1, maxX: 1, minZ: -1, maxZ: 1 }, VIEWPORT, {
       azimuth: ISO_START_AZIMUTH,

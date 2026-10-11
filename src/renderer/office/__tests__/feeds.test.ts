@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { buildFixtureFrame, createFixtureFeed, FIXTURE_TICK_MS } from '../fixture/fixture-feed'
+import {
+  buildFixtureFrame,
+  createFixtureFeed,
+  FIXTURE_TICK_MS,
+  type FixtureMemory
+} from '../fixture/fixture-feed'
+import { fixtureLayout } from '../fixture/fixture-layout'
 import type { OfficeFrame } from '../scene-model'
 
 describe('buildFixtureFrame', () => {
@@ -49,6 +55,42 @@ describe('buildFixtureFrame', () => {
     const activities = (snapshot: OfficeFrame) =>
       snapshot.sessions.map((session) => session.activity)
     expect(activities(later)).not.toEqual(activities(frame))
+  })
+})
+
+describe('fixture layout memory', () => {
+  const sessions = buildFixtureFrame(0, 1_000_000).sessions
+  // Drop the first session of the busiest project, as when an agent finishes.
+  const busiest = sessions
+    .map((session) => session.projectKey)
+    .sort(
+      (a, b) =>
+        sessions.filter((session) => session.projectKey === b).length -
+        sessions.filter((session) => session.projectKey === a).length
+    )[0]
+  const leaver = sessions.find((session) => session.projectKey === busiest)
+  const remaining = sessions.filter((session) => session !== leaver)
+  const roomOf = (floors: OfficeFrame['floors'], sessionKey: string) =>
+    floors[0].rooms.find((room) => room.sessionKey === sessionKey)
+
+  it('keeps the remaining offices in place when a session leaves, given the saved layout', () => {
+    const before = fixtureLayout(sessions, undefined, 1_000_000)
+    const after = fixtureLayout(remaining, before.layout, 1_002_000)
+    for (const session of remaining) {
+      const was = roomOf(before.floors, session.key)
+      const now = roomOf(after.floors, session.key)
+      expect([session.name, now?.x, now?.z]).toEqual([session.name, was?.x, was?.z])
+    }
+  })
+
+  it('carries the layout from one preview tick to the next', () => {
+    const memory: FixtureMemory = {}
+    buildFixtureFrame(0, 1_000_000, memory)
+    const first = memory.layout
+    expect(first).toBeDefined()
+    buildFixtureFrame(1, 1_002_000, memory)
+    expect(memory.layout).toBeDefined()
+    expect(memory.layout).not.toBe(first)
   })
 })
 

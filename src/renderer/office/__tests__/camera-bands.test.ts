@@ -4,6 +4,8 @@ import {
   buildingFraming,
   bandForZoom,
   createWheelStepper,
+  followAnchor,
+  followStep,
   ISO_POLAR,
   snapAzimuth,
   stepBand
@@ -52,4 +54,41 @@ it('fits the district, hangar and tall tower inside a small building viewport', 
   expect(framing.zoom * framing.projectedHeight).toBeLessThan(600)
   expect(framing.target[1]).toBeGreaterThan(0)
   expect(framing.target[2]).toBeLessThan(0)
+})
+
+describe('desk follow', () => {
+  const rooms = [{ id: 'r1', x: 10, z: 4 }]
+  const agents = [{ agentKey: 'a', roomId: 'r1' }]
+  const anchor = { agentKey: 'a', roomX: 10, roomZ: 4 }
+
+  it('anchors on the centre of the room the agent sits in, not on the agent', () => {
+    expect(followAnchor(agents[0], rooms)).toEqual(anchor)
+    expect(followAnchor({ agentKey: 'a', roomId: 'gone' }, rooms)).toBeNull()
+  })
+
+  it('stays put while the room has not moved', () => {
+    expect(followStep(anchor, agents, rooms)).toEqual({ kind: 'stay' })
+  })
+
+  it('shifts by the room delta when the office is re-packed', () => {
+    expect(followStep(anchor, agents, [{ id: 'r1', x: 16, z: 1 }])).toEqual({
+      kind: 'shift',
+      dx: 6,
+      dz: -3,
+      anchor: { agentKey: 'a', roomX: 16, roomZ: 1 }
+    })
+  })
+
+  it('follows the agent into a different room', () => {
+    const moved = followStep(
+      anchor,
+      [{ agentKey: 'a', roomId: 'r2' }],
+      [...rooms, { id: 'r2', x: 0, z: 0 }]
+    )
+    expect(moved).toMatchObject({ kind: 'shift', dx: -10, dz: -4 })
+  })
+
+  it('reports the agent lost once it has left the floor', () => {
+    expect(followStep(anchor, [], rooms)).toEqual({ kind: 'lost' })
+  })
 })

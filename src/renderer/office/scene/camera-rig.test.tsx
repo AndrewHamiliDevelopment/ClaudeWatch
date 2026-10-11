@@ -2,16 +2,22 @@ import { render } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
 import type { Ref } from 'react'
 import { CameraRig } from './CameraRig'
-import { makeAgent, makeFloor, makeZone } from '../__tests__/fixtures'
+import { makeAgent, makeFloor, makeRoom, makeZone } from '../__tests__/fixtures'
 
 const { controls, surface } = vi.hoisted(() => ({
   controls: {
-    mouseButtons: {},
-    touches: {},
+    mouseButtons: {} as Record<string, number>,
+    touches: {} as Record<string, number>,
     azimuthAngle: 0,
     moveTo: vi.fn(),
     zoomTo: vi.fn(),
-    rotateTo: vi.fn()
+    rotateTo: vi.fn(),
+    getTarget: vi.fn((out: { x: number; y: number; z: number }) => {
+      out.x = 100
+      out.y = 0.6
+      out.z = 50
+      return out
+    })
   },
   surface: {
     size: { width: 1200, height: 800 },
@@ -24,7 +30,9 @@ vi.mock('@react-three/fiber', () => ({
 vi.mock('@react-three/drei', async () => {
   const { useImperativeHandle } = await import('react')
   return {
-    CameraControlsImpl: { ACTION: { TRUCK: 1, NONE: 0, TOUCH_TRUCK: 2 } },
+    CameraControlsImpl: {
+      ACTION: { TRUCK: 1, NONE: 0, TOUCH_TRUCK: 2, ROTATE: 3, TOUCH_ROTATE: 4 }
+    },
     CameraControls: ({ ref }: { ref: Ref<typeof controls> }) => {
       useImperativeHandle(ref, () => controls)
       return null
@@ -109,4 +117,51 @@ it('flies to a company zone when asked', () => {
   rerender(<CameraRig {...props} request={{ kind: 'zone', zoneId: 'c', nonce: 2 }} />)
   expect(controls.moveTo).toHaveBeenCalled()
   expect(props.onBandChange).toHaveBeenLastCalledWith('floor')
+})
+
+it('pans with left-drag and rotates with right-drag or two fingers', () => {
+  render(<CameraRig {...rigProps()} />)
+  expect(controls.mouseButtons.left).toBe(1)
+  expect(controls.mouseButtons.right).toBe(3)
+  expect(controls.touches.one).toBe(2)
+  expect(controls.touches.two).toBe(4)
+})
+
+function deskProps(roomX: number, hasAgent = true) {
+  const agent = makeAgent({ agentKey: 'a1', roomId: 'r1', x: roomX + 1, z: 3 })
+  return {
+    ...rigProps(),
+    floor: makeFloor({ floorId: 'one', rooms: [makeRoom({ id: 'r1', x: roomX, z: 4 })] }),
+    agents: hasAgent ? [agent] : [],
+    liveSessionKeys: new Set<string>(),
+    selectedAgentKey: 'a1',
+    request: { kind: 'fly' as const, agentKey: 'a1', nonce: 7 }
+  }
+}
+
+it('at desk zoom keeps the office in view when its room is re-packed, shifting from the current target', () => {
+  const first = deskProps(10)
+  const { rerender } = render(<CameraRig {...first} />)
+  controls.moveTo.mockClear()
+  // The app keeps the same request object between feed frames; only the floor and agents change.
+  const stable = { onBandChange: first.onBandChange, request: first.request }
+  rerender(<CameraRig {...deskProps(10)} {...stable} />)
+  expect(controls.moveTo).not.toHaveBeenCalled()
+  rerender(<CameraRig {...deskProps(16)} {...stable} />)
+  // The room moved +6 m in x; the user's own pan (target 100, 50) is kept and shifted.
+  expect(controls.moveTo).toHaveBeenLastCalledWith(106, 0.6, 50, false)
+  expect(first.onBandChange).toHaveBeenLastCalledWith('desk')
+})
+
+it('returns to the floor band when the followed agent leaves', () => {
+  const first = deskProps(10)
+  const { rerender } = render(<CameraRig {...first} />)
+  rerender(
+    <CameraRig
+      {...deskProps(10, false)}
+      onBandChange={first.onBandChange}
+      request={first.request}
+    />
+  )
+  expect(first.onBandChange).toHaveBeenLastCalledWith('floor')
 })

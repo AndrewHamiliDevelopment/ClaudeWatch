@@ -208,6 +208,7 @@ export function OfficeApp({ feed }: { feed: OfficeFeed }) {
             onWallsMode={(mode) => dispatch({ type: 'walls-set', mode })}
             onToggleList={() => dispatch({ type: 'list-toggled' })}
             onToggleMetrics={() => dispatch({ type: 'metrics-toggled' })}
+            onRotate={(direction) => dispatch({ type: 'camera-rotated', direction })}
           />
         </div>
       </div>
