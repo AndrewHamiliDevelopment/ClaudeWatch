@@ -45,12 +45,14 @@ export class OfficeInteractions {
   constructor(private readonly deps: OfficeInteractionsDeps) {}
 
   async send(sessionKey: string, text: string): Promise<InteractionResult> {
-    if (typeof text !== 'string' || !text.trim() || text.length > MAX_PROMPT_LENGTH) {
+    if (typeof text !== 'string') return fail('invalid-input')
+    // A raw newline in the agent's terminal would submit half the message, so lines are joined.
+    const prompt = text.replace(/\s*\r?\n\s*/g, ' ').trim()
+    if (!prompt || prompt.length > MAX_PROMPT_LENGTH || !isPrintable(prompt)) {
       return fail('invalid-input')
     }
-    if (!isPrintable(text)) return fail('invalid-input')
     return this.withTerminal(sessionKey, async (handle) => {
-      await this.deps.orca.sendPrompt(handle, text)
+      await this.deps.orca.sendPrompt(handle, prompt)
       return { success: true }
     })
   }
@@ -93,7 +95,7 @@ export class OfficeInteractions {
     if (!Object.hasOwn(AGENT_TITLES, provider)) return fail('invalid-input')
     const anchor = this.deps.snapshot()?.sessions.find((s) => s.projectKey === projectKey)
     if (!anchor) return fail('unknown-session')
-    const folder = anchor.worktree ?? anchor.cwd
+    const folder = anchor.projectRoot
     try {
       await this.deps.orca.create(folder, provider, AGENT_TITLES[provider])
       return { success: true }

@@ -61,6 +61,13 @@ describe('OfficeInteractions', () => {
       expect(orca.sendPrompt).toHaveBeenCalledWith('term_a', 'run the tests')
     })
 
+    it('joins a multi-line message into one line, since a raw newline would submit it early', async () => {
+      expect(await interactions.send('claude:s1', 'first line\r\nsecond line\n\nthird')).toEqual({
+        success: true
+      })
+      expect(orca.sendPrompt).toHaveBeenCalledWith('term_a', 'first line second line third')
+    })
+
     it('refuses sessions outside Orca, empty or control-character text, and unknown sessions', async () => {
       snapshot.sessions = [session({ host: 'terminal', orcaPaneKey: null })]
       expect(await interactions.send('claude:s1', 'hi')).toEqual({
@@ -210,10 +217,12 @@ describe('OfficeInteractions', () => {
       expect(orca.create).toHaveBeenCalledWith('/repo/app', 'codex', 'New Codex agent')
     })
 
-    it('prefers the worktree path when the session runs in one', async () => {
-      snapshot.sessions = [session({ worktree: '/repo/app-wt' })]
+    it('starts in the project root even when the known session runs in a worktree or subfolder', async () => {
+      snapshot.sessions = [
+        session({ worktree: '/repo/app-wt', cwd: '/repo/app-wt/src', projectRoot: '/repo/app' })
+      ]
       await interactions.start('p_app', 'claude')
-      expect(orca.create).toHaveBeenCalledWith('/repo/app-wt', 'claude', 'New Claude agent')
+      expect(orca.create).toHaveBeenCalledWith('/repo/app', 'claude', 'New Claude agent')
     })
 
     it('falls back to Terminal.app when Orca cannot create the terminal', async () => {

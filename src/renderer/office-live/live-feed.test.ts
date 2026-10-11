@@ -97,6 +97,33 @@ describe('createLiveFeed', () => {
     expect(listener).toBeNull()
   })
 
+  it('emits only when the frame changed, not on every tick', () => {
+    const frames: OfficeFrame[] = []
+    createLiveFeed(source, { storage: store }).subscribe((frame) => frames.push(frame))
+    listener?.({
+      type: 'hello',
+      v: 1,
+      snapshot: { rev: 1, generatedAtMs: 1, sessions: [session('claude:a')], sources: [] }
+    })
+    vi.advanceTimersByTime(10_000)
+    const settled = frames.length
+    vi.advanceTimersByTime(5_000)
+    expect(frames).toHaveLength(settled)
+  })
+
+  it('does not rewrite the stored layout when it did not change', () => {
+    const setItem = vi.spyOn(store, 'setItem')
+    createLiveFeed(source, { storage: store }).subscribe(() => {})
+    const hello: FeedMessage = {
+      type: 'hello',
+      v: 1,
+      snapshot: { rev: 1, generatedAtMs: 1, sessions: [session('claude:a')], sources: [] }
+    }
+    listener?.(hello)
+    listener?.({ ...hello, snapshot: { ...hello.snapshot, rev: 2 } })
+    expect(setItem).toHaveBeenCalledTimes(1)
+  })
+
   it('forwards jump requests to the bridge', () => {
     createLiveFeed(source, { storage: store }).jump('claude:a')
     expect(source.jump).toHaveBeenCalledWith('claude:a')

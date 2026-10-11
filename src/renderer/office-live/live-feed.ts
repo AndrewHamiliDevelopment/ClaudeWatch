@@ -43,7 +43,7 @@ function loadLayout(storage: LayoutStorage): LayoutMap | undefined {
   }
 }
 
-// Runs the office sim in the renderer on top of the bridge feed and emits a frame per tick.
+// Runs the office sim in the renderer on top of the bridge feed and emits a frame when it changes.
 export function createLiveFeed(
   source: FeedSource,
   options: { storage: LayoutStorage; now?: () => number }
@@ -57,13 +57,21 @@ export function createLiveFeed(
     let snapshot: OfficeSnapshot | null = null
     let floors: FloorGeometry[] = []
     let lastTick = now()
+    let savedLayout = ''
+    let lastAgents = ''
+    let isDirty = true
 
     const offFeed = source.onFeedMessage((message) => {
       snapshot = applyFeed(snapshot, message)
       world.apply(message)
       const layout = world.layout()
       floors = toFloorGeometry(layout, snapshot?.sessions ?? [])
-      options.storage.setItem(LAYOUT_KEY, JSON.stringify(layout))
+      isDirty = true
+      const serialised = JSON.stringify(layout)
+      if (serialised !== savedLayout) {
+        options.storage.setItem(LAYOUT_KEY, serialised)
+        savedLayout = serialised
+      }
     })
     void source.ready()
 
@@ -71,6 +79,11 @@ export function createLiveFeed(
       const tick = now()
       const agents = world.step(tick - lastTick).map(toSceneAgent)
       lastTick = tick
+      // Idle offices produce identical frames; skip them so the scene is not re-rendered for nothing.
+      const agentsKey = JSON.stringify(agents)
+      if (!isDirty && agentsKey === lastAgents) return
+      isDirty = false
+      lastAgents = agentsKey
       const frame: OfficeFrame = { floors, agents, sessions: snapshot?.sessions ?? [] }
       for (const listener of listeners) listener(frame)
     }, TICK_MS)
