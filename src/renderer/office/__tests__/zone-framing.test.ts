@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { ISO_START_AZIMUTH } from '../logic/camera-bands'
 import {
   boundsOfZone,
+  cardSafeArea,
   frameBounds,
   HUD_SAFE_INSETS,
   occupiedBounds,
@@ -74,6 +75,21 @@ describe('occupiedBounds', () => {
     expect(occupiedBounds(rooms, new Set(['claude:a'])).minX).toBeGreaterThan(-5)
     const plate = occupiedBounds(makeFloor({ floorId: 'f', width: 20, depth: 16 }), new Set())
     expect(plate).toEqual({ minX: -10, maxX: 10, minZ: -8, maxZ: 8 })
+  })
+})
+
+describe('cardSafeArea', () => {
+  it('keeps name cards off the left rail, the right panel and the bottom bar', () => {
+    expect(cardSafeArea(VIEWPORT)).toEqual({
+      left: HUD_SAFE_INSETS.left,
+      right: VIEWPORT.width - HUD_SAFE_INSETS.right,
+      top: 0,
+      bottom: VIEWPORT.height - HUD_SAFE_INSETS.bottom
+    })
+  })
+
+  it('uses the full width once the rails stack on a narrow window', () => {
+    expect(cardSafeArea({ width: 700, height: 900 })).toMatchObject({ left: 0, right: 700 })
   })
 })
 

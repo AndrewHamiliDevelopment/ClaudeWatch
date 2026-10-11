@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { buildNameCards, MAX_NAME_CARDS } from '../logic/name-cards'
-import { makeAgent, makeFloor, makeFrame, makeRoom, makeSession } from './fixtures'
+import { buildNameCards, buildProjectStacks, MAX_NAME_CARDS } from '../logic/name-cards'
+import { makeAgent, makeFloor, makeFrame, makeRoom, makeSession, makeZone } from './fixtures'
 
 const floor = makeFloor({
   floorId: 'f1',
@@ -69,5 +69,48 @@ describe('buildNameCards', () => {
       )
     })
     expect(buildNameCards(crowd, 'f1', null).length).toBeLessThanOrEqual(MAX_NAME_CARDS)
+  })
+
+  it('carries the project and last update so ties go to the most recent', () => {
+    const office = buildNameCards(frame, 'f1', null).find((card) => card.agentKey === 'a')
+    expect(office).toMatchObject({ projectKey: 'p_1', updatedAtMs: 0 })
+  })
+})
+
+describe('buildProjectStacks', () => {
+  it('summarises a project for its stacked badge and anchors it on the project office', () => {
+    const zoned = makeFrame({
+      ...frame,
+      floors: [
+        makeFloor({
+          ...floor,
+          zones: [
+            makeZone({
+              id: 'c',
+              kind: 'company',
+              children: [
+                makeZone({
+                  id: 'p-zone',
+                  kind: 'project',
+                  label: 'PropApp',
+                  projectKey: 'p_1',
+                  x: 7,
+                  z: -3
+                })
+              ]
+            })
+          ]
+        })
+      ]
+    })
+    expect(buildProjectStacks(zoned, 'f1')).toEqual([
+      expect.objectContaining({
+        projectKey: 'p_1',
+        zoneId: 'p-zone',
+        x: 7,
+        z: -3,
+        text: 'PropApp · 3 agents · 1 needs you'
+      })
+    ])
   })
 })

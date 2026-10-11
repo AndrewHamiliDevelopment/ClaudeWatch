@@ -4,14 +4,15 @@ import type { AgentView, SessionRef } from '../../../shared/office/types'
 import type { FrameMetrics } from '../frame-metrics'
 import { usePrefersReducedMotion } from '../hooks'
 import { BAND_ZOOM, ISO_POLAR, ISO_START_AZIMUTH, type ZoomBand } from '../logic/camera-bands'
-import type { NameCard } from '../logic/name-cards'
+import type { NameCard, ProjectStack } from '../logic/name-cards'
 import type { CameraRequest } from '../logic/office-reducer'
 import type { WallsMode } from '../logic/room-layout'
 import { SCENE_BACKGROUND } from '../office-palette'
 import type { FloorGeometry } from '../scene-model'
 import { CameraRig } from './CameraRig'
 import { FloorView } from './FloorView'
-import { CardProjector, NameCardLayer, type CardAnchors } from './NameCards'
+import { CardProjector, type CardAnchors } from './CardProjector'
+import { NameCardLayer } from './NameCards'
 import { FrameGovernor, MetricsProbe } from './RenderLoop'
 import { Robot } from './Robot'
 import { BatchedScene } from './BatchedScene'
@@ -27,6 +28,7 @@ interface OfficeSceneProps {
   floor: FloorGeometry
   agents: readonly AgentView[]
   cards: readonly NameCard[]
+  stacks: readonly ProjectStack[]
   selectedAgentKey: string | null
   wallsMode: WallsMode
   cameraRequest: CameraRequest | null
@@ -50,7 +52,11 @@ const INITIAL_CAMERA_POSITION: [number, number, number] = [
 export default function OfficeScene(props: OfficeSceneProps) {
   const isReducedMotion = usePrefersReducedMotion()
   const [band, setBand] = useState<ZoomBand>('floor')
-  const [anchors] = useState<CardAnchors>(() => new Map())
+  const [anchors] = useState<CardAnchors>(() => ({
+    cards: new Map(),
+    dots: new Map(),
+    stacks: new Map()
+  }))
   const liveSessionKeys = useMemo(
     () => new Set(props.sessions.map((session) => session.key)),
     [props.sessions]
@@ -103,7 +109,13 @@ export default function OfficeScene(props: OfficeSceneProps) {
         </BatchedScene>
         <WorldView theme={props.theme} floor={props.floor} floors={props.floors} band={band} />
         <ZonePickers floor={props.floor} onFly={props.onFlyToZone} />
-        <CardProjector cards={props.cards} anchors={anchors} />
+        <CardProjector
+          cards={props.cards}
+          stacks={props.stacks}
+          anchors={anchors}
+          band={band}
+          selectedAgentKey={props.selectedAgentKey}
+        />
         <CameraRig
           floorCount={props.floors.length}
           floor={props.floor}
@@ -119,6 +131,8 @@ export default function OfficeScene(props: OfficeSceneProps) {
       </Canvas>
       <NameCardLayer
         cards={props.cards}
+        stacks={props.stacks}
+        onFlyToZone={props.onFlyToZone}
         reviewableKeys={props.reviewableKeys}
         onReview={props.onReview}
         band={band}

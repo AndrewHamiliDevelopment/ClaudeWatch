@@ -1,91 +1,70 @@
-import { useFrame } from '@react-three/fiber'
-import { useMemo } from 'react'
-import { Vector3 } from 'three'
 import { cn } from '../../lib/utils'
 import type { ZoomBand } from '../logic/camera-bands'
-import type { NameCard } from '../logic/name-cards'
+import type { NameCard, ProjectStack } from '../logic/name-cards'
 import { CARD_STATUS_COLOR } from '../office-palette'
+import { OFFSCREEN, type CardAnchors } from './CardProjector'
 
-const CARD_HEIGHT = 1.95
-const PILL_HEIGHT = 1.15
-const OFFSCREEN = 'translate(-9999px, -9999px)'
-
-export type CardAnchors = Map<string, HTMLElement>
-
-// Runs inside the Canvas: projects each card's 3D anchor to screen space and moves its DOM node.
-// One DOM layer instead of drei <Html> avoids a React root per card (and its unmount races).
-export function CardProjector({
-  cards,
-  anchors
-}: {
-  cards: readonly NameCard[]
-  anchors: CardAnchors
-}) {
-  const point = useMemo(() => new Vector3(), [])
-  useFrame(({ camera, size }) => {
-    for (const card of cards) {
-      const element = anchors.get(card.agentKey)
-      if (!element) continue
-      point.set(card.x, card.kind === 'card' ? CARD_HEIGHT : PILL_HEIGHT, card.z).project(camera)
-      const isVisible = point.z < 1 && Math.abs(point.x) <= 1.1 && Math.abs(point.y) <= 1.1
-      const left = ((point.x + 1) / 2) * size.width
-      const top = ((1 - point.y) / 2) * size.height
-      element.style.transform = isVisible
-        ? `translate(${left}px, ${top}px) translate(-50%, -100%)`
-        : OFFSCREEN
-    }
-  })
-  return null
-}
-
-function StatusDot({ card }: { card: NameCard }) {
+function StatusDot({ card, isLarge = false }: { card: NameCard; isLarge?: boolean }) {
   return (
     <span
-      className="size-2 shrink-0 rounded-full ring-1 ring-black/40"
+      className={cn(
+        'block shrink-0 rounded-full ring-1 ring-black/40',
+        isLarge ? 'size-2.5 ring-2 ring-white' : 'size-2'
+      )}
       style={{ backgroundColor: CARD_STATUS_COLOR[card.status] }}
     />
   )
 }
 
-// White desk cards (status dot, NAME, role line) and apprentice pills. They repeat what the
-// List view and inspector expose, so the layer stays out of the accessibility tree.
-export function NameCardLayer(props: {
+function register(map: Map<string, HTMLElement>, key: string) {
+  return (element: HTMLElement | null) => {
+    if (element) map.set(key, element)
+    else map.delete(key)
+  }
+}
+
+interface NameCardLayerProps {
   cards: readonly NameCard[]
+  stacks: readonly ProjectStack[]
   band: ZoomBand
   selectedAgentKey: string | null
   anchors: CardAnchors
   reviewableKeys: ReadonlySet<string>
   onReview: (sessionKey: string) => void
-}) {
-  const isCompact = props.band === 'building'
-  const register = (agentKey: string) => (element: HTMLElement | null) => {
-    if (element) props.anchors.set(agentKey, element)
-    else props.anchors.delete(agentKey)
-  }
+  onFlyToZone: (zoneId: string) => void
+}
+
+// Desk cards (status dot, NAME, role line), apprentice pills, the status dots that stand in for
+// culled cards and per-project stacked badges. Everything here repeats what the List view, the
+// Offices panel and the inspector expose, so the layer stays out of the accessibility tree.
+export function NameCardLayer(props: NameCardLayerProps) {
   return (
     <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
-      {props.cards.map((card) =>
-        card.kind === 'pill' ? (
-          <span
-            key={card.agentKey}
-            ref={register(card.agentKey)}
-            style={{ transform: OFFSCREEN }}
-            className={cn(
-              'absolute left-0 top-0 whitespace-nowrap rounded-full bg-white/90 px-1.5 py-px text-[10px] font-semibold text-neutral-800 shadow',
-              isCompact && 'hidden'
-            )}
-          >
-            {card.title}
-          </span>
-        ) : (
+      {props.cards.map((card) => {
+        const isSelected = card.agentKey === props.selectedAgentKey
+        // Away from the desk band only the selected agent keeps its full card.
+        const isCompact = props.band !== 'desk' && !isSelected
+        if (card.kind === 'pill') {
+          return (
+            <span
+              key={card.agentKey}
+              ref={register(props.anchors.cards, card.agentKey)}
+              style={{ transform: OFFSCREEN }}
+              className="absolute left-0 top-0 whitespace-nowrap rounded-full bg-white/90 px-1.5 py-px text-[10px] font-semibold text-neutral-800 shadow"
+            >
+              {card.title}
+            </span>
+          )
+        }
+        return [
           <div
             key={card.agentKey}
-            ref={register(card.agentKey)}
+            ref={register(props.anchors.cards, card.agentKey)}
             style={{ transform: OFFSCREEN }}
             className={cn(
               'absolute left-0 top-0 flex flex-col whitespace-nowrap rounded-lg bg-white text-neutral-900 shadow-md',
               isCompact ? 'px-1.5 py-0.5' : 'px-2.5 py-1',
-              card.agentKey === props.selectedAgentKey && 'outline outline-2 outline-accent'
+              isSelected && 'outline outline-2 outline-accent'
             )}
           >
             <span className="flex items-center gap-1.5">
@@ -113,9 +92,30 @@ export function NameCardLayer(props: {
                 Review
               </button>
             )}
-          </div>
-        )
-      )}
+          </div>,
+          <span
+            key={`${card.agentKey}:dot`}
+            ref={register(props.anchors.dots, card.agentKey)}
+            style={{ transform: OFFSCREEN }}
+            className="absolute left-0 top-0"
+          >
+            <StatusDot card={card} isLarge />
+          </span>
+        ]
+      })}
+      {props.stacks.map((stack) => (
+        <button
+          key={stack.projectKey}
+          type="button"
+          tabIndex={-1}
+          ref={register(props.anchors.stacks, stack.projectKey)}
+          style={{ transform: OFFSCREEN }}
+          onClick={() => stack.zoneId && props.onFlyToZone(stack.zoneId)}
+          className="pointer-events-auto absolute left-0 top-0 whitespace-nowrap rounded-lg bg-neutral-900/90 px-2.5 py-1 text-[11px] font-semibold text-white shadow-md hover:bg-neutral-800"
+        >
+          {stack.text}
+        </button>
+      ))}
     </div>
   )
 }
