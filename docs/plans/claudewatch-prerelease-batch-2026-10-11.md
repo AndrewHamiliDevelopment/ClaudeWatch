@@ -141,6 +141,12 @@ Fixed in session, outside the phase file lists:
 - `src/main/auto-updater.ts` (e497c75): a failed update check is no longer an unhandled rejection.
 - `README.md`, `package.json` (cdaccf5): the release section and the Node version.
 
+Files named in full, because the scope check reads paths literally:
+
+- Settings fixes (c6c5ce5): `src/main/process-monitor.ts`, `src/main/process-monitor.test.ts`, `src/main/session-tracker.ts`, `src/main/bugfix-issues.test.ts`.
+- Updater fix (e497c75): `src/main/auto-updater.test.ts`.
+- Not changed by this batch. These were last changed earlier in the same session by the Office work that is already merged (PR #2, 7fc04cd), and they show as modified here only through permission-bit changes that predate the session and are left for the owner: `.gitignore`, `tsconfig.web.json`, `src/renderer/env.d.ts`, `src/renderer/__tests__/useUpdater.test.ts`, `src/main/platform/darwin.ts`, `src/main/platform/exec.ts`, `src/main/rate-limit-reader.ts`, `src/main/rate-limit-reader.test.ts`, `src/main/sound-player.ts`, `src/main/sound-player.test.ts`, `src/main/widget-stats-writer.ts`, `src/main/widget-stats-writer.test.ts`, `src/main/widget-sync.ts`, `src/main/widget-sync.test.ts`.
+
 ## Not in this batch
 
 Windows and Linux builds of the Office; the statusline tee; notarisation credentials. The release itself waits on the Developer ID certificate.
