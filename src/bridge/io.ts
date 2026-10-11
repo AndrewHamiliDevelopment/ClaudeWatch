@@ -60,10 +60,22 @@ async function readFirstLine(path: string): Promise<string> {
   }
 }
 
+// Enforced here, at the only door to the disk and to subprocesses, so no source can
+// reach a credential store or a shell by mistake.
+const CREDENTIAL_STORE = /(^|\/)(\.credentials\.json|auth\.json|orca-runtime\.json)$|\.key$/
+const PROGRAMS = new Set(['/bin/ps', '/usr/sbin/lsof', '/opt/homebrew/bin/orca'])
+const forbidden = (what: string): Error => new Error(`forbidden: ${what}`)
+const guarded =
+  (read: (path: string) => Promise<string>) =>
+  async (path: string): Promise<string> => {
+    if (CREDENTIAL_STORE.test(path)) throw forbidden('credential store')
+    return read(path)
+  }
+
 export const systemIo: BridgeIo = {
-  readText: (path) => readFile(path, 'utf8'),
-  readTail,
-  readFirstLine,
+  readText: guarded((path) => readFile(path, 'utf8')),
+  readTail: guarded(readTail),
+  readFirstLine: guarded(readFirstLine),
   list: (path) => readdir(path),
   stat: async (path) => {
     const info = await stat(path)
@@ -71,6 +83,7 @@ export const systemIo: BridgeIo = {
   },
   exec: (file, args) =>
     new Promise((resolve, reject) => {
+      if (!PROGRAMS.has(file)) return reject(forbidden('program'))
       execFile(
         file,
         args,

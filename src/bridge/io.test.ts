@@ -34,3 +34,25 @@ it('reads complete session metadata beyond 64 KB and bounds oversized headers', 
   await writeFile(path, 'x'.repeat(262145))
   expect(await systemIo.readFirstLine(path)).toBe('')
 })
+
+it('refuses to open credential stores, whatever a caller asks for', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'bridge-guard-'))
+  directories.push(directory)
+  for (const name of ['.credentials.json', 'auth.json', 'orca-runtime.json', '42.key']) {
+    const path = join(directory, name)
+    await writeFile(path, 'DO_NOT_READ')
+    await expect(systemIo.readText(path)).rejects.toThrow('forbidden')
+    await expect(systemIo.readTail(path)).rejects.toThrow('forbidden')
+    await expect(systemIo.readFirstLine(path)).rejects.toThrow('forbidden')
+  }
+})
+
+it('runs only the three programs the bridge needs', async () => {
+  await expect(systemIo.exec('/bin/sh', ['-c', 'echo hi'])).rejects.toThrow('forbidden')
+  await expect(systemIo.exec('/usr/bin/security', ['find-generic-password'])).rejects.toThrow(
+    'forbidden'
+  )
+  expect(await systemIo.exec('/bin/ps', ['-o', 'pid=', '-p', String(process.pid)])).toContain(
+    String(process.pid)
+  )
+})
