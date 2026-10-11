@@ -1,9 +1,9 @@
-import type { OfficeBridge } from './bridge-feed'
+import type { OfficeBridgeApi } from '../../preload/office'
 
 declare global {
   interface Window {
-    // Present in the Office window (Phase 6 preload); absent in the browser preview.
-    office?: OfficeBridge
+    // Present in the Office window (its preload); absent in the browser preview.
+    officeBridge?: OfficeBridgeApi
   }
 }
 

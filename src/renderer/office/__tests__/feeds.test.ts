@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildFixtureFrame, createFixtureFeed, FIXTURE_TICK_MS } from '../fixture/fixture-feed'
-import { createBridgeFeed, type OfficeBridge } from '../bridge-feed'
 import type { OfficeFrame } from '../scene-model'
 
 describe('buildFixtureFrame', () => {
@@ -62,18 +61,5 @@ describe('createFixtureFeed', () => {
     unsubscribe()
     vi.advanceTimersByTime(3000)
     expect(listener).toHaveBeenCalledTimes(4)
-  })
-})
-
-describe('createBridgeFeed', () => {
-  it('relays frames and jumps through the bridge', () => {
-    const unsubscribe = vi.fn()
-    const bridge: OfficeBridge = { onFeed: vi.fn(() => unsubscribe), jump: vi.fn() }
-    const feed = createBridgeFeed(bridge)
-    const listener = vi.fn()
-    expect(feed.subscribe(listener)).toBe(unsubscribe)
-    expect(bridge.onFeed).toHaveBeenCalledWith(listener)
-    feed.jump('claude:a')
-    expect(bridge.jump).toHaveBeenCalledWith('claude:a')
   })
 })
