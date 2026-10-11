@@ -33,8 +33,8 @@ describe('createApi', () => {
       body: typeof body === 'string' ? body : JSON.stringify(body)
     })
 
-  async function serve(interactive: boolean): Promise<void> {
-    const api = createApi({ service, bridge, interactive, onWatchers })
+  async function serve(interactive: boolean, lingerMs = 10): Promise<void> {
+    const api = createApi({ service, bridge, interactive, onWatchers }, lingerMs)
     server = createServer((request, response) => {
       void api(request, response, (request.url ?? '').split('?')[0])
     })
@@ -116,6 +116,20 @@ describe('createApi', () => {
       await vi.waitFor(() => expect(bridge.stop).toHaveBeenCalledOnce())
       expect(listeners.size).toBe(0)
       expect(onWatchers.mock.calls.map(([count]) => count)).toEqual([1, 2, 1, 0])
+    })
+
+    it('keeps the bridge running across a reload, which closes the feed and opens it again', async () => {
+      await new Promise<void>((resolve) => server.close(() => resolve()))
+      await serve(false, 300)
+      const page = await watch(1)
+      page.leave()
+      await vi.waitFor(() => expect(listeners.size).toBe(0))
+      const reloaded = await watch(1)
+      await new Promise((resolve) => setTimeout(resolve, 400))
+      expect(bridge.start).toHaveBeenCalledOnce()
+      expect(bridge.stop).not.toHaveBeenCalled()
+      reloaded.leave()
+      await vi.waitFor(() => expect(bridge.stop).toHaveBeenCalledOnce())
     })
 
     it('drops a watcher that stops reading instead of buffering its feed without limit', async () => {

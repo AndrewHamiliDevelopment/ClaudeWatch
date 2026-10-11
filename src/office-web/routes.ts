@@ -6,6 +6,9 @@ import type { InteractionResult } from '../shared/office/types'
 const MAX_BODY_BYTES = 16 * 1024
 // A watcher this far behind has stopped reading. It is dropped, and reconnects to a fresh hello.
 const MAX_FEED_BACKLOG_BYTES = 1024 * 1024
+// A reload closes the feed and opens it again at once. The bridge outlives that gap, so it does
+// not start over and count every transcript again.
+const BRIDGE_LINGER_MS = 5_000
 
 type ApiService = Pick<
   OfficeService,
@@ -67,12 +70,16 @@ async function readBody(request: IncomingMessage): Promise<Body | 400 | 413 | 41
 }
 
 // Requests reach this only after the guard has checked Host, Origin and the launch token.
-export function createApi({ service, bridge, interactive, onWatchers }: ApiOptions): ApiHandler {
+export function createApi(
+  { service, bridge, interactive, onWatchers }: ApiOptions,
+  lingerMs = BRIDGE_LINGER_MS
+): ApiHandler {
   // Built once: without --interactive the routes that touch a terminal do not exist.
   const routes = new Map(
     Object.entries(interactive ? { ...VIEW_ROUTES, ...INTERACTIVE_ROUTES } : VIEW_ROUTES)
   )
   let watchers = 0
+  let stopping: NodeJS.Timeout | null = null
 
   function watch(response: ServerResponse): void {
     response.writeHead(200, { 'Content-Type': 'application/x-ndjson; charset=utf-8' })
@@ -83,10 +90,21 @@ export function createApi({ service, bridge, interactive, onWatchers }: ApiOptio
     })
     response.on('close', () => {
       unsubscribe()
-      if (--watchers === 0) bridge.stop()
+      if (--watchers === 0) {
+        stopping = setTimeout(() => {
+          stopping = null
+          bridge.stop()
+        }, lingerMs)
+        // A pending stop must not hold the process open once the server has closed.
+        stopping.unref()
+      }
       onWatchers(watchers)
     })
-    if (++watchers === 1) bridge.start()
+    if (++watchers === 1) {
+      if (stopping) clearTimeout(stopping)
+      else bridge.start()
+      stopping = null
+    }
     onWatchers(watchers)
   }
 
