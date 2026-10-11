@@ -1,6 +1,12 @@
 import { needsHuman } from '../../shared/office/attention'
 import { projectKey, projectRootOf } from '../../shared/office/project-key'
-import type { AgentActivity, AgentAttention, SessionRef } from '../../shared/office/types'
+import { sumCounts } from '../../shared/office/token-counts'
+import type {
+  AgentActivity,
+  AgentAttention,
+  SessionRef,
+  SubagentRef
+} from '../../shared/office/types'
 import { GEM_SPECS } from '../office/logic/status-gem'
 import type { ClaudeInstance } from '../lib/types'
 import { timeAgo } from '../lib/utils'
@@ -91,9 +97,12 @@ export function stateOfAttention(
   return { state: attention, detail: null }
 }
 
+// What the feed says of one process: a session, or a teammate (which reports no attention).
+type FeedState = Pick<SessionRef, 'attention' | 'activity' | 'currentTool'>
+
 function stateOf(
   instance: ClaudeInstance,
-  session: SessionRef | undefined,
+  session: FeedState | undefined,
   nowMs: number
 ): Pick<RosterAgent, 'state' | 'stateDetail'> {
   // A finished turn is timed from the process below, so only the other attention states decide.
@@ -148,6 +157,19 @@ function toAgent(
   }
 }
 
+// A teammate is its own process, so the process list has it; the feed lists it under its lead.
+function teammateAgent(instance: ClaudeInstance, member: SubagentRef, nowMs: number): RosterAgent {
+  const feedState: FeedState = { attention: 'none', activity: member.activity, currentTool: null }
+  return {
+    pid: instance.pid,
+    instance,
+    name: member.name ?? member.type,
+    ...stateOf(instance, feedState, nowMs),
+    tokens: member.tokens ? sumCounts(member.tokens) : null,
+    isInOrca: Boolean(member.orcaPaneKey)
+  }
+}
+
 // `sessions` is null while the office feed is unavailable; rows then show process state only.
 export function buildSquads(
   instances: readonly ClaudeInstance[],
@@ -155,18 +177,27 @@ export function buildSquads(
   nowMs: number
 ): Squad[] {
   const sessionByPid = new Map<number, SessionRef>()
+  const teammateByPid = new Map<number, { lead: SessionRef; member: SubagentRef }>()
   for (const session of sessions ?? []) {
     if (session.pid !== null) sessionByPid.set(session.pid, session)
+    for (const member of session.subagents) {
+      if (member.kind === 'teammate' && typeof member.pid === 'number') {
+        teammateByPid.set(member.pid, { lead: session, member })
+      }
+    }
   }
 
   const squadByKey = new Map<string, Squad>()
   for (const instance of instances) {
     const session = sessionByPid.get(instance.pid)
-    const candidate = emptySquad(instance, session)
+    const teammate = session ? undefined : teammateByPid.get(instance.pid)
+    const candidate = emptySquad(instance, session ?? teammate?.lead)
     const squad = squadByKey.get(candidate.key) ?? candidate
     squadByKey.set(squad.key, squad)
 
-    const agent = toAgent(instance, session, nowMs)
+    const agent = teammate
+      ? teammateAgent(instance, teammate.member, nowMs)
+      : toAgent(instance, session, nowMs)
     squad.agents.push(agent)
     if (agent.state === 'needs-you') squad.needsYouCount += 1
   }

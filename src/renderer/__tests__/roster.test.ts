@@ -153,6 +153,43 @@ describe('buildSquads', () => {
     ])
   })
 
+  it('shows a teammate under its own name, in its lead’s squad, with its own tokens', () => {
+    const [squad, ...others] = buildSquads(
+      [
+        instanceFixture({ pid: 1234 }),
+        // A teammate is its own process, started in a worktree of the lead's project.
+        instanceFixture({
+          pid: 500,
+          status: 'idle',
+          projectPath: '/Users/test/ZKidz/ClaudeWatch/.claude/worktrees/agent-1'
+        })
+      ],
+      [
+        sessionFixture({
+          pid: 1234,
+          usage: usageOf(100),
+          subagents: [
+            {
+              id: 'lena-hud@session-abc',
+              type: 'lena',
+              name: 'lena-hud',
+              kind: 'teammate',
+              pid: 500,
+              activity: 'editing',
+              orcaPaneKey: 'tab-2:leaf-2',
+              tokens: { input: 5, output: 6, cacheWrite: 7, cacheRead: 8 }
+            }
+          ]
+        })
+      ],
+      NOW_MS
+    )
+    expect(others).toHaveLength(0)
+    const mate = squad.agents.find((agent) => agent.pid === 500)
+    expect(mate).toMatchObject({ name: 'lena-hud', state: 'working', tokens: 26, isInOrca: true })
+    expect(squad.isTokensPartial).toBe(false)
+  })
+
   it('keeps one squad when only some agents of a project are in the office feed', () => {
     const squads = buildSquads(
       [instanceFixture({ pid: 1234 }), instanceFixture({ pid: 77 })],
