@@ -3,12 +3,14 @@ import { object } from '../../bridge/io'
 import type { AccountLimit, AccountSource } from '../../shared/accounts'
 import type { AccountConfidence, ProviderId, TokenCounts } from '../../shared/office/types'
 import { isAlias } from './account-records'
-import { amountOrNull, isAmount } from './amount'
+import { amountOrNull, isAmount, isPosition } from './amount'
 import {
   type AccountRecord,
+  BEYOND_ANY_LINE,
   bucketId,
   type IdentitySpan,
   type LedgerState,
+  type TranscriptPlace,
   type UsageBucket
 } from './ledger-state'
 
@@ -104,13 +106,31 @@ function toLimit(value: unknown): AccountLimit[] {
   ]
 }
 
+// Each file's time stays where a version without positions reads it; a file dropped there
+// would be counted again from the tracking start. Positions are a list of their own.
+function toPlaces(stored: Record<string, unknown>): Map<string, TranscriptPlace> {
+  const positions = new Map(pairs(stored.filePositions))
+  return new Map(
+    pairs(stored.files).flatMap(([id, atMs]): [string, TranscriptPlace][] => {
+      const position = positions.get(id)
+      return isAmount(atMs)
+        ? [[id, { atMs, position: isPosition(position) ? position : BEYOND_ANY_LINE }]]
+        : []
+    })
+  )
+}
+
 export function toStored(state: LedgerState): Record<string, unknown> {
+  const places = [...state.files]
   return {
     version: VERSION,
     ...state,
     buckets: [...state.buckets.values()],
     projects: [...state.projects],
-    files: [...state.files],
+    files: places.map(([id, { atMs }]) => [id, atMs]),
+    filePositions: places.flatMap(([id, { position }]) =>
+      position === BEYOND_ANY_LINE ? [] : [[id, position]]
+    ),
     codexSessions: [...state.codexSessions],
     limits: [...state.limits]
   }
@@ -137,11 +157,7 @@ export function fromStored(data: unknown): LedgerState | null {
         isText(label) ? [[key, label]] : []
       )
     ),
-    files: new Map(
-      pairs(stored.files).flatMap(([id, atMs]): [string, number][] =>
-        isAmount(atMs) ? [[id, atMs]] : []
-      )
-    ),
+    files: toPlaces(stored),
     codexSessions: new Map(
       pairs(stored.codexSessions).flatMap(
         ([key, value]): [string, { counts: TokenCounts; countedAtMs: number }][] => {

@@ -121,17 +121,32 @@ it('reports what each line added, stamped with the line, and nothing for a repea
   const at = (minute: number) => ({ timestamp: `2026-10-11T10:${minute}:00.000Z` })
   const atMs = (minute: number): number => Date.parse(at(minute).timestamp)
   const added: UsageIncrement[] = []
-  const text = [
+  const lines = [
     line('m1', { output_tokens: 2, cache_read_input_tokens: 70 }, at(10)),
     line('m1', { output_tokens: 2, cache_read_input_tokens: 70 }, at(11)),
     line('m1', { output_tokens: 468, cache_read_input_tokens: 70 }, at(12)),
     line('m2', { input_tokens: 5, output_tokens: 1 }, at(40))
-  ].join('\n')
-  const state = foldLines(emptyFold(), `${text}\n`, (increment) => added.push(increment))
+  ]
+  const startOf = (index: number): number => Buffer.byteLength(lines.slice(0, index).join('\n')) + 1
+  const state = foldLines(emptyFold(), `${lines.join('\n')}\n`, (increment) =>
+    added.push(increment)
+  )
   expect(added).toEqual([
-    { atMs: atMs(10), counts: { input: 0, output: 2, cacheWrite: 0, cacheRead: 70 } },
-    { atMs: atMs(12), counts: { input: 0, output: 466, cacheWrite: 0, cacheRead: 0 } },
-    { atMs: atMs(40), counts: { input: 5, output: 1, cacheWrite: 0, cacheRead: 0 } }
+    {
+      atMs: atMs(10),
+      position: 0,
+      counts: { input: 0, output: 2, cacheWrite: 0, cacheRead: 70 }
+    },
+    {
+      atMs: atMs(12),
+      position: startOf(2),
+      counts: { input: 0, output: 466, cacheWrite: 0, cacheRead: 0 }
+    },
+    {
+      atMs: atMs(40),
+      position: startOf(3),
+      counts: { input: 5, output: 1, cacheWrite: 0, cacheRead: 0 }
+    }
   ])
   const reported = added.reduce(
     (sum, { counts }) => sum + counts.input + counts.output + counts.cacheRead,
@@ -150,4 +165,22 @@ it('counts a line with no readable time but does not report it for attribution',
   )
   expect(foldTotal(state).output).toBe(10)
   expect(added).toEqual([])
+})
+
+it('places each line by the byte its line starts at in the file, not by the character', () => {
+  const stamp = { timestamp: '2026-10-11T10:10:00.000Z' }
+  const prompt = JSON.stringify({ type: 'user', message: { content: 'naïve — 🙂' } })
+  const first = line('m1', { output_tokens: 2 }, { ...stamp, cwd: '/café' })
+  const second = line('m2', { output_tokens: 3 }, stamp)
+  const positions: number[] = []
+  const startsAt = 4096
+  foldLines(
+    emptyFold(),
+    `${prompt}\n${first}\n${second}\n`,
+    ({ position }) => positions.push(position),
+    startsAt
+  )
+  const afterPrompt = startsAt + Buffer.byteLength(prompt) + 1
+  expect(positions).toEqual([afterPrompt, afterPrompt + Buffer.byteLength(first) + 1])
+  expect(Buffer.byteLength(prompt)).toBeGreaterThan(prompt.length)
 })

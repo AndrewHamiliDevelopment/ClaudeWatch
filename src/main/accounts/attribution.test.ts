@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { accountKey } from '../../bridge/account-key'
-import { session } from '../../bridge/__fixtures__/helpers'
+import { fixtureIo, registryEntry, session } from '../../bridge/__fixtures__/helpers'
+import { BridgePoller } from '../../bridge/poller'
 import { type UsageDelta, USAGE_RETENTION_MS } from '../../shared/accounts'
 import type { SessionRef } from '../../shared/office/types'
-import { countCodexSessions, countUsage, prune, recordIdentity } from './attribution'
+import { countCodexSessions, countUsage, prune, recordIdentity, toUsageDeltas } from './attribution'
 import type { IdentityRead } from './identity'
 import { toAccountsState } from './accounts-view'
-import { addUsage, dayKey, emptyLedger, type LedgerState } from './ledger-state'
+import { fromStored, toStored } from './ledger-shape'
+import { addUsage, BEYOND_ANY_LINE, dayKey, emptyLedger, type LedgerState } from './ledger-state'
 
 it('folds days older than the view’s week into one bucket per account, project and confidence, keeping every total', () => {
   const noon = new Date(2026, 9, 11, 12).getTime()
@@ -56,7 +58,13 @@ const line = (atMs: number, tokens: number, file = '/p/a.jsonl'): UsageDelta => 
   projectLabel: 'repo',
   file,
   atMs,
+  position: 0,
   counts: output(tokens)
+})
+// The same line, starting at a byte offset of its transcript.
+const lineAt = (position: number, atMs: number, tokens: number): UsageDelta => ({
+  ...line(atMs, tokens),
+  position
 })
 // What the ledger holds, as [account, confidence, output tokens].
 const held = (state: LedgerState): [string | null, string, number][] =>
@@ -145,6 +153,71 @@ describe('counting each line once', () => {
     expect(held(state)).toEqual([[keyOf('ada'), 'inferred', 7]])
   })
 
+  it('counts a line that shares its millisecond with the last one counted and arrives in a later batch', () => {
+    const state = watching('ada', at(10, 30))
+    countUsage(state, [lineAt(0, at(10, 10), 5)], at(10, 11))
+    expect(countUsage(state, [lineAt(300, at(10, 10), 2)], at(10, 12))).toBe(true)
+    expect(held(state)).toEqual([[keyOf('ada'), 'inferred', 7]])
+  })
+
+  it('counts nothing new when lines that share a millisecond are reported again from the first line', () => {
+    const state = watching('ada', at(10, 30))
+    const read = [lineAt(0, at(10, 10), 5), lineAt(300, at(10, 10), 2), lineAt(600, at(10, 11), 1)]
+    countUsage(state, read.slice(0, 1), at(10, 11))
+    countUsage(state, read.slice(1), at(10, 12))
+    expect(countUsage(state, read, at(10, 13))).toBe(false)
+    expect(held(state)).toEqual([[keyOf('ada'), 'inferred', 8]])
+  })
+
+  it('counts an appended line stamped earlier than the latest one counted', () => {
+    const state = watching('ada', at(10, 30))
+    countUsage(state, [lineAt(0, at(10, 10), 5)], at(10, 11))
+    countUsage(state, [lineAt(300, at(10, 9), 2)], at(10, 12))
+    expect(held(state)).toEqual([[keyOf('ada'), 'inferred', 7]])
+  })
+
+  it('counts the newer lines of a rewritten transcript, which start at smaller offsets', () => {
+    const state = watching('ada', at(10, 30))
+    countUsage(state, [lineAt(0, at(10, 10), 5), lineAt(900, at(10, 11), 2)], at(10, 12))
+    const rewritten = [
+      lineAt(0, at(10, 10), 5),
+      lineAt(200, at(10, 20), 4),
+      lineAt(400, at(10, 20), 1)
+    ]
+    countUsage(state, rewritten, at(10, 21))
+    expect(countUsage(state, rewritten, at(10, 22))).toBe(false)
+    expect(held(state)).toEqual([[keyOf('ada'), 'inferred', 12]])
+  })
+
+  it('never counts a line stamped before tracking began, wherever it starts', () => {
+    const state = watching('ada', at(10, 30))
+    countUsage(state, [lineAt(0, at(10, 10), 5)], at(10, 11))
+    expect(countUsage(state, [lineAt(300, at(8, 59), 100)], at(10, 12))).toBe(false)
+    expect(held(state)).toEqual([[keyOf('ada'), 'inferred', 5]])
+  })
+
+  it('leaves a transcript counted before positions were kept to the time alone, so nothing counts twice', () => {
+    const before = watching('ada', at(10, 30))
+    countUsage(before, [lineAt(0, at(10, 10), 5), lineAt(300, at(10, 11), 2)], at(10, 12))
+    const { filePositions, ...olderForm } = JSON.parse(JSON.stringify(toStored(before)))
+    expect(filePositions).toHaveLength(1)
+    const state = fromStored(olderForm)
+    if (!state) throw new Error('expected the older form to load')
+    expect([...state.files.values()]).toEqual([{ atMs: at(10, 11), position: BEYOND_ANY_LINE }])
+
+    // The bridge starts again and reports the file from its first line, with what was appended.
+    const reread = [
+      lineAt(0, at(10, 10), 5),
+      lineAt(300, at(10, 11), 2),
+      lineAt(600, at(10, 11), 64),
+      lineAt(900, at(10, 20), 1)
+    ]
+    countUsage(state, reread, at(10, 21))
+    expect(countUsage(state, reread, at(10, 22))).toBe(false)
+    expect(held(state)).toEqual([[keyOf('ada'), 'inferred', 8]])
+    expect([...state.files.values()]).toEqual([{ atMs: at(10, 20), position: BEYOND_ANY_LINE }])
+  })
+
   it('still refuses old lines after a quiet transcript has been forgotten', () => {
     const state = watching('ada', at(10, 30))
     const old = line(at(10, 10), 5)
@@ -155,6 +228,62 @@ describe('counting each line once', () => {
     expect(state.files.size).toBe(0)
     countUsage(state, [old, line(later, 2)], later + 1_000)
     expect(held(state).map(([, , tokens]) => tokens)).toEqual([5, 2])
+  })
+})
+
+describe('a bridge that starts again', () => {
+  const transcript = '/claude/projects/-repo/a.jsonl'
+  // One line of a message as Claude Code writes it, with the output it has reached so far.
+  const written = (id: string, outputSoFar: number, atMs: number): string =>
+    `${JSON.stringify({
+      type: 'assistant',
+      timestamp: new Date(atMs).toISOString(),
+      message: { id, content: [], usage: { input_tokens: 0, output_tokens: outputSoFar } }
+    })}\n`
+
+  it('counts each line once across restarts of the bridge and of the app, lines of one millisecond included', async () => {
+    const entry = registryEntry()
+    const files: Record<string, string | null> = {
+      '/claude/sessions/42.json': JSON.stringify(entry),
+      '/repo/.git': null,
+      [transcript]: written('m1', 5, at(10, 10))
+    }
+    const io = fixtureIo(files)
+    io.exec = async (_file, args) => (args[0] === '-o' ? entry.procStart : '')
+    const now = at(10, 31)
+    let state = watching('ada', at(10, 30))
+    // A bridge as main starts it: what each tick added crosses to main and is counted there.
+    const startBridge = async (): Promise<BridgePoller> => {
+      const poller = new BridgePoller({
+        io,
+        claudeRoots: ['/claude'],
+        codexRoot: '/codex',
+        now: () => now,
+        onUsage: (deltas) => countUsage(state, toUsageDeltas({ type: 'usage', v: 1, deltas }), now)
+      })
+      // Its first tick publishes before any transcript is read.
+      await poller.tick()
+      await poller.tick()
+      return poller
+    }
+
+    const bridge = await startBridge()
+    expect(held(state)).toEqual([[keyOf('ada'), 'inferred', 5]])
+    files[transcript] += written('m1', 9, at(10, 10))
+    await bridge.tick()
+    expect(held(state)).toEqual([[keyOf('ada'), 'inferred', 9]])
+
+    await startBridge()
+    expect(held(state)).toEqual([[keyOf('ada'), 'inferred', 9]])
+
+    // The app restarts too, and the message grew in that same millisecond while it was down.
+    const reloaded = fromStored(JSON.parse(JSON.stringify(toStored(state))))
+    if (!reloaded) throw new Error('expected the saved ledger to load')
+    state = reloaded
+    files[transcript] += written('m1', 12, at(10, 10))
+    const restarted = await startBridge()
+    await restarted.tick()
+    expect(held(state)).toEqual([[keyOf('ada'), 'inferred', 12]])
   })
 })
 

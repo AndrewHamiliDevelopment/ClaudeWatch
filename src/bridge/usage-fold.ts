@@ -10,10 +10,10 @@ export interface UsageFold {
 
 export interface UsageIncrement {
   atMs: number
+  // The byte of its file the line starts at.
+  position: number
   counts: TokenCounts
 }
-
-// The bridge's usage readers and main/accounts/attribution.ts still import these from here.
 
 export function emptyFold(): UsageFold {
   return { closed: zeroCounts(), openId: null, open: zeroCounts() }
@@ -33,10 +33,16 @@ export function foldLines(
   fold: UsageFold,
   text: string,
   // Told what each line added and when it was written; the amounts sum to the fold's growth.
-  onAdded?: (increment: UsageIncrement) => void
+  onAdded?: (increment: UsageIncrement) => void,
+  // The byte of its file `text` starts at.
+  startsAt = 0
 ): UsageFold {
   let { closed, openId, open } = fold
+  let nextLineAt = startsAt
   for (const line of text.split('\n')) {
+    const position = nextLineAt
+    // Measured only for a listener: it is a second pass over every line.
+    if (onAdded) nextLineAt += Buffer.byteLength(line) + 1
     // Quotes inside a JSON string are escaped, so this test can skip a line but never a usage.
     if (!line.includes('"usage"')) continue
     const record = jsonObject(line)
@@ -77,7 +83,7 @@ export function foldLines(
     const atMs = typeof record.timestamp === 'string' ? Date.parse(record.timestamp) : Number.NaN
     // Without a time the tokens cannot be placed under an account; the fold still counts them.
     if (Number.isFinite(atMs) && Object.values(added).some((amount) => amount > 0))
-      onAdded({ atMs, counts: added })
+      onAdded({ atMs, position, counts: added })
   }
   return { closed, openId, open }
 }

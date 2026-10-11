@@ -4,9 +4,17 @@ import { zeroCounts } from '../../shared/office/token-counts'
 import { type UsageDelta, USAGE_RETENTION_MS } from '../../shared/accounts'
 import type { SessionRef, TokenCounts } from '../../shared/office/types'
 import { upsertAccount, upsertClaudeAccount } from './account-records'
-import { isAmount } from './amount'
+import { isAmount, isPosition } from './amount'
 import type { IdentityRead } from './identity'
-import { addUsage, dayKey, FOLDED_DAY, type LedgerState, weekStartKey } from './ledger-state'
+import {
+  addUsage,
+  BEYOND_ANY_LINE,
+  dayKey,
+  FOLDED_DAY,
+  type LedgerState,
+  type TranscriptPlace,
+  weekStartKey
+} from './ledger-state'
 
 // Samples closer together than this were taken by one unbroken watch, so a change between
 // them happened then. Further apart, nobody saw when it happened.
@@ -49,8 +57,8 @@ export function toUsageDeltas(message: unknown): UsageDelta[] {
   return usage.deltas.flatMap((value): UsageDelta[] => {
     const delta = object(value)
     const counts = object(delta?.counts)
-    if (!delta || !counts || !isAmount(delta.atMs)) return []
-    const { sessionKey, projectKey, projectLabel, file, atMs } = delta
+    if (!delta || !counts || !isAmount(delta.atMs) || !isPosition(delta.position)) return []
+    const { sessionKey, projectKey, projectLabel, file, atMs, position } = delta
     const { input, output, cacheWrite, cacheRead } = counts
     if (!isLabel(sessionKey) || !isLabel(projectKey) || !isLabel(projectLabel) || !isLabel(file))
       return []
@@ -63,6 +71,7 @@ export function toUsageDeltas(message: unknown): UsageDelta[] {
         projectLabel,
         file,
         atMs,
+        position,
         counts: { input, output, cacheWrite, cacheRead }
       }
     ]
@@ -73,21 +82,26 @@ const transcriptId = (file: string): string =>
   createHash('sha256').update(file).digest('base64url').slice(0, 16)
 
 // Files each line under the account signed in when it was written. The bridge reports a
-// transcript again from its first line whenever it re-reads it, so a line counts only if it is
-// newer than the last one counted from the same file. True when anything was added.
+// transcript again from its first line whenever it re-reads it, so a line counts only if it
+// starts beyond the furthest one counted from the same file, or is newer than the latest: a
+// line appended in the millisecond of the last has only its place to show it is new, a
+// rewritten transcript only its time. True when anything was added.
 export function countUsage(state: LedgerState, deltas: UsageDelta[], now: number): boolean {
   const floor = Math.max(state.trackingSinceMs, now - USAGE_RETENTION_MS)
-  // Where each file stood before this batch: lines that share a timestamp arrive together.
-  const countedUpTo = new Map<string, { id: string; atMs: number }>()
+  // Where each file stood before this batch: lines of one millisecond that no position tells
+  // apart still count when they arrive together. A file never counted has the floor alone.
+  const countedUpTo = new Map<string, TranscriptPlace & { id: string }>()
   let hasAdded = false
   for (const delta of deltas) {
     let place = countedUpTo.get(delta.file)
     if (!place) {
       const id = transcriptId(delta.file)
-      place = { id, atMs: state.files.get(id) ?? floor }
+      place = { id, ...(state.files.get(id) ?? { atMs: floor, position: BEYOND_ANY_LINE }) }
       countedUpTo.set(delta.file, place)
     }
-    if (delta.atMs <= place.atMs) continue
+    const isNew = delta.position > place.position || delta.atMs > place.atMs
+    // The floor holds wherever the line starts: nothing from before tracking is ever counted.
+    if (!isNew || delta.atMs <= floor) continue
     const accountKey = accountAt(state, delta.atMs)
     addUsage(state, {
       accountKey,
@@ -97,7 +111,11 @@ export function countUsage(state: LedgerState, deltas: UsageDelta[], now: number
       counts: delta.counts
     })
     state.projects.set(delta.projectKey, delta.projectLabel)
-    state.files.set(place.id, Math.max(state.files.get(place.id) ?? 0, delta.atMs))
+    const counted = state.files.get(place.id)
+    state.files.set(place.id, {
+      atMs: Math.max(counted?.atMs ?? 0, delta.atMs),
+      position: Math.max(counted?.position ?? 0, delta.position)
+    })
     hasAdded = true
   }
   return hasAdded
@@ -161,7 +179,7 @@ export function countCodexSessions(
 }
 
 export function prune(state: LedgerState, now: number): void {
-  for (const [id, atMs] of state.files) {
+  for (const [id, { atMs }] of state.files) {
     if (atMs < now - USAGE_RETENTION_MS) state.files.delete(id)
   }
   for (const [key, { countedAtMs }] of state.codexSessions) {

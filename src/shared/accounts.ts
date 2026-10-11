@@ -12,6 +12,8 @@ export interface UsageDelta {
   // The transcript the line came from: the ledger counts each line of a file once.
   file: string
   atMs: number
+  // The byte the line starts at: the same on every read, and larger for a line appended later.
+  position: number
   counts: TokenCounts
 }
 
