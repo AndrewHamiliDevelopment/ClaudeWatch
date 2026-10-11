@@ -136,3 +136,4 @@ Left as they are: full-screen or maximised state is not restored; the Dock icon 
 - `src/main/bugfix-issues.test.ts` holds the new validator tests, because the existing `validateSettings` tests live there.
 - `src/main/office-window.ts` holds `opensOfficeOnStart`, so the start decision is testable without Electron.
 - The scope check lists 116 files that this work does not touch: 114 mode-only changes (100644 → 100755) and 2 deleted Xcode user-state files that were already in the working tree before the session. They are never staged.
+- `claudedocs/project_claudewatch-prerelease_batch.md` is the intake ledger of the next batch (eight pre-release items raised in the same session). It is not part of this plan.
