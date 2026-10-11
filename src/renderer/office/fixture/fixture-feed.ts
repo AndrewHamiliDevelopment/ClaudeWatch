@@ -228,7 +228,9 @@ export function buildFixtureFrame(tick: number, nowMs: number): OfficeFrame {
   return {
     floors: floors.map((entry) => entry.floor),
     sessions: floors.flatMap((entry) => entry.sessions),
-    agents: floors.flatMap((entry) => entry.agents)
+    agents: floors.flatMap((entry) => entry.agents),
+    connected: true,
+    sources: []
   }
 }
 

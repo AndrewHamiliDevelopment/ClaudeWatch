@@ -84,7 +84,13 @@ export function createLiveFeed(
       if (!isDirty && agentsKey === lastAgents) return
       isDirty = false
       lastAgents = agentsKey
-      const frame: OfficeFrame = { floors, agents, sessions: snapshot?.sessions ?? [] }
+      const frame: OfficeFrame = {
+        floors,
+        agents,
+        sessions: snapshot?.sessions ?? [],
+        connected: snapshot !== null,
+        sources: snapshot?.sources ?? []
+      }
       for (const listener of listeners) listener(frame)
     }, TICK_MS)
 

@@ -97,6 +97,21 @@ describe('createLiveFeed', () => {
     expect(listener).toBeNull()
   })
 
+  it('reports not connected until the first hello, then the bridge source health', () => {
+    const frames: OfficeFrame[] = []
+    createLiveFeed(source, { storage: store }).subscribe((frame) => frames.push(frame))
+    vi.advanceTimersByTime(200)
+    expect(frames.at(-1)).toMatchObject({ connected: false, sources: [] })
+    const sources = [{ id: 'orca', ok: false, detail: 'Orca not running' }]
+    listener?.({
+      type: 'hello',
+      v: 1,
+      snapshot: { rev: 1, generatedAtMs: 1, sessions: [], sources }
+    })
+    vi.advanceTimersByTime(200)
+    expect(frames.at(-1)).toMatchObject({ connected: true, sources })
+  })
+
   it('emits only when the frame changed, not on every tick', () => {
     const frames: OfficeFrame[] = []
     createLiveFeed(source, { storage: store }).subscribe((frame) => frames.push(frame))

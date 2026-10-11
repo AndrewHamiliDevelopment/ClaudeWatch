@@ -4,7 +4,8 @@ import type {
   PeekResult,
   PermissionDecision,
   ProviderId,
-  SessionRef
+  SessionRef,
+  SourceHealth
 } from '../../shared/office/types'
 
 // All lengths in metres, floor-local, 1 unit = 1 m, Y up. Plain data: Phase 6 maps the sim's LayoutMap into it.
@@ -57,6 +58,9 @@ export interface OfficeFrame {
   floors: FloorGeometry[]
   agents: AgentView[]
   sessions: SessionRef[]
+  // False until the bridge's first snapshot arrives, so "no agents" is not shown while connecting.
+  connected: boolean
+  sources: SourceHealth[]
 }
 
 export interface OfficeFeed {

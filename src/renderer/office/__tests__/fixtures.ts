@@ -76,5 +76,5 @@ export function makeAgent(overrides: Partial<AgentView> & Pick<AgentView, 'agent
 }
 
 export function makeFrame(overrides: Partial<OfficeFrame> = {}): OfficeFrame {
-  return { floors: [], agents: [], sessions: [], ...overrides }
+  return { floors: [], agents: [], sessions: [], connected: true, sources: [], ...overrides }
 }
