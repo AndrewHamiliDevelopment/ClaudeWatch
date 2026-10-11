@@ -2,15 +2,35 @@ import { expect, it } from 'vitest'
 import { World } from './world'
 import { session } from './fixtures'
 
+// An office that was open and empty when session `a` started, so `a` walks in.
 function world() {
   const world = new World({ now: () => 0 })
   world.apply({
     type: 'hello',
     v: 1,
-    snapshot: { rev: 0, generatedAtMs: 0, sessions: [session('a')], sources: [] }
+    snapshot: { rev: 0, generatedAtMs: 0, sessions: [], sources: [] }
   })
+  world.apply({ type: 'patch', v: 1, seq: 1, upserts: [session('a')], removed: [] })
   return world
 }
+it('seats the sessions that were already running when the office opens', () => {
+  const sim = new World({ now: () => 0 })
+  sim.apply({
+    type: 'hello',
+    v: 1,
+    snapshot: { rev: 1, generatedAtMs: 0, sessions: [session('a')], sources: [] }
+  })
+  const [seated] = sim.step(0)
+  const seat = sim
+    .layout()
+    .floors[0].rooms.find((r) => r.sessionKey === 'a')!
+    .slots.find((s) => s.id === 'desk_main')!
+  expect(seated).toMatchObject({ x: seat.x, z: seat.z, heading: seat.heading })
+
+  // A session that starts while the office is open walks in from the gate.
+  sim.apply({ type: 'patch', v: 1, seq: 2, upserts: [session('b')], removed: [] })
+  expect(sim.step(0).find((a) => a.agentKey === 'b')).toMatchObject({ x: 0, z: 0 })
+})
 it('clamps a ten second delta to one second of walking', () => {
   const sim = world()
   const start = sim.step(0)[0]
@@ -21,7 +41,7 @@ it('clamps a ten second delta to one second of walking', () => {
 it('leaves after removal and disappears at the elevator', () => {
   const sim = world()
   for (let i = 0; i < 1000; i++) sim.step(100)
-  sim.apply({ type: 'patch', v: 1, seq: 1, upserts: [], removed: ['a'] })
+  sim.apply({ type: 'patch', v: 1, seq: 2, upserts: [], removed: ['a'] })
   expect(sim.step(0)).toHaveLength(1)
   for (let i = 0; i < 1000; i++) sim.step(100)
   expect(sim.step(0)).toEqual([])
@@ -85,7 +105,12 @@ it('arrives from the same gate for all 60 agents across four companies', () => {
     companyKey: `c_${i % 4}`,
     companyLabel: `Company ${i % 4}`
   }))
-  sim.apply({ type: 'hello', v: 1, snapshot: { rev: 1, generatedAtMs: 0, sessions, sources: [] } })
+  sim.apply({
+    type: 'hello',
+    v: 1,
+    snapshot: { rev: 1, generatedAtMs: 0, sessions: [], sources: [] }
+  })
+  sim.apply({ type: 'patch', v: 1, seq: 2, upserts: sessions, removed: [] })
   expect(sim.step(0)).toHaveLength(60)
   for (const view of sim.step(0))
     expect({ x: view.x, z: view.z, floorId: view.floorId }).toEqual({ x: 0, z: 0, floorId: 'hq' })
