@@ -24,8 +24,8 @@ Tier T2 (score 8 capped by a single implementation slice; risk 3 because of inst
 - [x] Phase 1 — Open the Office on start: `openOfficeOnLaunch` setting, Settings toggle, startup hook (TDD)
 - [x] Phase 2 — Office window remembers its place, size and display (TDD)
 - [x] Phase 3 — Gates, review, runtime smoke, push to PR #2
-- [ ] Phase 4 — Merge PR #2 to `main`, install on this Mac, turn both toggles on, verify at next start
-- [ ] Phase 5 — Signed release 1.3.0 published to GitHub Releases (blocked today, see Blocker)
+- [x] Phase 4 — Merge PR #2 to `main` (7fc04cd), install on this Mac, turn both toggles on, verify at next start (installed build is signed with the team's Apple Development certificate; the Office opened by itself on real sessions, login item registered, one running copy)
+- [ ] Phase 5 — Signed release 1.3.0 published to GitHub Releases — BLOCKED (owner: Angelo): no Developer ID Application certificate or notarisation credentials on this Mac; see Blocker
 
 ## How it fits
 
@@ -117,6 +117,19 @@ Total **6h with Claude | 15h without** (2.5x): Phase 1 1|3, Phase 2 1.5|4, Phase
 - ASSUMPTION: the interim install replaces the app in `/Applications` rather than sitting beside it — chose this because login items and the single-instance lock work on one copy, and the old app is kept as a backup.
 - ASSUMPTION: local-database question skipped — ClaudeWatch has no data layer.
 - ASSUMPTION: version 1.3.0 (minor) — new feature and a major Electron upgrade, no breaking change for users.
+
+## Review fixes (2026-10-11)
+
+Found by the QA, security and code-review passes on the first commit, each fixed with a test or a runtime check:
+
+- Cmd+Q left a process with no tray and no window (`before-quit` never set the quitting flag). Reproduced on the built app, fixed, and checked on the packaged app.
+- No single-instance lock existed, so a login item plus a manual start ran two copies. A packaged app now keeps one.
+- `settings:set` kept values of the wrong type (a null group, a NaN interval), which could stop the next start. Settings are shape-checked on the way in and when the stored file is read.
+- The window was saved on every close, so one start without its display overwrote the remembered place. It is now saved when the user moves or resizes it.
+- A window that mostly sat on an unplugged display was squeezed onto the remaining one. The display under the window's centre decides; otherwise the default is used.
+- The Office opened in the middle of startup; a failure there would have cost the tray. It now opens last and is contained.
+
+Left as they are: full-screen or maximised state is not restored; the Dock icon still opens the dashboard, not the Office; Windows-specific snapped-window and mixed-DPI behaviour (this milestone is macOS only).
 
 ## Deviations
 
