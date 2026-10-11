@@ -10,8 +10,11 @@ vi.mock('electron', () => ({ ipcMain: { handle }, app, shell: { openExternal } }
 vi.mock('./terminal-opener', () => ({ openTerminal: vi.fn(() => ({ success: true })) }))
 import { openTerminal } from './terminal-opener'
 import { forwardUpdatesToRenderer, setupIpcHandlers } from './ipc-handlers'
+import { join } from 'path'
+import { pathToFileURL } from 'url'
 
-const appEvent = { senderFrame: { parent: null, url: 'file:///app/index.html' } }
+const APP_PAGE = pathToFileURL(join(__dirname, '../renderer/index.html')).href
+const appEvent = { senderFrame: { parent: null, url: APP_PAGE } }
 const stats = { total: 2, active: 1, idle: 1, stale: 0, exited: 0, recentlyCompleted: 0 }
 const usage = {
   totalInputTokens: 1,
@@ -79,7 +82,8 @@ describe('IPC authorization', () => {
   it.each([
     null,
     { senderFrame: null },
-    { senderFrame: { parent: {}, url: 'file:///app/index.html' } },
+    { senderFrame: { parent: {}, url: APP_PAGE } },
+    { senderFrame: { parent: null, url: 'file:///tmp/dropped.html' } },
     ...['https://example.com', 'about:blank', 'data:text/html,x', 'invalid'].map((url) => ({
       senderFrame: { parent: null, url }
     }))

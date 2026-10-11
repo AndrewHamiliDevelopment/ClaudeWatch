@@ -1,4 +1,9 @@
 import { app, BrowserWindow } from 'electron'
+import { join, sep } from 'path'
+import { fileURLToPath } from 'url'
+
+// electron-vite puts the renderer pages next to the main bundle; only these files are the app.
+const RENDERER_DIR = join(__dirname, '../renderer')
 
 export function isAppOrigin(url: string): boolean {
   try {
@@ -8,8 +13,9 @@ export function isAppOrigin(url: string): boolean {
       const origin = new URL(rendererUrl).origin
       return origin !== 'null' && target.origin === origin
     }
-    // Opaque origins also include data: and about:, so check the file protocol explicitly.
-    return target.protocol === 'file:' && target.hostname === ''
+    // Any other local file (one dropped on a window, say) must not inherit the app's bridges.
+    if (target.protocol !== 'file:' || target.hostname !== '') return false
+    return fileURLToPath(target).startsWith(RENDERER_DIR + sep)
   } catch {
     return false
   }
@@ -28,8 +34,9 @@ export function createAppWindow(options: Electron.BrowserWindowConstructorOption
       allowRunningInsecureContent: false
     }
   })
-  const guardNavigation = (event: Electron.Event, url: string): void => {
-    if (!isAppOrigin(url)) event.preventDefault()
+  // App windows never navigate (routing is by hash), so any navigation is refused outright.
+  const guardNavigation = (event: Electron.Event): void => {
+    event.preventDefault()
   }
   window.webContents.on('will-navigate', guardNavigation)
   window.webContents.on('will-redirect', guardNavigation)
