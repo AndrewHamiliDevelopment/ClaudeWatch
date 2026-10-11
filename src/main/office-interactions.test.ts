@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { OfficeInteractions } from './office-interactions'
-import type { OfficeSnapshot, SessionRef } from '../shared/office/types'
+import type { OfficeSnapshot, SessionRef, SubagentRef } from '../shared/office/types'
 import type { PaneTerminal } from './orca-terminals'
 
 const session = (overrides: Partial<SessionRef> = {}): SessionRef => ({
@@ -312,6 +312,63 @@ describe('OfficeInteractions', () => {
         reason: 'not-in-orca',
         lines: []
       })
+    })
+  })
+
+  describe('a teammate, which has its own process and pane', () => {
+    const teammate: SubagentRef = {
+      id: 'ravi@session-s1',
+      type: 'ravi',
+      activity: 'thinking',
+      kind: 'teammate',
+      name: 'ravi',
+      pid: 5,
+      startedAtMs: 50,
+      orcaPaneKey: 'tab2:leaf2'
+    }
+    const teammateKey = 'claude:s1#ravi@session-s1'
+
+    beforeEach(() => {
+      snapshot.sessions = [session({ subagents: [teammate] })]
+      processStart.mockImplementation(async (pid: number) => (pid === 5 ? 50 : 1))
+      orca.handleFor.mockImplementation(async (paneKey: string) =>
+        paneKey === 'tab2:leaf2'
+          ? pane({ handle: 'term_mate', agent: 'claude-agent-teams' })
+          : pane()
+      )
+    })
+
+    it('types a message into the teammate’s pane, not the lead’s', async () => {
+      expect(await interactions.send(teammateKey, 'status?')).toEqual({ success: true })
+      expect(orca.sendPrompt).toHaveBeenCalledWith('term_mate', 'status?')
+    })
+
+    it('peeks at the teammate’s own screen', async () => {
+      orca.screen.mockResolvedValue(['mate line'])
+      expect((await interactions.peek(teammateKey)).lines).toEqual(['mate line'])
+      expect(orca.screen).toHaveBeenCalledWith('term_mate')
+    })
+
+    it('types nothing when the teammate’s process is no longer the one reported', async () => {
+      processStart.mockResolvedValue(999)
+      expect(await interactions.send(teammateKey, 'status?')).toEqual({
+        success: false,
+        reason: 'unknown-session'
+      })
+      expect(orca.sendPrompt).not.toHaveBeenCalled()
+    })
+
+    it('never types into the lead’s terminal for an agent that runs inside the lead', async () => {
+      snapshot.sessions = [
+        session({ subagents: [{ id: 'a1', type: 'Explore', activity: 'reading' }] })
+      ]
+      expect(await interactions.send('claude:s1#a1', 'status?')).toEqual({
+        success: false,
+        reason: 'unknown-session'
+      })
+      expect(await interactions.peek('claude:s1#a1')).toMatchObject({ success: false })
+      expect(orca.sendPrompt).not.toHaveBeenCalled()
+      expect(orca.screen).not.toHaveBeenCalled()
     })
   })
 

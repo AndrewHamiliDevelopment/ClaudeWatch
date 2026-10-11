@@ -179,27 +179,43 @@ export class OfficeInteractions {
     return pane.success ? { success: true, target: 'pane' } : { ...pane, target: 'app' }
   }
 
+  // Where an agent can be looked at. A subagent lives in its lead's process and pane.
   private ownerOf(agentKey: string): PaneOwner | null {
-    const session = this.session(agentKey)
-    if (session) return session
-    for (const lead of this.deps.snapshot()?.sessions ?? []) {
-      if (!agentKey.startsWith(`${lead.key}#`)) continue
-      const member = lead.subagents.find((s) => s.id === agentKey.slice(lead.key.length + 1))
-      if (!member) continue
-      // A subagent lives in its parent's process and pane; a teammate has its own of both.
-      if (member.kind !== 'teammate') return lead
-      return {
-        provider: lead.provider,
-        cwd: lead.cwd,
-        projectRoot: lead.projectRoot,
-        host: member.orcaPaneKey ? 'orca' : lead.host,
-        pid: member.pid ?? null,
-        // NaN equals no start time, so a teammate reported without one is never proven live.
-        startedAtMs: member.startedAtMs ?? Number.NaN,
-        orcaPaneKey: member.orcaPaneKey ?? null
-      }
+    return this.session(agentKey) ?? this.teammate(agentKey) ?? this.leadOf(agentKey)
+  }
+
+  // Where an agent can be typed to or read: its own terminal only. Text for a subagent would
+  // land in its lead's prompt, so a subagent has none.
+  private terminalOwner(agentKey: string): PaneOwner | null {
+    return this.session(agentKey) ?? this.teammate(agentKey)
+  }
+
+  private leadOf(agentKey: string): SessionRef | null {
+    const leads = this.deps.snapshot()?.sessions ?? []
+    return (
+      leads.find(
+        (lead) =>
+          agentKey.startsWith(`${lead.key}#`) &&
+          lead.subagents.some((member) => member.id === agentKey.slice(lead.key.length + 1))
+      ) ?? null
+    )
+  }
+
+  // A teammate has its own process and pane, in its lead's project.
+  private teammate(agentKey: string): PaneOwner | null {
+    const lead = this.leadOf(agentKey)
+    const member = lead?.subagents.find((s) => s.id === agentKey.slice(lead.key.length + 1))
+    if (!lead || member?.kind !== 'teammate') return null
+    return {
+      provider: lead.provider,
+      cwd: lead.cwd,
+      projectRoot: lead.projectRoot,
+      host: member.orcaPaneKey ? 'orca' : lead.host,
+      pid: member.pid ?? null,
+      // NaN equals no start time, so a teammate reported without one is never proven live.
+      startedAtMs: member.startedAtMs ?? Number.NaN,
+      orcaPaneKey: member.orcaPaneKey ?? null
     }
-    return null
   }
 
   private session(sessionKey: string): SessionRef | undefined {
@@ -207,11 +223,11 @@ export class OfficeInteractions {
   }
 
   private async withTerminal(
-    sessionKey: string,
+    agentKey: string,
     action: (terminal: PaneTerminal) => Promise<InteractionResult>
   ): Promise<InteractionResult> {
-    const session = this.session(sessionKey)
-    return session ? this.withPane(session, action) : fail('unknown-session')
+    const owner = this.terminalOwner(agentKey)
+    return owner ? this.withPane(owner, action) : fail('unknown-session')
   }
 
   // Resolves the pane's terminal fresh each time: Orca handles go stale across reloads.
