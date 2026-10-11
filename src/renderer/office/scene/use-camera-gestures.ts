@@ -225,7 +225,6 @@ function createGestureRig({ camera, domElement, invalidate, latestRef }: Gesture
 
 // The gesture layer over camera-controls: wheel, pinch and trackpad scroll, release inertia and
 // the pan and fit keys. camera-controls keeps drag pan, rotate and fly-to.
-// dry-new: no gesture hook existed; the wheel handling it replaces lived inline in CameraRig.
 export function useCameraGestures(options: GestureOptions): CameraGestures {
   const camera = useThree((state) => state.camera)
   const domElement = useThree((state) => state.gl.domElement)

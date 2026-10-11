@@ -1,8 +1,9 @@
+import { addCounts } from '../../../shared/office/token-counts'
 import type { SessionRef, SubagentRef } from '../../../shared/office/types'
 import { SegmentedMeter } from '../../components/deck/SegmentedMeter'
 import { formatTokens, sessionTokens } from '../../deck/tokens'
 import { Fact } from './Fact'
-import { contextShare, contextText, memberTokens, tokensText, usageParts } from './tokens'
+import { contextShare, contextText, memberTokens, tokensText } from './tokens'
 
 const PART_LABELS = [
   ['input', 'Input'],
@@ -24,7 +25,7 @@ export function MemberTokenFacts({ member }: { member: SubagentRef }) {
 // A lead's spend: the total, its four parts, the context window, and the agents it started.
 export function SessionTokenFacts({ session }: { session: SessionRef }) {
   const { usage } = session
-  const parts = usage ? usageParts(usage) : null
+  const parts = usage ? addCounts(usage.own, usage.subagents) : null
   const context = usage ? contextText(usage) : null
   const share = usage ? contextShare(usage) : null
   return (

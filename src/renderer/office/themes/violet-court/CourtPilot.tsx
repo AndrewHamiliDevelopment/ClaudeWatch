@@ -4,11 +4,11 @@ import { RobotEffects } from '../RobotEffects'
 import type { RobotModelProps } from '../types'
 import { COURT_CAST } from './cast'
 import { PILOT_PIVOT, pilotParts } from './pilot-parts'
-import { castIndexFor } from './roster'
+import { violetCourtRoster } from './roster'
 
 // A uniformed pilot at the desk; which one is decided by the provider and the office bay.
 export function CourtPilot({ agent, skin, rosterIndex, rig }: RobotModelProps) {
-  const castIndex = castIndexFor(agent, rosterIndex)
+  const castIndex = violetCourtRoster.indexFor(agent, rosterIndex)
   const joints = useMemo(() => pilotParts(COURT_CAST[castIndex]), [castIndex])
   return (
     <JointedFigure

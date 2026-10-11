@@ -1,9 +1,7 @@
-import type { AccountRef, AgentView, SessionRef } from '../../../shared/office/types'
-import type { AgentState } from '../../deck/roster'
+import type { AccountRef, SessionRef } from '../../../shared/office/types'
 import { sessionTokens } from '../../deck/tokens'
 import { memberForAgent, sessionForAgent } from '../logic/floor-model'
 import { isTeammate, reachTarget } from '../logic/interactions'
-import { GEM_SPECS } from '../logic/status-gem'
 import type { OfficeFrame } from '../scene-model'
 import { memberTokens } from './tokens'
 
@@ -30,22 +28,6 @@ export function buildAgentFacts(frame: OfficeFrame): Map<string, AgentFacts> {
     })
   }
   return facts
-}
-
-// The Deck's state vocabulary, so an agent reads the same in the Office and on the dashboard.
-export function agentStateMark(agent: Pick<AgentView, 'attention' | 'activity'>): {
-  state: AgentState
-  detail: string | null
-} {
-  switch (agent.attention) {
-    case 'permission':
-    case 'question':
-      return { state: 'needs-you', detail: GEM_SPECS[agent.attention].label }
-    case 'none':
-      return { state: agent.activity === 'idle' ? 'idle' : 'working', detail: null }
-    default:
-      return { state: agent.attention, detail: null }
-  }
 }
 
 // The account a session runs under, as the Office may name it: a label, never an address.

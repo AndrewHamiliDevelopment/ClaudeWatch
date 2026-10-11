@@ -1,15 +1,9 @@
+import { browserStorage } from '../../office-live/browser-storage'
+
 export const ROSTER_NAMES_STORAGE_KEY = 'claudewatch.office.roster-names'
 const MAX_NAME_LENGTH = 40
 
 type NameStorage = Pick<Storage, 'getItem'>
-
-function browserStorage(): NameStorage | null {
-  try {
-    return window.localStorage
-  } catch {
-    return null
-  }
-}
 
 // `{ [themeId]: string[] }`, checked by shape: anything else reads as "no override".
 function storedNames(storage: NameStorage | null, themeId: string): readonly unknown[] {

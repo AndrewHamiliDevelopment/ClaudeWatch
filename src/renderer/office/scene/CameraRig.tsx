@@ -66,8 +66,9 @@ export function CameraRig(props: CameraRigProps) {
     () => occupiedBounds(props.floor, props.liveSessionKeys),
     [props.floor, props.liveSessionKeys]
   )
-  const latestRef = useRef({ ...props, size, occupied, isAnimated: !props.isReducedMotion })
-  latestRef.current = { ...props, size, occupied, isAnimated: !props.isReducedMotion }
+  const latest = { ...props, size, occupied }
+  const latestRef = useRef(latest)
+  latestRef.current = latest
 
   // Stable helpers that read the latest props through the ref.
   const rig = useRef({
@@ -82,10 +83,10 @@ export function CameraRig(props: CameraRigProps) {
       const controls = controlsRef.current
       if (!controls) return
       gesturesRef.current?.cancel()
-      const { size: viewport, isAnimated } = latestRef.current
+      const { size: viewport, isReducedMotion } = latestRef.current
       const view = frameBounds(bounds, viewport, { azimuth: controls.azimuthAngle, maxZoom })
-      void controls.moveTo(...view.target, isAnimated)
-      void controls.zoomTo(view.zoom, isAnimated)
+      void controls.moveTo(...view.target, !isReducedMotion)
+      void controls.zoomTo(view.zoom, !isReducedMotion)
     },
     frameFloor(): void {
       rig.frame(latestRef.current.occupied, FLOOR_MAX_ZOOM)
@@ -173,7 +174,7 @@ export function CameraRig(props: CameraRigProps) {
       target.x + step.dx,
       target.y,
       target.z + step.dz,
-      latestRef.current.isAnimated
+      !latestRef.current.isReducedMotion
     )
   }, [followedFloor, followedAgents, rig, targetScratch])
 
@@ -181,7 +182,8 @@ export function CameraRig(props: CameraRigProps) {
   useEffect(() => {
     const controls = controlsRef.current
     if (!request || !controls) return
-    const { isAnimated, floor, agents } = latestRef.current
+    const { floor, agents } = latestRef.current
+    const isAnimated = !latestRef.current.isReducedMotion
     switch (request.kind) {
       case 'zoom':
         gesturesRef.current?.zoomBy(request.direction === 'in' ? KEY_ZOOM_STEP : 1 / KEY_ZOOM_STEP)

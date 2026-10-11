@@ -1,3 +1,4 @@
+import { addCounts, zeroCounts } from '../shared/office/token-counts'
 import type { TokenCounts } from '../shared/office/types'
 import { jsonObject, object } from './io'
 
@@ -12,16 +13,8 @@ export interface UsageIncrement {
   counts: TokenCounts
 }
 
-export const zeroCounts = (): TokenCounts => ({ input: 0, output: 0, cacheWrite: 0, cacheRead: 0 })
-
-export function addCounts(a: TokenCounts, b: TokenCounts): TokenCounts {
-  return {
-    input: a.input + b.input,
-    output: a.output + b.output,
-    cacheWrite: a.cacheWrite + b.cacheWrite,
-    cacheRead: a.cacheRead + b.cacheRead
-  }
-}
+// The bridge's usage readers and main/accounts/attribution.ts still import these from here.
+export { addCounts, zeroCounts }
 
 export function emptyFold(): UsageFold {
   return { closed: zeroCounts(), openId: null, open: zeroCounts() }

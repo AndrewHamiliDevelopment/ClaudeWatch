@@ -1,5 +1,5 @@
 import type { FloorProps, ZoneProps } from '../types'
-import { CompanyGrounds, ProjectRoom } from '../ZoneArchitecture'
+import { CompanyGrounds, FloorSlab, LiftAt, ProjectRoom } from '../ZoneArchitecture'
 import { pointedArch } from './CourtRoom'
 import { COURT, COURT_PALETTE } from './palette'
 import { box, Parts, type PartSpec } from '../parts'
@@ -23,14 +23,7 @@ export function CourtProjectOffice({ zone }: ZoneProps) {
 
 // Floor-scoped parts: drawn only when Violet Court is the whole floor's theme.
 export function CourtSlab({ floor }: FloorProps) {
-  return (
-    <Parts
-      parts={[
-        box([0, -0.16, 0], [floor.width + 1, 0.3, floor.depth + 1], COURT.slate),
-        box([0, -0.005, floor.corridor.z], [floor.width, 0.02, floor.corridor.width], COURT.violet)
-      ]}
-    />
-  )
+  return <FloorSlab floor={floor} ground={COURT.slate} lane={COURT.violet} />
 }
 
 // An open lift platform between four posts, under a violet canopy.
@@ -42,9 +35,5 @@ const LIFT: PartSpec[] = [
 ]
 
 export function CourtElevator({ floor }: FloorProps) {
-  return (
-    <group position={[floor.elevator.x, 0, floor.elevator.z]}>
-      <Parts parts={LIFT} />
-    </group>
-  )
+  return <LiftAt floor={floor} parts={LIFT} />
 }

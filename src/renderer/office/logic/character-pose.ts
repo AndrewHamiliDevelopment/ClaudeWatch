@@ -1,3 +1,4 @@
+import { needsHuman } from '../../../shared/office/attention'
 import type { AgentView } from '../../../shared/office/types'
 
 export type RobotMood = 'idle' | 'working' | 'reading' | 'thinking' | 'needs-you' | 'walking'
@@ -45,7 +46,7 @@ export function moodFor(
   agent: Pick<AgentView, 'activity' | 'attention'>,
   isMoving: boolean
 ): RobotMood {
-  if (agent.attention === 'permission' || agent.attention === 'question') return 'needs-you'
+  if (needsHuman(agent.attention)) return 'needs-you'
   if (isMoving) return 'walking'
   switch (agent.activity) {
     case 'editing':

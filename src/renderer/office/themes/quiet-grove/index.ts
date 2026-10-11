@@ -6,14 +6,14 @@ import { GroveSpirit } from './GroveSpirit'
 import { GroveWalls } from './GroveWalls'
 import { GroveDistrict, GroveHangar, GroveTower } from './GroveWorld'
 import { GROVE, GROVE_PALETTE } from './palette'
-import { castIndexFor, QUIET_GROVE_ID, quietGroveRoster } from './roster'
+import { QUIET_GROVE_ID, quietGroveRoster } from './roster'
 
 export const quietGrove: OfficeTheme = {
   id: QUIET_GROVE_ID,
   label: 'Quiet Grove',
   description: 'A studio in a forest clearing: timber desks, hedges for walls, paper lanterns.',
   palette: GROVE_PALETTE,
-  roster: { entries: quietGroveRoster, indexFor: castIndexFor },
+  roster: quietGroveRoster,
   robot: {
     Model: GroveSpirit,
     skins: {

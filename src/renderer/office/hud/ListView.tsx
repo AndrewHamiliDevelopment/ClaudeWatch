@@ -3,10 +3,11 @@ import type { AgentView } from '../../../shared/office/types'
 import { ICON_BUTTON_CLASS } from '../../components/deck/deck-styles'
 import { Plate } from '../../components/deck/Plate'
 import { StateMark } from '../../components/deck/StateMark'
+import { stateOfAttention } from '../../deck/roster'
 import { cn } from '../../lib/utils'
 import type { CompanyListEntry } from '../logic/zone-model'
 import { PROVIDER_LABEL } from '../office-palette'
-import { agentStateMark, type AgentFacts } from './agent-facts'
+import type { AgentFacts } from './agent-facts'
 import { tokensText } from './tokens'
 
 interface ListViewProps {
@@ -28,7 +29,7 @@ interface AgentRowProps extends Pick<ListViewProps, 'onSelectAgent' | 'onFocusTe
 }
 
 function AgentRow({ agent, facts, isSelected, onSelectAgent, onFocusTerminal }: AgentRowProps) {
-  const mark = agentStateMark(agent)
+  const mark = stateOfAttention(agent.attention, agent.activity)
   return (
     <tr className={cn(isSelected && 'bg-surface-hover')}>
       <td className={cn(CELL_CLASS, agent.isSubagent ? 'pl-[4.5rem]' : 'pl-12')}>

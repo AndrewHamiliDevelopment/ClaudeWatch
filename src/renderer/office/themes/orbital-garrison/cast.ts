@@ -98,7 +98,7 @@ export const WING_LEADS: readonly GarrisonCharacter[] = [
   }
 ]
 
-export const DECK_LEADS: readonly GarrisonCharacter[] = [
+const DECK_LEADS: readonly GarrisonCharacter[] = [
   {
     ...DECK,
     id: 'hollis-varga',
@@ -143,7 +143,7 @@ export const DECK_LEADS: readonly GarrisonCharacter[] = [
 ]
 
 // Subagents: one squad member per section, in plain steel headgear.
-export const WING_CADET: GarrisonCharacter = {
+const WING_CADET: GarrisonCharacter = {
   ...WING,
   isSquad: true,
   id: 'wing-cadet',
@@ -153,7 +153,7 @@ export const WING_CADET: GarrisonCharacter = {
   hair: GARRISON.hull,
   features: ['flight-helmet']
 }
-export const DECKHAND: GarrisonCharacter = {
+const DECKHAND: GarrisonCharacter = {
   ...DECK,
   isSquad: true,
   id: 'deckhand',

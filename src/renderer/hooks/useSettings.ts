@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { AppSettings } from '../lib/types'
 import { DEFAULT_SETTINGS } from '../lib/types'
+import { deckApi } from '../deck/deck-api'
 
 interface UseSettingsReturn {
   settings: AppSettings
@@ -10,17 +11,16 @@ interface UseSettingsReturn {
 
 export function useSettings(): UseSettingsReturn {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS)
-  const [loading, setLoading] = useState(() => {
-    return typeof window !== 'undefined' && !!window.api
-  })
+  const [loading, setLoading] = useState(() => Boolean(deckApi()))
 
   useEffect(() => {
-    if (typeof window === 'undefined' || !window.api) {
+    const api = deckApi()
+    if (!api) {
       setLoading(false)
       return
     }
 
-    window.api
+    api
       .getSettings()
       .then((data) => {
         setSettings(data)
@@ -31,9 +31,10 @@ export function useSettings(): UseSettingsReturn {
   }, [])
 
   const updateSettings = useCallback(async (partial: Partial<AppSettings>) => {
-    if (typeof window === 'undefined' || !window.api) return
+    const api = deckApi()
+    if (!api) return
 
-    const updated = await window.api.setSettings(partial)
+    const updated = await api.setSettings(partial)
     setSettings(updated)
   }, [])
 

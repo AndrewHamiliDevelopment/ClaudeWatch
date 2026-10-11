@@ -16,8 +16,7 @@ import {
 import { GarrisonWalls } from './GarrisonWalls'
 import { GarrisonDistrict, GarrisonHangar, GarrisonTower } from './GarrisonWorld'
 import { GARRISON, GARRISON_PALETTE } from './palette'
-import { GARRISON_CAST } from './cast'
-import { characterFor, ORBITAL_GARRISON_ID, orbitalGarrisonRoster } from './roster'
+import { ORBITAL_GARRISON_ID, orbitalGarrisonRoster } from './roster'
 
 export const orbitalGarrison: OfficeTheme = {
   id: ORBITAL_GARRISON_ID,
@@ -25,10 +24,7 @@ export const orbitalGarrison: OfficeTheme = {
   description:
     'A hangar deck in gunmetal, white and hazard orange: crews at consoles, frames parked.',
   palette: GARRISON_PALETTE,
-  roster: {
-    entries: orbitalGarrisonRoster,
-    indexFor: (agent, bay) => GARRISON_CAST.indexOf(characterFor(agent, bay))
-  },
+  roster: orbitalGarrisonRoster,
   robot: {
     Model: GarrisonCrew,
     skins: {

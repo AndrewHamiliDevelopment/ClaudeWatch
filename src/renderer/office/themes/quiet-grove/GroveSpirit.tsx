@@ -7,7 +7,7 @@ import { UNIT_SHAPES, UnitPart } from '../unit-parts'
 import { Parts } from '../parts'
 import { GROVE_CAST } from './cast'
 import { GROVE } from './palette'
-import { castIndexFor } from './roster'
+import { quietGroveRoster } from './roster'
 import { spiritBuild } from './spirit-parts'
 
 // Where each firefly rises (x, z); the rig sets its height and size while the agent works,
@@ -55,7 +55,7 @@ function GroveEffects({ rig, crown }: Pick<RobotModelProps, 'rig'> & { crown: nu
 
 // A keeper, a helper or a sprout; which one is decided by the provider and the office bay.
 export function GroveSpirit({ agent, skin, rosterIndex, rig }: RobotModelProps) {
-  const castIndex = castIndexFor(agent, rosterIndex)
+  const castIndex = quietGroveRoster.indexFor(agent, rosterIndex)
   const build = useMemo(() => spiritBuild(GROVE_CAST[castIndex]), [castIndex])
   const isAsking = moodFor(agent, false) === 'needs-you'
   return (

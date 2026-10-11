@@ -1,3 +1,4 @@
+import { agentKey } from '../../../shared/office/agent-key'
 import type {
   FocusResult,
   InteractionFailure,
@@ -8,15 +9,9 @@ import type {
 
 export const MAX_MESSAGE_CHARS = 4000
 
-type Reachable = Pick<SessionRef, 'host'>
-
 // Talk and peek drive the agent's Orca pane, so only Orca-hosted sessions can be reached.
-export function canTalk(session: Reachable): boolean {
-  return session.host === 'orca'
-}
-
-export function canPeek(session: Reachable): boolean {
-  return session.host === 'orca'
+export function isOrcaHosted(target: Pick<SessionRef, 'host'>): boolean {
+  return target.host === 'orca'
 }
 
 export function canRespond(session: Pick<SessionRef, 'host' | 'provider' | 'attention'>): boolean {
@@ -34,15 +29,20 @@ export interface ReachTarget {
   key: string
   name: string
   host: SessionHost
+  // False only for a teammate, which has a terminal of its own.
+  isLead: boolean
 }
 
 // A teammate has a process and a pane of its own; a subagent shares its lead's.
 export function reachTarget(session: SessionRef, member: SubagentRef | undefined): ReachTarget {
-  if (!isTeammate(member)) return { key: session.key, name: session.name, host: session.host }
+  if (!isTeammate(member)) {
+    return { key: session.key, name: session.name, host: session.host, isLead: true }
+  }
   return {
-    key: `${session.key}#${member.id}`,
+    key: agentKey(session.key, member.id),
     name: member.name ?? member.type,
-    host: member.orcaPaneKey ? 'orca' : session.host
+    host: member.orcaPaneKey ? 'orca' : session.host,
+    isLead: false
   }
 }
 

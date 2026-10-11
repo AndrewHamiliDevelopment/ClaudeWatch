@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
+import { INTERACTION_FAILURES } from '../../../shared/office/types'
 import {
-  canPeek,
   canRespond,
-  canTalk,
   failureMessage,
   focusMessage,
+  isOrcaHosted,
   MAX_MESSAGE_CHARS,
   messageProblem,
   reachTarget
@@ -16,10 +16,9 @@ describe('availability', () => {
   const orcaClaude = makeSession({ key: 'claude:a', host: 'orca', attention: 'permission' })
 
   it('lets talk and peek reach only Orca sessions', () => {
-    expect(canTalk(orcaClaude)).toBe(true)
-    expect(canPeek(orcaClaude)).toBe(true)
-    expect(canTalk(makeSession({ key: 'claude:t', host: 'terminal' }))).toBe(false)
-    expect(canPeek(makeSession({ key: 'claude:t', host: 'vscode' }))).toBe(false)
+    expect(isOrcaHosted(orcaClaude)).toBe(true)
+    expect(isOrcaHosted(makeSession({ key: 'claude:t', host: 'terminal' }))).toBe(false)
+    expect(isOrcaHosted(makeSession({ key: 'claude:t', host: 'vscode' }))).toBe(false)
   })
 
   it('answers prompts only for Claude in Orca with a permission prompt showing', () => {
@@ -54,6 +53,12 @@ describe('failureMessage', () => {
     )
   })
 
+  it('has its own words for each failure the contract lists', () => {
+    const messages = INTERACTION_FAILURES.map((reason) => failureMessage(reason))
+    expect(new Set(messages).size).toBe(INTERACTION_FAILURES.length)
+    expect(messages).not.toContain(failureMessage(undefined))
+  })
+
   it('still says something when the reason is missing', () => {
     expect(failureMessage(undefined)).toMatch(/try again/i)
   })
@@ -74,16 +79,21 @@ describe('reachTarget', () => {
     expect(reachTarget(lead, undefined)).toEqual({
       key: 'claude:a',
       name: 'office renderer',
-      host: 'terminal'
+      host: 'terminal',
+      isLead: true
     })
-    expect(reachTarget(lead, { id: 's1', type: 'Explore', activity: 'idle' }).key).toBe('claude:a')
+    expect(reachTarget(lead, { id: 's1', type: 'Explore', activity: 'idle' })).toMatchObject({
+      key: 'claude:a',
+      isLead: true
+    })
   })
 
   it('reaches a teammate through its own pane, under its own name', () => {
     expect(reachTarget(lead, teammate)).toEqual({
       key: 'claude:a#t1',
       name: 'lena-hud',
-      host: 'orca'
+      host: 'orca',
+      isLead: false
     })
   })
 

@@ -1,5 +1,6 @@
-import type { SessionUsage, SubagentRef, TokenCounts } from '../../../shared/office/types'
-import { formatTokens, formatTotal, sumCounts } from '../../deck/tokens'
+import { sumCounts } from '../../../shared/office/token-counts'
+import type { SessionUsage, SubagentRef } from '../../../shared/office/types'
+import { formatTokens, formatTotal } from '../../deck/tokens'
 
 const COUNTING_TEXT = 'counting…'
 
@@ -10,15 +11,6 @@ export function tokensText(tokens: number | null, isPartial = false): string {
 
 export function memberTokens(member: Pick<SubagentRef, 'tokens'>): number | null {
   return member.tokens ? sumCounts(member.tokens) : null
-}
-
-export function usageParts(usage: Pick<SessionUsage, 'own' | 'subagents'>): TokenCounts {
-  return {
-    input: usage.own.input + usage.subagents.input,
-    output: usage.own.output + usage.subagents.output,
-    cacheWrite: usage.own.cacheWrite + usage.subagents.cacheWrite,
-    cacheRead: usage.own.cacheRead + usage.subagents.cacheRead
-  }
 }
 
 type ContextWindow = Pick<SessionUsage, 'contextTokens' | 'contextLimit'>

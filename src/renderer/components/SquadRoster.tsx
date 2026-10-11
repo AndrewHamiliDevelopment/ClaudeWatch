@@ -3,15 +3,15 @@ import { Bot } from 'lucide-react'
 import { useSettings } from '../hooks/useSettings'
 import type { Squad } from '../deck/roster'
 import { agentCountLabel, needsYouLabel } from '../office/logic/floor-model'
-import { formatTotal } from '../deck/tokens'
 import { cn } from '../lib/utils'
 import { AgentRow, ROSTER_COLUMNS_CLASS, ROSTER_COLUMNS_WITH_TOKENS_CLASS } from './AgentRow'
 import { Crest } from './deck/Plate'
+import { SquadTokens } from './deck/SquadTokens'
 import { StateIcon } from './deck/StateMark'
 
 export function SquadRoster({ squads }: { squads: readonly Squad[] }) {
   const { settings, updateSettings } = useSettings()
-  const mutedProjects = settings.notifications.mutedProjects ?? []
+  const { mutedProjects } = settings.notifications
   const showTokens = squads.some((squad) => squad.tokens !== null)
 
   const handleToggleMute = (projectPath: string, shouldMute: boolean): void => {
@@ -94,12 +94,7 @@ function SquadSection({ squad, showTokens, mutedProjects, onToggleMute }: SquadS
           </span>
         )}
         <span className="text-xs text-text-secondary">{agentCountLabel(squad.agents.length)}</span>
-        {squad.tokens !== null && (
-          <span className="min-w-14 text-right text-xs tabular-nums text-accent">
-            {formatTotal(squad.tokens, squad.isTokensPartial)}
-            <span className="sr-only">{squad.isTokensPartial ? ' or more tokens' : ' tokens'}</span>
-          </span>
-        )}
+        <SquadTokens squad={squad} className="min-w-14 text-xs" />
       </div>
       <ul>
         {squad.agents.map((agent) => (

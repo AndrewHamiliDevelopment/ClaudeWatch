@@ -4,11 +4,10 @@ import { usePromoStatus } from '../hooks/usePromoStatus'
 import { useRateLimits } from '../hooks/useRateLimits'
 import { useSquads } from '../hooks/useSquads'
 import { useUsage } from '../hooks/useUsage'
-import { openOffice } from '../deck/deck-api'
+import { deckApi, openOffice } from '../deck/deck-api'
 import { tallySquads, type Squad, type SquadTally } from '../deck/roster'
 import { needsYouLabel } from '../office/logic/floor-model'
 import type { UsageStats } from '../lib/types'
-import { formatTotal } from '../deck/tokens'
 import { cn, formatCurrency } from '../lib/utils'
 import {
   BUTTON_PRIMARY_CLASS,
@@ -18,6 +17,7 @@ import {
 } from './deck/deck-styles'
 import { Crest } from './deck/Plate'
 import { LimitLines } from './deck/LimitLines'
+import { SquadTokens } from './deck/SquadTokens'
 import { StateIcon } from './deck/StateMark'
 import { WorkOrderSlip } from './deck/WorkOrderSlip'
 
@@ -29,9 +29,10 @@ export function PopoverView() {
   const [isPinned, setIsPinned] = useState(false)
 
   useEffect(() => {
-    if (typeof window === 'undefined' || !window.api) return
-    void window.api.getPopoverPinned?.().then((pinned) => setIsPinned(pinned === true))
-    return window.api.onPopoverPinChanged?.(setIsPinned)
+    const api = deckApi()
+    if (!api) return
+    void api.getPopoverPinned?.().then((pinned) => setIsPinned(pinned === true))
+    return api.onPopoverPinChanged?.(setIsPinned)
   }, [])
 
   const tally = tallySquads(squads)
@@ -195,12 +196,7 @@ function SquadLine({ squad }: { squad: Squad }) {
           />
         ))}
       </span>
-      {squad.tokens !== null && (
-        <span className="min-w-10 text-right tabular-nums text-accent">
-          {formatTotal(squad.tokens, squad.isTokensPartial)}
-          <span className="sr-only">{squad.isTokensPartial ? ' or more tokens' : ' tokens'}</span>
-        </span>
-      )}
+      <SquadTokens squad={squad} className="min-w-10" />
     </li>
   )
 }

@@ -4,7 +4,7 @@ import type { InstancePlacement } from '../../scene/instancing'
 import { Batch } from '../primitives'
 import type { DeskProps, RoomProps, RoomsProps } from '../types'
 import { UNIT_SHAPES } from '../unit-parts'
-import { box, Parts, turned, type PartSpec } from '../parts'
+import { box, Parts, turned, type PartSpec, lit } from '../parts'
 import { BRIDGE, frameParts, GANTRY } from './frame-parts'
 import { GARRISON } from './palette'
 import { parkingSpot } from './parking'
@@ -56,8 +56,6 @@ export function GarrisonRoomFloors({ rooms }: RoomsProps) {
     </>
   )
 }
-
-const lit = (part: PartSpec): PartSpec => ({ ...part, glow: true })
 
 // A bulkhead door frame on hazard footings, with a status light on each face.
 const DOOR_FRAME: PartSpec[] = [

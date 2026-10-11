@@ -1,9 +1,11 @@
-import type {
-  FeedMessage,
-  FocusResult,
-  InteractionFailure,
-  InteractionResult,
-  PeekResult
+import {
+  FOCUS_TARGETS,
+  INTERACTION_FAILURES,
+  type FeedMessage,
+  type FocusResult,
+  type InteractionFailure,
+  type InteractionResult,
+  type PeekResult
 } from '../../shared/office/types'
 import { isFeedMessage } from '../../shared/office/feed-message'
 
@@ -14,21 +16,6 @@ const TOKEN_KEY = 'claudewatch.office.token'
 const TOKEN_FRAGMENT = /^#t=([A-Za-z0-9_-]{43})$/
 const SESSION_TOKEN = /^[A-Za-z0-9_-]{43}$/
 const FEED_RETRY_MS = 1000
-
-// Listing every reason keeps this in step with the contract: a new one fails to compile here.
-const FAILURES: Record<InteractionFailure, true> = {
-  'unknown-session': true,
-  'not-in-orca': true,
-  'orca-unavailable': true,
-  'terminal-not-found': true,
-  'no-permission-prompt': true,
-  'prompt-on-screen': true,
-  'prompt-changed': true,
-  'unsupported-provider': true,
-  'invalid-input': true,
-  'not-permitted': true
-}
-const FOCUS_TARGETS = ['pane', 'app', 'terminal', 'terminal-app'] as const
 
 // What this page can show the standalone server: the one-time code in its launch address,
 // taken out of the address at once, or the session token this tab stored after trading one.
@@ -54,7 +41,7 @@ function parseFeedLine(line: string): FeedMessage | null {
 const field = (reply: unknown, name: string): unknown =>
   typeof reply === 'object' && reply !== null ? Reflect.get(reply, name) : undefined
 const isFailure = (value: unknown): value is InteractionFailure =>
-  typeof value === 'string' && Object.hasOwn(FAILURES, value)
+  INTERACTION_FAILURES.some((known) => known === value)
 
 // A reason this page does not know is dropped, so the Office shows its general failure
 // wording instead of nothing.

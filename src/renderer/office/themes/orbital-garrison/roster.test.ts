@@ -66,14 +66,14 @@ describe('Orbital Garrison roster', () => {
   })
 
   it('exports id, name and role, with the owner local renames applied by index', () => {
-    const shipped = orbitalGarrisonRoster({ getItem: () => null })
+    const shipped = orbitalGarrisonRoster.entries({ getItem: () => null })
     expect(shipped).toHaveLength(GARRISON_CAST.length)
     expect(shipped[0]).toEqual({
       id: GARRISON_CAST[0].id,
       name: GARRISON_CAST[0].name,
       role: GARRISON_CAST[0].role
     })
-    const renamed = orbitalGarrisonRoster({
+    const renamed = orbitalGarrisonRoster.entries({
       getItem: (key) =>
         key === ROSTER_NAMES_STORAGE_KEY
           ? JSON.stringify({ [ORBITAL_GARRISON_ID]: ['My Commander'] })

@@ -111,7 +111,7 @@ export interface RosterEntry {
   role: string
 }
 
-interface ThemeRoster {
+export interface ThemeRoster {
   // The cast, with any names the owner changed on this machine.
   entries(storage?: Pick<Storage, 'getItem'> | null): RosterEntry[]
   // Which entry an agent plays: its provider and its office bay decide.

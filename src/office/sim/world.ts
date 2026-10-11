@@ -1,4 +1,5 @@
 import type { AgentView, FeedMessage, SessionRef } from '../../shared/office/types'
+import { clamp } from '../../shared/range'
 import { createAgent, leaveAgent, tickAgent, updateAgent, type AgentRecord } from './behaviour'
 import { buildLayout, type LayoutMap } from './layout'
 import { PathCache } from './navigation'
@@ -98,7 +99,7 @@ export class World {
   }
 
   step(dtMs: number): AgentView[] {
-    this.accumulatedMs += Number.isFinite(dtMs) ? Math.max(0, Math.min(1000, dtMs)) : 0
+    this.accumulatedMs += Number.isFinite(dtMs) ? clamp(dtMs, [0, 1000]) : 0
     while (this.accumulatedMs >= 100) {
       for (const [key, agent] of this.agents) {
         const next = tickAgent(agent, 100)

@@ -34,7 +34,7 @@ function Pip({ state, x, y }: { state: AgentState; x: number; y: number }) {
   )
 }
 
-// dry-new: a pocket view of the Office floor, one tile per squad. Decorative: the caption
+// A pocket view of the Office floor, one tile per squad. Decorative: the caption
 // beside it says the same thing in words.
 export function FloorMap({ squads }: { squads: readonly Squad[] }) {
   const drawnSquads = squads.slice(0, MAX_SQUADS_DRAWN)

@@ -1,5 +1,5 @@
 import type { Vector } from '../primitives'
-import { box, turned, type PartSpec } from '../parts'
+import { box, turned, type PartSpec, lit, SIDES } from '../parts'
 import type { CrewFeature, GarrisonCharacter } from './cast'
 import { GARRISON } from './palette'
 
@@ -15,8 +15,6 @@ export const CREW_PIVOT: Record<'leftArm' | 'rightArm' | 'head' | 'gear', Vector
 }
 
 const BACK = -0.14
-const SIDES = [-1, 1] as const
-const lit = (part: PartSpec): PartSpec => ({ ...part, glow: true })
 const rod = (at: Vector, size: Vector, color: string): PartSpec => ({
   shape: 'cylinder',
   at,

@@ -1,8 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import { browserStorage } from '../../office-live/browser-storage'
 import type { FloorGeometry, RoomGeometry, ZoneGeometry } from '../scene-model'
-import { getTheme, listThemes } from '../themes/registry'
-import type { OfficeTheme } from '../themes/types'
+import { listThemes } from '../themes/registry'
 
 export const OFFICE_THEMES_STORAGE_KEY = 'claudewatch.office.themes'
 const STORAGE_VERSION = 1
@@ -119,7 +118,6 @@ type Scope = 'companies' | 'projects'
 
 export interface OfficeThemeStore {
   getAssignments(): ThemeAssignments
-  getThemeFor(zone: ThemedZone, defaultTheme: OfficeTheme): OfficeTheme
   setCompanyTheme(companyKey: string, themeId: string): void
   clearCompanyTheme(companyKey: string): void
   setProjectTheme(projectKey: string, themeId: string): void
@@ -187,7 +185,6 @@ export function createOfficeThemeStore(
 
   return {
     getAssignments: () => assignments,
-    getThemeFor: (zone, defaultTheme) => getTheme(resolveTheme(zone, assignments, defaultTheme.id)),
     setCompanyTheme: (companyKey, themeId) => assign('companies', companyKey, themeId),
     clearCompanyTheme: (companyKey) => clear('companies', companyKey),
     setProjectTheme: (projectKey, themeId) => assign('projects', projectKey, themeId),
@@ -203,7 +200,6 @@ export function createOfficeThemeStore(
   }
 }
 
-// dead-code-allowed: the theme picker in the Office HUD calls the setters 2026-12-31
 export const officeThemes = createOfficeThemeStore(browserStorage(), window)
 
 export function useThemeAssignments(): ThemeAssignments {

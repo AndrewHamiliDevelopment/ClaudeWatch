@@ -26,7 +26,6 @@ function accountFact(selected: SessionRef, known: AccountRef[] | undefined): str
       member={undefined}
       accounts={known}
       character={null}
-      nowMs={0}
       canFly={false}
       onFocusTerminal={() => undefined}
       onFly={() => undefined}

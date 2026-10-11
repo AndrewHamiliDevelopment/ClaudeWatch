@@ -144,18 +144,21 @@ export interface AgentView {
 }
 
 // Why an office interaction did not happen; the UI turns each into plain words.
-export type InteractionFailure =
-  | 'unknown-session'
-  | 'not-in-orca'
-  | 'orca-unavailable'
-  | 'terminal-not-found'
-  | 'no-permission-prompt'
+export const INTERACTION_FAILURES = [
+  'unknown-session',
+  'not-in-orca',
+  'orca-unavailable',
+  'terminal-not-found',
+  'no-permission-prompt',
   // Talk refused: a dialog is on the agent's screen, and typed text would answer it.
-  | 'prompt-on-screen'
-  | 'prompt-changed'
-  | 'unsupported-provider'
-  | 'invalid-input'
-  | 'not-permitted'
+  'prompt-on-screen',
+  'prompt-changed',
+  'unsupported-provider',
+  'invalid-input',
+  'not-permitted'
+] as const
+
+export type InteractionFailure = (typeof INTERACTION_FAILURES)[number]
 
 export interface InteractionResult {
   success: boolean
@@ -171,8 +174,10 @@ export interface PeekResult extends InteractionResult {
 // Where a focus request landed: the agent's exact pane, only the Orca app (the pane could not
 // be proven to be the agent's), a terminal opened at the session's folder, or only the
 // terminal app brought forward (a view-only page, which may type nothing).
+export const FOCUS_TARGETS = ['pane', 'app', 'terminal', 'terminal-app'] as const
+
 export interface FocusResult extends InteractionResult {
-  target?: 'pane' | 'app' | 'terminal' | 'terminal-app'
+  target?: (typeof FOCUS_TARGETS)[number]
 }
 
 export type PermissionDecision = 'approve' | 'deny'

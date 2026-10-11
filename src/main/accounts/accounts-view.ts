@@ -1,4 +1,4 @@
-import { addCounts, zeroCounts } from '../../bridge/usage-fold'
+import { addCounts, zeroCounts } from '../../shared/office/token-counts'
 import type {
   AccountsState,
   AccountSummary,

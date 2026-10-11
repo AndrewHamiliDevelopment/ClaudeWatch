@@ -48,6 +48,26 @@ describe('useAgentSessions', () => {
     expect(result.current?.map((session) => session.name)).toEqual(['one', 'two'])
   })
 
+  it('keeps the array it already returned when a poll reads the same sessions', async () => {
+    // Each read crosses IPC as a fresh copy, and the bridge raises `rev` on every poll.
+    const getOfficeSnapshot = vi
+      .fn()
+      .mockImplementationOnce(async () => ({ ...snapshotOf(['one']), rev: 1 }))
+      .mockImplementationOnce(async () => ({ ...snapshotOf(['one']), rev: 2 }))
+      .mockImplementation(async () => ({ ...snapshotOf(['one', 'two']), rev: 3 }))
+    window.api = mockApi({ getOfficeSnapshot })
+
+    const { result } = renderHook(() => useAgentSessions())
+    await act(() => vi.advanceTimersByTimeAsync(0))
+    const first = result.current
+
+    await act(() => vi.advanceTimersByTimeAsync(3000))
+    expect(result.current).toBe(first)
+
+    await act(() => vi.advanceTimersByTimeAsync(3000))
+    expect(result.current).toHaveLength(2)
+  })
+
   it('goes back to unknown when the feed loses its snapshot, so nothing stale stays up', async () => {
     const getOfficeSnapshot = vi
       .fn()

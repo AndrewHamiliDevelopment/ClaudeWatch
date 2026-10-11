@@ -1,3 +1,4 @@
+import { agentKey } from '../../shared/office/agent-key'
 import type { SessionRef } from '../../shared/office/types'
 import type { LayoutMap, RoomLayout, Slot } from './layout'
 
@@ -47,7 +48,7 @@ export function placements(
     const guests = session.subagents
       .map((subagent) => ({
         ...session,
-        key: `${session.key}#${subagent.id}`,
+        key: agentKey(session.key, subagent.id),
         // A teammate is known by its own name; a subagent only by its type.
         name: subagent.name ?? subagent.type,
         activity: subagent.activity,

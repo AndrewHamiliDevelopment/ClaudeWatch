@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { ROSTER_NAMES_STORAGE_KEY } from '../roster-names'
 import { COURT_CAST } from './cast'
-import { castIndexFor, COURT_FRAMES, frameForBay, violetCourtRoster } from './roster'
+import { COURT_FRAMES, frameForBay, violetCourtRoster } from './roster'
 
 const lead = (provider: 'claude' | 'codex', bay: number) =>
-  COURT_CAST[castIndexFor({ provider, isSubagent: false }, bay)]
+  COURT_CAST[violetCourtRoster.indexFor({ provider, isSubagent: false }, bay)]
 const squad = (provider: 'claude' | 'codex', bay: number) =>
-  COURT_CAST[castIndexFor({ provider, isSubagent: true }, bay)]
+  COURT_CAST[violetCourtRoster.indexFor({ provider, isSubagent: true }, bay)]
 
 describe('Violet Court roster', () => {
   it('names at least eight distinct characters, each with a one-line role', () => {
@@ -58,14 +58,14 @@ describe('Violet Court roster', () => {
   })
 
   it('exports id, name and role, with the owner local renames applied by index', () => {
-    const shipped = violetCourtRoster({ getItem: () => null })
+    const shipped = violetCourtRoster.entries({ getItem: () => null })
     expect(shipped).toHaveLength(COURT_CAST.length)
     expect(shipped[0]).toEqual({
       id: COURT_CAST[0].id,
       name: COURT_CAST[0].name,
       role: COURT_CAST[0].role
     })
-    const renamed = violetCourtRoster({
+    const renamed = violetCourtRoster.entries({
       getItem: (key) =>
         key === ROSTER_NAMES_STORAGE_KEY ? JSON.stringify({ 'violet-court': ['My Regent'] }) : null
     })

@@ -4,8 +4,10 @@ import type {
   AccountSummary,
   UsageWindows
 } from '../../../shared/accounts'
+import { addCounts, sumCounts } from '../../../shared/office/token-counts'
 import type { TokenCounts } from '../../../shared/office/types'
-import { sumCounts } from '../../deck/tokens'
+import { clamp } from '../../../shared/range'
+import { timeAgo } from '../../lib/utils'
 import type { LedgerRow } from '../GaugeWall'
 
 type UsageWindowKey = keyof UsageWindows
@@ -55,14 +57,7 @@ export function splitWindow(usage: CountedUsage, key: UsageWindowKey): WindowSpl
     exact: exact ? sumCounts(exact) : null,
     inferred: inferred ? sumCounts(inferred) : null,
     total: isCounted ? sumCounts(exact) + sumCounts(inferred) : null,
-    parts: isCounted
-      ? {
-          input: exact.input + inferred.input,
-          output: exact.output + inferred.output,
-          cacheWrite: exact.cacheWrite + inferred.cacheWrite,
-          cacheRead: exact.cacheRead + inferred.cacheRead
-        }
-      : null
+    parts: isCounted ? addCounts(exact, inferred) : null
   }
 }
 
@@ -84,20 +79,6 @@ const OLD_READING_MS = 15 * 60_000
 
 type LimitAge = 'current' | 'old' | 'reset'
 
-const AGE_UNITS: readonly [seconds: number, suffix: string][] = [
-  [86_400, 'd'],
-  [3_600, 'h'],
-  [60, 'm']
-]
-
-// dry-new: lib/utils `timeAgo` reads the wall clock itself, so a card's ages could not all be
-// measured against the one `nowMs` the screen ticks on.
-function readingAge(fetchedAtMs: number, nowMs: number): string {
-  const seconds = Math.max(0, Math.floor((nowMs - fetchedAtMs) / 1000))
-  const unit = AGE_UNITS.find(([unitSeconds]) => seconds >= unitSeconds)
-  return unit ? `${Math.floor(seconds / unit[0])}${unit[1]} ago` : `${seconds}s ago`
-}
-
 export interface AccountLimitReading {
   percent: number
   age: LimitAge
@@ -108,9 +89,9 @@ export function readAccountLimit(limit: AccountLimit, nowMs: number): AccountLim
   const hasReset = limit.resetsAtMs !== null && limit.resetsAtMs <= nowMs
   const isOld = nowMs - limit.fetchedAtMs > OLD_READING_MS
   return {
-    percent: Math.min(100, Math.max(0, limit.usedPercent)),
+    percent: clamp(limit.usedPercent, [0, 100]),
     age: hasReset ? 'reset' : isOld ? 'old' : 'current',
-    ageText: `as of ${readingAge(limit.fetchedAtMs, nowMs)}`
+    ageText: `as of ${timeAgo(new Date(limit.fetchedAtMs), nowMs)}`
   }
 }
 
