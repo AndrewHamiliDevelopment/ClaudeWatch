@@ -1,15 +1,17 @@
 import type { SessionRef, SourceHealth, SubagentRef } from '../shared/office/types'
-import { type BridgeIo, jsonObject, ORCA_CLI } from './io'
+import { ORCA_CLI } from '../shared/orca-bundle'
+import { type BridgeIo, jsonObject } from './io'
 
 export interface OrcaEnvironment {
   paneKey: string | null
   worktreeId: string | null
   jobDir: string | null
 }
-export function parseOrcaEnvironment(command: string): OrcaEnvironment {
+// Only these three keys survive; everything else in the text is dropped.
+export function parseOrcaEnvironment(environment: string): OrcaEnvironment {
   const filtered: OrcaEnvironment = { paneKey: null, worktreeId: null, jobDir: null }
   const pattern = /(?:^|\s)(ORCA_PANE_KEY|ORCA_WORKTREE_ID|CLAUDE_JOB_DIR)=([^\s]*)/g
-  for (const match of command.matchAll(pattern)) {
+  for (const match of environment.matchAll(pattern)) {
     const value = match[2] || null
     if (match[1] === 'ORCA_PANE_KEY') filtered.paneKey = value
     if (match[1] === 'ORCA_WORKTREE_ID') filtered.worktreeId = value
@@ -20,6 +22,21 @@ export function parseOrcaEnvironment(command: string): OrcaEnvironment {
     filtered.worktreeId = null
   }
   return filtered
+}
+
+// `ps -E` prints the arguments and then the environment with nothing to tell them apart, so
+// the arguments are read alone first and only what follows them is parsed. Still a hint, not
+// proof: a process can rewrite its own environment.
+export async function readOrcaEnvironment(
+  pid: number,
+  ps: (args: string[]) => Promise<string>
+): Promise<OrcaEnvironment> {
+  const argv = (await ps(['-o', 'command=', '-p', String(pid)])).trim()
+  const listing = (await ps(['-E', '-o', 'command=', '-p', String(pid)])).trim()
+  const environment = listing.slice(argv.length)
+  if (!argv || !listing.startsWith(argv) || !/^(\s|$)/.test(environment))
+    throw new Error('process arguments changed between reads')
+  return parseOrcaEnvironment(environment)
 }
 
 const isTeammate = (agent: SubagentRef): boolean => agent.kind === 'teammate'
@@ -120,10 +137,7 @@ export class OrcaSource {
     let cached = this.environments.get(identity)
     if (!cached || now >= cached.retryAt) {
       try {
-        // Only these three keys survive the process-environment read.
-        const value = parseOrcaEnvironment(
-          await this.io.exec('/bin/ps', ['-E', '-o', 'command=', '-p', String(pid)])
-        )
+        const value = await readOrcaEnvironment(pid, (args) => this.io.exec('/bin/ps', args))
         cached = { value, retryAt: Infinity }
       } catch {
         cached = {

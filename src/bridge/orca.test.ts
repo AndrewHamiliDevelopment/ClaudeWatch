@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { claimPanes, OrcaSource, parseOrcaEnvironment } from './orca'
-import { ORCA_CLI } from './io'
+import { claimPanes, OrcaSource, parseOrcaEnvironment, readOrcaEnvironment } from './orca'
+import { ORCA_CLI } from '../shared/orca-bundle'
 import { fixtureIo, missing, session } from './__fixtures__/helpers'
 import type { SubagentRef } from '../shared/office/types'
 
@@ -26,6 +26,50 @@ it('CLAUDE_JOB_DIR suppresses Orca identifiers and discards other env', () => {
     jobDir: null,
     paneKey: 'p',
     worktreeId: 'w'
+  })
+})
+
+// `ps` as the bridge asks it: the arguments alone, or the arguments and then the environment.
+const psOf =
+  (argv: string, environment: string) =>
+  async (_file: string, args: string[]): Promise<string> =>
+    args.includes('-E') ? `${argv} ${environment}\n` : `${argv}\n`
+
+describe('a process’s Orca environment', () => {
+  const read = (argv: string, environment: string): ReturnType<typeof readOrcaEnvironment> =>
+    readOrcaEnvironment(4242, (args) => psOf(argv, environment)('/bin/ps', args))
+
+  it('asks for the arguments alone, then for the arguments with the environment', async () => {
+    const ps = vi.fn(async (args: string[]) =>
+      args.includes('-E') ? 'claude HOME=/x\n' : 'claude\n'
+    )
+    await readOrcaEnvironment(4242, ps)
+    expect(ps.mock.calls).toEqual([
+      [['-o', 'command=', '-p', '4242']],
+      [['-E', '-o', 'command=', '-p', '4242']]
+    ])
+  })
+
+  it('reads the pane key from the environment', async () => {
+    expect((await read('claude --resume x', 'HOME=/x ORCA_PANE_KEY=tab1:leaf1')).paneKey).toBe(
+      'tab1:leaf1'
+    )
+  })
+
+  it('never accepts an argument that looks like a pane key', async () => {
+    expect((await read('claude ORCA_PANE_KEY=tabX:leafY', 'HOME=/x')).paneKey).toBeNull()
+    expect(
+      (await read('claude ORCA_PANE_KEY=tabX:leafY', 'HOME=/x ORCA_PANE_KEY=tab1:leaf1')).paneKey
+    ).toBe('tab1:leaf1')
+  })
+
+  it('reads nothing when the two listings disagree about the arguments', async () => {
+    const renamed = async (args: string[]): Promise<string> =>
+      args.includes('-E') ? 'renamed ORCA_PANE_KEY=tab1:leaf1\n' : 'claude\n'
+    await expect(readOrcaEnvironment(4242, renamed)).rejects.toThrow()
+    const longer = async (args: string[]): Promise<string> =>
+      args.includes('-E') ? 'claudeORCA_PANE_KEY=x ORCA_PANE_KEY=tab1:leaf1\n' : 'claude\n'
+    await expect(readOrcaEnvironment(4242, longer)).rejects.toThrow()
   })
 })
 
@@ -57,8 +101,9 @@ describe('Orca polling', () => {
   )
   it('polls successful responses at most every 10s and reads each new pid env once', async () => {
     const io = fixtureIo({ [ORCA_CLI]: '' })
-    io.exec = vi.fn(async (file) =>
-      file.endsWith('orca') ? '{"ok":true,"data":[]}' : 'claude ORCA_PANE_KEY=p SECRET=hidden'
+    const ps = psOf('claude', 'ORCA_PANE_KEY=p SECRET=hidden')
+    io.exec = vi.fn(async (file, args) =>
+      file.endsWith('orca') ? '{"ok":true,"data":[]}' : ps(file, args)
     )
     const source = new OrcaSource(io)
     expect((await source.poll(0)).ok).toBe(true)
@@ -67,13 +112,13 @@ describe('Orca polling', () => {
     const ref = session('a')
     expect(await source.enrich(ref)).toMatchObject({ host: 'orca', orcaPaneKey: 'p' })
     await source.enrich(ref)
-    expect(io.exec).toHaveBeenCalledTimes(2)
-    await source.enrich({ ...ref, startedAtMs: 1 })
     expect(io.exec).toHaveBeenCalledTimes(3)
+    await source.enrich({ ...ref, startedAtMs: 1 })
+    expect(io.exec).toHaveBeenCalledTimes(5)
   })
   it('keeps jobs in terminal hosts', async () => {
     const io = fixtureIo()
-    io.exec = async () => 'claude ORCA_PANE_KEY=p CLAUDE_JOB_DIR=/job'
+    io.exec = psOf('claude', 'ORCA_PANE_KEY=p CLAUDE_JOB_DIR=/job')
     expect(await new OrcaSource(io).enrich(session('a'))).toMatchObject({
       host: 'terminal',
       orcaPaneKey: null
@@ -86,10 +131,8 @@ it('retries failed environment reads after 30 seconds', async () => {
   try {
     vi.setSystemTime(0)
     const io = fixtureIo()
-    io.exec = vi
-      .fn()
-      .mockRejectedValueOnce(new Error('timeout'))
-      .mockResolvedValue('claude ORCA_PANE_KEY=p')
+    const ps = psOf('claude', 'ORCA_PANE_KEY=p')
+    io.exec = vi.fn(ps).mockRejectedValueOnce(new Error('timeout'))
     const source = new OrcaSource(io)
     expect((await source.enrich(session('a'))).orcaPaneKey).toBeNull()
     vi.setSystemTime(29999)
@@ -97,7 +140,7 @@ it('retries failed environment reads after 30 seconds', async () => {
     expect(io.exec).toHaveBeenCalledTimes(1)
     vi.setSystemTime(30000)
     expect((await source.enrich(session('a'))).orcaPaneKey).toBe('p')
-    expect(io.exec).toHaveBeenCalledTimes(2)
+    expect(io.exec).toHaveBeenCalledTimes(3)
   } finally {
     vi.useRealTimers()
   }
@@ -105,7 +148,9 @@ it('retries failed environment reads after 30 seconds', async () => {
 
 it('reads each teammate’s pane from its own process, once, and forgets it when it leaves', async () => {
   const io = fixtureIo()
-  io.exec = vi.fn(async (_file, args) => `claude ORCA_PANE_KEY=pane-of-${args.at(-1)} SECRET=x`)
+  io.exec = vi.fn(async (file, args) =>
+    psOf('claude', `ORCA_PANE_KEY=pane-of-${args.at(-1)} SECRET=x`)(file, args)
+  )
   const source = new OrcaSource(io)
   const lead = { ...session('a'), subagents: [teammate('lena', 77, 5), teammate('ravi', 78, 6)] }
   const plain = { id: 'abc', type: 'Explore', activity: 'thinking' as const }
@@ -118,10 +163,10 @@ it('reads each teammate’s pane from its own process, once, and forgets it when
   ])
   source.prune([lead])
   await source.enrich(lead)
-  expect(io.exec).toHaveBeenCalledTimes(3)
+  expect(io.exec).toHaveBeenCalledTimes(6)
   source.prune([{ ...lead, subagents: [lead.subagents[0]] }])
   await source.enrich(lead)
-  expect(io.exec).toHaveBeenCalledTimes(4)
+  expect(io.exec).toHaveBeenCalledTimes(8)
 })
 
 it('takes a pane away from a teammate that only inherited it', () => {

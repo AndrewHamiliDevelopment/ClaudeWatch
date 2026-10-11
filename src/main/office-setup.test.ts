@@ -2,11 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
 
-const { handle, execFilePromise, openTerminal, fork } = vi.hoisted(() => ({
+const { handle, execFilePromise, openTerminal, fork, assertOrcaTrusted } = vi.hoisted(() => ({
   handle: vi.fn(),
   execFilePromise: vi.fn(),
   openTerminal: vi.fn(),
-  fork: vi.fn()
+  fork: vi.fn(),
+  assertOrcaTrusted: vi.fn()
 }))
 vi.mock('electron', () => ({
   ipcMain: { handle },
@@ -18,9 +19,13 @@ vi.mock('electron', () => ({
 vi.mock('@electron-toolkit/utils', () => ({ is: { dev: false } }))
 vi.mock('./platform/exec', () => ({ execFilePromise }))
 vi.mock('./terminal-opener', () => ({ openTerminal, openTerminalRunning: vi.fn() }))
+vi.mock('../shared/orca-bundle', async (original) => ({
+  ...(await original<typeof import('../shared/orca-bundle')>()),
+  assertOrcaTrusted
+}))
 
+import { ORCA_APP, ORCA_CLI } from '../shared/orca-bundle'
 import { setupOffice } from './office-setup'
-import { ORCA_APP, ORCA_CLI, ORCA_TEAM_ID } from './orca-cli'
 
 const pageEvent = (page: string): unknown => ({
   senderFrame: { parent: null, url: pathToFileURL(join(__dirname, '../renderer', page)).href }
@@ -32,6 +37,7 @@ const envelope = (result: unknown): string => JSON.stringify({ id: '1', ok: true
 function answer(program: string, args: string[]): { stdout: string; stderr: string } {
   const stdout = ((): string => {
     if (program === '/bin/ps' && args.includes('lstart=')) return 'Sun Oct 11 09:00:00 2026\n'
+    if (program === '/bin/ps' && !args.includes('-E')) return 'claude --resume x\n'
     // Shaped like `ps -E`: the command line, then the environment, secrets included.
     if (program === '/bin/ps')
       return 'claude --resume x ANTHROPIC_API_KEY=sk-not-kept ORCA_PANE_KEY=tab1:leaf1 HOME=/Users/dev\n'
@@ -51,9 +57,7 @@ function answer(program: string, args: string[]): { stdout: string; stderr: stri
       })
     return envelope({ focus: { handle: 'term_a', navigated: true } })
   })()
-  const stderr =
-    args[0] === '-dv' ? `Identifier=com.stablyai.orca\nTeamIdentifier=${ORCA_TEAM_ID}` : ''
-  return { stdout, stderr }
+  return { stdout, stderr: '' }
 }
 
 describe('setupOffice', () => {
@@ -83,6 +87,7 @@ describe('setupOffice', () => {
     execFilePromise.mockImplementation(async (program: string, args: string[]) =>
       answer(program, args)
     )
+    assertOrcaTrusted.mockResolvedValue(undefined)
     openTerminal.mockResolvedValue({ success: true })
     terminalResolver.resolve.mockResolvedValue({ terminalType: 'iterm2' })
     tracker.getInstances.mockReturnValue([{ pid: 4242, projectPath: '/repo/app' }])
@@ -150,10 +155,9 @@ describe('setupOffice', () => {
 
     expect(commands()).toEqual([
       ['/bin/ps', ['-o', 'lstart=', '-p', '4242']],
+      ['/bin/ps', ['-o', 'command=', '-p', '4242']],
       ['/bin/ps', ['-E', '-o', 'command=', '-p', '4242']],
       ['/bin/ps', ['-o', 'lstart=', '-p', '4242']],
-      ['/usr/bin/codesign', ['--verify', '--deep', '--strict', ORCA_APP]],
-      ['/usr/bin/codesign', ['-dv', ORCA_APP]],
       [ORCA_CLI, ['terminal', 'list', '--json']],
       [ORCA_CLI, ['terminal', 'switch', '--terminal', 'term_a', '--json']],
       ['/usr/bin/open', ['-a', ORCA_APP]]
@@ -162,10 +166,7 @@ describe('setupOffice', () => {
   })
 
   it('runs nothing from Orca, and opens no terminal, when its signature does not check out', async () => {
-    execFilePromise.mockImplementation(async (program: string, args: string[]) => {
-      if (args[0] === '-dv') return { stdout: '', stderr: 'TeamIdentifier=ABCDE12345' }
-      return answer(program, args)
-    })
+    assertOrcaTrusted.mockRejectedValue(new Error('code failed to satisfy its requirement'))
 
     expect(await office.focusSession(4242)).toEqual({
       success: false,
@@ -187,6 +188,20 @@ describe('setupOffice', () => {
     expect(await office.focusSession(4242)).toEqual({ success: true, target: 'terminal' })
     expect(terminalResolver.resolve).toHaveBeenCalledWith(4242)
     expect(openTerminal).toHaveBeenCalledWith('/repo/app', 'iterm2')
-    expect(commands().map(([program]) => program)).toEqual(['/bin/ps', '/bin/ps'])
+    expect(commands().map(([program]) => program)).toEqual(['/bin/ps', '/bin/ps', '/bin/ps'])
+  })
+
+  it('does not take a pane key from the tracked process’s arguments', async () => {
+    execFilePromise.mockImplementation(async (program: string, args: string[]) =>
+      args.includes('command=')
+        ? {
+            stdout: `claude ORCA_PANE_KEY=tab1:leaf1${args.includes('-E') ? ' HOME=/Users/dev' : ''}\n`,
+            stderr: ''
+          }
+        : answer(program, args)
+    )
+
+    expect(await office.focusSession(4242)).toEqual({ success: true, target: 'terminal' })
+    expect(commands().map(([program]) => program)).not.toContain(ORCA_CLI)
   })
 })

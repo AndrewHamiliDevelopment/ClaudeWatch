@@ -80,12 +80,12 @@ it('prunes environment identities when their sessions disappear', async () => {
   let live = true
   let environmentReads = 0
   io.exec = async (_file, args) => {
-    if (args[0] === '-o') return live ? entry.procStart : ''
+    if (args.includes('lstart=')) return live ? entry.procStart : ''
     if (args[0] === '-E') {
       environmentReads++
       return 'claude ORCA_PANE_KEY=p'
     }
-    return ''
+    return args.includes('command=') ? 'claude' : ''
   }
   const poller = new BridgePoller({ io, claudeRoots: ['/claude'], codexRoot: '/codex' })
   await poller.tick()
@@ -204,8 +204,9 @@ it('shows a teammate under its lead with its own pane, then its tokens', async (
     })
   })
   io.exec = async (_file, args) => {
-    if (args[0] === '-o') return entry.procStart
+    if (args.includes('lstart=')) return entry.procStart
     if (args[0] === '-E') return `claude ORCA_PANE_KEY=pane-${args.at(-1)}`
+    if (args.includes('command=')) return 'claude'
     return `93143 ${entry.procStart} /versions/2.1.296 --agent-id lena-b0@${team} --parent-session-id ${lead}`
   }
   const poller = new BridgePoller({

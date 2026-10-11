@@ -4,10 +4,17 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
-const { execFilePromise } = vi.hoisted(() => ({ execFilePromise: vi.fn() }))
+const { execFilePromise, assertOrcaTrusted } = vi.hoisted(() => ({
+  execFilePromise: vi.fn(),
+  assertOrcaTrusted: vi.fn()
+}))
 vi.mock('../platform/exec', () => ({ execFilePromise }))
+vi.mock('../../shared/orca-bundle', async (original) => ({
+  ...(await original<typeof import('../../shared/orca-bundle')>()),
+  assertOrcaTrusted
+}))
 
-import { ORCA_APP, ORCA_CLI, ORCA_TEAM_ID } from '../orca-cli'
+import { ORCA_CLI } from '../../shared/orca-bundle'
 import { createAccountLedger } from './index'
 
 const CANARY = 'CANARY_SECRET_VALUE'
@@ -34,12 +41,14 @@ beforeEach(async () => {
   await writeFile(join(auth, 'oauth-account.json'), JSON.stringify(oauthAccount('grace')))
   await writeFile(join(auth, '.orca-managed-claude-auth'), CANARY)
   execFilePromise.mockReset()
-  execFilePromise.mockImplementation(async (program: string, args: string[]) => ({
+  assertOrcaTrusted.mockReset()
+  assertOrcaTrusted.mockResolvedValue(undefined)
+  execFilePromise.mockImplementation(async (program: string) => ({
     stdout:
       program === ORCA_CLI
         ? JSON.stringify({ ok: true, result: { claude: { accounts: [] }, token: CANARY } })
         : '',
-    stderr: args[0] === '-dv' ? `TeamIdentifier=${ORCA_TEAM_ID}` : ''
+    stderr: ''
   }))
 })
 afterEach(async () => {
@@ -54,7 +63,7 @@ it('watches the real files with one fixed, scrubbed Orca command, and keeps its 
   const before = await everyFile(home)
   const ledger = createAccountLedger({ isWatching: true, home, userData })
   ledger.start()
-  await vi.waitFor(() => expect(execFilePromise).toHaveBeenCalledTimes(3))
+  await vi.waitFor(() => expect(execFilePromise).toHaveBeenCalledTimes(1))
   await vi.waitFor(async () =>
     expect(await ledger.dashboardState()).toMatchObject({
       status: 'on',
@@ -64,11 +73,9 @@ it('watches the real files with one fixed, scrubbed Orca command, and keeps its 
   ledger.stop()
 
   const scrubbed = { timeout: 15_000, env: { LC_ALL: 'C', TZ: 'UTC' } }
-  expect(execFilePromise.mock.calls).toEqual([
-    ['/usr/bin/codesign', ['--verify', '--deep', '--strict', ORCA_APP], scrubbed],
-    ['/usr/bin/codesign', ['-dv', ORCA_APP], scrubbed],
-    [ORCA_CLI, ['account', 'list', '--json'], scrubbed]
-  ])
+  // The bundle check is the one the whole process shares, not a second one of the ledger's.
+  expect(assertOrcaTrusted).toHaveBeenCalledOnce()
+  expect(execFilePromise.mock.calls).toEqual([[ORCA_CLI, ['account', 'list', '--json'], scrubbed]])
   const file = join(userData, 'accounts-ledger.json')
   expect((await stat(file)).mode & 0o777).toBe(0o600)
   expect(await readFile(file, 'utf8')).not.toContain(CANARY)

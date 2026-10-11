@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process'
 import { open, readFile, readdir, realpath, stat } from 'node:fs/promises'
+import { assertOrcaTrusted, ORCA_CLI } from '../shared/orca-bundle'
 
 interface FileInfo {
   directory: boolean
@@ -84,8 +85,6 @@ async function readFrom(path: string, offset: number, maxBytes: number): Promise
 // reach a credential store or a shell by mistake.
 const CREDENTIAL_STORE =
   /(^|\/)(\.credentials\.json|[\w.-]*auth\.json|\.orca-managed-claude-auth|orca-(runtime|e2ee-keypair|secret-protection)\.json|Cookies)$|\.key$/i
-// The app-bundle copy, which the main process runs too; Homebrew's is only a symlink to it.
-export const ORCA_CLI = '/Applications/Orca.app/Contents/Resources/bin/orca'
 const PROGRAMS = new Set(['/bin/ps', '/usr/sbin/lsof', ORCA_CLI])
 const forbidden = (what: string): Error => new Error(`forbidden: ${what}`)
 const guarded =
@@ -108,9 +107,11 @@ export const systemIo: BridgeIo = {
     const info = await stat(path)
     return { directory: info.isDirectory(), mtimeMs: info.mtimeMs, size: info.size }
   },
-  exec: (file, args) =>
-    new Promise((resolve, reject) => {
-      if (!PROGRAMS.has(file)) return reject(forbidden('program'))
+  exec: async (file, args) => {
+    if (!PROGRAMS.has(file)) throw forbidden('program')
+    // Orca's bundle is checked before anything in it runs, as in the main process.
+    if (file === ORCA_CLI) await assertOrcaTrusted()
+    return new Promise((resolve, reject) => {
       execFile(
         file,
         args,
@@ -121,6 +122,7 @@ export const systemIo: BridgeIo = {
         }
       )
     })
+  }
 }
 
 export function object(value: unknown): Record<string, unknown> | null {

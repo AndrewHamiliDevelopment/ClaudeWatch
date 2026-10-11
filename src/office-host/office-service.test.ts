@@ -1,12 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { openTerminal, openTerminalRunning } = vi.hoisted(() => ({
+const { openTerminal, openTerminalRunning, assertOrcaTrusted } = vi.hoisted(() => ({
   openTerminal: vi.fn(),
-  openTerminalRunning: vi.fn()
+  openTerminalRunning: vi.fn(),
+  assertOrcaTrusted: vi.fn()
 }))
 vi.mock('../main/terminal-opener', () => ({ openTerminal, openTerminalRunning }))
+vi.mock('../shared/orca-bundle', async (original) => ({
+  ...(await original<typeof import('../shared/orca-bundle')>()),
+  assertOrcaTrusted
+}))
 
-import { ORCA_APP, ORCA_CLI, ORCA_TEAM_ID } from '../main/orca-cli'
+import { ORCA_CLI } from '../shared/orca-bundle'
 import type { FeedMessage, OfficeSnapshot, SessionRef } from '../shared/office/types'
 import { createOfficeService, type OfficeService } from './office-service'
 
@@ -48,16 +53,16 @@ const TERMINALS = [
   }
 ]
 
-// One Claude agent, pid 4242, in the Orca pane tab1:leaf1 of /repo/app.
+// One Claude agent, pid 4242, in the Orca pane tab1:leaf1 of /repo/app, showing `screen`.
+let screen: string[]
 function answer(program: string, args: string[]): { stdout: string; stderr: string } {
   const stdout = ((): string => {
     if (program === '/bin/ps') return 'Sun Oct 11 09:00:00 2026\n'
     if (program !== ORCA_CLI) return ''
-    return envelope(args[1] === 'list' ? { terminals: TERMINALS } : {})
+    if (args[1] === 'list') return envelope({ terminals: TERMINALS })
+    return envelope(args[1] === 'read' ? { terminal: { tail: screen } } : {})
   })()
-  const stderr =
-    args[0] === '-dv' ? `Identifier=com.stablyai.orca\nTeamIdentifier=${ORCA_TEAM_ID}` : ''
-  return { stdout, stderr }
+  return { stdout, stderr: '' }
 }
 
 describe('createOfficeService', () => {
@@ -71,6 +76,8 @@ describe('createOfficeService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    screen = ['⏺ Done.', '❯ ']
+    assertOrcaTrusted.mockResolvedValue(undefined)
     snapshot = { rev: 4, generatedAtMs: 1, sessions: [session()], sources: [] }
     feedListeners = new Set()
     run.mockImplementation(async (program: string, args: string[]) => answer(program, args))
@@ -126,9 +133,8 @@ describe('createOfficeService', () => {
 
       expect(commands()).toEqual([
         ['/bin/ps', ['-o', 'lstart=', '-p', '4242']],
-        ['/usr/bin/codesign', ['--verify', '--deep', '--strict', ORCA_APP]],
-        ['/usr/bin/codesign', ['-dv', ORCA_APP]],
         [ORCA_CLI, ['terminal', 'list', '--json']],
+        [ORCA_CLI, ['terminal', 'read', '--terminal', 'term_a', '--screen', '--json']],
         [
           ORCA_CLI,
           [
@@ -143,6 +149,16 @@ describe('createOfficeService', () => {
           ]
         ]
       ])
+    })
+
+    it('types nothing into a pane that is showing a prompt', async () => {
+      screen = ['Do you want to proceed?', '❯ 1. Yes', '  2. No']
+
+      expect(await service.send('claude:s1', 'no, wait')).toEqual({
+        success: false,
+        reason: 'prompt-on-screen'
+      })
+      expect(commands().some(([, args]) => args[1] === 'send')).toBe(false)
     })
 
     it('reads process start times in the C locale and UTC', async () => {
@@ -194,11 +210,7 @@ describe('createOfficeService', () => {
     })
 
     it('runs nothing from Orca when its signature does not check out', async () => {
-      run.mockImplementation(async (program: string, args: string[]) =>
-        args[0] === '-dv'
-          ? { stdout: '', stderr: 'TeamIdentifier=ABCDE12345' }
-          : answer(program, args)
-      )
+      assertOrcaTrusted.mockRejectedValue(new Error('code failed to satisfy its requirement'))
 
       expect(await service.send('claude:s1', 'run the tests')).toEqual({
         success: false,

@@ -5,7 +5,7 @@ import { BridgeHost } from './bridge-host'
 import { OfficeWindowController } from './office-window'
 import { assertTrustedSender, createAppWindow } from './window-factory'
 import { PaneFocus } from './pane-focus'
-import { parseOrcaEnvironment } from '../bridge/orca'
+import { readOrcaEnvironment } from '../bridge/orca'
 import { createOfficeService, PS_OPTIONS } from '../office-host/office-service'
 import type { FocusResult, OfficeSnapshot } from '../shared/office/types'
 import { execFilePromise } from './platform/exec'
@@ -87,10 +87,12 @@ export function setupOffice(
   const paneFocus = new PaneFocus({
     instances: () => tracker.getInstances(),
     processStart: service.processStart,
-    // `ps -E` prints the whole environment; the parser keeps the pane key and drops the rest.
+    // `ps -E` prints the whole environment; the reader keeps the pane key and drops the rest.
     paneKeyOf: (pid) =>
-      execFilePromise('/bin/ps', ['-E', '-o', 'command=', '-p', String(pid)], PS_OPTIONS).then(
-        ({ stdout }) => parseOrcaEnvironment(stdout).paneKey,
+      readOrcaEnvironment(pid, async (args) => {
+        return (await execFilePromise('/bin/ps', args, PS_OPTIONS)).stdout
+      }).then(
+        ({ paneKey }) => paneKey,
         () => null
       ),
     focusProcess: service.focusProcess
