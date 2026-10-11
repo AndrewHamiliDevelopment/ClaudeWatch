@@ -1,3 +1,4 @@
+import { createAppWindow } from './window-factory'
 import { app, BrowserWindow } from 'electron'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
@@ -30,7 +31,7 @@ let trayManager: TrayManager | null = null
 let tracker: SessionTracker | null = null
 
 function createWindow(store: SettingsStore): BrowserWindow {
-  const win = new BrowserWindow({
+  const win = createAppWindow({
     width: 900,
     height: 700,
     minWidth: 600,
@@ -43,9 +44,7 @@ function createWindow(store: SettingsStore): BrowserWindow {
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 15, y: 15 },
     webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
-      sandbox: false,
-      contextIsolation: true
+      preload: join(__dirname, '../preload/index.js')
     }
   })
 

@@ -1,510 +1,222 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { DEFAULT_SETTINGS } from '../renderer/lib/types'
 
-// Use vi.hoisted so mocks are available in factory functions
-const { mockHandle, mockQuit, mockApp } = vi.hoisted(() => {
-  const mockHandle = vi.fn()
-  const mockQuit = vi.fn()
-  const mockApp = {
-    quit: mockQuit,
-    isQuitting: false
-  }
-  return { mockHandle, mockQuit, mockApp }
+const { handle, app, openExternal } = vi.hoisted(() => ({
+  handle: vi.fn(),
+  app: { isQuitting: false, isPackaged: false, quit: vi.fn(), setLoginItemSettings: vi.fn() },
+  openExternal: vi.fn()
+}))
+vi.mock('electron', () => ({ ipcMain: { handle }, app, shell: { openExternal } }))
+vi.mock('./terminal-opener', () => ({ openTerminal: vi.fn(() => ({ success: true })) }))
+import { openTerminal } from './terminal-opener'
+import { forwardUpdatesToRenderer, setupIpcHandlers } from './ipc-handlers'
+
+const appEvent = { senderFrame: { parent: null, url: 'file:///app/index.html' } }
+const stats = { total: 2, active: 1, idle: 1, stale: 0, exited: 0, recentlyCompleted: 0 }
+const usage = {
+  totalInputTokens: 1,
+  totalOutputTokens: 0,
+  totalCacheReadTokens: 0,
+  totalCacheCreationTokens: 0,
+  totalCostUSD: 0,
+  modelUsage: [],
+  dataAvailable: true,
+  lastUpdated: null,
+  weeklyTokens: 1,
+  weeklyTokenTarget: 100_000
+}
+const tracker = {
+  getInstances: vi.fn(() => []),
+  getStats: vi.fn(() => stats),
+  setStaleThreshold: vi.fn(),
+  setCooldownSeconds: vi.fn(),
+  on: vi.fn()
+}
+const store = {
+  getSettings: vi.fn(() => structuredClone(DEFAULT_SETTINGS)),
+  setSettings: vi.fn(),
+  getHistory: vi.fn(() => []),
+  clearHistory: vi.fn()
+}
+const usageReader = {
+  getLastData: vi.fn(() => null),
+  read: vi.fn(async () => usage),
+  setWeeklyTokenTarget: vi.fn()
+}
+const promoChecker = { getLastData: vi.fn(() => null) }
+const rateLimitReader = {
+  getLastData: vi.fn(() => null),
+  isStatuslineConfigured: vi.fn(async () => true),
+  setupStatusline: vi.fn(async () => true)
+}
+const updater = { checkForUpdates: vi.fn(), downloadUpdate: vi.fn(), quitAndInstall: vi.fn() }
+const notifications = { isSupported: vi.fn(() => true), sendTest: vi.fn(() => ({ sent: true })) }
+const onOpenDashboard = vi.fn()
+let handlers: Record<string, (...args: unknown[]) => unknown>
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  vi.unstubAllEnvs()
+  app.isQuitting = false
+  handlers = {}
+  handle.mockImplementation((channel: string, listener: (...args: unknown[]) => unknown) => {
+    handlers[channel] = listener
+  })
+  setupIpcHandlers({
+    tracker,
+    store,
+    updater,
+    usageReader,
+    promoChecker,
+    rateLimitReader,
+    notifications,
+    onOpenDashboard
+  })
 })
 
-vi.mock('electron', () => ({
-  ipcMain: {
-    handle: mockHandle
-  },
-  app: mockApp,
-  shell: {
-    openExternal: vi.fn()
-  },
-  BrowserWindow: vi.fn()
-}))
-
-vi.mock('./terminal-opener', () => ({
-  openTerminal: vi.fn().mockReturnValue({ success: true })
-}))
-
-import { setupIpcHandlers, forwardUpdatesToRenderer } from './ipc-handlers'
-import type { SessionTracker } from './session-tracker'
-import type { SettingsStore } from './store'
-import type { UsageStatsReader } from './usage-stats'
-import type { PromoChecker } from './promo-checker'
-import type { RateLimitReader } from './rate-limit-reader'
-import type { NotificationManager } from './notifications'
-
-function makeTracker(overrides: Partial<SessionTracker> = {}): SessionTracker {
-  return {
-    getInstances: vi.fn().mockReturnValue([{ pid: 1 }, { pid: 2 }]),
-    getStats: vi.fn().mockReturnValue({ total: 2, active: 1, idle: 1 }),
-    getHistory: vi.fn().mockReturnValue([]),
-    clearHistory: vi.fn(),
-    on: vi.fn(),
-    ...overrides
-  } as unknown as SessionTracker
-}
-
-function makeStore(overrides: Partial<SettingsStore> = {}): SettingsStore {
-  return {
-    getSettings: vi.fn().mockReturnValue({ pollingIntervalMs: 3000 }),
-    setSettings: vi.fn().mockReturnValue({ pollingIntervalMs: 5000 }),
-    getHistory: vi.fn().mockReturnValue([{ pid: 10 }]),
-    clearHistory: vi.fn(),
-    ...overrides
-  } as unknown as SettingsStore
-}
-
-function makeUsageReader(overrides = {}): UsageStatsReader {
-  return {
-    getLastData: vi.fn().mockReturnValue({
-      totalInputTokens: 1000,
-      totalCostUSD: 5.5,
-      dataAvailable: true
-    }),
-    read: vi.fn().mockResolvedValue({
-      totalInputTokens: 2000,
-      totalCostUSD: 10.0,
-      dataAvailable: true
-    }),
-    ...overrides
-  } as unknown as UsageStatsReader
-}
-
-function makePromoChecker(overrides = {}): PromoChecker {
-  return {
-    getLastData: vi.fn().mockReturnValue({
-      is2x: true,
-      promoActive: true
-    }),
-    ...overrides
-  } as unknown as PromoChecker
-}
-
-function makeRateLimitReader(overrides = {}): RateLimitReader {
-  return {
-    getLastData: vi.fn().mockReturnValue({
-      window_5h: { used_percentage: 45, resets_at: '2026-03-20T20:00:00Z' },
-      window_7d: { used_percentage: 62, resets_at: '2026-03-27T00:00:00Z' },
-      updated_at: '2026-03-20T15:00:00Z',
-      dataAvailable: true,
-      isStale: false,
-      isVeryStale: false
-    }),
-    isStatuslineConfigured: vi.fn().mockResolvedValue(true),
-    setupStatusline: vi.fn().mockResolvedValue(true),
-    ...overrides
-  } as unknown as RateLimitReader
-}
-
-describe('setupIpcHandlers', () => {
-  let tracker: ReturnType<typeof makeTracker>
-  let store: ReturnType<typeof makeStore>
-  let usageReader: ReturnType<typeof makeUsageReader>
-  let promoChecker: ReturnType<typeof makePromoChecker>
-  let rateLimitReader: ReturnType<typeof makeRateLimitReader>
-  let onOpenDashboard: ReturnType<typeof vi.fn>
-  let handlers: Record<string, (...args: unknown[]) => unknown>
-
-  beforeEach(() => {
-    vi.clearAllMocks()
-    mockApp.isQuitting = false
-    handlers = {}
-    mockHandle.mockImplementation((channel: string, handler: (...args: unknown[]) => unknown) => {
-      handlers[channel] = handler
-    })
-
-    tracker = makeTracker()
-    store = makeStore()
-    usageReader = makeUsageReader()
-    promoChecker = makePromoChecker()
-    rateLimitReader = makeRateLimitReader()
-    onOpenDashboard = vi.fn()
-    setupIpcHandlers({
-      tracker,
-      store,
-      usageReader,
-      promoChecker,
-      rateLimitReader,
-      onOpenDashboard
-    })
+describe('IPC authorization', () => {
+  it('registers all 25 handlers', () => expect(Object.keys(handlers)).toHaveLength(25))
+  it.each([
+    null,
+    { senderFrame: null },
+    { senderFrame: { parent: {}, url: 'file:///app/index.html' } },
+    ...['https://example.com', 'about:blank', 'data:text/html,x', 'invalid'].map((url) => ({
+      senderFrame: { parent: null, url }
+    }))
+  ])('rejects untrusted events before every handler: %j', (event) => {
+    for (const listener of Object.values(handlers)) {
+      expect(() => listener(event)).toThrow('Untrusted IPC sender')
+    }
   })
-
-  describe('handler registration', () => {
-    it('should register all expected IPC handlers', () => {
-      const expectedChannels = [
-        'instances:get',
-        'settings:get',
-        'settings:set',
-        'history:get',
-        'history:clear',
-        'app:open-dashboard',
-        'app:quit',
-        'updater:check',
-        'updater:download',
-        'updater:install',
-        'usage:get',
-        'usage:refresh',
-        'promo:get',
-        'ratelimits:get',
-        'ratelimits:statusline-status',
-        'ratelimits:setup-statusline',
-        'notifications:check-permission',
-        'notifications:open-settings',
-        'notifications:send-test',
-        'notifications:mute-project',
-        'notifications:unmute-project',
-        'terminal:open',
-        'popover:set-pinned',
-        'popover:get-pinned',
-        'popover:close'
-      ]
-
-      for (const channel of expectedChannels) {
-        expect(handlers[channel], `handler for "${channel}" should be registered`).toBeDefined()
-      }
-
-      expect(mockHandle).toHaveBeenCalledTimes(expectedChannels.length)
-    })
-  })
-
-  describe('instances:get', () => {
-    it('should return instances and stats from tracker', () => {
-      const result = handlers['instances:get']()
-
-      expect(tracker.getInstances).toHaveBeenCalledOnce()
-      expect(tracker.getStats).toHaveBeenCalledOnce()
-      expect(result).toEqual({
-        instances: [{ pid: 1 }, { pid: 2 }],
-        stats: { total: 2, active: 1, idle: 1 }
-      })
-    })
-  })
-
-  describe('settings:get', () => {
-    it('should return settings from store', () => {
-      const result = handlers['settings:get']()
-
-      expect(store.getSettings).toHaveBeenCalledOnce()
-      expect(result).toEqual({ pollingIntervalMs: 3000 })
-    })
-  })
-
-  describe('settings:set', () => {
-    it('should call store.setSettings with data and return updated settings', () => {
-      const updatedSettings = { pollingIntervalMs: 5000, theme: 'light' }
-      ;(store.getSettings as ReturnType<typeof vi.fn>).mockReturnValue(updatedSettings)
-
-      const fakeEvent = {} as Electron.IpcMainInvokeEvent
-      const result = handlers['settings:set'](fakeEvent, { pollingIntervalMs: 5000 })
-
-      expect(store.setSettings).toHaveBeenCalledWith({ pollingIntervalMs: 5000 })
-      expect(store.getSettings).toHaveBeenCalled()
-      expect(result).toEqual(updatedSettings)
-    })
-  })
-
-  describe('history:get', () => {
-    it('should return history from store', () => {
-      const result = handlers['history:get']()
-
-      expect(store.getHistory).toHaveBeenCalledOnce()
-      expect(result).toEqual([{ pid: 10 }])
-    })
-  })
-
-  describe('history:clear', () => {
-    it('should call store.clearHistory and return success', () => {
-      const result = handlers['history:clear']()
-
-      expect(store.clearHistory).toHaveBeenCalledOnce()
-      expect(result).toEqual({ success: true })
-    })
-  })
-
-  describe('app:open-dashboard', () => {
-    it('should call onOpenDashboard callback and return success', () => {
-      const result = handlers['app:open-dashboard']()
-
-      expect(onOpenDashboard).toHaveBeenCalledOnce()
-      expect(result).toEqual({ success: true })
-    })
-  })
-
-  describe('app:quit', () => {
-    it('should set app.isQuitting before calling app.quit', () => {
-      mockQuit.mockImplementation(() => {
-        expect(mockApp.isQuitting).toBe(true)
-      })
-
-      handlers['app:quit']()
-
-      expect(mockApp.isQuitting).toBe(true)
-      expect(mockQuit).toHaveBeenCalledOnce()
-    })
-  })
-
-  describe('updater:install', () => {
-    it('should set app.isQuitting before installing the update', () => {
-      const quitAndInstall = vi.fn(() => {
-        expect(mockApp.isQuitting).toBe(true)
-      })
-
-      setupIpcHandlers({
-        tracker,
-        store,
-        updater: { quitAndInstall } as never,
-        usageReader,
-        promoChecker,
-        onOpenDashboard
-      })
-
-      handlers['updater:install']()
-
-      expect(mockApp.isQuitting).toBe(true)
-      expect(quitAndInstall).toHaveBeenCalledOnce()
-    })
-
-    it('should not mark the app as quitting when no updater is available', () => {
-      handlers['updater:install']()
-
-      expect(mockApp.isQuitting).toBe(false)
-    })
-  })
-
-  describe('usage:get', () => {
-    it('should return last usage data from reader', () => {
-      const result = handlers['usage:get']()
-
-      expect(usageReader.getLastData).toHaveBeenCalledOnce()
-      expect(result).toEqual(
-        expect.objectContaining({ totalInputTokens: 1000, dataAvailable: true })
-      )
-    })
-  })
-
-  describe('usage:refresh', () => {
-    it('should call reader.read and return result', async () => {
-      const result = await handlers['usage:refresh']()
-
-      expect(usageReader.read).toHaveBeenCalledOnce()
-      expect(result).toEqual(
-        expect.objectContaining({ totalInputTokens: 2000, dataAvailable: true })
-      )
-    })
-  })
-
-  describe('promo:get', () => {
-    it('should return last promo data from checker', () => {
-      const result = handlers['promo:get']()
-
-      expect(promoChecker.getLastData).toHaveBeenCalledOnce()
-      expect(result).toEqual(expect.objectContaining({ is2x: true, promoActive: true }))
-    })
-  })
-
-  describe('ratelimits:get', () => {
-    it('should return last rate limit data from reader', () => {
-      const result = handlers['ratelimits:get']()
-
-      expect(rateLimitReader.getLastData).toHaveBeenCalledOnce()
-      expect(result).toEqual(
-        expect.objectContaining({
-          dataAvailable: true,
-          window_5h: expect.objectContaining({ used_percentage: 45 })
-        })
-      )
-    })
-
-    it('should return null when rateLimitReader is not provided', () => {
-      const localHandlers: Record<string, (...args: unknown[]) => unknown> = {}
-      mockHandle.mockImplementation((channel: string, handler: (...args: unknown[]) => unknown) => {
-        localHandlers[channel] = handler
-      })
-      setupIpcHandlers({ tracker, store, onOpenDashboard })
-      const result = localHandlers['ratelimits:get']()
-      expect(result).toBeNull()
-    })
-  })
-
-  describe('terminal:open', () => {
-    it('should return { success: false } for empty string path', () => {
-      const fakeEvent = {} as Electron.IpcMainInvokeEvent
-      const result = handlers['terminal:open'](fakeEvent, '')
-
-      expect(result).toEqual({ success: false })
-    })
-
-    it('should return { success: false } for relative path', () => {
-      const fakeEvent = {} as Electron.IpcMainInvokeEvent
-      const result = handlers['terminal:open'](fakeEvent, 'relative/path')
-
-      expect(result).toEqual({ success: false })
-    })
-
-    it('should return { success: false } for undefined/null path', () => {
-      const fakeEvent = {} as Electron.IpcMainInvokeEvent
-
-      expect(handlers['terminal:open'](fakeEvent, undefined)).toEqual({ success: false })
-      expect(handlers['terminal:open'](fakeEvent, null)).toEqual({ success: false })
-    })
-  })
-
-  describe('notifications:mute-project', () => {
-    it('should add project to muted list', () => {
-      const mockNotifications = {
-        isSupported: vi.fn().mockReturnValue(true),
-        sendTest: vi.fn()
-      } as unknown as NotificationManager
-
-      const currentSettings = {
-        pollingIntervalMs: 3000,
-        notifications: { mutedProjects: [], onTaskComplete: true }
-      }
-      const storeWithMuted = makeStore({
-        getSettings: vi.fn().mockReturnValue(currentSettings),
-        setSettings: vi.fn().mockReturnValue(currentSettings)
-      })
-
-      setupIpcHandlers({
-        tracker,
-        store: storeWithMuted,
-        usageReader,
-        promoChecker,
-        notifications: mockNotifications,
-        onOpenDashboard
-      })
-
-      const fakeEvent = {} as Electron.IpcMainInvokeEvent
-      handlers['notifications:mute-project'](fakeEvent, '/Users/test/my-project')
-
-      expect(storeWithMuted.setSettings).toHaveBeenCalledWith(
-        expect.objectContaining({
-          notifications: expect.objectContaining({
-            mutedProjects: ['/Users/test/my-project']
-          })
-        })
-      )
-    })
-  })
-
-  describe('notifications:unmute-project', () => {
-    it('should remove project from muted list', () => {
-      const mockNotifications = {
-        isSupported: vi.fn().mockReturnValue(true),
-        sendTest: vi.fn()
-      } as unknown as NotificationManager
-
-      const currentSettings = {
-        pollingIntervalMs: 3000,
-        notifications: {
-          mutedProjects: ['/Users/test/my-project', '/Users/test/other'],
-          onTaskComplete: true
+  it('accepts only the dev server origin', () => {
+    vi.stubEnv('ELECTRON_RENDERER_URL', 'http://localhost:5173')
+    expect(
+      handlers['instances:get']({
+        senderFrame: {
+          parent: null,
+          url: 'http://localhost:5173/#popover'
         }
-      }
-      const storeWithMuted = makeStore({
-        getSettings: vi.fn().mockReturnValue(currentSettings),
-        setSettings: vi.fn().mockReturnValue(currentSettings)
       })
-
-      setupIpcHandlers({
-        tracker,
-        store: storeWithMuted,
-        usageReader,
-        promoChecker,
-        notifications: mockNotifications,
-        onOpenDashboard
+    ).toBeDefined()
+    expect(() =>
+      handlers['instances:get']({
+        senderFrame: {
+          parent: null,
+          url: 'http://localhost:5174'
+        }
       })
-
-      const fakeEvent = {} as Electron.IpcMainInvokeEvent
-      handlers['notifications:unmute-project'](fakeEvent, '/Users/test/my-project')
-
-      expect(storeWithMuted.setSettings).toHaveBeenCalledWith(
-        expect.objectContaining({
-          notifications: expect.objectContaining({
-            mutedProjects: ['/Users/test/other']
-          })
-        })
-      )
-    })
+    ).toThrow('Untrusted IPC sender')
   })
 })
 
-describe('forwardUpdatesToRenderer', () => {
-  it('should register an update listener on the tracker', () => {
-    const tracker = makeTracker()
-    const getWindow = vi.fn()
+it.each([
+  ['instances:get', { instances: [], stats }],
+  ['settings:get', DEFAULT_SETTINGS],
+  ['history:get', []],
+  ['usage:get', null],
+  ['usage:refresh', usage],
+  ['promo:get', null],
+  ['ratelimits:get', null],
+  ['ratelimits:statusline-status', true],
+  ['notifications:check-permission', { supported: true }],
+  ['notifications:send-test', { sent: true }],
+  ['popover:get-pinned', false],
+  ['popover:close', { success: false }],
+  ['popover:set-pinned', { success: false }]
+])('%s returns its result for a trusted sender', async (channel, expected) => {
+  expect(await handlers[channel](appEvent)).toEqual(expected)
+})
 
-    forwardUpdatesToRenderer(tracker, getWindow)
-
-    expect(tracker.on).toHaveBeenCalledWith('update', expect.any(Function))
+it('filters unknown settings keys, including nested keys', () => {
+  handlers['settings:set'](appEvent, {
+    theme: 'dark',
+    injected: true,
+    notifications: { sound: true, injected: true }
   })
-
-  it('should send updates to window webContents when window exists and is not destroyed', () => {
-    const tracker = makeTracker()
-    let updateCallback: (data: unknown) => void = () => {}
-    ;(tracker.on as ReturnType<typeof vi.fn>).mockImplementation(
-      (_event: string, cb: (data: unknown) => void) => {
-        updateCallback = cb
-      }
-    )
-
-    const mockSend = vi.fn()
-    const mockWindow = {
-      isDestroyed: vi.fn().mockReturnValue(false),
-      webContents: { send: mockSend }
+  expect(store.setSettings).toHaveBeenCalledWith({ theme: 'dark', notifications: { sound: true } })
+})
+it('retains settings propagation', () => {
+  handlers['settings:set'](appEvent, {
+    weeklyTokenTarget: 100_000,
+    launchAtLogin: true,
+    staleThresholdMinutes: 10,
+    notifications: { cooldownSeconds: 30 }
+  })
+  expect(usageReader.setWeeklyTokenTarget).toHaveBeenCalledWith(DEFAULT_SETTINGS.weeklyTokenTarget)
+  expect(app.setLoginItemSettings).toHaveBeenCalledWith({ openAtLogin: true })
+  expect(tracker.setStaleThreshold).toHaveBeenCalledWith(DEFAULT_SETTINGS.staleThresholdMinutes)
+  expect(tracker.setCooldownSeconds).toHaveBeenCalledWith(
+    DEFAULT_SETTINGS.notifications.cooldownSeconds
+  )
+})
+it.each(['bogus', null, 42, {}, 'toString'])('rejects terminal type %j', (type) => {
+  expect(handlers['terminal:open'](appEvent, '/project', type)).toEqual({ success: false })
+  expect(openTerminal).not.toHaveBeenCalled()
+})
+it.each(['', 'relative/path', undefined, null, 42, {}])('rejects path %j', (path) => {
+  expect(handlers['terminal:open'](appEvent, path)).toEqual({ success: false })
+  expect(openTerminal).not.toHaveBeenCalled()
+})
+it.each([
+  undefined,
+  'terminal-app',
+  'iterm2',
+  'warp',
+  'alacritty',
+  'kitty',
+  'wezterm',
+  'hyper',
+  'ghostty',
+  'vscode',
+  'cursor',
+  'tmux',
+  'screen',
+  'unknown'
+])('accepts terminal %s', (type) => {
+  expect(handlers['terminal:open'](appEvent, '/project', type)).toEqual({ success: true })
+  expect(openTerminal).toHaveBeenCalledWith('/project', type)
+})
+it.each([
+  ['history:clear', store.clearHistory],
+  ['app:open-dashboard', onOpenDashboard],
+  ['app:quit', app.quit],
+  ['updater:check', updater.checkForUpdates],
+  ['updater:download', updater.downloadUpdate],
+  ['updater:install', updater.quitAndInstall]
+])('%s calls its dependency', (channel, callback) => {
+  if (channel === 'app:quit' || channel === 'updater:install') {
+    callback.mockImplementationOnce(() => expect(app.isQuitting).toBe(true))
+  }
+  handlers[channel](appEvent)
+  expect(callback).toHaveBeenCalledOnce()
+  if (channel === 'app:quit' || channel === 'updater:install') expect(app.isQuitting).toBe(true)
+})
+it('does not begin quitting without an updater', () => {
+  setupIpcHandlers({ tracker, store, onOpenDashboard })
+  handlers['updater:install'](appEvent)
+  expect(app.isQuitting).toBe(false)
+  expect(handlers['ratelimits:get'](appEvent)).toBeNull()
+})
+it('opens only the fixed notification settings destination', () => {
+  handlers['notifications:open-settings'](appEvent)
+  expect(openExternal).toHaveBeenCalledWith(
+    'x-apple.systempreferences:com.apple.preference.notifications'
+  )
+})
+it.each(['mute', 'unmute'])('updates the %s project list', (action) => {
+  handlers[`notifications:${action}-project`](appEvent, '/project')
+  expect(store.setSettings).toHaveBeenCalledWith({
+    notifications: {
+      ...DEFAULT_SETTINGS.notifications,
+      mutedProjects: action === 'mute' ? ['/project'] : []
     }
-    const getWindow = vi.fn().mockReturnValue(mockWindow)
-
-    forwardUpdatesToRenderer(tracker, getWindow)
-
-    const updateData = { instances: [{ pid: 1 }], stats: { total: 1 } }
-    updateCallback(updateData)
-
-    expect(getWindow).toHaveBeenCalled()
-    expect(mockWindow.isDestroyed).toHaveBeenCalled()
-    expect(mockSend).toHaveBeenCalledWith('instances:update', updateData)
   })
-
-  it('should not send updates when getWindow returns null', () => {
-    const tracker = makeTracker()
-    let updateCallback: (data: unknown) => void = () => {}
-    ;(tracker.on as ReturnType<typeof vi.fn>).mockImplementation(
-      (_event: string, cb: (data: unknown) => void) => {
-        updateCallback = cb
-      }
-    )
-
-    const getWindow = vi.fn().mockReturnValue(null)
-
-    forwardUpdatesToRenderer(tracker, getWindow)
-    updateCallback({ some: 'data' })
-
-    expect(getWindow).toHaveBeenCalled()
-    // Should not throw
-  })
-
-  it('should not send updates when window is destroyed', () => {
-    const tracker = makeTracker()
-    let updateCallback: (data: unknown) => void = () => {}
-    ;(tracker.on as ReturnType<typeof vi.fn>).mockImplementation(
-      (_event: string, cb: (data: unknown) => void) => {
-        updateCallback = cb
-      }
-    )
-
-    const mockSend = vi.fn()
-    const mockWindow = {
-      isDestroyed: vi.fn().mockReturnValue(true),
-      webContents: { send: mockSend }
-    }
-    const getWindow = vi.fn().mockReturnValue(mockWindow)
-
-    forwardUpdatesToRenderer(tracker, getWindow)
-    updateCallback({ some: 'data' })
-
-    expect(getWindow).toHaveBeenCalled()
-    expect(mockWindow.isDestroyed).toHaveBeenCalled()
-    expect(mockSend).not.toHaveBeenCalled()
-  })
+})
+it.each([false, true, null])('forwards updates only to live windows: %s', (destroyed) => {
+  const send = vi.fn()
+  const window = destroyed === null ? null : { isDestroyed: () => destroyed, webContents: { send } }
+  forwardUpdatesToRenderer(tracker, vi.fn(() => window) as () => Electron.BrowserWindow | null)
+  const listener = tracker.on.mock.calls.at(-1)?.[1]
+  listener({ instances: [], stats: { total: 2 } })
+  expect(send).toHaveBeenCalledTimes(destroyed === false ? 1 : 0)
 })

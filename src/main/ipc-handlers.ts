@@ -1,5 +1,7 @@
 import { ipcMain, BrowserWindow, app, shell } from 'electron'
-import { join } from 'path'
+import { isAbsolute, join } from 'path'
+import { isAppOrigin } from './window-factory'
+import { DEFAULT_SETTINGS } from '../renderer/lib/types'
 import { openTerminal } from './terminal-opener'
 import type { SessionTracker } from './session-tracker'
 import type { SettingsStore } from './store'
@@ -8,11 +10,18 @@ import type { UsageStatsReader } from './usage-stats'
 import type { PromoChecker } from './promo-checker'
 import type { RateLimitReader } from './rate-limit-reader'
 import type { NotificationManager } from './notifications'
-import type { AppSettings } from '../renderer/lib/types'
+import type { AppSettings, TerminalType } from '../renderer/lib/types'
 import type { TrayManager } from './tray'
 
 export function validateSettings(data: Partial<AppSettings>): Partial<AppSettings> {
-  const validated = { ...data }
+  const knownEntries = (value: object, defaults: object): [string, unknown][] =>
+    Object.entries(value).filter(([key]) => Object.hasOwn(defaults, key))
+  const validated = Object.fromEntries(knownEntries(data, DEFAULT_SETTINGS)) as Partial<AppSettings>
+  if (validated.notifications) {
+    validated.notifications = Object.fromEntries(
+      knownEntries(validated.notifications, DEFAULT_SETTINGS.notifications)
+    ) as AppSettings['notifications']
+  }
 
   if (validated.pollingIntervalMs !== undefined) {
     validated.pollingIntervalMs = Math.max(500, Math.min(60000, validated.pollingIntervalMs))
@@ -42,14 +51,40 @@ export function validateSettings(data: Partial<AppSettings>): Partial<AppSetting
   return validated
 }
 
+const TERMINAL_TYPES = {
+  'terminal-app': true,
+  iterm2: true,
+  warp: true,
+  alacritty: true,
+  kitty: true,
+  wezterm: true,
+  hyper: true,
+  ghostty: true,
+  vscode: true,
+  cursor: true,
+  tmux: true,
+  screen: true,
+  unknown: true
+} satisfies Record<TerminalType, boolean>
+
+function isTerminalType(value: unknown): value is TerminalType {
+  return typeof value === 'string' && Object.hasOwn(TERMINAL_TYPES, value)
+}
+
 interface IpcHandlerOptions {
-  tracker: SessionTracker
-  store: SettingsStore
-  updater?: AutoUpdaterManager
-  usageReader?: UsageStatsReader
-  promoChecker?: PromoChecker
-  rateLimitReader?: RateLimitReader
-  notifications?: NotificationManager
+  tracker: Pick<
+    SessionTracker,
+    'getInstances' | 'getStats' | 'setStaleThreshold' | 'setCooldownSeconds'
+  >
+  store: Pick<SettingsStore, 'getSettings' | 'setSettings' | 'getHistory' | 'clearHistory'>
+  updater?: Pick<AutoUpdaterManager, 'checkForUpdates' | 'downloadUpdate' | 'quitAndInstall'>
+  usageReader?: Pick<UsageStatsReader, 'getLastData' | 'read' | 'setWeeklyTokenTarget'>
+  promoChecker?: Pick<PromoChecker, 'getLastData'>
+  rateLimitReader?: Pick<
+    RateLimitReader,
+    'getLastData' | 'isStatuslineConfigured' | 'setupStatusline'
+  >
+  notifications?: Pick<NotificationManager, 'isSupported' | 'sendTest'>
   onOpenDashboard: () => void
   getTrayManager?: () => TrayManager | null
 }
@@ -67,102 +102,94 @@ export function setupIpcHandlers(options: IpcHandlerOptions): void {
     getTrayManager
   } = options
 
+  const handle = (channel: string, listener: Parameters<typeof ipcMain.handle>[1]): void => {
+    ipcMain.handle(channel, (event, ...args) => {
+      const frame = event?.senderFrame
+      if (!frame || frame.parent !== null || !isAppOrigin(frame.url)) {
+        throw new Error('Untrusted IPC sender')
+      }
+      return listener(event, ...args)
+    })
+  }
+
   const beginQuit = (): void => {
     app.isQuitting = true
   }
 
-  ipcMain.handle('instances:get', () => {
+  handle('instances:get', () => {
     return {
       instances: tracker.getInstances(),
       stats: tracker.getStats()
     }
   })
 
-  ipcMain.handle('settings:get', () => {
-    return store.getSettings()
-  })
+  handle('settings:get', () => store.getSettings())
 
-  ipcMain.handle(
-    'settings:set',
-    (_event: Electron.IpcMainInvokeEvent, data: Partial<AppSettings>) => {
-      const validated = validateSettings(data)
-      store.setSettings(validated)
-      const updated = store.getSettings()
-      // Propagate weekly token target to usage reader
-      if (validated.weeklyTokenTarget !== undefined && usageReader) {
-        usageReader.setWeeklyTokenTarget(updated.weeklyTokenTarget)
-      }
-      // Propagate launch-at-login to OS
-      if (validated.launchAtLogin !== undefined) {
-        app.setLoginItemSettings({ openAtLogin: validated.launchAtLogin })
-      }
-      // Propagate stale threshold to session tracker
-      if (validated.staleThresholdMinutes !== undefined) {
-        tracker.setStaleThreshold(updated.staleThresholdMinutes)
-      }
-      // Propagate cooldown to session tracker
-      if (validated.notifications?.cooldownSeconds !== undefined) {
-        tracker.setCooldownSeconds(updated.notifications.cooldownSeconds)
-      }
-      return updated
+  handle('settings:set', (_event: Electron.IpcMainInvokeEvent, data: Partial<AppSettings>) => {
+    const validated = validateSettings(data)
+    store.setSettings(validated)
+    const updated = store.getSettings()
+    if (validated.weeklyTokenTarget !== undefined && usageReader) {
+      usageReader.setWeeklyTokenTarget(updated.weeklyTokenTarget)
     }
-  )
-
-  ipcMain.handle('history:get', () => {
-    return store.getHistory()
+    if (validated.launchAtLogin !== undefined) {
+      app.setLoginItemSettings({ openAtLogin: validated.launchAtLogin })
+    }
+    if (validated.staleThresholdMinutes !== undefined) {
+      tracker.setStaleThreshold(updated.staleThresholdMinutes)
+    }
+    if (validated.notifications?.cooldownSeconds !== undefined) {
+      tracker.setCooldownSeconds(updated.notifications.cooldownSeconds)
+    }
+    return updated
   })
 
-  ipcMain.handle('history:clear', () => {
+  handle('history:get', () => store.getHistory())
+
+  handle('history:clear', () => {
     store.clearHistory()
     return { success: true }
   })
 
-  ipcMain.handle('app:open-dashboard', () => {
+  handle('app:open-dashboard', () => {
     onOpenDashboard()
     return { success: true }
   })
 
-  ipcMain.handle('app:quit', () => {
+  handle('app:quit', () => {
     beginQuit()
     app.quit()
   })
 
-  ipcMain.handle('updater:check', () => {
+  handle('updater:check', () => {
     updater?.checkForUpdates()
   })
 
-  ipcMain.handle('updater:download', () => {
+  handle('updater:download', () => {
     updater?.downloadUpdate()
   })
 
-  ipcMain.handle('updater:install', () => {
+  handle('updater:install', () => {
     if (!updater) return
 
     beginQuit()
     updater.quitAndInstall()
   })
 
-  ipcMain.handle('usage:get', () => {
-    return usageReader?.getLastData() ?? null
-  })
+  handle('usage:get', () => usageReader?.getLastData() ?? null)
 
-  ipcMain.handle('usage:refresh', async () => {
-    return usageReader?.read() ?? null
-  })
+  handle('usage:refresh', async () => usageReader?.read() ?? null)
 
-  ipcMain.handle('promo:get', () => {
-    return promoChecker?.getLastData() ?? null
-  })
+  handle('promo:get', () => promoChecker?.getLastData() ?? null)
 
-  ipcMain.handle('ratelimits:get', () => {
-    return rateLimitReader?.getLastData() ?? null
-  })
+  handle('ratelimits:get', () => rateLimitReader?.getLastData() ?? null)
 
-  ipcMain.handle('ratelimits:statusline-status', async () => {
-    return rateLimitReader?.isStatuslineConfigured() ?? false
-  })
+  handle(
+    'ratelimits:statusline-status',
+    async () => rateLimitReader?.isStatuslineConfigured() ?? false
+  )
 
-  ipcMain.handle('ratelimits:setup-statusline', async () => {
+  handle('ratelimits:setup-statusline', async () => {
     if (!rateLimitReader) return false
     const scriptSource = join(
       app.isPackaged ? process.resourcesPath : app.getAppPath(),
@@ -172,20 +199,20 @@ export function setupIpcHandlers(options: IpcHandlerOptions): void {
     return rateLimitReader.setupStatusline(scriptSource)
   })
 
-  ipcMain.handle('notifications:check-permission', () => {
-    return { supported: notifications?.isSupported() ?? false }
-  })
+  handle('notifications:check-permission', () => ({
+    supported: notifications?.isSupported() ?? false
+  }))
 
-  ipcMain.handle('notifications:open-settings', () => {
+  handle('notifications:open-settings', () => {
     shell.openExternal('x-apple.systempreferences:com.apple.preference.notifications')
   })
 
-  ipcMain.handle('notifications:send-test', () => {
+  handle('notifications:send-test', () => {
     if (!notifications) return { sent: false, reason: 'Notification manager not available' }
     return notifications.sendTest()
   })
 
-  ipcMain.handle(
+  handle(
     'notifications:mute-project',
     (_event: Electron.IpcMainInvokeEvent, projectPath: string) => {
       const settings = store.getSettings()
@@ -200,7 +227,7 @@ export function setupIpcHandlers(options: IpcHandlerOptions): void {
     }
   )
 
-  ipcMain.handle(
+  handle(
     'notifications:unmute-project',
     (_event: Electron.IpcMainInvokeEvent, projectPath: string) => {
       const settings = store.getSettings()
@@ -214,33 +241,30 @@ export function setupIpcHandlers(options: IpcHandlerOptions): void {
     }
   )
 
-  ipcMain.handle(
+  handle(
     'terminal:open',
     (_event: Electron.IpcMainInvokeEvent, projectPath: string, terminalType?: string) => {
-      if (!projectPath || typeof projectPath !== 'string' || !projectPath.startsWith('/')) {
+      if (!projectPath || typeof projectPath !== 'string' || !isAbsolute(projectPath)) {
         return { success: false }
       }
-      return openTerminal(
-        projectPath,
-        terminalType as import('../renderer/lib/types').TerminalType | undefined
-      )
+      if (terminalType !== undefined && !isTerminalType(terminalType)) return { success: false }
+      return openTerminal(projectPath, terminalType)
     }
   )
 
-  // Popover pin controls
-  ipcMain.handle('popover:set-pinned', (_event: Electron.IpcMainInvokeEvent, pinned: boolean) => {
+  handle('popover:set-pinned', (_event: Electron.IpcMainInvokeEvent, pinned: boolean) => {
     const tray = getTrayManager?.()
     if (!tray) return { success: false }
     tray.setPinned(pinned)
     return { success: true }
   })
 
-  ipcMain.handle('popover:get-pinned', () => {
+  handle('popover:get-pinned', () => {
     const tray = getTrayManager?.()
     return tray?.isPinned() ?? false
   })
 
-  ipcMain.handle('popover:close', () => {
+  handle('popover:close', () => {
     const tray = getTrayManager?.()
     if (!tray) return { success: false }
     tray.closePopover()
@@ -249,7 +273,7 @@ export function setupIpcHandlers(options: IpcHandlerOptions): void {
 }
 
 export function forwardUpdatesToRenderer(
-  tracker: SessionTracker,
+  tracker: Pick<SessionTracker, 'on'>,
   ...getWindows: (() => BrowserWindow | null)[]
 ): void {
   tracker.on('update', (data) => {
