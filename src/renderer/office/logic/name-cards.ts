@@ -1,6 +1,7 @@
+import { needsHuman } from '../../../shared/office/attention'
 import type { AgentActivity, AgentView } from '../../../shared/office/types'
 import type { OfficeFrame } from '../scene-model'
-import { agentCountLabel, needsHuman, needsYouLabel, sessionForAgent } from './floor-model'
+import { agentCountLabel, needsYouLabel, sessionForAgent } from './floor-model'
 import { DESK_REACH } from './room-layout'
 import { GEM_SPECS } from './status-gem'
 
@@ -136,7 +137,7 @@ export function buildProjectStacks(frame: OfficeFrame, floorId: string): Project
     .flatMap((zone) => {
       const members = zone.projectKey ? membersByProject.get(zone.projectKey) : undefined
       if (!zone.projectKey || !members) return []
-      const waiting = members.filter(needsHuman).length
+      const waiting = members.filter((member) => needsHuman(member.attention)).length
       const parts = [zone.label, agentCountLabel(members.length)]
       if (waiting > 0) parts.push(needsYouLabel(waiting))
       return [

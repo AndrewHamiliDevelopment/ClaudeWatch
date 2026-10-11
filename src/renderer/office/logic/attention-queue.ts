@@ -1,18 +1,17 @@
+import { needsHuman, type HumanAttention } from '../../../shared/office/attention'
 import type { SessionRef } from '../../../shared/office/types'
 
 export interface AttentionItem {
   sessionKey: string
-  attention: 'permission' | 'question'
+  attention: HumanAttention
   sessionName: string
   projectLabel: string
   companyLabel: string
   sinceMs: number
 }
 
-function isQueued(
-  session: SessionRef
-): session is SessionRef & { attention: AttentionItem['attention'] } {
-  return session.attention === 'permission' || session.attention === 'question'
+function isQueued(session: SessionRef): session is SessionRef & { attention: HumanAttention } {
+  return needsHuman(session.attention)
 }
 
 // Only "needs you" states queue (research §14); error and limited are counts, not queue items.

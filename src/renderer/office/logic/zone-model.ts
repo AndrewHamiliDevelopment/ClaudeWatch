@@ -1,6 +1,7 @@
 import type { AgentView, SessionRef } from '../../../shared/office/types'
 import type { FloorGeometry, OfficeFrame, ZoneGeometry } from '../scene-model'
-import { needsHuman, sessionForAgent } from './floor-model'
+import { needsHuman } from '../../../shared/office/attention'
+import { sessionForAgent } from './floor-model'
 import { doorSignPlacement, roomWallSegments, type WallSegment } from './room-layout'
 
 export interface OfficeProjectRow {
@@ -99,7 +100,7 @@ function projectRow(
     label,
     zoneId,
     agentCount: group?.agents.length ?? 0,
-    attentionCount: group?.sessions.filter(needsHuman).length ?? 0
+    attentionCount: group?.sessions.filter((session) => needsHuman(session.attention)).length ?? 0
   }
 }
 

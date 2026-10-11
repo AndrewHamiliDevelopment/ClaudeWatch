@@ -1,11 +1,8 @@
-import type { SessionRef, SessionUsage, TokenCounts } from '../../shared/office/types'
+import { sumCounts } from '../../shared/office/token-counts'
+import type { SessionRef, SessionUsage } from '../../shared/office/types'
 import { formatCompactNumber } from '../lib/utils'
 
 const BILLION = 1_000_000_000
-
-export function sumCounts(counts: TokenCounts): number {
-  return counts.input + counts.output + counts.cacheWrite + counts.cacheRead
-}
 
 export function sessionTokens(usage: SessionUsage | null | undefined): number | null {
   if (!usage) return null

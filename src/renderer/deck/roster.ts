@@ -1,5 +1,6 @@
-import { projectKey } from '../../shared/office/project-key'
-import type { SessionRef } from '../../shared/office/types'
+import { needsHuman } from '../../shared/office/attention'
+import { projectKey, projectRootOf } from '../../shared/office/project-key'
+import type { AgentActivity, AgentAttention, SessionRef } from '../../shared/office/types'
 import { GEM_SPECS } from '../office/logic/status-gem'
 import type { ClaudeInstance } from '../lib/types'
 import { timeAgo } from '../lib/utils'
@@ -80,17 +81,25 @@ function assignCrests(squads: readonly Squad[]): void {
   }
 }
 
+// What the feed alone says about an agent, in the Deck's words; the Office shows exactly this.
+export function stateOfAttention(
+  attention: AgentAttention,
+  activity: AgentActivity
+): { state: AgentState; detail: string | null } {
+  if (needsHuman(attention)) return { state: 'needs-you', detail: GEM_SPECS[attention].label }
+  if (attention === 'none') return { state: activity === 'idle' ? 'idle' : 'working', detail: null }
+  return { state: attention, detail: null }
+}
+
 function stateOf(
   instance: ClaudeInstance,
   session: SessionRef | undefined,
   nowMs: number
 ): Pick<RosterAgent, 'state' | 'stateDetail'> {
-  const attention = session?.attention
-  if (attention === 'permission' || attention === 'question') {
-    return { state: 'needs-you', stateDetail: GEM_SPECS[attention].label }
-  }
-  if (attention === 'error' || attention === 'limited') {
-    return { state: attention, stateDetail: null }
+  // A finished turn is timed from the process below, so only the other attention states decide.
+  if (session && session.attention !== 'none' && session.attention !== 'done') {
+    const { state, detail } = stateOfAttention(session.attention, session.activity)
+    return { state, stateDetail: detail }
   }
   // The feed knows a tool is running even while it waits on a subprocess and burns no CPU.
   const isWorking = session ? session.activity !== 'idle' : instance.status === 'active'
@@ -106,11 +115,8 @@ function stateOf(
   return { state: 'idle', stateDetail: null }
 }
 
-// An agent's worktree lives inside its project; the project is the folder above `.claude`.
-const WORKTREE_FOLDER = /[\\/]\.claude[\\/](?:\.worktree|worktrees)[\\/].*$/
-
 function emptySquad(instance: ClaudeInstance, session: SessionRef | undefined): Squad {
-  const projectRoot = instance.projectPath.replace(WORKTREE_FOLDER, '')
+  const projectRoot = projectRootOf(instance.projectPath)
   const segments = projectRoot.split(/[\\/]/).filter(Boolean)
   const name = session?.projectLabel ?? segments[segments.length - 1] ?? instance.projectName
   return {

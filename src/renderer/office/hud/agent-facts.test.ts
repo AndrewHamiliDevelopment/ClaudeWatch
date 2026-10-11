@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { makeAgent, makeFloor, makeFrame, makeRoom, makeSession } from '../__tests__/fixtures'
-import { agentStateMark, buildAgentFacts } from './agent-facts'
+import { buildAgentFacts } from './agent-facts'
 
 const frame = makeFrame({
   floors: [makeFloor({ floorId: 'f1', rooms: [makeRoom({ id: 'r1', sessionKey: 'claude:a' })] })],
@@ -56,26 +56,5 @@ describe('buildAgentFacts', () => {
       tokens: 10,
       focusKey: 'claude:a#t1'
     })
-  })
-})
-
-describe('agentStateMark', () => {
-  it('reads both waiting states as needs you, with the reason in words', () => {
-    expect(agentStateMark({ attention: 'permission', activity: 'idle' })).toEqual({
-      state: 'needs-you',
-      detail: 'Needs permission'
-    })
-    expect(agentStateMark({ attention: 'question', activity: 'idle' })).toEqual({
-      state: 'needs-you',
-      detail: 'Waiting for you'
-    })
-  })
-
-  it('reads a busy agent as working and a resting one as idle', () => {
-    expect(agentStateMark({ attention: 'none', activity: 'editing' }).state).toBe('working')
-    expect(agentStateMark({ attention: 'none', activity: 'idle' }).state).toBe('idle')
-    expect(agentStateMark({ attention: 'done', activity: 'idle' }).state).toBe('done')
-    expect(agentStateMark({ attention: 'error', activity: 'idle' }).state).toBe('error')
-    expect(agentStateMark({ attention: 'limited', activity: 'idle' }).state).toBe('limited')
   })
 })

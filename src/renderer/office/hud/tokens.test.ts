@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { SessionUsage, TokenCounts } from '../../../shared/office/types'
 import { makeSession } from '../__tests__/fixtures'
 import { buildTokenLedger, formatTokens } from '../../deck/tokens'
-import { contextText, memberTokens, tokensText, usageParts } from './tokens'
+import { contextText, memberTokens, tokensText } from './tokens'
 
 const counts = (input: number, output = 0, cacheWrite = 0, cacheRead = 0): TokenCounts => ({
   input,
@@ -43,14 +43,6 @@ describe('memberTokens', () => {
   it('is unknown when the bridge sent no count', () => {
     expect(memberTokens({})).toBeNull()
     expect(memberTokens({ tokens: null })).toBeNull()
-  })
-})
-
-describe('usageParts', () => {
-  it('adds the session thread and its spawned agents part by part', () => {
-    expect(usageParts(usage(counts(1, 2, 3, 4), counts(10, 20, 30, 40)))).toEqual(
-      counts(11, 22, 33, 44)
-    )
   })
 })
 

@@ -1,4 +1,4 @@
-import { addCounts } from '../../bridge/usage-fold'
+import { addCounts } from '../../shared/office/token-counts'
 import type { AccountLimit, AccountSource } from '../../shared/accounts'
 import type { AccountConfidence, ProviderId, TokenCounts } from '../../shared/office/types'
 

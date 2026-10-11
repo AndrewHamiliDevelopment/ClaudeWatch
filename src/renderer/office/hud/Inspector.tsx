@@ -14,11 +14,12 @@ import {
 } from '../../components/deck/deck-styles'
 import { Plate } from '../../components/deck/Plate'
 import { StateMark } from '../../components/deck/StateMark'
+import { stateOfAttention } from '../../deck/roster'
 import { formatElapsedTime } from '../../lib/utils'
 import { isTeammate, reachTarget } from '../logic/interactions'
 import { PROVIDER_LABEL } from '../office-palette'
 import type { RosterEntry } from '../themes/types'
-import { accountText, agentStateMark } from './agent-facts'
+import { accountText } from './agent-facts'
 import { Fact } from './Fact'
 import { KBD_INK_CLASS } from './hud-styles'
 import { MemberTokenFacts, SessionTokenFacts } from './TokenFacts'
@@ -65,7 +66,7 @@ export function Inspector({
   onClose,
   children
 }: InspectorProps) {
-  const mark = agentStateMark(agent)
+  const mark = stateOfAttention(agent.attention, agent.activity)
   const account = accountText(session, accounts)
   const startedAtMs = member?.startedAtMs ?? session?.startedAtMs
   const elapsedSeconds =

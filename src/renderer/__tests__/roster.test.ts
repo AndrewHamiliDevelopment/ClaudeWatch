@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildSquads, crestFor, filterSquads, tallySquads } from '../deck/roster'
+import { buildSquads, crestFor, filterSquads, stateOfAttention, tallySquads } from '../deck/roster'
 import { sessionTokens } from '../deck/tokens'
 import { instanceFixture, NOW_MS, sessionFixture } from './fixtures'
 
@@ -295,5 +295,27 @@ describe('tallySquads', () => {
       NOW_MS
     )
     expect(tallySquads(squads)).toEqual({ needsYou: 1, working: 1, resting: 2 })
+  })
+})
+
+describe('stateOfAttention', () => {
+  it('reads both waiting states as needs you, with the reason in words', () => {
+    expect(stateOfAttention('permission', 'idle')).toEqual({
+      state: 'needs-you',
+      detail: 'Needs permission'
+    })
+    expect(stateOfAttention('question', 'idle')).toEqual({
+      state: 'needs-you',
+      detail: 'Waiting for you'
+    })
+  })
+
+  it('reads a busy agent as working and a resting one as idle', () => {
+    expect(stateOfAttention('none', 'editing')).toEqual({ state: 'working', detail: null })
+    expect(stateOfAttention('none', 'idle').state).toBe('idle')
+  })
+
+  it.each(['done', 'error', 'limited'] as const)('keeps %s as its own state', (attention) => {
+    expect(stateOfAttention(attention, 'editing')).toEqual({ state: attention, detail: null })
   })
 })

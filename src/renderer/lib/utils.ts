@@ -45,9 +45,9 @@ export function getProjectName(projectPath: string): string {
   return segments[segments.length - 1] || projectPath
 }
 
-export function timeAgo(date: Date): string {
-  const now = new Date()
-  const diffSeconds = Math.floor((now.getTime() - date.getTime()) / 1000)
+// `nowMs` lets a screen measure every age against the one clock it ticks on.
+export function timeAgo(date: Date, nowMs = Date.now()): string {
+  const diffSeconds = Math.max(0, Math.floor((nowMs - date.getTime()) / 1000))
 
   if (diffSeconds < 60) return `${diffSeconds}s ago`
   if (diffSeconds < 3600) return `${Math.floor(diffSeconds / 60)}m ago`

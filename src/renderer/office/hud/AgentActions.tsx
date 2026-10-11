@@ -1,11 +1,6 @@
+import { needsHuman } from '../../../shared/office/attention'
 import type { InteractionFailure, SessionRef } from '../../../shared/office/types'
-import {
-  canPeek,
-  canRespond,
-  canTalk,
-  failureMessage,
-  type ReachTarget
-} from '../logic/interactions'
+import { canRespond, failureMessage, isOrcaHosted, type ReachTarget } from '../logic/interactions'
 import type { OfficeFeed } from '../scene-model'
 import { PeekPanel } from './PeekPanel'
 import { PermissionPanel } from './PermissionPanel'
@@ -35,16 +30,16 @@ export function AgentActions({
   onFocusTerminal,
   onSent
 }: AgentActionsProps) {
-  const isOwnSession = target.key === session.key
+  const isOwnSession = target.isLead
   // Mounted while reviewing even after the prompt clears, so the panel itself closes the review.
   const isReviewOpen =
     isOwnSession && isReviewing && canRespond({ ...session, attention: 'permission' })
   const { attention } = session
-  const waitingOn = attention === 'permission' || attention === 'question' ? attention : null
+  const waitingOn = needsHuman(attention) ? attention : null
   // A typed message would answer the agent's open dialog (Enter confirms its default), so no box.
   const talkBlocker = ((): InteractionFailure | null => {
     if (isOwnSession && waitingOn) return 'prompt-on-screen'
-    return canTalk(target) ? null : 'not-in-orca'
+    return isOrcaHosted(target) ? null : 'not-in-orca'
   })()
   return (
     <div className="flex flex-col gap-3">
@@ -69,7 +64,7 @@ export function AgentActions({
       ) : (
         <TalkBox agentKey={target.key} agentName={target.name} send={feed.send} onSent={onSent} />
       )}
-      {canPeek(target) && <PeekPanel agentKey={target.key} peek={feed.peek} />}
+      {isOrcaHosted(target) && <PeekPanel agentKey={target.key} peek={feed.peek} />}
     </div>
   )
 }
