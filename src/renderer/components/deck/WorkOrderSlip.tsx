@@ -14,14 +14,23 @@ const SEAL_ICON: Record<WorkOrder['attention'], LucideIcon> = {
 // The paper itself, shared with the Office HUD's work orders.
 export const SLIP_CLASS = 'on-paper rounded bg-paper text-ink shadow-slip'
 
-export function Seal({ attention }: { attention: WorkOrder['attention'] }) {
+interface SealProps {
+  attention: WorkOrder['attention']
+  // The stamp on a floating name tag, where the full seal would be larger than the name.
+  isSmall?: boolean
+}
+
+export function Seal({ attention, isSmall = false }: SealProps) {
   const SealIcon = SEAL_ICON[attention]
   return (
     <span
-      className="inline-grid size-[30px] shrink-0 -rotate-[4deg] place-items-center rounded-[5px] bg-seal text-paper"
+      className={cn(
+        'inline-grid shrink-0 -rotate-[4deg] place-items-center bg-seal text-paper',
+        isSmall ? 'size-3.5 rounded-[3px]' : 'size-[30px] rounded-[5px]'
+      )}
       aria-hidden="true"
     >
-      <SealIcon className="size-4" strokeWidth={2.1} />
+      <SealIcon className={isSmall ? 'size-2.5' : 'size-4'} strokeWidth={2.1} />
     </span>
   )
 }
