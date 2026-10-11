@@ -34,9 +34,9 @@ Validated (B8): with six teammates running, `node out/main/bridge.js --once` rep
 - [x] Phase 7 — Accounts: ledger, attribution, Accounts view (B6) (merged 9ac0aac and 33ec28d, then the review fixes: a ledger that reads names and plans only, kept in a 0600 file; an Accounts screen with tokens for today, 7 days and since tracking, split exact and inferred; this Mac's live ledger lists 5 accounts)
 - [x] Phase 8 — Three themes: Violet Court, Orbital Garrison, Quiet Grove (B5) (merged 005d539 + 67f02c5, ce0404b, c18b50a: 12 named characters and three parked frames or helpers per theme; alone 86 to 128 draw calls, mixed with Neo Edo Steam 212 to 231, three themes on one floor 258, ceiling 300)
 - [x] Phase 9 — Standalone Office: loopback web host and web bridge in ClaudeWatch (B7) (merged edb65a4: `npm run build:office-web` emits 10 files, 1.44 MB, largest 383,551 bytes; view-only server on 127.0.0.1 refused a request without the token and a POST to an action route; 26 guards each have a test that fails when the guard is removed)
-- [ ] Phase 10 — zkidz-claude-team: vendored Office bundle and the `zkoffice` command (B7)
+- [x] Phase 10 — zkidz-claude-team: vendored Office bundle and the `zkoffice` command (B7) (framework PR #96 merged as fff5c03, closes #95: `office/` bundle of 9 files and 1.5 MB, `bin/zkoffice`, `/zk:office`, 70-case harness in that repo's gate; installed on this Mac and started from `~/.claude/bin/zkoffice`: page 200, no token 401, port free after stop)
 - [x] Phase 11 — Release readiness: notarisation switch, changelog, README, clean-clone check (cdaccf5: the builder skips notarisation when its credentials are absent and does not fail; README now describes the local release; Node version declared)
-- [ ] Phase 12 — Integration: gates, QA and security review, second review, cleanup pass, dead-code scan, demo, notes
+- [x] Phase 12 — Integration: gates, QA and security review, second review, cleanup pass, dead-code scan, demo, notes (two review rounds and an independent one, all findings fixed; cleanup pass applied; 1,924 tests in 187 files, typecheck, eslint, both builds and the dead-code scan pass at 3baf3d0; that build is installed in `/Applications`; demo re-recorded on it and frame-checked; learnings recorded; worktrees removed)
 - [ ] Phase 13 — Signed release 1.3.0 — BLOCKED (owner: Angelo): no Developer ID Application certificate on this Mac
 
 ## How the work is cut
@@ -136,6 +136,9 @@ Fixed in session, outside the phase file lists:
 - `src/renderer/office/scene/NameCards.tsx`, `src/renderer/components/deck/WorkOrderSlip.tsx` (d5d77fb): paper name tag for an agent that needs the owner.
 - Review fixes, by both reviews and the independent one (911616e..1f14739, about forty commits): Talk refuses unless the agent's input line is on screen; the Orca signature check is one requirement anchored at Apple and guards the bridge too; a one-time launch code for the web page; a finished teammate keeps its tokens; the dashboard and the Office share one token roll-up; a lost-server and a view-only state on the web page; the ledger counts by file position; `knip.json` for the dead-code scan.
 - Cleanup pass (be42ce0..9a5122c): shared helpers under `src/shared/office/` (`agent-key`, `attention`, `token-counts`), one roster builder for the three themes, one trusted IPC handler helper, and the bridge's tick cut from 8 spawned processes to 1.
+- Found while recording the demo and fixed (5f190ac, 3baf3d0): the bridge stayed on its 30-second background pace under a visible Office or dashboard, because a window created visible emits no `show` event and Electron does not report every way a window ends up on screen. The pace now looks at a window when it is created and re-checks every five seconds.
+- Last-tokens fixes (65a259c): a session that exits between two polls is read to its end, and Codex totals reach the ledger without the display's ten-second hold.
+- `src/main/auto-updater.ts` (e497c75): a failed update check is no longer an unhandled rejection.
 - `README.md`, `package.json` (cdaccf5): the release section and the Node version.
 
 ## Not in this batch
