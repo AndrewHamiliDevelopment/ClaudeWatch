@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 
-import { browserStorage } from '../office-live/browser-storage'
+import { readStored, writeStored } from '../office-live/browser-storage'
 import { officeThemes, resolveTheme, useThemeAssignments } from './logic/office-themes'
 import type { ZoneGeometry } from './scene-model'
 import { getTheme, listThemes, themeForTeam } from './themes/registry'
@@ -42,16 +42,12 @@ export function useOfficeTheme(focusedZone?: ZoneGeometry) {
   const assignments = useThemeAssignments()
   const [hasChosenTheme, setHasChosenTheme] = useState(false)
   const [theme, setTheme] = useState(() => {
-    const stored = browserStorage()?.getItem(THEME_STORAGE_KEY)
+    const stored = readStored(THEME_STORAGE_KEY)
     return listThemes().find((candidate) => candidate.id === stored) ?? themeForTeam()
   })
   useEffect(() => {
     if (!hasChosenTheme) return
-    try {
-      localStorage.setItem(THEME_STORAGE_KEY, theme.id)
-    } catch {
-      // A locked-down storage backend must not disable the office controls.
-    }
+    writeStored(THEME_STORAGE_KEY, theme.id)
   }, [theme.id, hasChosenTheme])
 
   const zoneThemeId = focusedZone ? resolveTheme(focusedZone, assignments, theme.id) : null

@@ -1,16 +1,31 @@
 import { act, fireEvent, render, renderHook, screen } from '@testing-library/react'
-import { beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useOfficeTheme } from '../hooks'
 import { useOfficeHotkeys } from '../use-office-effects'
 import { BottomBar } from '../hud/BottomBar'
 import { listThemes, themeForTeam } from '../themes/registry'
 
 beforeEach(() => localStorage.clear())
+// Here, not in the test: a spy left behind by a failing test would fail every test after it.
+afterEach(() => vi.restoreAllMocks())
 
 it('uses the team default and falls back for unknown stored ids', () => {
   localStorage.setItem('claudewatch.office.theme', 'missing')
   const { result } = renderHook(useOfficeTheme)
   expect(result.current.theme.id).toBe(themeForTeam().id)
+})
+
+it('renders with the default theme when the stored one cannot be read or written', () => {
+  const refuse = (): never => {
+    throw new DOMException('The operation is insecure.', 'SecurityError')
+  }
+  vi.spyOn(Storage.prototype, 'getItem').mockImplementation(refuse)
+  vi.spyOn(Storage.prototype, 'setItem').mockImplementation(refuse)
+
+  const { result } = renderHook(useOfficeTheme)
+  expect(result.current.theme.id).toBe(themeForTeam().id)
+  act(() => result.current.cycleTheme())
+  expect(result.current.theme.id).not.toBe(themeForTeam().id)
 })
 
 it('restores a registered theme, cycles in registry order and persists', () => {
