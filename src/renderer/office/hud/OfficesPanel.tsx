@@ -106,26 +106,29 @@ export function OfficesPanel({
                       </span>
                       <Counts row={project} />
                     </button>
-                    <button
-                      type="button"
-                      ref={(element) => {
-                        if (element) toggleRefs.current.set(project.projectKey, element)
-                        else toggleRefs.current.delete(project.projectKey)
-                      }}
-                      aria-label={`New agent in ${project.label}`}
-                      aria-expanded={menuProjectKey === project.projectKey}
-                      onClick={() =>
-                        setMenuProjectKey(
-                          menuProjectKey === project.projectKey ? null : project.projectKey
-                        )
-                      }
-                      className={cn(
-                        FOCUS_RING_CLASS,
-                        'ml-1 shrink-0 rounded-md p-1.5 text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary'
-                      )}
-                    >
-                      <Plus aria-hidden="true" className="size-3.5" />
-                    </button>
+                    {/* Starting an agent needs a running session's folder; an emptied office has none. */}
+                    {project.agentCount > 0 && (
+                      <button
+                        type="button"
+                        ref={(element) => {
+                          if (element) toggleRefs.current.set(project.projectKey, element)
+                          else toggleRefs.current.delete(project.projectKey)
+                        }}
+                        aria-label={`New agent in ${project.label}`}
+                        aria-expanded={menuProjectKey === project.projectKey}
+                        onClick={() =>
+                          setMenuProjectKey(
+                            menuProjectKey === project.projectKey ? null : project.projectKey
+                          )
+                        }
+                        className={cn(
+                          FOCUS_RING_CLASS,
+                          'ml-1 shrink-0 rounded-md p-1.5 text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary'
+                        )}
+                      >
+                        <Plus aria-hidden="true" className="size-3.5" />
+                      </button>
+                    )}
                   </div>
                   {menuProjectKey === project.projectKey && (
                     <NewAgentMenu

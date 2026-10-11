@@ -145,3 +145,14 @@ it('provides one empty headquarters floor before any sessions arrive', () => {
   expect(floors).toHaveLength(1)
   expect(floors[0]).toMatchObject({ floorId: 'hq', rooms: [], zones: [] })
 })
+
+it('draws an empty headquarters for a layout saved by the old floor-per-project version', () => {
+  const old = {
+    version: 1,
+    floors: [
+      { id: 'p_old', label: 'Old', width: 24, depth: 18, rooms: [], elevator: { x: 0, z: 0 } }
+    ],
+    reservations: {}
+  } as unknown as Parameters<typeof toFloorGeometry>[0]
+  expect(toFloorGeometry(old, [])).toMatchObject([{ floorId: 'hq', rooms: [], zones: [] }])
+})

@@ -113,7 +113,11 @@ export default function OfficeScene(props: OfficeSceneProps) {
           ))}
         </BatchedScene>
         <WorldView theme={props.theme} floor={props.floor} floors={props.floors} band={band} />
-        <ZonePickers floor={props.floor} onFly={props.onFlyToZone} />
+        <ZonePickers
+          floor={props.floor}
+          onFly={props.onFlyToZone}
+          onMiss={() => props.onSelectAgent(null)}
+        />
         <CardProjector
           cards={props.cards}
           stacks={props.stacks}

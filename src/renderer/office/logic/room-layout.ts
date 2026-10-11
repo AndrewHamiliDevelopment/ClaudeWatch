@@ -92,6 +92,11 @@ export function roomWallSegments(room: WalledRect, doorWidth = DOOR_WIDTH): Wall
   })
 }
 
+// Not `rooms.flatMap(roomWallSegments)`: flatMap would pass each room's index as its door width.
+export function floorWallSegments(rooms: readonly WalledRect[]): WallSegment[] {
+  return rooms.flatMap((room) => roomWallSegments(room))
+}
+
 export function wallHeight(
   mode: WallsMode,
   segment: WallSegment,

@@ -71,7 +71,8 @@ function detailFor(agent: AgentView, toolName: string | undefined): string {
 function priority(card: NameCard, selectedAgentKey: string | null): number {
   if (card.agentKey === selectedAgentKey) return 0
   if (card.status === 'permission' || card.status === 'waiting') return 1
-  return card.kind === 'card' ? 2 : 3
+  if (card.status === 'error' || card.status === 'limited') return 2
+  return card.kind === 'card' ? 3 : 4
 }
 
 export function buildNameCards(

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   doorSide,
+  floorWallSegments,
   inwardHeading,
   doorSignPlacement,
   roomWallSegments,
@@ -63,5 +64,22 @@ describe('wallHeight', () => {
   it('lowers only the walls facing the camera in Cutaway mode', () => {
     expect(southWall && wallHeight('cutaway', southWall, { x: 0, z: 30 })).toBe(WALL_HEIGHT_LOW)
     expect(northWall && wallHeight('cutaway', northWall, { x: 0, z: 30 })).toBe(WALL_HEIGHT_FULL)
+  })
+})
+
+describe('floorWallSegments', () => {
+  it('leaves the same doorway in every room, wherever it sits in the list', () => {
+    const rooms = Array.from({ length: 6 }, (_, index) =>
+      makeRoom({ id: `r${index}`, x: index * 8, z: -4, door: { x: index * 8, z: -1.5 } })
+    )
+    const segments = floorWallSegments(rooms)
+    for (const candidate of rooms) {
+      const doorWall = segments.filter(
+        (segment) => segment.roomId === candidate.id && segment.normalZ === 1
+      )
+      // Two pieces either side of a 1.1 m gap in a 6 m wall.
+      expect(doorWall).toHaveLength(2)
+      expect(doorWall.reduce((total, segment) => total + segment.length, 0)).toBeCloseTo(4.9)
+    }
   })
 })

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { summariseFloors } from '../logic/floor-model'
-import { makeAgent, makeFloor, makeFrame, makeRoom } from './fixtures'
+import { sessionForAgent, summariseFloors } from '../logic/floor-model'
+import { makeAgent, makeFloor, makeFrame, makeRoom, makeSession } from './fixtures'
 
 const frame = makeFrame({
   floors: [
@@ -24,5 +24,28 @@ describe('summariseFloors', () => {
       { floorId: 'f1', label: 'ClaudeWatch', number: 1, agentCount: 2, attentionCount: 1 },
       { floorId: 'f2', label: 'PropApp', number: 2, agentCount: 1, attentionCount: 0 }
     ])
+  })
+})
+
+describe('sessionForAgent', () => {
+  it('finds the session of a subagent seated in the shared team area', () => {
+    const session = makeSession({ key: 'claude:a' })
+    const team = makeFrame({
+      floors: [
+        makeFloor({
+          floorId: 'f1',
+          rooms: [
+            makeRoom({ id: 'office', sessionKey: 'claude:a' }),
+            makeRoom({ id: 'team', kind: 'team', sessionKey: null })
+          ]
+        })
+      ],
+      sessions: [session, makeSession({ key: 'claude:ab' })]
+    })
+    const overflow = makeAgent({ agentKey: 'claude:a#3', roomId: 'team', isSubagent: true })
+    expect(sessionForAgent(team, overflow)).toBe(session)
+    expect(
+      sessionForAgent(team, makeAgent({ agentKey: 'stranger', roomId: 'team' }))
+    ).toBeUndefined()
   })
 })

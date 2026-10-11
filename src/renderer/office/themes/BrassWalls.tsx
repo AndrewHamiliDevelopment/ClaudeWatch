@@ -1,7 +1,7 @@
 import { useFrame } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
 import { CylinderGeometry, type InstancedMesh } from 'three'
-import { roomWallSegments, WALL_HEIGHT_FULL, type WallsMode } from '../logic/room-layout'
+import { floorWallSegments, WALL_HEIGHT_FULL, type WallsMode } from '../logic/room-layout'
 import { createWallHeights } from '../logic/wall-heights'
 import { STEAM } from '../office-palette'
 import type { RoomGeometry } from '../scene-model'
@@ -21,7 +21,7 @@ interface WallsProps {
 export function Walls({ rooms, mode, isReducedMotion }: WallsProps) {
   const wallRef = useRef<InstancedMesh>(null)
   const pipeRef = useRef<InstancedMesh>(null)
-  const segments = useMemo(() => rooms.flatMap(roomWallSegments), [rooms])
+  const segments = useMemo(() => floorWallSegments(rooms), [rooms])
   const pipeGeometry = useMemo(
     () => new CylinderGeometry(PIPE_RADIUS, PIPE_RADIUS, 1, 8).rotateZ(Math.PI / 2),
     []

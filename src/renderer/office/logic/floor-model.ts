@@ -44,7 +44,9 @@ function roomForAgent(frame: OfficeFrame, agent: AgentView): RoomGeometry | unde
 
 export function sessionForAgent(frame: OfficeFrame, agent: AgentView): SessionRef | undefined {
   const sessionKey = roomForAgent(frame, agent)?.sessionKey
-  return frame.sessions.find((session) => session.key === sessionKey)
+  if (sessionKey) return frame.sessions.find((session) => session.key === sessionKey)
+  // The shared team area belongs to no session; a subagent there is keyed `${sessionKey}#${id}`.
+  return frame.sessions.find((session) => agent.agentKey.startsWith(`${session.key}#`))
 }
 
 export function mainAgentForSession(frame: OfficeFrame, sessionKey: string): AgentView | undefined {

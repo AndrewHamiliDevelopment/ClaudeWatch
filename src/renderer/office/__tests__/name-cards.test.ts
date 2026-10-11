@@ -71,6 +71,21 @@ describe('buildNameCards', () => {
     expect(buildNameCards(crowd, 'f1', null).length).toBeLessThanOrEqual(MAX_NAME_CARDS)
   })
 
+  it('keeps every agent with something wrong when the cap drops quiet ones', () => {
+    const crowd = makeFrame({
+      floors: [floor],
+      agents: [
+        ...Array.from({ length: 60 }, (_, index) =>
+          makeAgent({ agentKey: `bot-${index}`, roomId: 'r1', activity: 'editing' })
+        ),
+        makeAgent({ agentKey: 'broken', roomId: 'r1', attention: 'error' }),
+        makeAgent({ agentKey: 'limited', roomId: 'r1', attention: 'limited' })
+      ]
+    })
+    const keys = buildNameCards(crowd, 'f1', null).map((card) => card.agentKey)
+    expect(keys).toEqual(expect.arrayContaining(['broken', 'limited']))
+  })
+
   it('carries the project and last update so ties go to the most recent', () => {
     const office = buildNameCards(frame, 'f1', null).find((card) => card.agentKey === 'a')
     expect(office).toMatchObject({ projectKey: 'p_1', updatedAtMs: 0 })

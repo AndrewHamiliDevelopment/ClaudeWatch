@@ -1,7 +1,7 @@
 import { useFrame } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
 import type { InstancedMesh } from 'three'
-import { roomWallSegments } from '../logic/room-layout'
+import { floorWallSegments } from '../logic/room-layout'
 import { createWallHeights } from '../logic/wall-heights'
 import { writeInstances, type InstancePlacement } from '../scene/instancing'
 import { Matte } from '../scene/InstancedParts'
@@ -15,7 +15,7 @@ export function EdoWalls({ floor, mode, isReducedMotion }: WallsProps) {
   const pipes = useRef<InstancedMesh>(null)
   const gauges = useRef<InstancedMesh>(null)
   const wallHeights = useRef(createWallHeights()).current
-  const segments = useMemo(() => floor.rooms.flatMap(roomWallSegments), [floor.rooms])
+  const segments = useMemo(() => floorWallSegments(floor.rooms), [floor.rooms])
   const latticeCount = segments.reduce((count, s) => count + Math.ceil(s.length / 0.5) + 4, 0)
   useFrame(({ camera }, delta) => {
     if (!panels.current || !lattice.current || !pipes.current || !gauges.current) return

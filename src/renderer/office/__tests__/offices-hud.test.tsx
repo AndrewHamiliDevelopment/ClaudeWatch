@@ -130,6 +130,20 @@ describe('Offices panel', () => {
     expect(feed.start).toHaveBeenCalledWith('p_pa', 'codex')
   })
 
+  it('offers a new agent only where a running session can anchor it', () => {
+    const { push } = harness()
+    // PropApp's office is still reserved, but its last session has left.
+    push({
+      ...companyFrame,
+      sessions: companyFrame.sessions.filter((session) => session.projectKey === 'p_cw'),
+      agents: companyFrame.agents.filter((agent) => agent.roomId === 'o-a')
+    })
+    const offices = screen.getByRole('navigation', { name: 'Offices' })
+    expect(within(offices).getByRole('button', { name: 'New agent in ClaudeWatch' })).toBeEnabled()
+    expect(within(offices).getByRole('button', { name: 'PropApp, 0 agents' })).toBeInTheDocument()
+    expect(within(offices).queryByRole('button', { name: 'New agent in PropApp' })).toBeNull()
+  })
+
   it('no longer switches floors with the bracket keys', () => {
     const { push } = harness()
     push(companyFrame)
