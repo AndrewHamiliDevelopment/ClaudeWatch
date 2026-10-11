@@ -20,7 +20,7 @@ export interface ThemePalette {
 }
 
 // dead-code-allowed: plug-in contract type that each team's theme implements 2027-01-31
-export interface RobotSkin {
+interface RobotSkin {
   label: string
   body: string
   trim: string
@@ -85,14 +85,14 @@ export interface TowerProps {
 
 // Drawn once per floor, by the floor's default theme.
 // dead-code-allowed: plug-in contract type each theme's floor kit implements 2027-01-31
-export interface FloorKit {
+interface FloorKit {
   Slab: ComponentType<FloorProps>
   Elevator: ComponentType<FloorProps>
 }
 
 // Drawn per zone, by the theme that zone resolves to; several can share one floor.
 // dead-code-allowed: plug-in contract type each theme's zone kit implements 2027-01-31
-export interface ZoneKit {
+interface ZoneKit {
   // Offices within offices: a company's fenced grounds and a project's walled office.
   CompanyZone: ComponentType<ZoneProps>
   ProjectOffice: ComponentType<ZoneProps>

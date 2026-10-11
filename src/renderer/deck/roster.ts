@@ -51,7 +51,7 @@ export interface SquadTally {
 // A turn that ended this recently reads as "Done"; after that the agent is just idle.
 const DONE_WINDOW_MS = 10 * 60 * 1000
 
-export // Two-letter crests for a name, best first: outer initials, then the first letter with each
+// Two-letter crests for a name, best first: outer initials, then the first letter with each
 // later word's initial, then with each later letter.
 function crestCandidates(projectName: string): string[] {
   const words = projectName

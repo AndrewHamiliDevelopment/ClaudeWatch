@@ -1,6 +1,6 @@
 import { cn } from '../../lib/utils'
 
-export interface LedgerTableRow {
+interface LedgerTableRow {
   key: string
   name: string
   cells: readonly string[]
