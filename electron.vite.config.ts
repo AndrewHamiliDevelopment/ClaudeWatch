@@ -36,6 +36,14 @@ export default defineConfig({
         '@renderer': resolve('src/renderer')
       }
     },
-    plugins: [react()]
+    plugins: [react()],
+    build: {
+      rollupOptions: {
+        input: {
+          index: resolve('src/renderer/index.html'),
+          office: resolve('src/renderer/office.html')
+        }
+      }
+    }
   }
 })
