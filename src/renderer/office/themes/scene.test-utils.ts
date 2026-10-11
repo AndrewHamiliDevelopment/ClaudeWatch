@@ -1,25 +1,28 @@
 import { isValidElement, type ReactElement, type ReactNode } from 'react'
 import {
+  BufferGeometry,
   Group,
   InstancedMesh,
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
-  type BufferGeometry,
   type Material
 } from 'three'
-import { InstancedParts } from '../../scene/InstancedParts'
-import { createMeshBatches, releaseMeshBatches } from '../../scene/mesh-batches'
-import { makeGeometry } from '../geometry-audit.test-utils'
+import { InstancedParts } from '../scene/InstancedParts'
+import { createMeshBatches, releaseMeshBatches } from '../scene/mesh-batches'
+import { makeGeometry } from './geometry-audit.test-utils'
 
 interface NodeProps {
   children?: ReactNode
   args?: readonly (number | BufferGeometry | Material | undefined)[]
   placements?: readonly object[]
+  geometry?: BufferGeometry
   name?: string
   visible?: boolean
   transparent?: boolean
   userData?: Record<string, string>
+  // Test-only: marks a subtree whose materials must not merge with any other theme's.
+  unshared?: boolean
 }
 export type SceneElement = ReactElement<NodeProps>
 
@@ -51,16 +54,17 @@ function surfaceOf(material: SceneElement): Record<string, unknown> {
   )
 }
 
-// dry-new: the expansion live-budget.test.tsx runs; a test file cannot export its harness.
-function sceneGraph(node: ReactNode): Group {
+function sceneGraph(node: ReactNode, isUnshared = false): Group {
   const root = new Group()
   for (const child of directChildren(node)) {
     const isInstanced = child.type === InstancedParts || child.type === 'instancedMesh'
     if (child.type !== 'mesh' && !isInstanced) {
-      root.add(sceneGraph(child.props.children))
+      root.add(sceneGraph(child.props.children, isUnshared || child.props.unshared === true))
       continue
     }
-    let geometry: BufferGeometry | undefined
+    let geometry =
+      child.props.geometry ??
+      (child.props.args?.[0] instanceof BufferGeometry ? child.props.args[0] : undefined)
     let material: Material | undefined
     for (const part of directChildren(child.props.children)) {
       if (typeof part.type !== 'string') continue
@@ -72,7 +76,9 @@ function sceneGraph(node: ReactNode): Group {
       if (part.type === 'meshBasicMaterial') material = new MeshBasicMaterial(surfaceOf(part))
       if (part.type === 'meshStandardMaterial') material = new MeshStandardMaterial(surfaceOf(part))
     }
-    if (!geometry || !material) throw new Error('Missing geometry or material')
+    if (!geometry || !material)
+      throw new Error(`Missing geometry or material for ${String(child.type)}`)
+    if (isUnshared) material.name = 'unshared'
     const count =
       child.props.placements?.length ??
       (typeof child.props.args?.[2] === 'number' ? child.props.args[2] : 1)
@@ -85,19 +91,28 @@ function sceneGraph(node: ReactNode): Group {
   return root
 }
 
-// Merged as BatchedScene merges at runtime: an upper bound with every effect switched on.
-// Textured signs never merge and belong to no theme, so they are counted apart.
-export function mergedDraws(node: ReactNode): { all: number; untextured: number } {
+export interface DrawCount {
+  draws: number
+  // Textured signs never merge and belong to no theme, so a theme's own cost leaves them out.
+  untextured: number
+  triangles: number
+}
+
+// Merged as one BatchedScene merges at runtime. An upper bound: every effect is switched on,
+// because only a hidden material, not a hidden object, is left out.
+export function mergedDraws(node: ReactNode): DrawCount {
   const root = sceneGraph(node)
   const batches = createMeshBatches(root)
-  const drawn: Material[] = []
+  const counted: DrawCount = { draws: 0, untextured: 0, triangles: 0 }
   root.traverse((object) => {
     if (!(object instanceof Mesh) || !object.layers.isEnabled(0)) return
-    if (!Array.isArray(object.material) && object.material.visible) drawn.push(object.material)
+    if (Array.isArray(object.material) || !object.material.visible) return
+    counted.draws += 1
+    if (!('map' in object.material && object.material.map)) counted.untextured += 1
+    counted.triangles +=
+      ((object.geometry.index?.count ?? object.geometry.attributes.position.count) / 3) *
+      (object instanceof InstancedMesh ? object.count : 1)
   })
   releaseMeshBatches(root, batches)
-  return {
-    all: drawn.length,
-    untextured: drawn.filter((material) => !('map' in material && material.map)).length
-  }
+  return counted
 }

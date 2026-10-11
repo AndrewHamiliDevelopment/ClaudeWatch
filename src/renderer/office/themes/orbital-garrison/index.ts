@@ -16,10 +16,8 @@ import {
 import { GarrisonWalls } from './GarrisonWalls'
 import { GarrisonDistrict, GarrisonHangar, GarrisonTower } from './GarrisonWorld'
 import { GARRISON, GARRISON_PALETTE } from './palette'
-import { ORBITAL_GARRISON_ID } from './roster'
-
-// dead-code-allowed: the cast and frames as { id, name, role } for the Office HUD 2026-12-31
-export { GARRISON_FRAMES, orbitalGarrisonRoster } from './roster'
+import { GARRISON_CAST } from './cast'
+import { characterFor, ORBITAL_GARRISON_ID, orbitalGarrisonRoster } from './roster'
 
 export const orbitalGarrison: OfficeTheme = {
   id: ORBITAL_GARRISON_ID,
@@ -27,6 +25,10 @@ export const orbitalGarrison: OfficeTheme = {
   description:
     'A hangar deck in gunmetal, white and hazard orange: crews at consoles, frames parked.',
   palette: GARRISON_PALETTE,
+  roster: {
+    entries: orbitalGarrisonRoster,
+    indexFor: (agent, bay) => GARRISON_CAST.indexOf(characterFor(agent, bay))
+  },
   robot: {
     Model: GarrisonCrew,
     skins: {

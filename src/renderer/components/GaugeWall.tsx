@@ -2,7 +2,7 @@ import { Building2 } from 'lucide-react'
 import { openOffice } from '../deck/deck-api'
 import { tallySquads, type Squad } from '../deck/roster'
 import type { RateLimits, UsageStats } from '../lib/types'
-import { formatCompactNumber } from '../lib/utils'
+import { formatTokens } from '../deck/tokens'
 import { BUTTON_PRIMARY_CLASS, PLATE_TITLE_CLASS } from './deck/deck-styles'
 import { FloorMap } from './deck/FloorMap'
 import { Plate } from './deck/Plate'
@@ -82,13 +82,13 @@ function TokenLedger({ title, note, rows }: TokenLedgerProps) {
       <div className="mb-1 flex items-baseline justify-between gap-2">
         <h2 className={PLATE_TITLE_CLASS}>{title}</h2>
         <span className="text-caption text-text-tertiary">
-          {note}, {formatCompactNumber(totalTokens)}
+          {note}, {formatTokens(totalTokens)}
         </span>
       </div>
       <ul className="flex flex-col gap-1.5">
         {rankedRows.map((row) => {
           const sharePercent = totalTokens > 0 ? Math.round((row.tokens / totalTokens) * 100) : 0
-          const tokensText = formatCompactNumber(row.tokens)
+          const tokensText = formatTokens(row.tokens)
           return (
             <li key={row.key} className="text-body">
               <div className="mb-1 flex items-baseline gap-2">

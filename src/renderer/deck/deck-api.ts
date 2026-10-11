@@ -19,7 +19,8 @@ export async function jumpToAgent(target: JumpTarget): Promise<void> {
   if (target.pid !== null) {
     try {
       const focus = await api.focusSession(target.pid)
-      if (focus?.success) return
+      // 'app': Orca came forward without the pane being proven. That is where the agent is.
+      if (focus?.success || focus?.target === 'app') return
     } catch {
       // A focus call that fails outright still leaves the terminal fallback below.
     }

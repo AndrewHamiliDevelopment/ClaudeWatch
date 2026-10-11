@@ -15,9 +15,11 @@ export interface WheelInput {
 const NOTCH_WHEEL_DELTA = 120
 const GESTURE_GAP_MS = 150
 const PINCH_GAIN = 0.01
-const NOTCH_GAIN = 0.0018
-const MAX_NOTCH_PX = 120
-const LINE_PX = 40
+// One notch is one step (×1.2), whatever delta it carries: the delta varies by browser and by
+// how fast the wheel turns, from about 4 px to several hundred.
+const NOTCH_STEP = 0.18
+// A mouse wheel with Ctrl or Cmd held arrives as a pinch; capped here it zooms like a plain notch.
+const MAX_PINCH_PX = NOTCH_STEP / PINCH_GAIN
 
 function isNotched(input: WheelInput): boolean {
   if (input.deltaMode !== 0) return true
@@ -47,10 +49,9 @@ export function createWheelClassifier(): (input: WheelInput) => WheelIntent {
 // Multiplier for the zoom goal. Exponential, so zooming in then out by the same input is exact.
 export function zoomFactor(intent: WheelIntent, input: WheelInput): number {
   if (intent === 'scroll-pan') return 1
-  if (intent === 'pinch') return Math.exp(-input.deltaY * PINCH_GAIN)
-  const pixels = input.deltaMode === 0 ? input.deltaY : input.deltaY * LINE_PX
-  const notch = Math.max(-MAX_NOTCH_PX, Math.min(MAX_NOTCH_PX, pixels))
-  return Math.exp(-notch * NOTCH_GAIN)
+  if (intent === 'wheel-zoom') return Math.exp(-Math.sign(input.deltaY) * NOTCH_STEP)
+  const pixels = Math.max(-MAX_PINCH_PX, Math.min(MAX_PINCH_PX, input.deltaY))
+  return Math.exp(-pixels * PINCH_GAIN)
 }
 
 export function nextZoomGoal(

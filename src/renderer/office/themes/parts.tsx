@@ -1,5 +1,5 @@
-import type { Vector } from '../primitives'
-import { UnitPart, type UnitShape } from '../unit-parts'
+import type { Vector } from './primitives'
+import { UnitPart, type UnitShape } from './unit-parts'
 
 // A figure as data: unit shapes scaled per part, so a whole cast shares a few merged draws.
 export interface PartSpec {

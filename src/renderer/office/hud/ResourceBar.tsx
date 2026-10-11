@@ -8,10 +8,12 @@ interface ResourceBarProps {
   agentCount: number
   // Null until a session has been counted.
   tokens: number | null
+  // A session is still being counted, so the total is a floor.
+  isPartial: boolean
 }
 
 // The office at a glance. Tokens are what live sessions have spent since they began.
-export function ResourceBar({ agentCount, tokens }: ResourceBarProps) {
+export function ResourceBar({ agentCount, tokens, isPartial }: ResourceBarProps) {
   return (
     <section aria-label="Office totals">
       <Plate faceClassName="flex h-[42px] items-center gap-4 px-4 text-xs text-text-secondary">
@@ -28,7 +30,9 @@ export function ResourceBar({ agentCount, tokens }: ResourceBarProps) {
             <span>Tokens: {tokensText(tokens)}</span>
           ) : (
             <span>
-              <strong className={cn(COUNT_CLASS, 'text-accent')}>{tokensText(tokens)}</strong>{' '}
+              <strong className={cn(COUNT_CLASS, 'text-accent')}>
+                {tokensText(tokens, isPartial)}
+              </strong>{' '}
               tokens
             </span>
           )}

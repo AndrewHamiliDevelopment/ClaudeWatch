@@ -11,7 +11,8 @@ import type { OfficeTheme } from '../themes/types'
 import { NewAgentMenu } from './NewAgentMenu'
 import { ThemeToggle, ZoneButton } from './OfficeRow'
 import { ThemePicker } from './ThemePicker'
-import { tokensText, type TokenLedger } from './tokens'
+import type { TokenLedger } from '../../deck/tokens'
+import { tokensText } from './tokens'
 
 interface OfficesPanelProps {
   companies: readonly OfficeCompanyRow[]
@@ -61,7 +62,9 @@ export function OfficesPanel({
             <span className="flex-1">All offices</span>
             <span>{agentCountLabel(agentTotal)}</span>
             {agentTotal > 0 && (
-              <span className="tabular-nums text-accent">{tokensText(ledger.office)}</span>
+              <span className="tabular-nums text-accent">
+                {tokensText(ledger.office, ledger.isOfficePartial)}
+              </span>
             )}
           </li>
           {companies.map((company) => {
@@ -79,6 +82,7 @@ export function OfficesPanel({
                   <ZoneButton
                     row={company}
                     tokens={ledger.companies.get(company.companyKey)}
+                    isPartial={ledger.partialCompanies.has(company.companyKey)}
                     focusedZoneId={focusedZoneId}
                     onFlyToZone={onFlyToZone}
                   >
@@ -117,6 +121,7 @@ export function OfficesPanel({
                           <ZoneButton
                             row={project}
                             tokens={ledger.projects.get(project.projectKey)}
+                            isPartial={ledger.partialProjects.has(project.projectKey)}
                             focusedZoneId={focusedZoneId}
                             onFlyToZone={onFlyToZone}
                           >

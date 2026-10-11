@@ -86,12 +86,11 @@ export default function OfficeScene(props: OfficeSceneProps) {
     [props.sessions]
   )
   return (
-    <div
-      className="absolute inset-0"
-      role="img"
-      aria-label={`Isometric view of the ${props.floor.label} floor`}
-    >
+    <div className="absolute inset-0" data-scene-root="">
+      {/* The image role sits on the canvas alone: around the card layer it would hide its buttons. */}
       <Canvas
+        role="img"
+        aria-label={`Isometric view of the ${props.floor.label} floor`}
         orthographic
         frameloop="demand"
         flat
@@ -140,7 +139,6 @@ export default function OfficeScene(props: OfficeSceneProps) {
           floor={props.floor}
           agents={props.agents}
           liveSessionKeys={liveSessionKeys}
-          selectedAgentKey={props.selectedAgentKey}
           request={props.cameraRequest}
           isReducedMotion={isReducedMotion}
           onBandChange={setBand}

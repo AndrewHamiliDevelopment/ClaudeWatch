@@ -18,7 +18,8 @@ export interface MeshBatch {
   sources: SourceMesh[]
 }
 
-// Opt-in for identical coplanar decals (agent shadows): draw order among them cannot matter.
+// Opt-in for see-through parts that are all alike (agent shadows, steam puffs): one geometry,
+// one material, and a draw order among them that cannot matter.
 export const SHARED_BATCH = 'sharedBatch'
 
 function batchKey(mesh: Mesh, material: Material): string | null {

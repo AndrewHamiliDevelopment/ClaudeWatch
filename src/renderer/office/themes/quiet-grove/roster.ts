@@ -1,6 +1,6 @@
 import type { AgentView } from '../../../../shared/office/types'
 import { rosterName } from '../roster-names'
-import type { RosterEntry } from '../violet-court/cast'
+import type { RosterEntry } from '../types'
 import { GROVE_CAST } from './cast'
 
 export const QUIET_GROVE_ID = 'quiet-grove'

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { sessionTokens } from '../../deck/roster'
+import { sessionTokens } from '../../deck/tokens'
 import { officeThemes } from '../logic/office-themes'
 import { buildFixtureFrame, createFixtureFeed } from './fixture-feed'
 

@@ -8,7 +8,8 @@ import { openOffice } from '../deck/deck-api'
 import { tallySquads, type Squad, type SquadTally } from '../deck/roster'
 import { needsYouLabel } from '../office/logic/floor-model'
 import type { UsageStats } from '../lib/types'
-import { cn, formatCompactNumber, formatCurrency } from '../lib/utils'
+import { formatTotal } from '../deck/tokens'
+import { cn, formatCurrency } from '../lib/utils'
 import {
   BUTTON_PRIMARY_CLASS,
   BUTTON_QUIET_CLASS,
@@ -196,8 +197,8 @@ function SquadLine({ squad }: { squad: Squad }) {
       </span>
       {squad.tokens !== null && (
         <span className="min-w-10 text-right tabular-nums text-accent">
-          {formatCompactNumber(squad.tokens)}
-          <span className="sr-only"> tokens</span>
+          {formatTotal(squad.tokens, squad.isTokensPartial)}
+          <span className="sr-only">{squad.isTokensPartial ? ' or more tokens' : ' tokens'}</span>
         </span>
       )}
     </li>

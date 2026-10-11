@@ -2,7 +2,7 @@ import type { FloorProps, TowerProps } from '../types'
 import { ThemeTower } from '../WorldArchitecture'
 import { frameParts } from './frame-parts'
 import { COURT, COURT_PALETTE } from './palette'
-import { box, Parts, type PartSpec } from './Parts'
+import { box, Parts, type PartSpec } from '../parts'
 import { COURT_FRAMES } from './roster'
 
 // A stepped keep: three shrinking tiers, a lit window band and a gold spire.

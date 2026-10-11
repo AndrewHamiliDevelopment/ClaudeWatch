@@ -1,5 +1,6 @@
 import type { AccountRef, AgentView, SessionRef } from '../../../shared/office/types'
-import { sessionTokens, type AgentState } from '../../deck/roster'
+import type { AgentState } from '../../deck/roster'
+import { sessionTokens } from '../../deck/tokens'
 import { memberForAgent, sessionForAgent } from '../logic/floor-model'
 import { isTeammate, reachTarget } from '../logic/interactions'
 import { GEM_SPECS } from '../logic/status-gem'

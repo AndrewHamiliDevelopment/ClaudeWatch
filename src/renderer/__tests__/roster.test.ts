@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { buildSquads, crestFor, filterSquads, sessionTokens, tallySquads } from '../deck/roster'
+import { buildSquads, crestFor, filterSquads, tallySquads } from '../deck/roster'
+import { sessionTokens } from '../deck/tokens'
 import { instanceFixture, NOW_MS, sessionFixture } from './fixtures'
 
 describe('crestFor', () => {
@@ -31,6 +32,14 @@ describe('sessionTokens', () => {
     expect(sessionTokens(null)).toBeNull()
     expect(sessionTokens(undefined)).toBeNull()
   })
+})
+
+const usageOf = (tokens: number) => ({
+  own: { input: tokens, output: 0, cacheWrite: 0, cacheRead: 0 },
+  subagents: { input: 0, output: 0, cacheWrite: 0, cacheRead: 0 },
+  spawned: 0,
+  contextTokens: null,
+  contextLimit: null
 })
 
 describe('buildSquads', () => {
@@ -79,6 +88,68 @@ describe('buildSquads', () => {
       ['ClaudeWatch', 'CW'],
       ['ClearSpent-Web', 'CS'],
       ['CrabWalk', 'CR']
+    ])
+  })
+
+  it('totals a squad from every session of its project, a Codex one included', () => {
+    const [squad] = buildSquads(
+      [instanceFixture({ pid: 1234 })],
+      [
+        sessionFixture({ pid: 1234, usage: usageOf(100) }),
+        // The process list only knows Claude processes; the feed knows this one.
+        sessionFixture({ key: 'codex:c1', provider: 'codex', pid: 999, usage: usageOf(50) })
+      ],
+      NOW_MS
+    )
+    expect(squad.tokens).toBe(150)
+    expect(squad.isTokensPartial).toBe(false)
+  })
+
+  it('says a total is partial while one of its sessions is still being counted', () => {
+    const [squad] = buildSquads(
+      [instanceFixture({ pid: 1234 }), instanceFixture({ pid: 77 })],
+      [
+        sessionFixture({ pid: 1234, usage: usageOf(100) }),
+        sessionFixture({ key: 'claude:other', pid: 77, usage: null })
+      ],
+      NOW_MS
+    )
+    expect(squad.tokens).toBe(100)
+    expect(squad.isTokensPartial).toBe(true)
+  })
+
+  it('reads working or idle from the session when there is one, as the Office does', () => {
+    const stateOf = (status: 'active' | 'idle', activity: 'running' | 'idle') =>
+      buildSquads(
+        [instanceFixture({ pid: 1234, status })],
+        [sessionFixture({ pid: 1234, activity })],
+        NOW_MS
+      )[0].agents[0].state
+    // A tool waiting on a subprocess burns no CPU and is still working.
+    expect(stateOf('idle', 'running')).toBe('working')
+    expect(stateOf('active', 'idle')).toBe('idle')
+  })
+
+  it('keeps an agent in a worktree in its project squad before the feed arrives', () => {
+    const squads = buildSquads(
+      [
+        instanceFixture({ pid: 1 }),
+        instanceFixture({
+          pid: 2,
+          projectPath: '/Users/test/ZKidz/ClaudeWatch/.claude/.worktree/fix-a',
+          projectName: '.worktree/fix-a'
+        }),
+        instanceFixture({
+          pid: 3,
+          projectPath: '/Users/test/ZKidz/ClaudeWatch/.claude/worktrees/agent-1',
+          projectName: 'worktrees/agent-1'
+        })
+      ],
+      null,
+      NOW_MS
+    )
+    expect(squads.map((squad) => [squad.name, squad.company, squad.agents.length])).toEqual([
+      ['ClaudeWatch', 'ZKidz', 3]
     ])
   })
 

@@ -1,5 +1,5 @@
 import type { FloorProps, TowerProps } from '../types'
-import { box, Parts, turned, type PartSpec } from '../violet-court/Parts'
+import { box, Parts, turned, type PartSpec } from '../parts'
 import { ThemeTower } from '../WorldArchitecture'
 import { frameParts } from './frame-parts'
 import { GARRISON, GARRISON_PALETTE } from './palette'

@@ -19,7 +19,7 @@ export function useAgentSessions(): SessionRef[] | null {
       if (document.hidden) return
       try {
         const snapshot = await getOfficeSnapshot()
-        if (isMounted && snapshot) setSessions(snapshot.sessions)
+        if (isMounted) setSessions(snapshot ? snapshot.sessions : null)
       } catch {
         // One failed read keeps the last known sessions; the next poll retries.
       }

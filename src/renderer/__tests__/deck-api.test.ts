@@ -30,6 +30,18 @@ describe('jumpToAgent', () => {
     expect(openTerminal).toHaveBeenCalledWith('/w/app', 'ghostty')
   })
 
+  it('opens no terminal when Orca came forward but the pane could not be proven', async () => {
+    const focusSession = vi
+      .fn()
+      .mockResolvedValue({ success: false, target: 'app', reason: 'terminal-not-found' })
+    const openTerminal = vi.fn().mockResolvedValue({ success: true })
+    window.api = mockApi({ focusSession, openTerminal })
+
+    await jumpToAgent(target)
+
+    expect(openTerminal).not.toHaveBeenCalled()
+  })
+
   it('opens the terminal when the session has no process to focus', async () => {
     const focusSession = vi.fn()
     const openTerminal = vi.fn().mockResolvedValue({ success: true })

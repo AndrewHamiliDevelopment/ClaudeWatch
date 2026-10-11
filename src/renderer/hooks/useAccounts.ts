@@ -3,7 +3,7 @@ import type { AccountsState, AliasResult } from '../../shared/accounts'
 import { deckApi } from '../deck/deck-api'
 
 // 'off' is the owner's choice; 'loading' and 'error' are about the read itself.
-export type AccountsLoad = AccountsState | { status: 'loading' } | { status: 'error' }
+type AccountsLoad = AccountsState | { status: 'loading' } | { status: 'error' }
 
 interface UseAccounts {
   accounts: AccountsLoad

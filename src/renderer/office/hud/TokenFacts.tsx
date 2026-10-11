@@ -1,15 +1,8 @@
 import type { SessionRef, SubagentRef } from '../../../shared/office/types'
 import { SegmentedMeter } from '../../components/deck/SegmentedMeter'
-import { sessionTokens } from '../../deck/roster'
+import { formatTokens, sessionTokens } from '../../deck/tokens'
 import { Fact } from './Fact'
-import {
-  contextShare,
-  contextText,
-  formatTokens,
-  memberTokens,
-  tokensText,
-  usageParts
-} from './tokens'
+import { contextShare, contextText, memberTokens, tokensText, usageParts } from './tokens'
 
 const PART_LABELS = [
   ['input', 'Input'],

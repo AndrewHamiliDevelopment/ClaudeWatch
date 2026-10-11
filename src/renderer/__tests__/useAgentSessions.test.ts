@@ -48,6 +48,21 @@ describe('useAgentSessions', () => {
     expect(result.current?.map((session) => session.name)).toEqual(['one', 'two'])
   })
 
+  it('goes back to unknown when the feed loses its snapshot, so nothing stale stays up', async () => {
+    const getOfficeSnapshot = vi
+      .fn()
+      .mockResolvedValueOnce(snapshotOf(['one']))
+      .mockResolvedValue(null)
+    window.api = mockApi({ getOfficeSnapshot })
+
+    const { result } = renderHook(() => useAgentSessions())
+    await act(() => vi.advanceTimersByTimeAsync(0))
+    expect(result.current).toHaveLength(1)
+
+    await act(() => vi.advanceTimersByTimeAsync(3000))
+    expect(result.current).toBeNull()
+  })
+
   it('stops polling when unmounted', async () => {
     const getOfficeSnapshot = vi.fn().mockResolvedValue(snapshotOf(['one']))
     window.api = mockApi({ getOfficeSnapshot })

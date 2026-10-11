@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { makeGeometry } from '../geometry-audit.test-utils'
 import { UNIT_SHAPES, type UnitShape } from '../unit-parts'
-import type { PartSpec } from '../violet-court/Parts'
+import type { PartSpec } from '../parts'
 import { GARRISON_CAST } from './cast'
 import { crewParts } from './crew-parts'
 import { BRIDGE, frameParts, GANTRY } from './frame-parts'

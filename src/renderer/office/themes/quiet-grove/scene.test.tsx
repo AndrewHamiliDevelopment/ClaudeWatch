@@ -11,7 +11,7 @@ import { WorldView } from '../../scene/WorldView'
 import { getTheme } from '../registry'
 import { useRobotRig } from '../rig'
 import { quietGrove } from './index'
-import { everyElement, mergedDraws, type SceneElement } from './scene.test-utils'
+import { everyElement, mergedDraws, type SceneElement } from '../scene.test-utils'
 
 vi.mock('react', async (original) => ({
   ...(await original<typeof import('react')>()),
@@ -79,11 +79,11 @@ function measure(companyCount: number, floorThemeId: string, themeIds: readonly 
       band: 'building',
       floors: [{ floorId: floor.floorId, label: floor.label, agentCount: 20, attentionCount: 2 }]
     })
-  ).all
+  ).draws
   const otherThemes = zoneGroups.filter((zoneGroup) => zoneGroup.themeId !== GROVE_ID)
   return {
     world,
-    total: mergedDraws([kit(zoneGroups), crew]).all + world,
+    total: mergedDraws([kit(zoneGroups), crew]).draws + world,
     // What the grove's own zone parts add to a floor, robots and signs aside.
     groveKit: mergedDraws(kit(zoneGroups)).untextured - mergedDraws(kit(otherThemes)).untextured
   }
