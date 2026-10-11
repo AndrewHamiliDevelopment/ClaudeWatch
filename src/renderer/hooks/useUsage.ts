@@ -5,14 +5,11 @@ interface UseUsageReturn {
   usage: UsageStats | null
   loading: boolean
   refresh: () => void
-  showModelBreakdown: boolean
-  setShowModelBreakdown: (show: boolean) => void
 }
 
 export function useUsage(): UseUsageReturn {
   const [usage, setUsage] = useState<UsageStats | null>(null)
   const [loading, setLoading] = useState(true)
-  const [showModelBreakdown, setShowModelBreakdown] = useState(false)
 
   useEffect(() => {
     if (!window.api?.getUsage) {
@@ -42,5 +39,5 @@ export function useUsage(): UseUsageReturn {
     })
   }, [])
 
-  return { usage, loading, refresh, showModelBreakdown, setShowModelBreakdown }
+  return { usage, loading, refresh }
 }

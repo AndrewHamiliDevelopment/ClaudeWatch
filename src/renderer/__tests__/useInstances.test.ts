@@ -67,9 +67,8 @@ describe('useInstances', () => {
     const { result } = renderHook(() => useInstances())
 
     await waitFor(() => {
-      expect(result.current.instances.length).toBe(3)
+      expect(result.current.length).toBe(3)
     })
-    expect(result.current.stats.total).toBe(3)
     expect(window.api.getInstances).toHaveBeenCalledOnce()
   })
 
@@ -88,7 +87,7 @@ describe('useInstances', () => {
     const { result } = renderHook(() => useInstances())
 
     await waitFor(() => {
-      expect(result.current.instances.length).toBe(3)
+      expect(result.current.length).toBe(3)
     })
 
     const newUpdate: InstanceUpdate = {
@@ -101,148 +100,7 @@ describe('useInstances', () => {
       callback(newUpdate)
     })
 
-    expect(result.current.instances.length).toBe(1)
-    expect(result.current.stats.total).toBe(1)
-  })
-
-  it('filters instances by status', async () => {
-    const { result } = renderHook(() => useInstances())
-
-    await waitFor(() => {
-      expect(result.current.instances.length).toBe(3)
-    })
-
-    act(() => {
-      result.current.setFilter('active')
-    })
-
-    expect(result.current.filteredInstances.length).toBe(1)
-    expect(result.current.filteredInstances[0].status).toBe('active')
-  })
-
-  it('filters instances by search query', async () => {
-    const { result } = renderHook(() => useInstances())
-
-    await waitFor(() => {
-      expect(result.current.instances.length).toBe(3)
-    })
-
-    act(() => {
-      result.current.setSearchQuery('other')
-    })
-
-    expect(result.current.filteredInstances.length).toBe(1)
-    expect(result.current.filteredInstances[0].projectName).toBe('projects/other')
-  })
-
-  it('combines filter and search', async () => {
-    const { result } = renderHook(() => useInstances())
-
-    await waitFor(() => {
-      expect(result.current.instances.length).toBe(3)
-    })
-
-    act(() => {
-      result.current.setFilter('idle')
-      result.current.setSearchQuery('other')
-    })
-
-    expect(result.current.filteredInstances.length).toBe(1)
-
-    act(() => {
-      result.current.setFilter('active')
-    })
-
-    // active + "other" search = no match
-    expect(result.current.filteredInstances.length).toBe(0)
-  })
-
-  it("returns all instances when filter is 'all'", async () => {
-    const { result } = renderHook(() => useInstances())
-
-    await waitFor(() => {
-      expect(result.current.instances.length).toBe(3)
-    })
-
-    act(() => {
-      result.current.setFilter('all')
-    })
-
-    expect(result.current.filteredInstances.length).toBe(3)
-  })
-
-  describe('groupedInstances', () => {
-    it('groups active instances as inProgress', async () => {
-      const { result } = renderHook(() => useInstances())
-
-      await waitFor(() => {
-        expect(result.current.instances.length).toBe(3)
-      })
-
-      expect(result.current.groupedInstances.inProgress.length).toBe(1)
-      expect(result.current.groupedInstances.inProgress[0].status).toBe('active')
-    })
-
-    it('groups idle instances without lastBecameIdleAt as waiting', async () => {
-      const { result } = renderHook(() => useInstances())
-
-      await waitFor(() => {
-        expect(result.current.instances.length).toBe(3)
-      })
-
-      // The idle instance has no lastBecameIdleAt, so it goes to waiting
-      const waitingIdle = result.current.groupedInstances.waiting.filter((i) => i.status === 'idle')
-      expect(waitingIdle.length).toBe(1)
-    })
-
-    it('groups idle instances with recent lastBecameIdleAt as recentlyCompleted', async () => {
-      const recentUpdate: InstanceUpdate = {
-        instances: [
-          mockInstance({
-            pid: 2222,
-            status: 'idle',
-            lastBecameIdleAt: new Date() // just now
-          })
-        ],
-        stats: { total: 1, active: 0, idle: 1, stale: 0, exited: 0, recentlyCompleted: 1 }
-      }
-
-      ;(window.api.getInstances as ReturnType<typeof vi.fn>).mockResolvedValue(recentUpdate)
-
-      const { result } = renderHook(() => useInstances())
-
-      await waitFor(() => {
-        expect(result.current.instances.length).toBe(1)
-      })
-
-      expect(result.current.groupedInstances.recentlyCompleted.length).toBe(1)
-      expect(result.current.groupedInstances.waiting.length).toBe(0)
-    })
-
-    it('groups idle instances with old lastBecameIdleAt as waiting', async () => {
-      const oldDate = new Date(Date.now() - 15 * 60 * 1000) // 15 minutes ago
-      const oldUpdate: InstanceUpdate = {
-        instances: [
-          mockInstance({
-            pid: 3333,
-            status: 'idle',
-            lastBecameIdleAt: oldDate
-          })
-        ],
-        stats: { total: 1, active: 0, idle: 1, stale: 0, exited: 0, recentlyCompleted: 0 }
-      }
-
-      ;(window.api.getInstances as ReturnType<typeof vi.fn>).mockResolvedValue(oldUpdate)
-
-      const { result } = renderHook(() => useInstances())
-
-      await waitFor(() => {
-        expect(result.current.instances.length).toBe(1)
-      })
-
-      expect(result.current.groupedInstances.recentlyCompleted.length).toBe(0)
-      expect(result.current.groupedInstances.waiting.length).toBe(1)
-    })
+    expect(result.current.length).toBe(1)
   })
 
   it('handles missing window.api gracefully', async () => {
@@ -251,14 +109,6 @@ describe('useInstances', () => {
 
     const { result } = renderHook(() => useInstances())
 
-    expect(result.current.instances).toEqual([])
-    expect(result.current.stats).toEqual({
-      total: 0,
-      active: 0,
-      idle: 0,
-      stale: 0,
-      exited: 0,
-      recentlyCompleted: 0
-    })
+    expect(result.current).toEqual([])
   })
 })

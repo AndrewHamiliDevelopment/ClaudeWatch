@@ -48,9 +48,11 @@ describe('useSettings', () => {
   })
 
   it('uses DEFAULT_SETTINGS before loading completes', () => {
-    const { result } = renderHook(() => useSettings())
+    const { result, unmount } = renderHook(() => useSettings())
 
     expect(result.current.settings).toEqual(DEFAULT_SETTINGS)
+    // Leaves before the pending read resolves into a finished test.
+    unmount()
   })
 
   it('updates settings via updateSettings', async () => {
