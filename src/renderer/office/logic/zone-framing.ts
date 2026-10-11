@@ -121,6 +121,15 @@ function toScreenMetres(point: { x: number; y: number; z: number }, azimuth: num
   }
 }
 
+type Axis = [number, number, number]
+
+// World directions of screen-right and screen-up: the inverse of toScreenMetres.
+export function screenAxes(azimuth: number): { right: Axis; up: Axis } {
+  const sin = Math.sin(azimuth)
+  const cos = Math.cos(azimuth)
+  return { right: [cos, 0, -sin], up: [-sin * COS_POLAR, SIN_POLAR, -cos * COS_POLAR] }
+}
+
 export function projectToScreen(
   point: { x: number; y: number; z: number },
   view: ScreenView,

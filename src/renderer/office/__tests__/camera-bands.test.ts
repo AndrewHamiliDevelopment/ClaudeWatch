@@ -3,28 +3,53 @@ import {
   BAND_ZOOM,
   buildingFraming,
   bandForZoom,
-  createWheelStepper,
   followAnchor,
   followStep,
   ISO_POLAR,
-  snapAzimuth,
-  stepBand
+  snapAzimuth
 } from '../logic/camera-bands'
 
 const DEG = Math.PI / 180
 
 describe('camera bands', () => {
-  it('steps through desk, floor and building bands and stops at the ends', () => {
-    expect(stepBand('floor', 'out')).toBe('building')
-    expect(stepBand('building', 'out')).toBe('building')
-    expect(stepBand('floor', 'in')).toBe('desk')
-    expect(stepBand('desk', 'in')).toBe('desk')
+  it('reads the band off the zoom: desk up close, building below the floor fit', () => {
+    expect(bandForZoom(BAND_ZOOM.desk, 'floor', 8.2)).toBe('desk')
+    expect(bandForZoom(8.2, 'floor', 8.2)).toBe('floor')
+    expect(bandForZoom(34, 'floor', 8.2)).toBe('floor')
+    expect(bandForZoom(4.5, 'floor', 8.2)).toBe('building')
   })
 
-  it('maps an orthographic zoom to the nearest band', () => {
-    expect(bandForZoom(BAND_ZOOM.desk * 1.1)).toBe('desk')
-    expect(bandForZoom(BAND_ZOOM.floor)).toBe('floor')
-    expect(bandForZoom(1)).toBe('building')
+  it('measures the building threshold against the floor fit, not a fixed zoom', () => {
+    // A lone office fits at 60 px/m: 40 is already further out than its floor view.
+    expect(bandForZoom(40, 'floor', 60)).toBe('building')
+    expect(bandForZoom(40, 'floor', 8.2)).toBe('floor')
+  })
+
+  it('enters desk at 55 px/m and leaves it under 48', () => {
+    expect(bandForZoom(54, 'floor', 8.2)).toBe('floor')
+    expect(bandForZoom(55, 'floor', 8.2)).toBe('desk')
+    expect(bandForZoom(50, 'desk', 8.2)).toBe('desk')
+    expect(bandForZoom(47, 'desk', 8.2)).toBe('floor')
+  })
+
+  it('enters building under 0.8 of the fit and leaves it above 0.9', () => {
+    expect(bandForZoom(8.1, 'floor', 10)).toBe('floor')
+    expect(bandForZoom(7.9, 'floor', 10)).toBe('building')
+    expect(bandForZoom(8.9, 'building', 10)).toBe('building')
+    expect(bandForZoom(9.1, 'building', 10)).toBe('floor')
+  })
+
+  it('changes band at most once when the zoom wobbles 10 % around a threshold', () => {
+    for (const threshold of [55, 8]) {
+      let band = bandForZoom(threshold * 0.9, 'floor', 10)
+      let changes = 0
+      for (const factor of [1.0, 1.05, 0.95, 1.05, 0.95, 1.02, 0.98]) {
+        const next = bandForZoom(threshold * factor, band, 10)
+        if (next !== band) changes += 1
+        band = next
+      }
+      expect(changes).toBeLessThanOrEqual(1)
+    }
   })
 
   it('fixes the isometric elevation at 35 degrees', () => {
@@ -36,14 +61,6 @@ describe('camera bands', () => {
     expect(snapAzimuth(45 * DEG, -1)).toBeCloseTo(-45 * DEG)
     expect(snapAzimuth(60 * DEG, -1)).toBeCloseTo(45 * DEG)
     expect(snapAzimuth(60 * DEG, 1)).toBeCloseTo(135 * DEG)
-  })
-
-  it('turns a burst of wheel deltas into one band step per gesture', () => {
-    const step = createWheelStepper({ threshold: 50, cooldownMs: 300 })
-    expect(step(20, 0)).toBeNull()
-    expect(step(40, 10)).toBe('out')
-    expect(step(200, 50)).toBeNull()
-    expect(step(-80, 400)).toBe('in')
   })
 })
 
