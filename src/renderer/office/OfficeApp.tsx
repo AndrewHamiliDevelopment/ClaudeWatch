@@ -3,7 +3,7 @@ import { useNow, useOfficeTheme } from './hooks'
 import { buildAttentionQueue } from './logic/attention-queue'
 import { mainAgentForSession, sessionForAgent, summariseFloors } from './logic/floor-model'
 import { canRespond } from './logic/interactions'
-import { buildNameCards } from './logic/name-cards'
+import { buildNameCards, buildProjectStacks } from './logic/name-cards'
 import { INITIAL_OFFICE_STATE, officeReducer } from './logic/office-reducer'
 import { buildCompanyList, buildOfficesTree } from './logic/zone-model'
 import { createFrameMetrics } from './frame-metrics'
@@ -98,6 +98,7 @@ export function OfficeApp({ feed }: { feed: OfficeFeed }) {
               floor={focusedFloor}
               agents={frame.agents.filter((agent) => agent.floorId === focusedFloor.floorId)}
               cards={buildNameCards(frame, focusedFloor.floorId, state.selectedAgentKey)}
+              stacks={buildProjectStacks(frame, focusedFloor.floorId)}
               selectedAgentKey={state.selectedAgentKey}
               wallsMode={state.wallsMode}
               cameraRequest={state.cameraRequest}

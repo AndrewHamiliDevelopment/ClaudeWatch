@@ -1,6 +1,6 @@
 import type { AgentActivity, AgentView } from '../../../shared/office/types'
 import type { OfficeFrame } from '../scene-model'
-import { sessionForAgent } from './floor-model'
+import { needsHuman, sessionForAgent } from './floor-model'
 import { DESK_REACH } from './room-layout'
 import { GEM_SPECS } from './status-gem'
 
@@ -23,10 +23,21 @@ export interface NameCard {
   title: string
   detail: string
   status: CardStatus
+  // Culling groups cards by project and breaks priority ties toward the latest update.
+  projectKey: string | null
+  updatedAtMs: number
 }
 
-// drei Html is a DOM node per card; past a dozen the layout cost outweighs the read.
-export const MAX_NAME_CARDS = 12
+export interface ProjectStack {
+  projectKey: string
+  zoneId: string | null
+  x: number
+  z: number
+  text: string
+}
+
+// One DOM node per card; screen-space culling (card-culling.ts) decides which are shown.
+export const MAX_NAME_CARDS = 40
 
 const ACTIVITY_LABEL: Record<AgentActivity, string> = {
   idle: 'Idle',
@@ -72,6 +83,10 @@ export function buildNameCards(
     .filter((agent) => agent.floorId === floorId)
     .map((agent): NameCard => {
       const session = sessionForAgent(frame, agent)
+      const meta = {
+        projectKey: session?.projectKey ?? null,
+        updatedAtMs: session?.updatedAtMs ?? 0
+      }
       if (agent.isSubagent) {
         return {
           agentKey: agent.agentKey,
@@ -81,7 +96,8 @@ export function buildNameCards(
           z: agent.z,
           title: agent.label,
           detail: '',
-          status: statusFor(agent)
+          status: statusFor(agent),
+          ...meta
         }
       }
       return {
@@ -92,10 +108,42 @@ export function buildNameCards(
         z: agent.z + Math.cos(agent.heading) * DESK_REACH,
         title: session?.name ?? agent.label,
         detail: detailFor(agent, session?.currentTool?.name),
-        status: statusFor(agent)
+        status: statusFor(agent),
+        ...meta
       }
     })
   return cards
     .sort((a, b) => priority(a, selectedAgentKey) - priority(b, selectedAgentKey))
     .slice(0, MAX_NAME_CARDS)
+}
+
+function plural(count: number, one: string, many: string): string {
+  return `${count} ${count === 1 ? one : many}`
+}
+
+// One summary per project for the stacked badge shown when its cards crowd together.
+export function buildProjectStacks(frame: OfficeFrame, floorId: string): ProjectStack[] {
+  const floor = frame.floors.find((candidate) => candidate.floorId === floorId)
+  const projectZones = (floor?.zones ?? []).flatMap((company) =>
+    company.children.filter((child) => child.kind === 'project')
+  )
+  const agents = frame.agents.filter((agent) => agent.floorId === floorId)
+  return projectZones.flatMap((zone) => {
+    const members = agents.filter(
+      (agent) => sessionForAgent(frame, agent)?.projectKey === zone.projectKey
+    )
+    if (!zone.projectKey || members.length === 0) return []
+    const waiting = members.filter(needsHuman).length
+    const parts = [zone.label, plural(members.length, 'agent', 'agents')]
+    if (waiting > 0) parts.push(`${waiting} ${waiting === 1 ? 'needs' : 'need'} you`)
+    return [
+      {
+        projectKey: zone.projectKey,
+        zoneId: zone.id,
+        x: zone.x,
+        z: zone.z,
+        text: parts.join(' · ')
+      }
+    ]
+  })
 }

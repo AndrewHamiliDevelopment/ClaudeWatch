@@ -39,6 +39,24 @@ const MIN_FRAME_ZOOM = 4
 const COS_POLAR = Math.cos(ISO_POLAR)
 const SIN_POLAR = Math.sin(ISO_POLAR)
 
+// Where name cards may sit: clear of the side rails and the bottom bar. Cards may rise to the
+// top edge; the camera already leaves headroom for them.
+export function cardSafeArea(viewport: Viewport): {
+  left: number
+  right: number
+  top: number
+  bottom: number
+} {
+  const hasRoomForRails =
+    viewport.width - HUD_SAFE_INSETS.left - HUD_SAFE_INSETS.right >= MIN_SAFE_WIDTH
+  return {
+    left: hasRoomForRails ? HUD_SAFE_INSETS.left : 0,
+    right: viewport.width - (hasRoomForRails ? HUD_SAFE_INSETS.right : 0),
+    top: 0,
+    bottom: viewport.height - HUD_SAFE_INSETS.bottom
+  }
+}
+
 export function boundsOfZone(zone: Pick<ZoneGeometry, 'x' | 'z' | 'width' | 'depth'>): Bounds {
   return {
     minX: zone.x - zone.width / 2,
