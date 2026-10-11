@@ -20,6 +20,11 @@ export const box = (at: Vector, size: Vector, color: string): PartSpec => ({
 
 export const turned = (part: PartSpec, rotation: Vector): PartSpec => ({ ...part, rotation })
 
+export const lit = (part: PartSpec): PartSpec => ({ ...part, glow: true })
+
+// Mirrors a part across the figure's centre line.
+export const SIDES = [-1, 1] as const
+
 export function Parts({ parts }: { parts: readonly PartSpec[] }) {
   return (
     <>

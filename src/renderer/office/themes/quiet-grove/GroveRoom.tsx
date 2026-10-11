@@ -4,9 +4,9 @@ import type { InstancePlacement } from '../../scene/instancing'
 import { Batch } from '../primitives'
 import type { DeskProps, RoomProps, RoomsProps } from '../types'
 import { UNIT_SHAPES } from '../unit-parts'
-import { box, Parts, type PartSpec } from '../parts'
+import { box, lit, Parts, type PartSpec } from '../parts'
 import { GROVE } from './palette'
-import { ball, lit, tube } from './spirit-features'
+import { ball, tube } from './spirit-features'
 
 const BOARD_WIDTH = 0.34
 const BOARD_GAP = 0.03

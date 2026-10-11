@@ -1,5 +1,5 @@
 import type { Vector } from '../primitives'
-import { box, turned, type PartSpec } from '../parts'
+import { box, turned, type PartSpec, lit, SIDES } from '../parts'
 import type { GroveCharacter, SpiritFeature } from './cast'
 import { GROVE } from './palette'
 
@@ -24,9 +24,7 @@ export const spike = (at: Vector, size: Vector, color: string): PartSpec => ({
   size,
   color
 })
-export const lit = (part: PartSpec): PartSpec => ({ ...part, glow: true })
 
-const SIDES = [-1, 1] as const
 const ON_ITS_SIDE: Vector = [0, 0, Math.PI / 2]
 const KEEPER_BACK = -0.14
 const HELPER_BACK = -0.2

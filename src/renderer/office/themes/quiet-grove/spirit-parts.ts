@@ -1,11 +1,10 @@
 import type { Vector } from '../primitives'
-import { box, turned, type PartSpec } from '../parts'
+import { box, lit, turned, type PartSpec, SIDES } from '../parts'
 import type { GroveCharacter } from './cast'
 import { GROVE } from './palette'
 import {
   ball,
   FEATURE_PARTS,
-  lit,
   spike,
   tube,
   type SpiritJoint,
@@ -24,7 +23,6 @@ export interface SpiritBuild {
   beacon: PartSpec[]
 }
 
-const SIDES = [-1, 1] as const
 // One size for every figure, so the cast shares one eye geometry per provider.
 const EYE_SIZE: Vector = [0.19, 0.055, 0.03]
 

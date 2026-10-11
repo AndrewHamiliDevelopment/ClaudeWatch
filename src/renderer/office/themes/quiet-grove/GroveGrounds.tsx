@@ -1,9 +1,9 @@
 import type { FloorProps, ZoneProps } from '../types'
-import { box, Parts, type PartSpec } from '../parts'
-import { CompanyGrounds, ProjectRoom } from '../ZoneArchitecture'
+import { box, lit, Parts, type PartSpec } from '../parts'
+import { CompanyGrounds, FloorSlab, LiftAt, ProjectRoom } from '../ZoneArchitecture'
 import { paperLantern, timberArch } from './GroveRoom'
 import { GROVE, GROVE_PALETTE } from './palette'
-import { ball, lit, tube } from './spirit-features'
+import { ball, tube } from './spirit-features'
 
 // The company gate: a tall timber arch with a lantern on each side and ivy over the beam.
 const GATE: PartSpec[] = [
@@ -25,14 +25,7 @@ export function GroveProjectOffice({ zone }: ZoneProps) {
 
 // Floor-scoped parts: drawn only when Quiet Grove is the whole floor's theme.
 export function GroveSlab({ floor }: FloorProps) {
-  return (
-    <Parts
-      parts={[
-        box([0, -0.16, 0], [floor.width + 1, 0.3, floor.depth + 1], GROVE.pine),
-        box([0, -0.005, floor.corridor.z], [floor.width, 0.02, floor.corridor.width], GROVE.bark)
-      ]}
-    />
-  )
+  return <FloorSlab floor={floor} ground={GROVE.pine} lane={GROVE.bark} />
 }
 
 // The lift is a hollow trunk: a dark doorway on each side, a ring of lantern light and a crown.
@@ -46,9 +39,5 @@ const LIFT: PartSpec[] = [
 ]
 
 export function GroveElevator({ floor }: FloorProps) {
-  return (
-    <group position={[floor.elevator.x, 0, floor.elevator.z]}>
-      <Parts parts={LIFT} />
-    </group>
-  )
+  return <LiftAt floor={floor} parts={LIFT} />
 }

@@ -1,5 +1,5 @@
 import type { Vector } from '../primitives'
-import { box, turned, type PartSpec } from '../parts'
+import { box, turned, type PartSpec, lit, SIDES } from '../parts'
 import { GARRISON } from './palette'
 import type { FrameKind } from './roster'
 
@@ -15,7 +15,6 @@ const LIVERY: Record<FrameKind, FrameLivery> = {
   scout: { armor: GARRISON.orange, joint: GARRISON.gunmetal, trim: GARRISON.white }
 }
 
-const SIDES = [-1, 1] as const
 const ARM_X = 0.44
 const rod = (at: Vector, size: Vector, color: string, rotation?: Vector): PartSpec => ({
   shape: 'cylinder',
@@ -84,8 +83,6 @@ const EXTRAS: Record<FrameKind, (livery: FrameLivery) => PartSpec[]> = {
 export function frameParts(kind: FrameKind): PartSpec[] {
   return [...chassis(LIVERY[kind]), ...EXTRAS[kind](LIVERY[kind])]
 }
-
-const lit = (part: PartSpec): PartSpec => ({ ...part, glow: true })
 
 // The service gantry a frame is parked in: a plinth, two posts, a hazard beam and clamps.
 export const GANTRY: PartSpec[] = [

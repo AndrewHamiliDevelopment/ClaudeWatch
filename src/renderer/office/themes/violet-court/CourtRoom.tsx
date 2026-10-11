@@ -6,7 +6,7 @@ import type { DeskProps, RoomProps, RoomsProps } from '../types'
 import { UNIT_SHAPES } from '../unit-parts'
 import { frameParts } from './frame-parts'
 import { COURT } from './palette'
-import { box, Parts, turned, type PartSpec } from '../parts'
+import { box, Parts, turned, type PartSpec, lit } from '../parts'
 import { frameForBay } from './roster'
 
 const TILE = 0.75
@@ -74,8 +74,6 @@ export function CourtDoorway({ room }: RoomProps) {
     </group>
   )
 }
-
-const lit = (part: PartSpec): PartSpec => ({ ...part, glow: true })
 
 // A tactical table with a lit board and a screen, and a high-backed chair behind the pilot.
 const DESK: PartSpec[] = [

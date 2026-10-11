@@ -6,14 +6,14 @@ import { CourtDesk, CourtDoorway, CourtRoomDressing, CourtRoomFloors } from './C
 import { CourtWalls } from './CourtWalls'
 import { CourtDistrict, CourtHangar, CourtTower } from './CourtWorld'
 import { COURT, COURT_PALETTE } from './palette'
-import { castIndexFor, VIOLET_COURT_ID, violetCourtRoster } from './roster'
+import { VIOLET_COURT_ID, violetCourtRoster } from './roster'
 
 export const violetCourt: OfficeTheme = {
   id: VIOLET_COURT_ID,
   label: 'Violet Court',
   description: 'A royal court in violet, black and gold: pilots at their desks, knights parked.',
   palette: COURT_PALETTE,
-  roster: { entries: violetCourtRoster, indexFor: castIndexFor },
+  roster: violetCourtRoster,
   robot: {
     Model: CourtPilot,
     skins: {

@@ -1,10 +1,7 @@
 import type { FloorProps, ZoneProps } from '../types'
-import { box, Parts, type PartSpec } from '../parts'
-import { CompanyGrounds, ProjectRoom } from '../ZoneArchitecture'
+import { box, Parts, type PartSpec, lit, SIDES } from '../parts'
+import { CompanyGrounds, FloorSlab, LiftAt, ProjectRoom } from '../ZoneArchitecture'
 import { GARRISON, GARRISON_PALETTE } from './palette'
-
-const SIDES = [-1, 1] as const
-const lit = (part: PartSpec): PartSpec => ({ ...part, glow: true })
 
 // The company gate: a gantry truss on hazard footings, with a beacon over each post.
 const GATE: PartSpec[] = [
@@ -28,17 +25,10 @@ export function GarrisonProjectOffice({ zone }: ZoneProps) {
 // Floor-scoped parts: drawn only when Orbital Garrison is the whole floor's theme.
 export function GarrisonSlab({ floor }: FloorProps) {
   return (
-    <Parts
-      parts={[
-        box([0, -0.16, 0], [floor.width + 1, 0.3, floor.depth + 1], GARRISON.hull),
-        box(
-          [0, -0.005, floor.corridor.z],
-          [floor.width, 0.02, floor.corridor.width],
-          GARRISON.deck
-        ),
-        box([0, 0, floor.corridor.z], [floor.width, 0.02, 0.1], GARRISON.orange)
-      ]}
-    />
+    <>
+      <FloorSlab floor={floor} ground={GARRISON.hull} lane={GARRISON.deck} />
+      <Parts parts={[box([0, 0, floor.corridor.z], [floor.width, 0.02, 0.1], GARRISON.orange)]} />
+    </>
   )
 }
 
@@ -54,9 +44,5 @@ const LIFT: PartSpec[] = [
 ]
 
 export function GarrisonElevator({ floor }: FloorProps) {
-  return (
-    <group position={[floor.elevator.x, 0, floor.elevator.z]}>
-      <Parts parts={LIFT} />
-    </group>
-  )
+  return <LiftAt floor={floor} parts={LIFT} />
 }

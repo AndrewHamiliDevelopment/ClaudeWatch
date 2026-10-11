@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { ROSTER_NAMES_STORAGE_KEY } from '../roster-names'
 import { GROVE_CAST } from './cast'
-import { castIndexFor, quietGroveRoster } from './roster'
+import { quietGroveRoster } from './roster'
 
 const lead = (provider: 'claude' | 'codex', bay: number) =>
-  GROVE_CAST[castIndexFor({ provider, isSubagent: false }, bay)]
+  GROVE_CAST[quietGroveRoster.indexFor({ provider, isSubagent: false }, bay)]
 const sprout = (provider: 'claude' | 'codex', bay: number) =>
-  GROVE_CAST[castIndexFor({ provider, isSubagent: true }, bay)]
+  GROVE_CAST[quietGroveRoster.indexFor({ provider, isSubagent: true }, bay)]
 
 describe('Quiet Grove roster', () => {
   it('names at least eight distinct lead characters, each with a one-line role', () => {
@@ -45,14 +45,14 @@ describe('Quiet Grove roster', () => {
   })
 
   it('exports id, name and role, with the owner local renames applied by index', () => {
-    const shipped = quietGroveRoster({ getItem: () => null })
+    const shipped = quietGroveRoster.entries({ getItem: () => null })
     expect(shipped).toHaveLength(GROVE_CAST.length)
     expect(shipped[0]).toEqual({
       id: GROVE_CAST[0].id,
       name: GROVE_CAST[0].name,
       role: GROVE_CAST[0].role
     })
-    const renamed = quietGroveRoster({
+    const renamed = quietGroveRoster.entries({
       getItem: (key) =>
         key === ROSTER_NAMES_STORAGE_KEY ? JSON.stringify({ 'quiet-grove': ['My Keeper'] }) : null
     })

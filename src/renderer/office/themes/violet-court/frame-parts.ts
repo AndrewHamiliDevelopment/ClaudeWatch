@@ -1,5 +1,5 @@
 import { COURT } from './palette'
-import { box, turned, type PartSpec } from '../parts'
+import { box, turned, type PartSpec, SIDES } from '../parts'
 import type { FrameKind } from './roster'
 
 interface FrameLivery {
@@ -14,7 +14,6 @@ const LIVERY: Record<FrameKind, FrameLivery> = {
   lancer: { armor: COURT.ivory, joint: COURT.slate, trim: COURT.gold }
 }
 
-const SIDES = [-1, 1] as const
 const ARM_X = 0.38
 
 // One forearm and fist.

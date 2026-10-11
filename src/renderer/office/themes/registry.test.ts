@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { characterFor as garrisonCharacterFor } from './orbital-garrison/roster'
 import { GROVE_CAST } from './quiet-grove/cast'
-import { castIndexFor as groveIndexFor } from './quiet-grove/roster'
+import { quietGroveRoster } from './quiet-grove/roster'
 import {
   DEFAULT_THEME_ID,
   getTheme,
@@ -11,7 +11,7 @@ import {
   themeForTeam
 } from './registry'
 import { COURT_CAST } from './violet-court/cast'
-import { castIndexFor as courtIndexFor } from './violet-court/roster'
+import { violetCourtRoster } from './violet-court/roster'
 
 describe('theme registry', () => {
   it('registers both built-ins and defaults the floor and unknown ids to Neo Edo', () => {
@@ -83,13 +83,13 @@ describe('theme characters', () => {
     for (const agent of agents)
       for (const bay of bays) {
         expect(themeCharacter('violet-court', agent, bay)?.id).toBe(
-          COURT_CAST[courtIndexFor(agent, bay)].id
+          COURT_CAST[violetCourtRoster.indexFor(agent, bay)].id
         )
         expect(themeCharacter('orbital-garrison', agent, bay)?.id).toBe(
           garrisonCharacterFor(agent, bay).id
         )
         expect(themeCharacter('quiet-grove', agent, bay)?.id).toBe(
-          GROVE_CAST[groveIndexFor(agent, bay)].id
+          GROVE_CAST[quietGroveRoster.indexFor(agent, bay)].id
         )
       }
   })

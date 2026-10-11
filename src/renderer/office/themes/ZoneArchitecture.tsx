@@ -5,7 +5,8 @@ import { zoneSignPlacement, zoneWalls } from '../logic/zone-model'
 import type { ZoneGeometry } from '../scene-model'
 import { Matte } from '../scene/InstancedParts'
 import { signTexture } from '../scene/textures'
-import type { ThemePalette } from './types'
+import { box, Parts, type PartSpec } from './parts'
+import type { FloorProps, ThemePalette } from './types'
 
 const FLAT = -Math.PI / 2
 // Below the agent-office floors (y 0.012) so nested plates never z-fight.
@@ -133,6 +134,26 @@ export function ProjectRoom({ zone, palette }: { zone: ZoneGeometry; palette: Th
         width={PROJECT_SIGN.width}
         height={PROJECT_SIGN.height}
       />
+    </group>
+  )
+}
+
+// The slab a themed floor stands on, with the corridor laid over it as a lane.
+export function FloorSlab({ floor, ground, lane }: FloorProps & { ground: string; lane: string }) {
+  return (
+    <Parts
+      parts={[
+        box([0, -0.16, 0], [floor.width + 1, 0.3, floor.depth + 1], ground),
+        box([0, -0.005, floor.corridor.z], [floor.width, 0.02, floor.corridor.width], lane)
+      ]}
+    />
+  )
+}
+
+export function LiftAt({ floor, parts }: FloorProps & { parts: readonly PartSpec[] }) {
+  return (
+    <group position={[floor.elevator.x, 0, floor.elevator.z]}>
+      <Parts parts={parts} />
     </group>
   )
 }

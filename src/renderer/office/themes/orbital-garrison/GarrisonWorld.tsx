@@ -1,12 +1,9 @@
 import type { FloorProps, TowerProps } from '../types'
-import { box, Parts, turned, type PartSpec } from '../parts'
+import { box, Parts, turned, type PartSpec, lit, SIDES } from '../parts'
 import { ThemeTower } from '../WorldArchitecture'
 import { frameParts } from './frame-parts'
 import { GARRISON, GARRISON_PALETTE } from './palette'
 import { GARRISON_FRAMES } from './roster'
-
-const SIDES = [-1, 1] as const
-const lit = (part: PartSpec): PartSpec => ({ ...part, glow: true })
 
 // A colony habitat block: two lit window bands and a pale roof.
 function habitat(x: number, z: number, width: number, height: number): PartSpec[] {
