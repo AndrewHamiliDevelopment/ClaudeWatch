@@ -1,5 +1,6 @@
 import { brassWorkshop, neoEdoSteam } from './builtins'
 import { orbitalGarrison } from './orbital-garrison'
+import { quietGrove } from './quiet-grove'
 import type { OfficeTheme } from './types'
 import { violetCourt } from './violet-court'
 
@@ -15,6 +16,7 @@ registerTheme(neoEdoSteam)
 registerTheme(brassWorkshop)
 registerTheme(violetCourt)
 registerTheme(orbitalGarrison)
+registerTheme(quietGrove)
 
 export function getTheme(id: string): OfficeTheme {
   return themes.get(id) ?? neoEdoSteam
