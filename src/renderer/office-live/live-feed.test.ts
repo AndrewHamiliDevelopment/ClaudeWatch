@@ -44,7 +44,11 @@ describe('createLiveFeed', () => {
           listener = null
         }
       }),
-      jump: vi.fn().mockResolvedValue({ success: true })
+      jump: vi.fn().mockResolvedValue({ success: true }),
+      send: vi.fn().mockResolvedValue({ success: true }),
+      respond: vi.fn().mockResolvedValue({ success: true }),
+      peek: vi.fn().mockResolvedValue({ success: true, lines: ['ok'] }),
+      start: vi.fn().mockResolvedValue({ success: true })
     }
   })
 
@@ -93,5 +97,16 @@ describe('createLiveFeed', () => {
   it('forwards jump requests to the bridge', () => {
     createLiveFeed(source, { storage: store }).jump('claude:a')
     expect(source.jump).toHaveBeenCalledWith('claude:a')
+  })
+
+  it('forwards talk, respond, peek and start to the bridge and returns its answer', async () => {
+    const feed = createLiveFeed(source, { storage: store })
+    expect(await feed.send('claude:a', 'hi')).toEqual({ success: true })
+    expect(await feed.respond('claude:a', 'deny')).toEqual({ success: true })
+    expect(await feed.peek('claude:a')).toEqual({ success: true, lines: ['ok'] })
+    expect(await feed.start('p_app', 'codex')).toEqual({ success: true })
+    expect(source.send).toHaveBeenCalledWith('claude:a', 'hi')
+    expect(source.respond).toHaveBeenCalledWith('claude:a', 'deny')
+    expect(source.start).toHaveBeenCalledWith('p_app', 'codex')
   })
 })

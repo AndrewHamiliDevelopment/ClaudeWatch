@@ -1,7 +1,14 @@
 import { World } from '../../office/sim/world'
 import type { LayoutMap } from '../../office/sim/layout'
 import { applyFeed } from '../../shared/office/apply-feed'
-import type { FeedMessage, OfficeSnapshot } from '../../shared/office/types'
+import type {
+  FeedMessage,
+  InteractionResult,
+  OfficeSnapshot,
+  PeekResult,
+  PermissionDecision,
+  ProviderId
+} from '../../shared/office/types'
 import type { FloorGeometry, OfficeFeed, OfficeFrame } from '../office/scene-model'
 import { toFloorGeometry, toSceneAgent } from './layout-geometry'
 
@@ -9,6 +16,10 @@ export interface FeedSource {
   ready(): Promise<void>
   onFeedMessage(listener: (message: FeedMessage) => void): () => void
   jump(sessionKey: string): Promise<{ success: boolean }>
+  send(sessionKey: string, text: string): Promise<InteractionResult>
+  respond(sessionKey: string, decision: PermissionDecision): Promise<InteractionResult>
+  peek(sessionKey: string): Promise<PeekResult>
+  start(projectKey: string, provider: ProviderId): Promise<InteractionResult>
 }
 
 interface LayoutStorage {
@@ -80,6 +91,10 @@ export function createLiveFeed(
     },
     jump(sessionKey) {
       void source.jump(sessionKey)
-    }
+    },
+    send: (sessionKey, text) => source.send(sessionKey, text),
+    respond: (sessionKey, decision) => source.respond(sessionKey, decision),
+    peek: (sessionKey) => source.peek(sessionKey),
+    start: (projectKey, provider) => source.start(projectKey, provider)
   }
 }

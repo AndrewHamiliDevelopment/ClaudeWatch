@@ -1,5 +1,6 @@
 import { execFilePromise } from './platform/exec'
 import type { TerminalType } from '../renderer/lib/types'
+import type { AgentCommand } from './orca-terminals'
 
 const EXEC_TIMEOUT = 10_000
 
@@ -15,9 +16,13 @@ function runCommand(cmd: string, args: string[]): Promise<{ success: boolean }> 
 
 // The path reaches AppleScript as argv and the shell via `quoted form of`, so no
 // character in a folder name can end the string or start a command substitution.
-function runOsascript(script: string, projectPath: string): Promise<{ success: boolean }> {
+function runOsascript(
+  script: string,
+  projectPath: string,
+  ...extraArgs: string[]
+): Promise<{ success: boolean }> {
   const wrapped = `on run argv\nset projectPath to item 1 of argv\n${script}\nend run`
-  return runCommand('osascript', ['-e', wrapped, projectPath])
+  return runCommand('osascript', ['-e', wrapped, projectPath, ...extraArgs])
 }
 
 const CD_INTO_PROJECT = '"cd " & quoted form of projectPath'
@@ -133,4 +138,18 @@ export async function openTerminal(
 ): Promise<{ success: boolean }> {
   const opener = (terminalType && openerRegistry[terminalType]) || openDefault
   return opener(projectPath)
+}
+
+// Fallback for starting an agent when Orca is not running: a Terminal.app window in the folder.
+export function openTerminalRunning(
+  projectPath: string,
+  command: AgentCommand
+): Promise<{ success: boolean }> {
+  const script = `
+    tell application "Terminal"
+      activate
+      do script ${CD_INTO_PROJECT} & " && " & quoted form of (item 2 of argv)
+    end tell
+  `
+  return runOsascript(script, projectPath, command)
 }

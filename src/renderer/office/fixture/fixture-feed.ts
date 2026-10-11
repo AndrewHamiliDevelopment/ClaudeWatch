@@ -237,6 +237,22 @@ export function createFixtureFeed(options: { tickMs?: number } = {}): OfficeFeed
     },
     jump(sessionKey) {
       console.info(`[office preview] jump to terminal for ${sessionKey}`)
-    }
+    },
+    // The browser preview has no agents to talk to; actions succeed so the UI can be exercised.
+    send: async () => ({ success: true }),
+    respond: async () => ({ success: true }),
+    peek: async () => ({
+      success: true,
+      lines: [
+        '$ npm test',
+        '',
+        ' ✓ 42 tests passed',
+        '',
+        'Do you want to proceed?',
+        '❯ 1. Yes',
+        '  2. No'
+      ]
+    }),
+    start: async () => ({ success: true })
   }
 }

@@ -14,7 +14,11 @@ function controllableFeed() {
       push = listener
       return () => undefined
     },
-    jump: vi.fn()
+    jump: vi.fn(),
+    send: vi.fn().mockResolvedValue({ success: true }),
+    respond: vi.fn().mockResolvedValue({ success: true }),
+    peek: vi.fn().mockResolvedValue({ success: true, lines: [] }),
+    start: vi.fn().mockResolvedValue({ success: true })
   }
   return { feed, push: (frame: OfficeFrame) => act(() => push(frame)) }
 }

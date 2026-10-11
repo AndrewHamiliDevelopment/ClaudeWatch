@@ -6,7 +6,7 @@ vi.mock('child_process', () => ({
   execFile: (...args: unknown[]) => mockExecFile(...args)
 }))
 
-import { openTerminal } from './terminal-opener'
+import { openTerminal, openTerminalRunning } from './terminal-opener'
 
 type ExecCallback = (error: Error | null, stdout?: string, stderr?: string) => void
 
@@ -232,4 +232,24 @@ describe('openTerminal with an untrusted project path', () => {
       expect(args.slice(2)).toEqual([hostilePath])
     }
   )
+})
+
+describe('openTerminalRunning', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockExecFile.mockImplementation(
+      (_cmd: string, _args: string[], _opts: unknown, cb: ExecCallback) => {
+        cb(null)
+      }
+    )
+  })
+
+  it('starts the agent command in Terminal.app with path and command as argv', async () => {
+    expect(await openTerminalRunning('/tmp/a b"$(x)', 'codex')).toEqual({ success: true })
+    const [command, args] = mockExecFile.mock.calls[0] as [string, string[]]
+    expect(command).toBe('osascript')
+    expect(args.slice(2)).toEqual(['/tmp/a b"$(x)', 'codex'])
+    expect(args[1]).toContain('quoted form of projectPath')
+    expect(args[1]).not.toContain('$(x)')
+  })
 })

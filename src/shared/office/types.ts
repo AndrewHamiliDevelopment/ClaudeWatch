@@ -83,3 +83,24 @@ export interface AgentView {
   isSubagent: boolean
   label: string
 }
+
+// Why an office interaction did not happen; the UI turns each into plain words.
+export type InteractionFailure =
+  | 'unknown-session'
+  | 'not-in-orca'
+  | 'orca-unavailable'
+  | 'terminal-not-found'
+  | 'no-permission-prompt'
+  | 'unsupported-provider'
+  | 'invalid-input'
+
+export interface InteractionResult {
+  success: boolean
+  reason?: InteractionFailure
+}
+
+export interface PeekResult extends InteractionResult {
+  lines: string[]
+}
+
+export type PermissionDecision = 'approve' | 'deny'

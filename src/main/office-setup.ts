@@ -4,9 +4,16 @@ import { is } from '@electron-toolkit/utils'
 import { BridgeHost } from './bridge-host'
 import { OfficeWindowController } from './office-window'
 import { assertTrustedSender, createAppWindow } from './window-factory'
-import { openTerminal } from './terminal-opener'
+import { openTerminal, openTerminalRunning } from './terminal-opener'
+import { OfficeInteractions } from './office-interactions'
+import { OrcaTerminals } from './orca-terminals'
+import type { PermissionDecision, ProviderId } from '../shared/office/types'
 import { execFilePromise } from './platform/exec'
 import type { TerminalResolver } from './terminal-resolver'
+
+// The app bundle's CLI, not whatever `orca` is first on PATH.
+const ORCA_CLI = '/Applications/Orca.app/Contents/Resources/bin/orca'
+const ORCA_TIMEOUT_MS = 15_000
 
 function createOfficeWindow(): Electron.BrowserWindow {
   const window = createAppWindow({
@@ -49,6 +56,32 @@ export function setupOffice(terminalResolver: Pick<TerminalResolver, 'resolve'>)
       )
   })
 
+  const interactions = new OfficeInteractions({
+    snapshot: () => host.snapshot(),
+    orca: new OrcaTerminals(async (args) => {
+      const { stdout } = await execFilePromise(ORCA_CLI, args, { timeout: ORCA_TIMEOUT_MS })
+      return stdout
+    }),
+    openTerminalRunning
+  })
+  const asString = (value: unknown): string => (typeof value === 'string' ? value : '')
+
+  ipcMain.handle('office:send', (event, sessionKey: unknown, text: unknown) => {
+    assertTrustedSender(event)
+    return interactions.send(asString(sessionKey), asString(text))
+  })
+  ipcMain.handle('office:respond', (event, sessionKey: unknown, decision: unknown) => {
+    assertTrustedSender(event)
+    return interactions.respond(asString(sessionKey), asString(decision) as PermissionDecision)
+  })
+  ipcMain.handle('office:peek', (event, sessionKey: unknown) => {
+    assertTrustedSender(event)
+    return interactions.peek(asString(sessionKey))
+  })
+  ipcMain.handle('office:start', (event, projectKey: unknown, provider: unknown) => {
+    assertTrustedSender(event)
+    return interactions.start(asString(projectKey), asString(provider) as ProviderId)
+  })
   ipcMain.handle('office:ready', (event) => {
     assertTrustedSender(event)
     controller.ready()

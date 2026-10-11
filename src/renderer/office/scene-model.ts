@@ -1,4 +1,11 @@
-import type { AgentView, SessionRef } from '../../shared/office/types'
+import type {
+  AgentView,
+  InteractionResult,
+  PeekResult,
+  PermissionDecision,
+  ProviderId,
+  SessionRef
+} from '../../shared/office/types'
 
 // All lengths in metres, floor-local, 1 unit = 1 m, Y up. Plain data: Phase 6 maps the sim's LayoutMap into it.
 // The floor-local origin is the centre of the floor plate; room x/z is the room centre.
@@ -34,4 +41,8 @@ export interface OfficeFrame {
 export interface OfficeFeed {
   subscribe(listener: (frame: OfficeFrame) => void): () => void
   jump(sessionKey: string): void
+  send(sessionKey: string, text: string): Promise<InteractionResult>
+  respond(sessionKey: string, decision: PermissionDecision): Promise<InteractionResult>
+  peek(sessionKey: string): Promise<PeekResult>
+  start(projectKey: string, provider: ProviderId): Promise<InteractionResult>
 }
