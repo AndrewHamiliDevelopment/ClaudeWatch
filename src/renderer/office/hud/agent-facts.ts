@@ -1,4 +1,4 @@
-import type { AgentView } from '../../../shared/office/types'
+import type { AccountRef, AgentView, SessionRef } from '../../../shared/office/types'
 import { sessionTokens, type AgentState } from '../../deck/roster'
 import { memberForAgent, sessionForAgent } from '../logic/floor-model'
 import { isTeammate, reachTarget } from '../logic/interactions'
@@ -45,4 +45,15 @@ export function agentStateMark(agent: Pick<AgentView, 'attention' | 'activity'>)
     default:
       return { state: agent.attention, detail: null }
   }
+}
+
+// The account a session runs under, as the Office may name it: a label, never an address.
+export function accountText(
+  session: Pick<SessionRef, 'accountKey' | 'accountConfidence'> | undefined,
+  accounts: readonly AccountRef[] | undefined
+): string | null {
+  if (!session?.accountKey || session.accountConfidence === 'unattributed') return null
+  const account = accounts?.find(({ key }) => key === session.accountKey)
+  if (!account) return null
+  return session.accountConfidence === 'inferred' ? `${account.label} (inferred)` : account.label
 }
