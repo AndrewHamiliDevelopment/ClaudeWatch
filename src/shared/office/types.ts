@@ -24,12 +24,22 @@ export interface CurrentTool {
   category: ToolCategory
 }
 
-// Tokens counted from the transcript since the session began. Numbers only, never text.
-export interface TokenUsage {
+// Tokens counted from a transcript. Numbers only, never text.
+export interface TokenCounts {
   input: number
   output: number
+  cacheWrite: number
   cacheRead: number
-  cacheCreation: number
+}
+
+// What a session has spent since it began: its own thread, and every agent it spawned
+// (finished ones included, because they spent the tokens).
+export interface SessionUsage {
+  own: TokenCounts
+  subagents: TokenCounts
+  spawned: number
+  contextTokens: number | null // tokens in the window at the latest turn
+  contextLimit: number | null // known for Codex only
 }
 
 export interface SubagentRef {
@@ -43,7 +53,7 @@ export interface SubagentRef {
   pid?: number | null
   startedAtMs?: number
   orcaPaneKey?: string | null
-  tokens?: TokenUsage | null
+  tokens?: TokenCounts | null
 }
 
 export type AccountConfidence = 'exact' | 'inferred' | 'unattributed'
@@ -79,7 +89,8 @@ export interface SessionRef {
   subagents: SubagentRef[]
   startedAtMs: number
   updatedAtMs: number
-  tokens?: TokenUsage | null
+  // null: not counted yet, or unreadable.
+  usage?: SessionUsage | null
   accountKey?: string | null
   accountConfidence?: AccountConfidence
 }
