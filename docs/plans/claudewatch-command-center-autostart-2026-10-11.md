@@ -137,3 +137,4 @@ Left as they are: full-screen or maximised state is not restored; the Dock icon 
 - `src/main/office-window.ts` holds `opensOfficeOnStart`, so the start decision is testable without Electron.
 - The scope check lists 116 files that this work does not touch: 114 mode-only changes (100644 → 100755) and 2 deleted Xcode user-state files that were already in the working tree before the session. They are never staged.
 - `claudedocs/project_claudewatch-prerelease_batch.md` is the intake ledger of the next batch (eight pre-release items raised in the same session). It is not part of this plan.
+- `src/main/settings-shape.ts` was added by the review fixes: the one rule set for a valid setting (known key, shape of its default, number inside its range), used by `settings:set` and by the store when it reads the file. `src/main/store.test.ts` holds its read-path tests.
