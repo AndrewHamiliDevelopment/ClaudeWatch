@@ -26,16 +26,16 @@ Validated (B8): with six teammates running, `node out/main/bridge.js --once` rep
 
 - [x] Phase 0 — Contract: optional fields for teammates, tokens, accounts and focus in `src/shared/office/types.ts` (31d253b); this plan
 - [ ] Phase 1 — Data: teammates in the Office (B8) and token counters per session, subagent and teammate (B3)
-- [ ] Phase 2 — Orca: exact pane focus (B4), an Open Office entry for the dashboard (B1, main side), one Orca binary and a signature check
+- [x] Phase 2 — Orca: exact pane focus (B4), an Open Office entry for the dashboard (B1, main side), one Orca binary and a signature check (merged 00c068f, gate fix 35511af; the live pane switch is not run: it would move the owner's focus while he works)
 - [ ] Phase 3 — Camera: continuous zoom toward the cursor, inertial pan, interaction frame policy (B0)
-- [ ] Phase 4 — Theme engine: a theme per company with a project override (B5)
+- [x] Phase 4 — Theme engine: a theme per company with a project override (B5) (merged 898cdf7; two themes on one floor measure 245 to 264 draw calls, three measure 283 to 292, ceiling 300)
 - [ ] Phase 5 — Dashboard and popover redesign, "Dispatch Deck", with the Open Office button (B2, B1)
 - [ ] Phase 6 — Office HUD redesign: tokens, teammates, theme picker and focus in the HUD (B2, B3, B4, B5)
 - [ ] Phase 7 — Accounts: ledger, attribution, Accounts view (B6)
 - [ ] Phase 8 — Three themes: Violet Court, Orbital Garrison, Quiet Grove (B5)
 - [ ] Phase 9 — Standalone Office: loopback web host and web bridge in ClaudeWatch (B7)
 - [ ] Phase 10 — zkidz-claude-team: vendored Office bundle and the `zkoffice` command (B7)
-- [ ] Phase 11 — Release readiness: notarisation switch, changelog, README, clean-clone check
+- [x] Phase 11 — Release readiness: notarisation switch, changelog, README, clean-clone check (cdaccf5: the builder skips notarisation when its credentials are absent and does not fail; README now describes the local release; Node version declared)
 - [ ] Phase 12 — Integration: gates, QA and security review, second review, cleanup pass, dead-code scan, demo, notes
 - [ ] Phase 13 — Signed release 1.3.0 — BLOCKED (owner: Angelo): no Developer ID Application certificate on this Mac
 
@@ -112,6 +112,8 @@ Total **153h with AI | 408h without**. Phases 1 to 5 run in parallel, then 6 to 
 - ASSUMPTION: the standalone page is **view-only by default**; typing into terminals from the web page needs `--interactive`.
 - ASSUMPTION: the framework repo carries a **prebuilt bundle** with each file under that repo's commit-size guard, so the guard is not overridden.
 - ASSUMPTION: writers work in worktrees under `.claude/.worktree/`; no local-database question, the app has no data layer.
+- ASSUMPTION: the bridge runs for the whole life of the app, not only while the Office window is open — chose this because the dashboard's "Needs you" lane, tray rows, notification clicks and the accounts ledger all read it.
+- ASSUMPTION: no CI workflow is added — chose this because none was asked for; the README no longer claims one.
 - ASSUMPTION: nothing is pushed for ClaudeWatch without Angelo's word; the framework repo follows its own standing merge rule.
 
 ## Not in this batch
