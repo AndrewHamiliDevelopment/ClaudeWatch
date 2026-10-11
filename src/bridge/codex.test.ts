@@ -105,6 +105,33 @@ it('matches cwd using only rollout headers then tails the newest match', async (
   expect(tail).toHaveBeenCalledTimes(1)
   expect(batch.sources[0].ok).toBe(true)
 })
+it('asks where a Codex process runs once, and reads its rollout again only when the file changed', async () => {
+  const meta = JSON.stringify({ type: 'session_meta', payload: { id: 'a', cwd: '/repo' } })
+  const files: Record<string, string | null> = {
+    '/codex/sessions/rollout-a.jsonl': `${meta}\n`,
+    '/repo/.git': null
+  }
+  const io = fixtureIo(files)
+  let startedAt = 'Sat Oct 10 15:29:12 2026'
+  const exec = vi.fn(async (program: string) =>
+    program.endsWith('ps') ? `42 ${startedAt} /bin/codex` : 'p42\nn/repo\n'
+  )
+  io.exec = exec
+  const tail = vi.spyOn(io, 'readTail')
+  const folderAsks = (): number =>
+    exec.mock.calls.filter(([program]) => program.endsWith('lsof')).length
+  await collectCodex('/codex', io)
+  expect((await collectCodex('/codex', io)).sessions).toHaveLength(1)
+  expect([folderAsks(), tail.mock.calls.length]).toEqual([1, 1])
+  files['/codex/sessions/rollout-a.jsonl'] += `${tokenCount(1000, 700, 300)}\n`
+  expect((await collectCodex('/codex', io)).sessions[0].usage?.own.input).toBe(300)
+  expect([folderAsks(), tail.mock.calls.length]).toEqual([1, 2])
+  // Another process under the same pid is asked about afresh.
+  startedAt = 'Sun Oct 11 15:29:12 2026'
+  await collectCodex('/codex', io)
+  expect(folderAsks()).toBe(2)
+})
+
 it('keeps the last usage it read while output pushes the token count out of the tail', async () => {
   const meta = JSON.stringify({ type: 'session_meta', payload: { id: 'a', cwd: '/repo' } })
   const files: Record<string, string | null> = {

@@ -21,7 +21,7 @@ import { type BridgeIo, isMissing, jsonObject } from './io'
 import { isLive } from './liveness'
 import { sessionFromRegistry, sessionFromTeammate } from './claude'
 import { resolveProject } from './project-root'
-import { parseTranscript, transcriptPath } from './transcript-tail'
+import { pruneTranscripts, readTranscript, transcriptPath } from './transcript-tail'
 import { listAgentFiles, liveSubagents } from './subagents'
 import { type ProcessRow, readProcessTable } from './process-table'
 import { type Teammate, type TeammateProcess, teammateProcesses, TeammateSource } from './teammates'
@@ -64,6 +64,12 @@ export interface ClaudeBatch {
   transcripts: Map<string, SessionFiles>
 }
 
+interface Collected {
+  session: SessionRef
+  files: SessionFiles | null
+  hasTeam: boolean
+}
+
 export async function collectClaude(
   roots: string[],
   io: BridgeIo,
@@ -82,53 +88,67 @@ export async function collectClaude(
     (teammateTable ??= table().then(teammateProcesses))
   const uniqueRoots = [...new Set(roots)]
   const liveSessionIds = new Set<string>()
+  // One live entry as a session, with its agents, its team and the transcripts behind them.
+  const collectSession = async (root: string, entry: RegistryEntry): Promise<Collected> => {
+    const project = await resolveProject(entry.cwd, io, now)
+    const path = await transcriptPath(root, entry.cwd, entry.sessionId, io)
+    const transcript = path ? await readTranscript(path, io) : { tool: null, error: false }
+    const agentFiles = path ? await listAgentFiles(path, io) : []
+    const agents = await liveSubagents(agentFiles, io, now)
+    // A team that cannot be read costs the lead its teammates, never the lead itself.
+    const team = await teammates
+      .collect(root, entry.sessionId, entry.cwd, processes, now)
+      .catch(() => null)
+    const session = sessionFromRegistry(
+      entry,
+      transcript,
+      [...agents, ...(team ?? []).map((teammate) => teammate.ref)],
+      project.root,
+      project.worktree
+    )
+    const teamTranscripts = (team ?? []).map((teammate): [string, string[]] => [
+      teammate.ref.id,
+      teammate.transcripts
+    ])
+    return {
+      session,
+      hasTeam: team !== null,
+      files: path ? { main: path, agents: agentFiles, teammates: new Map(teamTranscripts) } : null
+    }
+  }
+  // A vanished file drops the session for this tick; anything else is a failed read.
+  const settled = (error: unknown): 'failed' | null => (isMissing(error) ? null : 'failed')
   for (const root of uniqueRoots) {
     const health: SourceHealth = { id: `claude:${root}`, ok: true, detail: 'empty' }
     try {
       const files = await io.list(join(root, 'sessions'))
+      // Liveness is proven one entry at a time, so at most one `ps` runs at once. Each live
+      // session is then read while the next is being proven, and listed in file order.
+      const reads: Promise<Collected | 'failed' | null>[] = []
       for (const file of files.filter((name) => /^\d+\.json$/.test(name))) {
         try {
           const entry = parseRegistry(await io.readText(join(root, 'sessions', file)))
           // An unreadable table proves nothing either way: each pid is then asked about.
           if (!entry || !(await isLive(entry, io, await table().catch(() => [])))) continue
           liveSessionIds.add(entry.sessionId)
-          const project = await resolveProject(entry.cwd, io)
-          const path = await transcriptPath(root, entry.cwd, entry.sessionId, io)
-          const transcript = path
-            ? parseTranscript(await io.readTail(path))
-            : { tool: null, error: false }
-          const agentFiles = path ? await listAgentFiles(path, io) : []
-          const agents = await liveSubagents(agentFiles, io, now)
-          // A team that cannot be read costs the lead its teammates, never the lead itself.
-          const team = await teammates
-            .collect(root, entry.sessionId, entry.cwd, processes, now)
-            .catch(() => null)
-          const session = sessionFromRegistry(
-            entry,
-            transcript,
-            [...agents, ...(team ?? []).map((teammate) => teammate.ref)],
-            project.root,
-            project.worktree
-          )
-          sessions.push(session)
-          if (path)
-            transcripts.set(session.key, {
-              main: path,
-              agents: agentFiles,
-              teammates: new Map(
-                (team ?? []).map((teammate) => [teammate.ref.id, teammate.transcripts])
-              )
-            })
-          if (health.ok) health.detail = 'live'
-          if (!team) {
-            health.ok = false
-            health.detail = 'team read failed'
-          }
+          reads.push(collectSession(root, entry).catch(settled))
         } catch (error) {
-          if (!isMissing(error)) {
-            health.ok = false
-            health.detail = 'session read failed'
-          }
+          reads.push(Promise.resolve(settled(error)))
+        }
+      }
+      for (const read of await Promise.all(reads)) {
+        if (read === null) continue
+        if (read === 'failed') {
+          health.ok = false
+          health.detail = 'session read failed'
+          continue
+        }
+        sessions.push(read.session)
+        if (read.files) transcripts.set(read.session.key, read.files)
+        if (health.ok) health.detail = 'live'
+        if (!read.hasTeam) {
+          health.ok = false
+          health.detail = 'team read failed'
         }
       }
     } catch (error) {
@@ -149,7 +169,7 @@ export async function collectClaude(
           .collect(root, leadSessionId, null, processes, now)
           .catch(() => [])
         for (const orphan of orphans) {
-          const files = await orphanSession(orphan, io).catch(() => null)
+          const files = await orphanSession(orphan, io, now).catch(() => null)
           if (!files) continue
           sessions.push(files.session)
           if (files.transcripts) transcripts.set(files.session.key, files.transcripts)
@@ -158,6 +178,7 @@ export async function collectClaude(
     }
   }
   teammates.prune()
+  pruneTranscripts(io)
   return { sessions, sources, transcripts }
 }
 
@@ -165,11 +186,12 @@ export async function collectClaude(
 // and pane, so it is shown as a session of its own until it exits too.
 async function orphanSession(
   { ref, transcripts: [main] }: Teammate,
-  io: BridgeIo
+  io: BridgeIo,
+  now: number
 ): Promise<{ session: SessionRef; transcripts: SessionFiles | null } | null> {
   const { cwd, pid } = ref
   if (!cwd || typeof pid !== 'number') return null
-  const project = await resolveProject(cwd, io)
+  const project = await resolveProject(cwd, io, now)
   return {
     session: sessionFromTeammate({ ...ref, cwd, pid }, project.root, project.worktree),
     transcripts: main

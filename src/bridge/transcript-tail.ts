@@ -42,6 +42,39 @@ export function parseTranscript(text: string): TranscriptState {
   }
 }
 
+interface ReadTail {
+  size: number
+  mtimeMs: number
+  state: TranscriptState
+}
+const tails = new WeakMap<BridgeIo, { read: Map<string, ReadTail>; seen: Set<string> }>()
+
+// A transcript's parsed tail and when the file was last written. The tail is read and parsed
+// again only when the file's size or time moved.
+export async function readTranscript(
+  path: string,
+  io: BridgeIo
+): Promise<TranscriptState & { mtimeMs: number }> {
+  let cache = tails.get(io)
+  if (!cache) tails.set(io, (cache = { read: new Map(), seen: new Set() }))
+  cache.seen.add(path)
+  const { size, mtimeMs } = await io.stat(path)
+  let tail = cache.read.get(path)
+  if (tail?.size !== size || tail.mtimeMs !== mtimeMs) {
+    tail = { size, mtimeMs, state: parseTranscript(await io.readTail(path)) }
+    cache.read.set(path, tail)
+  }
+  return { ...tail.state, mtimeMs }
+}
+
+// Forgets every transcript not read since the last call: its session has left.
+export function pruneTranscripts(io: BridgeIo): void {
+  const cache = tails.get(io)
+  if (!cache) return
+  for (const path of cache.read.keys()) if (!cache.seen.has(path)) cache.read.delete(path)
+  cache.seen.clear()
+}
+
 // The folder name Claude Code gives a working directory under `projects/`.
 export function projectSlug(cwd: string): string {
   return cwd.replace(/[^a-zA-Z0-9]/g, '-')

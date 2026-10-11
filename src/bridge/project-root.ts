@@ -11,10 +11,33 @@ async function isDirectory(path: string, io: BridgeIo): Promise<boolean> {
   }
 }
 
-export async function resolveProject(
-  cwd: string,
-  io: BridgeIo
-): Promise<{ root: string; worktree: string | null }> {
+interface Project {
+  root: string
+  worktree: string | null
+}
+
+const PROJECT_TTL_MS = 60_000
+const projects = new WeakMap<BridgeIo, Map<string, { project: Promise<Project>; until: number }>>()
+
+// Every tick asks where each session's folder belongs, and the answer costs a stat per folder
+// level: it is kept for a minute. A failed look-up is not kept.
+export function resolveProject(cwd: string, io: BridgeIo, now = Date.now()): Promise<Project> {
+  let known = projects.get(io)
+  if (!known) projects.set(io, (known = new Map()))
+  const folders = known
+  const cached = folders.get(cwd)
+  if (cached && now < cached.until) return cached.project
+  // A folder whose sessions left is never asked for again, so it is dropped here.
+  for (const [folder, { until }] of folders) if (now >= until) folders.delete(folder)
+  const project = findProject(cwd, io)
+  folders.set(cwd, { project, until: now + PROJECT_TTL_MS })
+  project.catch(() => {
+    if (folders.get(cwd)?.project === project) folders.delete(cwd)
+  })
+  return project
+}
+
+async function findProject(cwd: string, io: BridgeIo): Promise<Project> {
   let directory = resolve(cwd)
   while (true) {
     const marker = join(directory, '.git')

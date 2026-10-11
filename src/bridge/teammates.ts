@@ -5,7 +5,7 @@ import type { ProcessRow } from './process-table'
 import { listAgentFiles } from './subagents'
 import { newestTeammateTranscripts, type TranscriptFile } from './teammate-transcripts'
 import { toolActivity } from './tool-category'
-import { parseTranscript, projectSlug } from './transcript-tail'
+import { projectSlug, readTranscript } from './transcript-tail'
 
 export interface TeammateProcess {
   pid: number
@@ -193,8 +193,7 @@ export class TeammateSource {
     const path = this.transcripts.get(identity)
     if (!path) return 'thinking'
     try {
-      const { mtimeMs } = await this.io.stat(path)
-      const { tool } = parseTranscript(await this.io.readTail(path))
+      const { tool, mtimeMs } = await readTranscript(path, this.io)
       if (tool) return toolActivity(tool.category)
       return now - mtimeMs < FRESH_MS ? 'thinking' : 'idle'
     } catch {

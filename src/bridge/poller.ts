@@ -69,7 +69,7 @@ export class BridgePoller {
     const readProcesses = (): Promise<ProcessRow[]> => (processTable ??= readProcessTable(this.io))
     const [claude, codex, orca] = await Promise.all([
       collectClaude(this.roots, this.io, now, this.teammates, readProcesses),
-      collectCodex(this.codexRoot, this.io, readProcesses, this.derivesAccounts),
+      collectCodex(this.codexRoot, this.io, readProcesses, this.derivesAccounts, now),
       this.orca.poll(now)
     ])
     // The first snapshot goes out with usage unknown, so no window waits on a first scan.

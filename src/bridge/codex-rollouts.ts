@@ -7,6 +7,7 @@ export interface Rollout {
   id: string
   cwd: string
   mtimeMs: number
+  size: number
   // When the thread was first created, however often it has been resumed since.
   startedAtMs: number | null
   // The account the session was created under, hashed here so its id never leaves this file.
@@ -77,6 +78,7 @@ export async function findRollouts(
             id: meta.id,
             cwd: meta.cwd,
             mtimeMs: info.mtimeMs,
+            size: info.size,
             startedAtMs: Number.isFinite(startedAtMs) ? startedAtMs : null,
             accountKey:
               derivesAccounts && typeof creator === 'string' && creator
