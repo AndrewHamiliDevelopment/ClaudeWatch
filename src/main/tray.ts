@@ -14,6 +14,7 @@ import type { SettingsStore } from './store'
 
 interface TrayManagerOptions {
   onOpenDashboard: () => void
+  onOpenOffice?: () => void
   onQuit: () => void
   onCheckForUpdates?: () => void
   preloadPath: string
@@ -34,6 +35,7 @@ export class TrayManager {
   private tray: Tray | null = null
   private popover: BrowserWindow | null = null
   private onOpenDashboard: () => void
+  private onOpenOffice?: () => void
   private onQuit: () => void
   private onCheckForUpdates?: () => void
   private preloadPath: string
@@ -53,6 +55,7 @@ export class TrayManager {
 
   constructor(options: TrayManagerOptions) {
     this.onOpenDashboard = options.onOpenDashboard
+    this.onOpenOffice = options.onOpenOffice
     this.onQuit = options.onQuit
     this.onCheckForUpdates = options.onCheckForUpdates
     this.preloadPath = options.preloadPath
@@ -270,6 +273,12 @@ export class TrayManager {
       label: 'Open Dashboard',
       click: () => this.onOpenDashboard()
     })
+    if (this.onOpenOffice) {
+      menuItems.push({
+        label: 'Open Office',
+        click: () => this.onOpenOffice?.()
+      })
+    }
     if (this.onCheckForUpdates) {
       menuItems.push({
         label: 'Check for Updates',

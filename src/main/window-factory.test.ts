@@ -14,7 +14,7 @@ vi.mock('electron', () => ({
     }
   }
 }))
-import { createAppWindow, isAppOrigin } from './window-factory'
+import { assertTrustedSender, createAppWindow, isAppOrigin } from './window-factory'
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -72,5 +72,24 @@ describe('createAppWindow', () => {
     for (const url of ['about:blank', 'data:text/html,x', 'https://example.com', 'invalid']) {
       expect(isAppOrigin(url)).toBe(false)
     }
+  })
+})
+
+describe('assertTrustedSender', () => {
+  const event = (senderFrame: unknown): Electron.IpcMainInvokeEvent =>
+    ({ senderFrame }) as Electron.IpcMainInvokeEvent
+
+  it('accepts a top-level frame on the app origin', () => {
+    expect(() =>
+      assertTrustedSender(event({ parent: null, url: 'file:///app/office.html' }))
+    ).not.toThrow()
+  })
+
+  it.each([
+    ['no frame', null],
+    ['a subframe', { parent: {}, url: 'file:///app/office.html' }],
+    ['another origin', { parent: null, url: 'https://example.com/' }]
+  ])('rejects %s', (_name, frame) => {
+    expect(() => assertTrustedSender(event(frame))).toThrow('Untrusted IPC sender')
   })
 })

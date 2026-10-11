@@ -9,10 +9,26 @@ export default defineConfig({
       alias: {
         '@': resolve('src/main')
       }
+    },
+    build: {
+      rollupOptions: {
+        input: {
+          index: resolve('src/main/index.ts'),
+          bridge: resolve('src/bridge/index.ts')
+        }
+      }
     }
   },
   preload: {
-    plugins: [externalizeDepsPlugin()]
+    plugins: [externalizeDepsPlugin()],
+    build: {
+      rollupOptions: {
+        input: {
+          index: resolve('src/preload/index.ts'),
+          office: resolve('src/preload/office.ts')
+        }
+      }
+    }
   },
   renderer: {
     resolve: {

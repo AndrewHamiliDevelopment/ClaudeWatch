@@ -16,6 +16,7 @@ import { setupIpcHandlers, forwardUpdatesToRenderer } from './ipc-handlers'
 import { createWidgetStatsWriter } from './widget-stats-writer'
 import { SoundPlayer } from './sound-player'
 import { setupWidgetSync } from './widget-sync'
+import { setupOffice } from './office-setup'
 
 // Prevent "write EIO" crashes when stdout/stderr pipe is broken
 // (e.g., launching terminal closed, or running packaged without a TTY)
@@ -123,9 +124,12 @@ app.whenReady().then(() => {
     () => trayManager?.getPopoverWindow() ?? null
   ])
 
+  const office = setupOffice(terminalResolver)
+
   // Create tray with popover support
   trayManager = new TrayManager({
     onOpenDashboard: showDashboard,
+    onOpenOffice: office.open,
     onQuit: () => {
       app.isQuitting = true
       app.quit()

@@ -36,3 +36,11 @@ export function createAppWindow(options: Electron.BrowserWindowConstructorOption
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   return window
 }
+
+// IPC handlers trust only a top-level frame loaded from the app itself.
+export function assertTrustedSender(event: Electron.IpcMainInvokeEvent): void {
+  const frame = event?.senderFrame
+  if (!frame || frame.parent !== null || !isAppOrigin(frame.url)) {
+    throw new Error('Untrusted IPC sender')
+  }
+}

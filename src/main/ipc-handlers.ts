@@ -1,6 +1,6 @@
 import { ipcMain, BrowserWindow, app, shell } from 'electron'
 import { isAbsolute, join } from 'path'
-import { isAppOrigin } from './window-factory'
+import { assertTrustedSender } from './window-factory'
 import { DEFAULT_SETTINGS } from '../renderer/lib/types'
 import { openTerminal } from './terminal-opener'
 import type { SessionTracker } from './session-tracker'
@@ -104,10 +104,7 @@ export function setupIpcHandlers(options: IpcHandlerOptions): void {
 
   const handle = (channel: string, listener: Parameters<typeof ipcMain.handle>[1]): void => {
     ipcMain.handle(channel, (event, ...args) => {
-      const frame = event?.senderFrame
-      if (!frame || frame.parent !== null || !isAppOrigin(frame.url)) {
-        throw new Error('Untrusted IPC sender')
-      }
+      assertTrustedSender(event)
       return listener(event, ...args)
     })
   }
