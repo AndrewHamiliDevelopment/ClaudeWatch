@@ -242,6 +242,19 @@ describe('SettingsStore', () => {
       expect(settings.notifications.sound).toBe(DEFAULT_SETTINGS.notifications.sound)
     })
 
+    it('pulls a stored number back into its allowed range', () => {
+      const raw = store as unknown as { store: { set(key: string, value: unknown): void } }
+      raw.store.set('settings', {
+        ...DEFAULT_SETTINGS,
+        pollingIntervalMs: 1,
+        notifications: { ...DEFAULT_SETTINGS.notifications, cooldownSeconds: 100000 }
+      })
+
+      const settings = store.getSettings()
+      expect(settings.pollingIntervalMs).toBe(500)
+      expect(settings.notifications.cooldownSeconds).toBe(120)
+    })
+
     it('keeps the other notification choices when one is changed', () => {
       store.setSettings({ notifications: { ...DEFAULT_SETTINGS.notifications, sound: false } })
       const one = { onIdle: false } as typeof DEFAULT_SETTINGS.notifications

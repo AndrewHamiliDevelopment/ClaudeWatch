@@ -13,36 +13,8 @@ import type { NotificationManager } from './notifications'
 import type { AppSettings, TerminalType } from '../renderer/lib/types'
 import type { TrayManager } from './tray'
 
-export function validateSettings(data: Partial<AppSettings>): Partial<AppSettings> {
-  const validated = conformSettings(data)
-
-  if (validated.pollingIntervalMs !== undefined) {
-    validated.pollingIntervalMs = Math.max(500, Math.min(60000, validated.pollingIntervalMs))
-  }
-  if (validated.cpuIdleThreshold !== undefined) {
-    validated.cpuIdleThreshold = Math.max(0.1, Math.min(100, validated.cpuIdleThreshold))
-  }
-  if (validated.maxHistoryEntries !== undefined) {
-    validated.maxHistoryEntries = Math.max(1, Math.min(10000, validated.maxHistoryEntries))
-  }
-  if (validated.weeklyTokenTarget !== undefined) {
-    validated.weeklyTokenTarget = Math.max(
-      100_000,
-      Math.min(100_000_000, validated.weeklyTokenTarget)
-    )
-  }
-  if (validated.staleThresholdMinutes !== undefined) {
-    validated.staleThresholdMinutes = Math.max(5, Math.min(120, validated.staleThresholdMinutes))
-  }
-  if (validated.notifications?.cooldownSeconds !== undefined) {
-    validated.notifications = {
-      ...validated.notifications,
-      cooldownSeconds: Math.max(10, Math.min(120, validated.notifications.cooldownSeconds))
-    }
-  }
-
-  return validated
-}
+// One rule set for what a valid setting is, shared with the store's read path.
+export const validateSettings = conformSettings
 
 const TERMINAL_TYPES = {
   'terminal-app': true,

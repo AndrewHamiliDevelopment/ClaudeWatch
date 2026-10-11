@@ -17,14 +17,17 @@ function isBounds(value: unknown): value is Bounds {
   )
 }
 
-function overlapArea(a: Bounds, b: Bounds): number {
-  const width = Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x)
-  const height = Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y)
-  return width > 0 && height > 0 ? width * height : 0
-}
+const clamp = (value: number, low: number, high: number): number =>
+  Math.min(Math.max(value, low), high)
 
 export function isOnAnyDisplay(rect: Bounds, workAreas: readonly Bounds[]): boolean {
-  return workAreas.some((area) => overlapArea(rect, area) > 0)
+  return workAreas.some(
+    (area) =>
+      rect.x < area.x + area.width &&
+      rect.x + rect.width > area.x &&
+      rect.y < area.y + area.height &&
+      rect.y + rect.height > area.y
+  )
 }
 
 // Reuses saved bounds only on a display that is still connected, and keeps the whole window,
@@ -47,11 +50,11 @@ export function restoreBounds(
       centre.y < area.y + area.height
   )
   if (!home) return fallback
-  const width = Math.round(Math.min(Math.max(saved.width, minimum.width), home.width))
-  const height = Math.round(Math.min(Math.max(saved.height, minimum.height), home.height))
+  const width = Math.round(clamp(saved.width, minimum.width, home.width))
+  const height = Math.round(clamp(saved.height, minimum.height, home.height))
   return {
-    x: Math.round(Math.min(Math.max(saved.x, home.x), home.x + home.width - width)),
-    y: Math.round(Math.min(Math.max(saved.y, home.y), home.y + home.height - height)),
+    x: Math.round(clamp(saved.x, home.x, home.x + home.width - width)),
+    y: Math.round(clamp(saved.y, home.y, home.y + home.height - height)),
     width,
     height
   }
