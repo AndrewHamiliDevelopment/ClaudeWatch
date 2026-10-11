@@ -1,3 +1,4 @@
+import type { UsageDelta } from '../shared/accounts'
 import type { SessionRef, SessionUsage, SourceHealth, TokenCounts } from '../shared/office/types'
 import { type BridgeIo, isMissing } from './io'
 import type { AgentFile } from './subagents'
@@ -8,8 +9,12 @@ import {
   foldLines,
   foldTotal,
   type UsageFold,
+  type UsageIncrement,
   zeroCounts
 } from './usage-fold'
+
+// What one line added to one transcript; the poller adds the session's project.
+export type TranscriptDelta = Omit<UsageDelta, 'projectKey' | 'projectLabel'>
 
 export interface SessionFiles {
   main: string
@@ -54,11 +59,20 @@ export class UsageTracker {
 
   // Reads what was appended since the last scan, up to the byte budget. State for a transcript
   // that is no longer wanted is dropped here, so it stays bounded however long the bridge runs.
-  async scan(sessions: ReadonlyMap<string, SessionFiles>): Promise<void> {
+  // `onAdded` hears what every newly read line added. A transcript read again from its start
+  // is reported again, so the listener must count each line of a file once.
+  async scan(
+    sessions: ReadonlyMap<string, SessionFiles>,
+    onAdded?: (delta: TranscriptDelta) => void
+  ): Promise<void> {
     this.sessions = sessions
     const wanted = new Map<string, number | null>()
-    for (const files of sessions.values()) {
-      for (const path of [files.main, ...spawnedPaths(files)]) wanted.set(path, null)
+    const owners = new Map<string, string>()
+    for (const [sessionKey, files] of sessions) {
+      for (const path of [files.main, ...spawnedPaths(files)]) {
+        wanted.set(path, null)
+        owners.set(path, sessionKey)
+      }
       for (const agent of files.agents) wanted.set(agent.path, agent.size)
     }
     for (const path of this.files.keys()) if (!wanted.has(path)) this.files.delete(path)
@@ -70,7 +84,12 @@ export class UsageTracker {
     for (const [path, knownSize] of wanted) {
       try {
         const size = knownSize ?? (await this.io.stat(path)).size
-        remaining -= await this.advance(path, size, remaining)
+        const sessionKey = owners.get(path)
+        const report =
+          onAdded && sessionKey !== undefined
+            ? (increment: UsageIncrement): void => onAdded({ sessionKey, file: path, ...increment })
+            : undefined
+        remaining -= await this.advance(path, size, remaining, report)
       } catch (error) {
         this.files.delete(path)
         if (!isMissing(error)) this.failed = true
@@ -88,7 +107,12 @@ export class UsageTracker {
     }
   }
 
-  private async advance(path: string, size: number, budget: number): Promise<number> {
+  private async advance(
+    path: string,
+    size: number,
+    budget: number,
+    report?: (increment: UsageIncrement) => void
+  ): Promise<number> {
     let file = this.files.get(path)
     // A file shorter than what was read was rewritten: count it again from the start.
     if (!file || size < file.offset) file = { offset: 0, fold: emptyFold(), hasReachedEnd: false }
@@ -102,7 +126,7 @@ export class UsageTracker {
       }
       const read = await this.io.readFrom(path, file.offset, window)
       if (read.nextOffset > file.offset) {
-        file.fold = foldLines(file.fold, read.text)
+        file.fold = foldLines(file.fold, read.text, report)
         spent += read.nextOffset - file.offset
         file.offset = read.nextOffset
         continue

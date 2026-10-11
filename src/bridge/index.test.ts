@@ -66,3 +66,20 @@ it('forwards utility-process feed messages through the parent port', async () =>
   await main([], { postMessage })
   expect(postMessage).toHaveBeenCalledWith(message)
 })
+it('posts added tokens to the parent as their own message, apart from the feed', async () => {
+  mocks.start.mockResolvedValue(() => {})
+  const postMessage = vi.fn()
+  await main([], { postMessage })
+  const deltas = [
+    {
+      sessionKey: 'claude:a',
+      projectKey: 'p_1',
+      projectLabel: 'repo',
+      file: '/p/a.jsonl',
+      atMs: 5,
+      counts: { input: 1, output: 2, cacheWrite: 0, cacheRead: 0 }
+    }
+  ]
+  mocks.options.mock.calls[0][0].onUsage(deltas)
+  expect(postMessage).toHaveBeenCalledExactlyOnceWith({ type: 'usage', v: 1, deltas })
+})

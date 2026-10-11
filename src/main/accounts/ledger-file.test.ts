@@ -1,0 +1,164 @@
+// @vitest-environment node
+import { chmod, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'fs/promises'
+import { tmpdir } from 'os'
+import { join } from 'path'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { loadLedger, saveLedger } from './ledger-file'
+import { emptyLedger, type LedgerState } from './ledger-state'
+
+const counts = (output: number) => ({ input: 1, output, cacheWrite: 2, cacheRead: 3 })
+const limit = {
+  windowMinutes: 300,
+  scope: null,
+  usedPercent: 40,
+  resetsAtMs: null,
+  source: 'orca-cache' as const,
+  fetchedAtMs: 5_000
+}
+function filledLedger(): LedgerState {
+  return {
+    ...emptyLedger(1_000),
+    sampledAtMs: 9_000,
+    codexDefaultKey: 'codex:bbbbbbbbbbbb',
+    accounts: [
+      {
+        key: 'claude:aaaaaaaaaaaa',
+        provider: 'claude',
+        email: 'ada@example.test',
+        organizationUuid: 'org-ada',
+        organizationName: 'Ada Labs',
+        plan: 'max',
+        alias: 'Work',
+        orcaAccountId: 'orca-1',
+        sources: ['default-login', 'orca'],
+        firstSeenMs: 2_000
+      }
+    ],
+    spans: [
+      { accountKey: 'claude:aaaaaaaaaaaa', fromMs: 2_000, toMs: 4_000 },
+      { accountKey: 'claude:aaaaaaaaaaaa', fromMs: 6_000, toMs: null }
+    ],
+    buckets: new Map([
+      [
+        'claude:aaaaaaaaaaaa|2026-10-11|p_1|inferred',
+        {
+          accountKey: 'claude:aaaaaaaaaaaa',
+          day: '2026-10-11',
+          projectKey: 'p_1',
+          confidence: 'inferred' as const,
+          counts: counts(9)
+        }
+      ],
+      [
+        '|2026-10-11|p_1|unattributed',
+        {
+          accountKey: null,
+          day: '2026-10-11',
+          projectKey: 'p_1',
+          confidence: 'unattributed' as const,
+          counts: counts(4)
+        }
+      ]
+    ]),
+    projects: new Map([['p_1', 'repo']]),
+    files: new Map([['file-id', 7_000]]),
+    codexSessions: new Map([['codex:c', { counts: counts(5), countedAtMs: 8_000 }]]),
+    limits: new Map([['claude:aaaaaaaaaaaa', [limit]]])
+  }
+}
+
+let folder: string
+let path: string
+beforeEach(async () => {
+  folder = await mkdtemp(join(tmpdir(), 'cw-ledger-'))
+  path = join(folder, 'accounts-ledger.json')
+})
+afterEach(async () => {
+  await chmod(folder, 0o700)
+  await rm(folder, { recursive: true, force: true })
+})
+const mode = async (file: string): Promise<number> => (await stat(file)).mode & 0o777
+
+describe('saveLedger', () => {
+  it('writes a file only its owner can read, and reads the same ledger back', async () => {
+    saveLedger(path, filledLedger())
+    expect(await mode(path)).toBe(0o600)
+    expect(loadLedger(path)).toEqual(filledLedger())
+    expect(await readdir(folder)).toEqual(['accounts-ledger.json'])
+  })
+
+  it('replaces a file that was readable by others with one that is not', async () => {
+    await writeFile(path, '{}', { mode: 0o644 })
+    saveLedger(path, filledLedger())
+    expect(await mode(path)).toBe(0o600)
+  })
+
+  it('leaves the previous ledger whole when a write fails', async () => {
+    saveLedger(path, filledLedger())
+    const before = await readFile(path, 'utf8')
+    await chmod(folder, 0o500)
+    expect(() => saveLedger(path, emptyLedger(5))).toThrow()
+    expect(await readFile(path, 'utf8')).toBe(before)
+  })
+})
+
+describe('loadLedger', () => {
+  const stored = async (): Promise<Record<string, unknown>> => {
+    saveLedger(path, filledLedger())
+    return JSON.parse(await readFile(path, 'utf8'))
+  }
+
+  it('finds no ledger where none was saved, and creates nothing', async () => {
+    expect(loadLedger(path)).toBeNull()
+    expect(await readdir(folder)).toEqual([])
+  })
+
+  it.each([
+    ['text that is not JSON', '{"version":1,"trackingSinceMs":'],
+    ['a list', '[]'],
+    ['a version it does not know', JSON.stringify({ version: 2, trackingSinceMs: 1 })],
+    ['no tracking start', JSON.stringify({ version: 1, trackingSinceMs: 'yesterday' })]
+  ])(
+    'starts empty from %s, and sets the file aside instead of overwriting it',
+    async (_case, text) => {
+      await writeFile(path, text, { mode: 0o600 })
+      expect(loadLedger(path)).toBeNull()
+      expect(await readFile(`${path}.damaged`, 'utf8')).toBe(text)
+      expect(await mode(`${path}.damaged`)).toBe(0o600)
+      expect(await readdir(folder)).toEqual(['accounts-ledger.json.damaged'])
+    }
+  )
+
+  it('keeps what is sound in a hand-edited file and drops the rest', async () => {
+    const file = await stored()
+    const [account] = file.accounts as Record<string, unknown>[]
+    const [bucket] = file.buckets as Record<string, unknown>[]
+    Object.assign(file, {
+      unknownSection: { token: 'CANARY' },
+      sampledAtMs: 'soon',
+      accounts: [{ ...account, token: 'CANARY' }, { ...account, key: 7 }, 'ada'],
+      spans: [{ accountKey: 'claude:aaaaaaaaaaaa', fromMs: null, toMs: null }],
+      buckets: [
+        bucket,
+        { ...bucket, projectKey: 'p_2', counts: { ...counts(1), output: '12' } },
+        { ...bucket, projectKey: 'p_3', counts: { ...counts(1), input: -5 } },
+        { ...bucket, projectKey: 'p_4', confidence: 'certain' },
+        { ...bucket, projectKey: 'p_5', day: 'today' }
+      ],
+      files: [['file-id', 7_000], ['other', null], 'x', ['__proto__', 5]],
+      limits: [['claude:aaaaaaaaaaaa', [limit, { ...limit, usedPercent: null }]]]
+    })
+    await writeFile(path, JSON.stringify(file))
+    const ledger = loadLedger(path)
+    expect(ledger?.sampledAtMs).toBeNull()
+    expect(ledger?.accounts).toEqual(filledLedger().accounts)
+    expect(ledger?.spans).toEqual([])
+    expect([...(ledger?.buckets.values() ?? [])].map((kept) => kept.projectKey)).toEqual(['p_1'])
+    expect([...(ledger?.files ?? [])]).toEqual([
+      ['file-id', 7_000],
+      ['__proto__', 5]
+    ])
+    expect(ledger?.limits.get('claude:aaaaaaaaaaaa')).toEqual([limit])
+    expect(JSON.stringify([...(ledger?.accounts ?? [])])).not.toContain('CANARY')
+  })
+})

@@ -1,20 +1,23 @@
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import type { UsageDelta } from '../shared/accounts'
 import type { FeedMessage, OfficeSnapshot } from '../shared/office/types'
 import { type BridgeIo, systemIo } from './io'
-import { collectClaude } from './registry'
+import { type ClaudeBatch, collectClaude } from './registry'
 import { collectCodex } from './codex'
 import { claimPanes, OrcaSource } from './orca'
 import { diff, emptySnapshot, reduce } from './reducer'
 import { TeammateSource } from './teammates'
 import { UsageThrottle } from './usage-throttle'
-import { UsageTracker } from './usage-tracker'
+import { type TranscriptDelta, UsageTracker } from './usage-tracker'
 
 export interface PollerOptions {
   io?: BridgeIo
   claudeRoots?: string[]
   codexRoot?: string
   now?: () => number
+  // Hears the tokens every tick added, line by line, for whoever attributes them to an account.
+  onUsage?: (deltas: UsageDelta[]) => void
 }
 export class BridgePoller {
   private snapshot = emptySnapshot()
@@ -26,6 +29,7 @@ export class BridgePoller {
   private readonly roots: string[]
   private readonly codexRoot: string
   private readonly now: () => number
+  private readonly onUsage: PollerOptions['onUsage']
   private pending: Promise<OfficeSnapshot> | null = null
   constructor(options: PollerOptions = {}) {
     this.io = options.io ?? systemIo
@@ -35,6 +39,7 @@ export class BridgePoller {
     this.roots = options.claudeRoots ?? [join(homedir(), '.claude')]
     this.codexRoot = options.codexRoot ?? join(homedir(), '.codex')
     this.now = options.now ?? Date.now
+    this.onUsage = options.onUsage
   }
   tick(): Promise<OfficeSnapshot> {
     if (this.pending) return this.pending
@@ -55,7 +60,7 @@ export class BridgePoller {
       this.orca.poll(now)
     ])
     // The first snapshot goes out with usage unknown, so no window waits on a first scan.
-    if (this.snapshot.rev > 0) await this.usage.scan(claude.transcripts)
+    if (this.snapshot.rev > 0) await this.scanUsage(claude)
     this.orca.prune(claude.sessions)
     const enriched = claimPanes(
       await Promise.all(claude.sessions.map((session) => this.orca.enrich(session, now)))
@@ -68,6 +73,19 @@ export class BridgePoller {
       sources: [...claude.sources, ...codex.sources, orca, this.usage.health()]
     })
     return this.snapshot
+  }
+  private async scanUsage(claude: ClaudeBatch): Promise<void> {
+    if (!this.onUsage) return this.usage.scan(claude.transcripts)
+    const added: TranscriptDelta[] = []
+    await this.usage.scan(claude.transcripts, (delta) => added.push(delta))
+    const sessions = new Map(claude.sessions.map((session) => [session.key, session]))
+    const deltas = added.flatMap((delta): UsageDelta[] => {
+      const session = sessions.get(delta.sessionKey)
+      return session
+        ? [{ ...delta, projectKey: session.projectKey, projectLabel: session.projectLabel }]
+        : []
+    })
+    if (deltas.length) this.onUsage(deltas)
   }
   async start(post: (message: FeedMessage) => void): Promise<() => void> {
     let previous = await this.tick()

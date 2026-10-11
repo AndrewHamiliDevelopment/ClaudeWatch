@@ -103,7 +103,10 @@ export async function collectCodex(
           currentTool: null,
           subagents: [],
           startedAtMs: process.startedAtMs,
-          usage: tail !== null ? parseCodexUsage(tail) : null
+          usage: tail !== null ? parseCodexUsage(tail) : null,
+          accountKey: rollout?.accountKey ?? null,
+          // A rollout names its own account, so nothing is inferred from who is signed in.
+          ...(rollout?.accountKey && { accountConfidence: 'exact' as const })
         })
         health.detail = 'live'
       } catch {

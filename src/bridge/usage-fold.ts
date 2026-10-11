@@ -7,6 +7,11 @@ export interface UsageFold {
   open: TokenCounts
 }
 
+export interface UsageIncrement {
+  atMs: number
+  counts: TokenCounts
+}
+
 export const zeroCounts = (): TokenCounts => ({ input: 0, output: 0, cacheWrite: 0, cacheRead: 0 })
 
 export function addCounts(a: TokenCounts, b: TokenCounts): TokenCounts {
@@ -29,7 +34,12 @@ export const tokenCount = (value: unknown): number =>
 // A message is written once per content block and every line repeats its usage, growing while
 // it streams. Repeats are adjacent, so one open id is enough: the same id raises each field to
 // its maximum, a new id closes the last one. Summing every line over-counts about 2.1 times.
-export function foldLines(fold: UsageFold, text: string): UsageFold {
+export function foldLines(
+  fold: UsageFold,
+  text: string,
+  // Told what each line added and when it was written; the amounts sum to the fold's growth.
+  onAdded?: (increment: UsageIncrement) => void
+): UsageFold {
   let { closed, openId, open } = fold
   for (const line of text.split('\n')) {
     // Quotes inside a JSON string are escaped, so this test can skip a line but never a usage.
@@ -51,18 +61,28 @@ export function foldLines(fold: UsageFold, text: string): UsageFold {
       cacheWrite: tokenCount(usage.cache_creation_input_tokens),
       cacheRead: tokenCount(usage.cache_read_input_tokens)
     }
-    if (message.id === openId) {
-      open = {
-        input: Math.max(open.input, counts.input),
-        output: Math.max(open.output, counts.output),
-        cacheWrite: Math.max(open.cacheWrite, counts.cacheWrite),
-        cacheRead: Math.max(open.cacheRead, counts.cacheRead)
-      }
-    } else {
+    const before = message.id === openId ? open : zeroCounts()
+    if (message.id !== openId) {
       closed = addCounts(closed, open)
       openId = message.id
-      open = counts
     }
+    open = {
+      input: Math.max(before.input, counts.input),
+      output: Math.max(before.output, counts.output),
+      cacheWrite: Math.max(before.cacheWrite, counts.cacheWrite),
+      cacheRead: Math.max(before.cacheRead, counts.cacheRead)
+    }
+    if (!onAdded) continue
+    const added: TokenCounts = {
+      input: open.input - before.input,
+      output: open.output - before.output,
+      cacheWrite: open.cacheWrite - before.cacheWrite,
+      cacheRead: open.cacheRead - before.cacheRead
+    }
+    const atMs = typeof record.timestamp === 'string' ? Date.parse(record.timestamp) : Number.NaN
+    // Without a time the tokens cannot be placed under an account; the fold still counts them.
+    if (Number.isFinite(atMs) && Object.values(added).some((amount) => amount > 0))
+      onAdded({ atMs, counts: added })
   }
   return { closed, openId, open }
 }

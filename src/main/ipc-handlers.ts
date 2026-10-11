@@ -13,6 +13,8 @@ import type { NotificationManager } from './notifications'
 import type { AppSettings, TerminalType } from '../renderer/lib/types'
 import type { TrayManager } from './tray'
 import type { Office } from './office-setup'
+import type { AccountLedger } from './accounts'
+import type { AccountsState, AliasResult } from '../shared/accounts'
 
 const TERMINAL_TYPES = {
   'terminal-app': true,
@@ -59,7 +61,11 @@ interface IpcHandlerOptions {
   focusSession: Office['focusSession']
   getOfficeSnapshot: Office['snapshot']
   getTrayManager?: () => TrayManager | null
+  accounts?: Pick<AccountLedger, 'dashboardState' | 'setAlias' | 'setWatching'>
 }
+
+const ACCOUNTS_OFF: AccountsState = { status: 'off' }
+const ALIAS_REFUSED_OFF: AliasResult = { success: false, reason: 'off' }
 
 export function setupIpcHandlers(options: IpcHandlerOptions): void {
   const {
@@ -74,7 +80,8 @@ export function setupIpcHandlers(options: IpcHandlerOptions): void {
     onOpenOffice,
     focusSession,
     getOfficeSnapshot,
-    getTrayManager
+    getTrayManager,
+    accounts
   } = options
 
   const handle = (channel: string, listener: Parameters<typeof ipcMain.handle>[1]): void => {
@@ -120,8 +127,18 @@ export function setupIpcHandlers(options: IpcHandlerOptions): void {
     if (validated.notifications?.cooldownSeconds !== undefined) {
       tracker.setCooldownSeconds(updated.notifications.cooldownSeconds)
     }
+    if (validated.watchAccounts !== undefined) accounts?.setWatching(updated.watchAccounts)
     return updated
   })
+
+  // Emails are in this answer, so it goes to the dashboard page alone, like every handler here.
+  handle('accounts:get', () => accounts?.dashboardState() ?? ACCOUNTS_OFF)
+
+  handle(
+    'accounts:set-alias',
+    (_event: Electron.IpcMainInvokeEvent, key: unknown, alias: unknown) =>
+      accounts?.setAlias(key, alias) ?? ALIAS_REFUSED_OFF
+  )
 
   handle('history:get', () => store.getHistory())
 

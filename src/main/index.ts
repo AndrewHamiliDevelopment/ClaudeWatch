@@ -18,6 +18,7 @@ import { SoundPlayer } from './sound-player'
 import { setupWidgetSync } from './widget-sync'
 import { setupOffice } from './office-setup'
 import { opensOfficeOnStart } from './office-window'
+import { createAccountLedger } from './accounts'
 
 // Prevent "write EIO" crashes when stdout/stderr pipe is broken
 // (e.g., launching terminal closed, or running packaged without a TTY)
@@ -122,7 +123,12 @@ app.whenReady().then(() => {
     cooldownSeconds: settings.notifications.cooldownSeconds
   })
 
-  const office = setupOffice(terminalResolver, store, tracker)
+  const accounts = createAccountLedger({
+    isWatching: settings.watchAccounts,
+    home: app.getPath('home'),
+    userData: app.getPath('userData')
+  })
+  const office = setupOffice(terminalResolver, store, tracker, accounts)
   const focusSession = (pid: number): void => void office.focusSession(pid)
 
   // Initialize notifications and sound player
@@ -175,7 +181,14 @@ app.whenReady().then(() => {
     onOpenOffice: office.open,
     focusSession: office.focusSession,
     getOfficeSnapshot: office.snapshot,
-    getTrayManager: () => trayManager
+    getTrayManager: () => trayManager,
+    accounts
+  })
+  accounts.onChange((state) => {
+    for (const getWindow of windowGetters) {
+      const window = getWindow()
+      if (window && !window.isDestroyed()) window.webContents.send('accounts:update', state)
+    }
   })
 
   // Forward tracker updates to renderer windows (main + popover) and tray
@@ -252,12 +265,17 @@ app.whenReady().then(() => {
   // Last, and contained: a failing Office must not cost the tray, where it can be switched off.
   // The bridge starts with the app: the dashboard shows its data with the Office closed.
   try {
+    // Before the bridge: the ledger must know who is signed in when the first counts arrive.
+    accounts.start()
     office.start()
     if (opensOfficeOnStart(settings, process.argv)) office.open()
   } catch (error) {
     console.error('Office failed to start:', error)
   }
-  app.on('before-quit', () => office.stop())
+  app.on('before-quit', () => {
+    office.stop()
+    accounts.stop()
+  })
 })
 
 // Clean up tray before quitting to prevent "Object has been destroyed" errors
