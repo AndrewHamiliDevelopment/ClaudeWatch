@@ -28,6 +28,8 @@ export interface RoomGeometry {
   door: { x: number; z: number }
   label: string
   kind: 'office' | 'team'
+  // The session's reserved bay in its project; a team room has none.
+  bay?: number
   // Where the sim seats agents; the scene draws one desk in front of each.
   seats: DeskSlot[]
 }

@@ -39,6 +39,15 @@ describe('headquarters geometry', () => {
     }
     expect(floor.rooms).toHaveLength(5)
   })
+  it('carries each office bay from the sim and gives a team room none', () => {
+    const layout = buildLayout(sessions, undefined, 0)
+    const rooms = toFloorGeometry(layout, sessions)[0].rooms
+    for (const room of rooms) {
+      const simRoom = layout.floors[0].rooms.find((candidate) => candidate.id === room.id)
+      expect(room.bay).toBe(room.kind === 'office' ? simRoom?.bay : undefined)
+    }
+    expect(rooms.filter((room) => room.kind === 'office').map((room) => room.bay)).toContain(1)
+  })
   it('uses the same origin-centred metre frame for zones, leaves, entrance and agents', () => {
     const layout = buildLayout(sessions, undefined, 0)
     const floor = toFloorGeometry(layout, sessions)[0]

@@ -3,8 +3,11 @@ import { useLayoutEffect, useMemo, useRef } from 'react'
 import type { Group } from 'three'
 import type { AgentView } from '../../../shared/office/types'
 import { approach, approachAngle, moodFor, robotPose } from '../logic/character-pose'
+import type { ThemeZoneGroup } from '../logic/office-themes'
+import { getTheme } from '../themes/registry'
 import { applyThemePose, useRobotRig } from '../themes/rig'
 import type { OfficeTheme } from '../themes/types'
+import { SHARED_BATCH } from './mesh-batches'
 import { blobShadowTexture } from './textures'
 
 // Sized up from the 1 m desk scale so robots read at the floor zoom band.
@@ -13,9 +16,13 @@ const SUBAGENT_SCALE = 0.9
 const MOVE_RATE = 5
 const TURN_RATE = 6
 const MOVING_EPSILON = 0.05
+// Merged shadows sort as one object, so they are drawn before every other see-through part.
+const SHADOW_BATCH = { [SHARED_BATCH]: 'agent-shadow' }
+const SHADOW_RENDER_ORDER = -1
 
 interface RobotProps {
   theme: OfficeTheme
+  rosterIndex: number
   agent: AgentView
   isSelected: boolean
   isSpeaking: boolean
@@ -33,6 +40,7 @@ function phaseFor(key: string): number {
 export function Robot({
   agent,
   theme,
+  rosterIndex,
   isSelected,
   isSpeaking,
   isReducedMotion,
@@ -87,7 +95,12 @@ export function Robot({
 
   return (
     <group ref={rootRef} scale={agent.isSubagent ? SUBAGENT_SCALE : ROBOT_SCALE}>
-      <mesh position={[0, 0.012, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+      <mesh
+        position={[0, 0.012, 0]}
+        rotation={[-Math.PI / 2, 0, 0]}
+        userData={SHADOW_BATCH}
+        renderOrder={SHADOW_RENDER_ORDER}
+      >
         <planeGeometry args={[0.9, 0.9]} />
         <meshBasicMaterial map={blobShadowTexture()} transparent depthWrite={false} />
       </mesh>
@@ -100,6 +113,7 @@ export function Robot({
       <Model
         agent={agent}
         skin={theme.robot.skins[agent.provider]}
+        rosterIndex={rosterIndex}
         rig={rig}
         isReducedMotion={isReducedMotion}
       />
@@ -128,5 +142,50 @@ export function Robot({
         <meshBasicMaterial visible={false} />
       </mesh>
     </group>
+  )
+}
+
+interface RobotCrewProps extends Pick<RobotProps, 'isReducedMotion' | 'onSelect' | 'onFly'> {
+  agents: readonly AgentView[]
+  zoneGroups: readonly ThemeZoneGroup[]
+  floorTheme: OfficeTheme
+  selectedAgentKey: string | null
+  speakingAgentKey: string | null
+}
+
+// A robot wears the theme of its own room, and keeps it while it walks through other zones.
+export function RobotCrew({
+  agents,
+  zoneGroups,
+  floorTheme,
+  selectedAgentKey,
+  speakingAgentKey,
+  ...robotProps
+}: RobotCrewProps) {
+  const homes = new Map(
+    zoneGroups.flatMap((zoneGroup) =>
+      zoneGroup.rooms.map(
+        (room) =>
+          [room.id, { theme: getTheme(zoneGroup.themeId), rosterIndex: room.bay ?? 0 }] as const
+      )
+    )
+  )
+  return (
+    <>
+      {agents.map((agent) => {
+        const home = homes.get(agent.roomId)
+        return (
+          <Robot
+            key={agent.agentKey}
+            {...robotProps}
+            agent={agent}
+            theme={home?.theme ?? floorTheme}
+            rosterIndex={home?.rosterIndex ?? 0}
+            isSelected={agent.agentKey === selectedAgentKey}
+            isSpeaking={agent.agentKey === speakingAgentKey}
+          />
+        )
+      })}
+    </>
   )
 }

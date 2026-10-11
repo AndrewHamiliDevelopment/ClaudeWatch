@@ -1,4 +1,14 @@
-import { BoxGeometry, Group, InstancedMesh, Matrix4, Mesh, MeshStandardMaterial } from 'three'
+import {
+  BoxGeometry,
+  Group,
+  InstancedMesh,
+  Matrix4,
+  Mesh,
+  MeshBasicMaterial,
+  MeshStandardMaterial,
+  PlaneGeometry,
+  Texture
+} from 'three'
 import { expect, it } from 'vitest'
 import { createMeshBatches, updateMeshBatches, releaseMeshBatches } from './mesh-batches'
 
@@ -61,4 +71,32 @@ it('does not batch different baked geometry transforms that share primitive para
   root.add(new Mesh(new BoxGeometry(1, 2, 3), material))
   root.add(new Mesh(new BoxGeometry(1, 2, 3).rotateZ(Math.PI / 2), material))
   expect(createMeshBatches(root)).toHaveLength(0)
+})
+
+it('merges transparent textured meshes that opt into one shared batch, and follows them', () => {
+  const root = new Group()
+  const shadows = [0, 1, 2].map(() => {
+    const shadow = new Mesh(
+      new PlaneGeometry(0.9, 0.9),
+      new MeshBasicMaterial({ map: new Texture(), transparent: true, depthWrite: false })
+    )
+    shadow.userData.sharedBatch = 'agent-shadow'
+    shadow.renderOrder = -1
+    return shadow
+  })
+  const unmarked = new Mesh(
+    new PlaneGeometry(0.9, 0.9),
+    new MeshBasicMaterial({ map: new Texture(), transparent: true })
+  )
+  root.add(...shadows, unmarked)
+  const batches = createMeshBatches(root)
+  expect(batches).toHaveLength(1)
+  expect(batches[0].mesh.count).toBe(3)
+  expect(batches[0].mesh.renderOrder).toBe(-1)
+  expect(unmarked.layers.isEnabled(0)).toBe(true)
+  shadows[2].position.x = 4
+  updateMeshBatches(root, batches)
+  const matrix = new Matrix4()
+  batches[0].mesh.getMatrixAt(2, matrix)
+  expect(matrix.elements[12]).toBe(4)
 })

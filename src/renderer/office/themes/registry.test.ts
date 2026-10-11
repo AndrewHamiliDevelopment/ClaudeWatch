@@ -14,18 +14,20 @@ describe('theme registry', () => {
       expect(theme.label.length).toBeGreaterThan(0)
       expect(theme.description.length).toBeGreaterThan(0)
       expect(typeof theme.robot.Model).toBe('function')
+      for (const key of ['Slab', 'Elevator']) {
+        expect(typeof Reflect.get(theme.kit.floor, key)).toBe('function')
+      }
       for (const key of [
-        'Floor',
+        'CompanyZone',
+        'ProjectOffice',
+        'RoomFloors',
         'Walls',
         'Doorway',
         'Desk',
         'RoomDressing',
-        'Elevator',
-        'RoomSign',
-        'CompanyZone',
-        'ProjectOffice'
+        'RoomSign'
       ]) {
-        expect(typeof Reflect.get(theme.kit, key)).toBe('function')
+        expect(typeof Reflect.get(theme.kit.zone, key)).toBe('function')
       }
       for (const key of ['District', 'Hangar', 'Tower']) {
         expect(typeof Reflect.get(theme.world, key)).toBe('function')

@@ -86,6 +86,7 @@ describe('procedural geometry budgets', () => {
           createElement(theme.robot.Model, {
             agent,
             skin: theme.robot.skins[provider],
+            rosterIndex: 0,
             rig,
             isReducedMotion: true
           })
