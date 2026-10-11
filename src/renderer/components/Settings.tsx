@@ -70,8 +70,8 @@ export function Settings() {
               max={5}
               step={0.5}
               value={settings.cpuIdleThreshold}
-              valueText={`${settings.cpuIdleThreshold.toFixed(1)}%`}
-              onChange={(cpuIdleThreshold) => updateSettings({ cpuIdleThreshold })}
+              formatValue={(percent) => `${percent.toFixed(1)}%`}
+              onCommit={(cpuIdleThreshold) => updateSettings({ cpuIdleThreshold })}
             />
           </SettingRow>
 
@@ -85,8 +85,8 @@ export function Settings() {
               max={SETTING_RANGES.staleThresholdMinutes[1]}
               step={5}
               value={settings.staleThresholdMinutes}
-              valueText={`${settings.staleThresholdMinutes}m`}
-              onChange={(staleThresholdMinutes) => updateSettings({ staleThresholdMinutes })}
+              formatValue={(minutes) => `${minutes}m`}
+              onCommit={(staleThresholdMinutes) => updateSettings({ staleThresholdMinutes })}
             />
           </SettingRow>
 

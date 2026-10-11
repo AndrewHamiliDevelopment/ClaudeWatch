@@ -112,8 +112,8 @@ export function NotificationSettings({ notifications, onChange }: NotificationSe
           max={COOLDOWN_SECONDS_RANGE[1]}
           step={5}
           value={notifications.cooldownSeconds}
-          valueText={`${notifications.cooldownSeconds}s`}
-          onChange={(cooldownSeconds) => onChange({ ...notifications, cooldownSeconds })}
+          formatValue={(seconds) => `${seconds}s`}
+          onCommit={(cooldownSeconds) => onChange({ ...notifications, cooldownSeconds })}
         />
       </SettingRow>
 

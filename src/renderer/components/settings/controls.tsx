@@ -72,19 +72,29 @@ interface RangeSettingProps {
   min: number
   max: number
   step: number
-  valueText: string
-  onChange: (value: number) => void
+  formatValue: (value: number) => string
+  onCommit: (value: number) => void
 }
 
+// Follows the drag on screen and saves when it ends: each save is an IPC call and a file write.
 export function RangeSetting({
   label,
   value,
   min,
   max,
   step,
-  valueText,
-  onChange
+  formatValue,
+  onCommit
 }: RangeSettingProps) {
+  const [draft, setDraft] = useState<number | null>(null)
+  const shown = draft ?? value
+  const valueText = formatValue(shown)
+
+  const commit = (): void => {
+    setDraft(null)
+    if (draft !== null && draft !== value) onCommit(draft)
+  }
+
   return (
     <div className="flex items-center gap-2">
       <input
@@ -92,8 +102,11 @@ export function RangeSetting({
         min={min}
         max={max}
         step={step}
-        value={value}
-        onChange={(event) => onChange(Number(event.target.value))}
+        value={shown}
+        onChange={(event) => setDraft(Number(event.target.value))}
+        onPointerUp={commit}
+        onKeyUp={commit}
+        onBlur={commit}
         className="h-1.5 w-24 appearance-none rounded-full bg-track accent-accent"
         aria-label={label}
         aria-valuetext={valueText}
