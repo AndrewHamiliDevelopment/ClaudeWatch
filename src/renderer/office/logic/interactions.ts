@@ -9,9 +9,12 @@ import type {
 
 export const MAX_MESSAGE_CHARS = 4000
 
-// Talk and peek drive the agent's Orca pane, so only Orca-hosted sessions can be reached.
-export function isOrcaHosted(target: Pick<SessionRef, 'host'>): boolean {
-  return target.host === 'orca'
+// Talk and peek drive the agent's own Orca pane: null when it can be reached, else why not.
+export function reachBlocker(
+  target: Pick<ReachTarget, 'host' | 'hasPane'>
+): InteractionFailure | null {
+  if (target.host !== 'orca') return 'not-in-orca'
+  return target.hasPane ? null : 'terminal-not-found'
 }
 
 export function canRespond(session: Pick<SessionRef, 'host' | 'provider' | 'attention'>): boolean {
@@ -29,6 +32,8 @@ export interface ReachTarget {
   key: string
   name: string
   host: SessionHost
+  // False for an Orca agent whose pane another process claimed.
+  hasPane: boolean
   // False only for a teammate, which has a terminal of its own.
   isLead: boolean
 }
@@ -36,12 +41,19 @@ export interface ReachTarget {
 // A teammate has a process and a pane of its own; a subagent shares its lead's.
 export function reachTarget(session: SessionRef, member: SubagentRef | undefined): ReachTarget {
   if (!isTeammate(member)) {
-    return { key: session.key, name: session.name, host: session.host, isLead: true }
+    return {
+      key: session.key,
+      name: session.name,
+      host: session.host,
+      hasPane: session.orcaPaneKey !== null,
+      isLead: true
+    }
   }
   return {
     key: agentKey(session.key, member.id),
     name: member.name ?? member.type,
     host: member.orcaPaneKey ? 'orca' : session.host,
+    hasPane: Boolean(member.orcaPaneKey),
     isLead: false
   }
 }

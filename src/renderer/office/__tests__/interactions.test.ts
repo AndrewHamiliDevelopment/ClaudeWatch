@@ -4,7 +4,7 @@ import {
   canRespond,
   failureMessage,
   focusMessage,
-  isOrcaHosted,
+  reachBlocker,
   MAX_MESSAGE_CHARS,
   messageProblem,
   reachTarget
@@ -15,10 +15,16 @@ import { makeAgent, makeFloor, makeFrame, makeRoom, makeSession } from './fixtur
 describe('availability', () => {
   const orcaClaude = makeSession({ key: 'claude:a', host: 'orca', attention: 'permission' })
 
-  it('lets talk and peek reach only Orca sessions', () => {
-    expect(isOrcaHosted(orcaClaude)).toBe(true)
-    expect(isOrcaHosted(makeSession({ key: 'claude:t', host: 'terminal' }))).toBe(false)
-    expect(isOrcaHosted(makeSession({ key: 'claude:t', host: 'vscode' }))).toBe(false)
+  it('lets talk and peek reach only an Orca pane that is known', () => {
+    const blocker = (session: Parameters<typeof reachTarget>[0]) =>
+      reachBlocker(reachTarget(session, undefined))
+    expect(blocker(orcaClaude)).toBeNull()
+    expect(blocker(makeSession({ key: 'claude:t', host: 'terminal' }))).toBe('not-in-orca')
+    expect(blocker(makeSession({ key: 'claude:t', host: 'vscode' }))).toBe('not-in-orca')
+    // In Orca, but another process claimed its pane: there is nowhere to type.
+    expect(blocker(makeSession({ key: 'claude:t', host: 'orca', orcaPaneKey: null }))).toBe(
+      'terminal-not-found'
+    )
   })
 
   it('answers prompts only for Claude in Orca with a permission prompt showing', () => {
@@ -80,6 +86,7 @@ describe('reachTarget', () => {
       key: 'claude:a',
       name: 'office renderer',
       host: 'terminal',
+      hasPane: false,
       isLead: true
     })
     expect(reachTarget(lead, { id: 's1', type: 'Explore', activity: 'idle' })).toMatchObject({
@@ -93,6 +100,7 @@ describe('reachTarget', () => {
       key: 'claude:a#t1',
       name: 'lena-hud',
       host: 'orca',
+      hasPane: true,
       isLead: false
     })
   })

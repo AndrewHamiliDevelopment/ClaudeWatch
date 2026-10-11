@@ -127,7 +127,7 @@ export function sessionFor(
     companyLabel: project.root.split('/').at(-2)!,
     worktree: null,
     host: session.host ?? 'terminal',
-    orcaPaneKey: null,
+    orcaPaneKey: session.host === 'orca' ? `preview-pane-${session.name}` : null,
     activity,
     attention,
     currentTool: TOOL_FOR_ACTIVITY[activity],

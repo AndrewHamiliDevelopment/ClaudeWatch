@@ -15,7 +15,8 @@ export function makeSession(overrides: Partial<SessionRef> & Pick<SessionRef, 'k
     companyLabel: 'Test Co',
     worktree: null,
     host: 'terminal',
-    orcaPaneKey: null,
+    // The bridge names a pane for every session it places in Orca, bar one that lost a contest.
+    orcaPaneKey: overrides.host === 'orca' ? 'tab-1:leaf-1' : null,
     activity: 'idle',
     attention: 'none',
     currentTool: null,

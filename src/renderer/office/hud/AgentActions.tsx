@@ -1,6 +1,6 @@
 import { needsHuman } from '../../../shared/office/attention'
 import type { InteractionFailure, SessionRef } from '../../../shared/office/types'
-import { canRespond, failureMessage, isOrcaHosted, type ReachTarget } from '../logic/interactions'
+import { canRespond, failureMessage, reachBlocker, type ReachTarget } from '../logic/interactions'
 import type { OfficeFeed } from '../scene-model'
 import { PeekPanel } from './PeekPanel'
 import { PermissionPanel } from './PermissionPanel'
@@ -39,7 +39,7 @@ export function AgentActions({
   // A typed message would answer the agent's open dialog (Enter confirms its default), so no box.
   const talkBlocker = ((): InteractionFailure | null => {
     if (isOwnSession && waitingOn) return 'prompt-on-screen'
-    return isOrcaHosted(target) ? null : 'not-in-orca'
+    return reachBlocker(target)
   })()
   return (
     <div className="flex flex-col gap-3">
@@ -64,7 +64,7 @@ export function AgentActions({
       ) : (
         <TalkBox agentKey={target.key} agentName={target.name} send={feed.send} onSent={onSent} />
       )}
-      {isOrcaHosted(target) && <PeekPanel agentKey={target.key} peek={feed.peek} />}
+      {reachBlocker(target) === null && <PeekPanel agentKey={target.key} peek={feed.peek} />}
     </div>
   )
 }
