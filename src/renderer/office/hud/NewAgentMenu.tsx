@@ -1,9 +1,8 @@
 import { useState } from 'react'
 import type { InteractionResult, ProviderId } from '../../../shared/office/types'
-import { cn } from '../../lib/utils'
+import { BUTTON_QUIET_COMPACT_CLASS } from '../../components/deck/deck-styles'
 import { failureMessage } from '../logic/interactions'
 import { PROVIDER_LABEL } from '../office-palette'
-import { FOCUS_RING_CLASS, HUD_BUTTON_CLASS } from './hud-styles'
 import { useRequest } from './use-request'
 
 const FAILED: InteractionResult = { success: false }
@@ -36,7 +35,7 @@ export function NewAgentMenu({ floorLabel, onStart, onDismiss }: NewAgentMenuPro
 
   return (
     <div
-      className="flex flex-col gap-1.5 py-1.5 pl-8 pr-1"
+      className="flex flex-col gap-1.5 py-1.5 pl-3 pr-1"
       onKeyDown={(event) => {
         if (event.key === 'Escape') onDismiss()
       }}
@@ -49,13 +48,13 @@ export function NewAgentMenu({ floorLabel, onStart, onDismiss }: NewAgentMenuPro
             aria-label={`Start ${PROVIDER_LABEL[provider]} agent`}
             disabled={request.status === 'pending'}
             onClick={() => start(provider)}
-            className={cn(HUD_BUTTON_CLASS, FOCUS_RING_CLASS, 'bg-surface-hover')}
+            className={BUTTON_QUIET_COMPACT_CLASS}
           >
             {PROVIDER_LABEL[provider]}
           </button>
         ))}
       </div>
-      <p aria-live="polite" className="text-caption text-text-secondary">
+      <p aria-live="polite" className="text-xs text-text-secondary">
         {statusText}
       </p>
     </div>

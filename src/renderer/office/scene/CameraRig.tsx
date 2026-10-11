@@ -176,6 +176,8 @@ export function CameraRig(props: CameraRigProps) {
       case 'zoom':
         gesturesRef.current?.zoomBy(request.direction === 'in' ? KEY_ZOOM_STEP : 1 / KEY_ZOOM_STEP)
         return
+      case 'fit':
+        return rig.fit()
       case 'rotate':
         rig.takeOver()
         void controls.rotateTo(

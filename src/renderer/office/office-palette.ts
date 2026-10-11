@@ -2,23 +2,24 @@ import type { ProviderId } from '../../shared/office/types'
 import type { CardStatus } from './logic/name-cards'
 
 // three.js materials cannot read Tailwind classes, so the scene keeps its colours here.
-// Values that exist as tokens mirror tailwind.config.ts (surface, accent, status.*).
+// The state colours mirror the Dispatch Deck tokens in tailwind.config.ts.
 export const PROVIDER_LABEL: Record<ProviderId, string> = {
   claude: 'Claude',
   codex: 'Codex'
 }
 
 export const STATE_COLOR = {
-  permission: '#FF453A', // status.exited
-  question: '#FFD60A', // status.idle
-  done: '#64D2FF', // status.finished
-  error: '#FF9F0A',
-  limited: '#8E8E93',
-  working: '#7C5CFC' // accent
+  // Vermilion means "needs you" and nothing else, so both waiting states share it.
+  permission: '#D8432F', // seal
+  question: '#D8432F', // seal
+  done: '#B3B9D6', // status.finished
+  error: '#FFF0D2', // accent.hot
+  limited: '#8F97BC', // text.tertiary
+  working: '#5FD3C4' // status.active
 } as const
 
 export const CARD_STATUS_COLOR: Record<CardStatus, string> = {
-  working: '#30D158', // status.active
+  working: STATE_COLOR.working,
   waiting: STATE_COLOR.question,
   permission: STATE_COLOR.permission,
   done: STATE_COLOR.done,
@@ -45,7 +46,7 @@ export const STEAM = {
   slab: '#2A2622'
 } as const
 
-export const SCENE_BACKGROUND = '#0E0E10' // surface
+export const SCENE_BACKGROUND = '#121629' // surface
 
 export interface RobotPalette {
   body: string

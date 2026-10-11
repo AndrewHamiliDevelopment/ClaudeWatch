@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
-import { cn } from '../../lib/utils'
+import { Plate } from '../../components/deck/Plate'
 import type { FrameMetrics } from '../frame-metrics'
-import { PANEL_CLASS } from './hud-styles'
 
 const REFRESH_MS = 500
 
@@ -19,19 +18,18 @@ export function MetricsOverlay({ metrics }: { metrics: FrameMetrics }) {
     ['triangles', shown.triangles.toLocaleString()]
   ]
   return (
-    <dl
-      aria-label="Render metrics"
-      className={cn(
-        PANEL_CLASS,
-        'grid grid-cols-[auto_auto] gap-x-3 px-3 py-2 font-mono text-mono-sm'
-      )}
-    >
-      {rows.map(([term, value]) => (
-        <div key={term} className="contents">
-          <dt className="text-text-secondary">{term}</dt>
-          <dd className="text-right tabular-nums text-text-primary">{value}</dd>
-        </div>
-      ))}
-    </dl>
+    <Plate>
+      <dl
+        aria-label="Render metrics"
+        className="grid grid-cols-[auto_auto] gap-x-3 px-3 py-2 font-mono text-mono-sm"
+      >
+        {rows.map(([term, value]) => (
+          <div key={term} className="contents">
+            <dt className="text-text-secondary">{term}</dt>
+            <dd className="text-right tabular-nums text-text-primary">{value}</dd>
+          </div>
+        ))}
+      </dl>
+    </Plate>
   )
 }

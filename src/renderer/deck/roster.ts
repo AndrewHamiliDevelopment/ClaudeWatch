@@ -48,7 +48,7 @@ export interface SquadTally {
 // A turn that ended this recently reads as "Done"; after that the agent is just idle.
 const DONE_WINDOW_MS = 10 * 60 * 1000
 
-function sumCounts(counts: TokenCounts): number {
+export function sumCounts(counts: TokenCounts): number {
   return counts.input + counts.output + counts.cacheWrite + counts.cacheRead
 }
 

@@ -181,12 +181,13 @@ describe('permission review', () => {
     expect(screen.queryByRole('region', { name: 'Permission request' })).not.toBeInTheDocument()
   })
 
-  it('offers Review only where an answer can be sent', () => {
-    setup()
+  it('reviews in the office only where an answer can be sent, else in the terminal', () => {
+    const focus = vi.fn(async () => ({ success: true }))
+    setup({ focus })
     const queue = screen.getByRole('region', { name: 'Needs you' })
-    expect(
-      within(queue).queryByRole('button', { name: 'Review widget sync' })
-    ).not.toBeInTheDocument()
+    fireEvent.click(within(queue).getByRole('button', { name: 'Review widget sync' }))
+    expect(focus).toHaveBeenCalledWith('codex:c')
+    expect(screen.queryByRole('region', { name: 'Permission request' })).not.toBeInTheDocument()
   })
 
   it('re-reads the screen when the prompt changed since it was reviewed', async () => {

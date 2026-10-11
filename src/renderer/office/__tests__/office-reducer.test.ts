@@ -107,6 +107,14 @@ describe('officeReducer', () => {
     })
   })
 
+  it('asks the camera to fit the floor, again each time it is pressed', () => {
+    const first = officeReducer(withFrame(), { type: 'camera-fit' })
+    expect(first.cameraRequest).toMatchObject({ kind: 'fit' })
+    expect(officeReducer(first, { type: 'camera-fit' }).cameraRequest?.nonce).not.toBe(
+      first.cameraRequest?.nonce
+    )
+  })
+
   it('toggles walls, list view and metrics', () => {
     let state = officeReducer(withFrame(), { type: 'walls-set', mode: 'down' })
     state = officeReducer(state, { type: 'list-toggled' })

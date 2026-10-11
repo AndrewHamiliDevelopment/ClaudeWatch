@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 
-import { listThemes, themeForTeam } from './themes/registry'
+import { officeThemes, resolveTheme, useThemeAssignments } from './logic/office-themes'
+import type { ZoneGeometry } from './scene-model'
+import { getTheme, listThemes, themeForTeam } from './themes/registry'
+import type { OfficeTheme } from './themes/types'
 
 const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)'
 
@@ -29,7 +32,22 @@ export function useNow(intervalMs: number): number {
 
 const THEME_STORAGE_KEY = 'claudewatch.office.theme'
 
-export function useOfficeTheme() {
+function themeAfter(themeId: string): OfficeTheme {
+  const themes = listThemes()
+  return themes[(themes.findIndex((candidate) => candidate.id === themeId) + 1) % themes.length]
+}
+
+// A project zone carries its company's key too, so the project key decides which it is.
+function assignNextTheme(zone: ZoneGeometry, currentThemeId: string): void {
+  const nextId = themeAfter(currentThemeId).id
+  if (zone.projectKey) officeThemes.setProjectTheme(zone.projectKey, nextId)
+  else if (zone.companyKey) officeThemes.setCompanyTheme(zone.companyKey, nextId)
+}
+
+// `theme` is the office default. Cycling changes the focused company or project when there
+// is one, and the default otherwise; `cycled` is whichever of the two the next cycle changes.
+export function useOfficeTheme(focusedZone?: ZoneGeometry) {
+  const assignments = useThemeAssignments()
   const [hasChosenTheme, setHasChosenTheme] = useState(false)
   const [theme, setTheme] = useState(() => {
     try {
@@ -47,14 +65,20 @@ export function useOfficeTheme() {
       // A locked-down storage backend must not disable the office controls.
     }
   }, [theme.id, hasChosenTheme])
+
+  const zoneThemeId = focusedZone ? resolveTheme(focusedZone, assignments, theme.id) : null
   const cycleTheme = useCallback(() => {
+    if (focusedZone && zoneThemeId) return assignNextTheme(focusedZone, zoneThemeId)
     setHasChosenTheme(true)
-    setTheme((current) => {
-      const themes = listThemes()
-      return themes[
-        (themes.findIndex((candidate) => candidate.id === current.id) + 1) % themes.length
-      ]
-    })
-  }, [])
-  return { theme, cycleTheme }
+    setTheme((current) => themeAfter(current.id))
+  }, [focusedZone, zoneThemeId])
+
+  return {
+    theme,
+    cycleTheme,
+    cycled: {
+      scope: focusedZone?.label ?? null,
+      theme: zoneThemeId ? getTheme(zoneThemeId) : theme
+    }
+  }
 }

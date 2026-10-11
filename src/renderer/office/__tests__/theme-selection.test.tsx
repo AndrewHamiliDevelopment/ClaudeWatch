@@ -26,7 +26,9 @@ it('restores a registered theme, cycles in registry order and persists', () => {
 it('cycles from T without dispatching a reducer action or intercepting editable input', () => {
   const dispatch = vi.fn()
   const cycle = vi.fn()
-  renderHook(() => useOfficeHotkeys(dispatch, false, cycle))
+  renderHook(() =>
+    useOfficeHotkeys(dispatch, false, { onCycleTheme: cycle, onFocusTerminal: vi.fn() })
+  )
   fireEvent.keyDown(window, { key: 'T' })
   expect(cycle).toHaveBeenCalledTimes(1)
   expect(dispatch).not.toHaveBeenCalled()
@@ -48,9 +50,12 @@ it('exposes the current theme and cycles from the BottomBar', () => {
       onWallsMode={vi.fn()}
       onToggleList={vi.fn()}
       onToggleMetrics={vi.fn()}
+      themeScope={null}
       themeLabel="Neo Edo Steam"
       onCycleTheme={cycle}
       onRotate={vi.fn()}
+      onZoom={vi.fn()}
+      onFit={vi.fn()}
     />
   )
   fireEvent.click(screen.getByRole('button', { name: /Theme: Neo Edo Steam/ }))

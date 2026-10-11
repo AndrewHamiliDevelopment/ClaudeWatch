@@ -10,6 +10,7 @@ export type CameraRequest =
   | { kind: 'rotate'; direction: -1 | 1; nonce: number }
   | { kind: 'zoom'; direction: ZoomDirection; nonce: number }
   | { kind: 'zone'; zoneId: string; nonce: number }
+  | { kind: 'fit'; nonce: number }
 
 export interface OfficeState {
   frame: OfficeFrame | null
@@ -38,6 +39,7 @@ export type OfficeAction =
   | { type: 'fly-to-selected' }
   | { type: 'camera-rotated'; direction: -1 | 1 }
   | { type: 'camera-zoomed'; direction: ZoomDirection }
+  | { type: 'camera-fit' }
   | { type: 'walls-set'; mode: WallsMode }
   | { type: 'list-toggled' }
   | { type: 'metrics-toggled' }
@@ -155,6 +157,8 @@ export function officeReducer(state: OfficeState, action: OfficeAction): OfficeS
         ...state,
         cameraRequest: { kind: 'zoom', direction: action.direction, nonce: nextNonce(state) }
       }
+    case 'camera-fit':
+      return { ...state, cameraRequest: { kind: 'fit', nonce: nextNonce(state) } }
     case 'walls-set':
       return { ...state, wallsMode: action.mode }
     case 'list-toggled':

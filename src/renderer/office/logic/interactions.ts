@@ -1,4 +1,10 @@
-import type { InteractionFailure, SessionRef } from '../../../shared/office/types'
+import type {
+  FocusResult,
+  InteractionFailure,
+  SessionHost,
+  SessionRef,
+  SubagentRef
+} from '../../../shared/office/types'
 
 export const MAX_MESSAGE_CHARS = 4000
 
@@ -19,20 +25,51 @@ export function canRespond(session: Pick<SessionRef, 'host' | 'provider' | 'atte
   )
 }
 
+export function isTeammate(member: SubagentRef | undefined): member is SubagentRef {
+  return member?.kind === 'teammate'
+}
+
+// Who Focus terminal, Talk and Peek act on for a selected agent.
+export interface ReachTarget {
+  key: string
+  name: string
+  host: SessionHost
+}
+
+// A teammate has a process and a pane of its own; a subagent shares its lead's.
+export function reachTarget(session: SessionRef, member: SubagentRef | undefined): ReachTarget {
+  if (!isTeammate(member)) return { key: session.key, name: session.name, host: session.host }
+  return {
+    key: `${session.key}#${member.id}`,
+    name: member.name ?? member.type,
+    host: member.orcaPaneKey ? 'orca' : session.host
+  }
+}
+
 const FAILURE_COPY: Record<InteractionFailure, string> = {
-  'not-in-orca': 'This agent runs in a plain terminal. Use Jump to terminal to reply there.',
+  'not-in-orca': 'This agent runs in a plain terminal. Use Focus terminal to reply there.',
   'orca-unavailable': "Orca isn't responding. Check that it's running.",
   'terminal-not-found': "Couldn't find this agent's Orca pane. It may have closed.",
   'no-permission-prompt': 'No permission prompt is showing for this agent right now.',
   'prompt-changed': 'The prompt changed since you reviewed it. Review it again.',
   'unsupported-provider':
-    'Answering prompts from the office works for Claude agents. Jump to the terminal for Codex.',
+    'Answering prompts from the office works for Claude agents. Focus the terminal for Codex.',
   'invalid-input': 'Type a message first (up to 4000 characters).',
-  'unknown-session': 'This agent has left the office.'
+  'unknown-session': 'This agent has left the office.',
+  'not-permitted': 'This page is view-only. Start it with --interactive to act on agents.'
 }
 
 export function failureMessage(reason: InteractionFailure | undefined): string {
   return reason ? FAILURE_COPY[reason] : "That didn't go through. Try again."
+}
+
+// Empty when the agent's own pane came forward: the owner is looking at it, nothing to add.
+export function focusMessage(result: FocusResult): string {
+  if (result.target === 'app') {
+    return `Orca is in front, but not on this agent's pane. ${failureMessage(result.reason)}`
+  }
+  if (!result.success) return failureMessage(result.reason)
+  return result.target === 'terminal' ? "Opened a terminal at this agent's folder." : ''
 }
 
 export function messageProblem(text: string): InteractionFailure | null {
