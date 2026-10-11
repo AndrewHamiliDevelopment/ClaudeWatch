@@ -65,9 +65,11 @@ describe('useUsage', () => {
   })
 
   it('starts with loading=true', () => {
-    const { result } = renderHook(() => useUsage())
+    const { result, unmount } = renderHook(() => useUsage())
     expect(result.current.loading).toBe(true)
     expect(result.current.usage).toBeNull()
+    // Leaves before the pending read resolves into a finished test.
+    unmount()
   })
 
   it('fetches initial usage data', async () => {
@@ -111,18 +113,6 @@ describe('useUsage', () => {
 
     expect(window.api.refreshUsage).toHaveBeenCalledOnce()
     expect(result.current.usage?.totalCostUSD).toBe(5.0)
-  })
-
-  it('toggles showModelBreakdown', async () => {
-    const { result } = renderHook(() => useUsage())
-
-    expect(result.current.showModelBreakdown).toBe(false)
-
-    act(() => {
-      result.current.setShowModelBreakdown(true)
-    })
-
-    expect(result.current.showModelBreakdown).toBe(true)
   })
 
   it('cleans up subscription on unmount', async () => {

@@ -1,6 +1,8 @@
 import { vi } from 'vitest'
+import type { DeckApi } from '../deck/deck-api'
 
-type ElectronApi = Window['api']
+// Includes openOffice, focusSession and getOfficeSnapshot, which the preload is gaining.
+type ElectronApi = DeckApi
 
 // Tests override only the bridge methods they exercise; every other method is a
 // mock that resolves to null, and `on*` subscriptions return a no-op unsubscribe.

@@ -10,14 +10,30 @@
   }
 
   body {
-    font-family:
-      -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, 'Segoe UI', sans-serif;
+    font-family: theme('fontFamily.sans');
+    font-variant-numeric: tabular-nums;
     overflow: hidden;
     user-select: none;
   }
 
   #root {
     height: 100%;
+  }
+
+  ::selection {
+    background: theme('colors.accent.DEFAULT');
+    color: theme('colors.ink.DEFAULT');
+  }
+
+  :focus-visible {
+    outline: 2px solid theme('colors.accent.DEFAULT');
+    outline-offset: 2px;
+  }
+
+  /* Lantern on paper is 1.4:1, so a control on a work order takes an ink ring. */
+  .on-paper :focus-visible,
+  .on-paper:focus-visible {
+    outline-color: theme('colors.ink.DEFAULT');
   }
 
   /* Allow interaction on all interactive elements */
@@ -35,7 +51,6 @@
     -webkit-app-region: drag;
   }
 
-  /* Custom scrollbar */
   ::-webkit-scrollbar {
     width: 6px;
   }
@@ -45,65 +60,72 @@
   }
 
   ::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.1);
+    background: theme('colors.border.DEFAULT');
     border-radius: 3px;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.2);
+    background: theme('colors.border.hover');
   }
 }
 
 @layer components {
-  .card {
-    @apply rounded-card border border-border bg-surface-raised;
+  /* Instrument plate, chamfered top-left and bottom-right. clip-path cuts a border off,
+     so the brass edge is the outer element showing through 1px of padding. */
+  .plate {
+    --cut: 10px;
+    padding: 1px;
+    background: theme('colors.brass.line');
+    clip-path: polygon(
+      var(--cut) 0,
+      100% 0,
+      100% calc(100% - var(--cut)),
+      calc(100% - var(--cut)) 100%,
+      0 100%,
+      0 var(--cut)
+    );
   }
 
-  .card-interactive {
-    @apply card transition-all duration-150 hover:border-border-hover hover:bg-surface-hover;
+  .plate-face {
+    height: 100%;
+    background: theme('colors.surface.raised');
+    clip-path: polygon(
+      calc(var(--cut) - 0.5px) 0,
+      100% 0,
+      100% calc(100% - var(--cut) + 0.5px),
+      calc(100% - var(--cut) + 0.5px) 100%,
+      0 100%,
+      0 calc(var(--cut) - 0.5px)
+    );
   }
 
-  .stat-card {
-    @apply card flex flex-col gap-1 px-4 py-3;
+  .crest {
+    clip-path: polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px);
   }
 
-  .filter-btn {
-    @apply rounded-full px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary;
+  /* Segmented meter. --fill is the value, --mark the point past which the fill runs hot.
+     The empty track is 1.3:1 on a plate, so a meter always prints its number beside it. */
+  .meter-fill {
+    --fill: 0%;
+    --mark: 100%;
+    height: 8px;
+    background: linear-gradient(
+      to right,
+      theme('colors.accent.DEFAULT') 0 min(var(--fill), var(--mark)),
+      theme('colors.accent.hot') min(var(--fill), var(--mark)) var(--fill),
+      theme('colors.track') var(--fill) 100%
+    );
+    -webkit-mask-image: repeating-linear-gradient(to right, #000 0 5px, transparent 5px 7px);
+    mask-image: repeating-linear-gradient(to right, #000 0 5px, transparent 5px 7px);
   }
+}
 
-  .filter-btn-active {
-    @apply rounded-full bg-accent/15 px-3 py-1.5 text-xs font-medium text-accent;
-  }
-
-  /* Staggered fade-in for list items */
-  [role='listitem']:nth-child(1) {
-    animation-delay: 0ms;
-  }
-  [role='listitem']:nth-child(2) {
-    animation-delay: 30ms;
-  }
-  [role='listitem']:nth-child(3) {
-    animation-delay: 60ms;
-  }
-  [role='listitem']:nth-child(4) {
-    animation-delay: 90ms;
-  }
-  [role='listitem']:nth-child(5) {
-    animation-delay: 120ms;
-  }
-  [role='listitem']:nth-child(6) {
-    animation-delay: 150ms;
-  }
-  [role='listitem']:nth-child(7) {
-    animation-delay: 180ms;
-  }
-  [role='listitem']:nth-child(8) {
-    animation-delay: 210ms;
-  }
-  [role='listitem']:nth-child(9) {
-    animation-delay: 240ms;
-  }
-  [role='listitem']:nth-child(10) {
-    animation-delay: 270ms;
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
