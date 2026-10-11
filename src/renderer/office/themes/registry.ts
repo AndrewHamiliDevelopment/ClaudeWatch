@@ -26,6 +26,6 @@ export function listThemes(): OfficeTheme[] {
   return Array.from(themes.values())
 }
 
-export function themeForTeam(_teamId?: string): OfficeTheme {
+export function themeForTeam(): OfficeTheme {
   return getTheme(DEFAULT_THEME_ID)
 }

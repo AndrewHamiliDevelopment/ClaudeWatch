@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { DEFAULT_THEME_ID, getTheme, listThemes, registerTheme, themeForTeam } from './registry'
 
 describe('theme registry', () => {
-  it('registers both built-ins and defaults all teams and unknown ids to Neo Edo', () => {
+  it('registers both built-ins and defaults the floor and unknown ids to Neo Edo', () => {
     expect(DEFAULT_THEME_ID).toBe('neo-edo-steam')
     expect(
       listThemes()
@@ -11,7 +11,7 @@ describe('theme registry', () => {
     ).toEqual(['neo-edo-steam', 'brass-workshop'])
     expect(getTheme('brass-workshop').id).toBe('brass-workshop')
     expect(getTheme('missing')).toBe(getTheme(DEFAULT_THEME_ID))
-    expect(themeForTeam()).toBe(themeForTeam('future-team'))
+    expect(themeForTeam()).toBe(getTheme(DEFAULT_THEME_ID))
   })
   it('provides every kit, world and provider member', () => {
     for (const theme of listThemes()) {

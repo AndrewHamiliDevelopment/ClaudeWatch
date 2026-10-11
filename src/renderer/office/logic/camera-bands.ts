@@ -23,8 +23,10 @@ const BUILDING_LEAVE_FIT = 0.9
 // a gap between entering and leaving, so hovering on one does not flicker the cards.
 export function bandForZoom(zoom: number, previous: ZoomBand, floorFitZoom: number): ZoomBand {
   if (zoom >= (previous === 'desk' ? DESK_LEAVE_ZOOM : DESK_ENTER_ZOOM)) return 'desk'
+  // A lone office fits above the desk threshold; measured from there it would have no floor level.
+  const fitZoom = Math.min(floorFitZoom, DESK_LEAVE_ZOOM)
   const buildingBelow =
-    floorFitZoom * (previous === 'building' ? BUILDING_LEAVE_FIT : BUILDING_ENTER_FIT)
+    fitZoom * (previous === 'building' ? BUILDING_LEAVE_FIT : BUILDING_ENTER_FIT)
   return zoom < buildingBelow ? 'building' : 'floor'
 }
 

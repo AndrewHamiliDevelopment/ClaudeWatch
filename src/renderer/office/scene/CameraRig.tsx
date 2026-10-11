@@ -41,7 +41,6 @@ interface CameraRigProps {
   floor: FloorGeometry
   agents: readonly AgentView[]
   liveSessionKeys: ReadonlySet<string>
-  selectedAgentKey: string | null
   request: CameraRequest | null
   isReducedMotion: boolean
   onBandChange: (band: ZoomBand) => void
@@ -58,6 +57,8 @@ export function CameraRig(props: CameraRigProps) {
   const followRef = useRef<FollowAnchor | null>(null)
   // The camera frames the occupied floor by itself only until the owner moves it; Fit re-arms.
   const isAutoFramingRef = useRef(true)
+  // Whether the owner has moved the camera by hand since the last fly-to an agent.
+  const hasMovedSinceFlyRef = useRef(false)
   const targetScratch = useMemo(() => new Vector3(), [])
   const size = useThree((state) => state.size)
   const camera = useThree((state) => state.camera)
@@ -72,6 +73,10 @@ export function CameraRig(props: CameraRigProps) {
   const rig = useRef({
     takeOver(): void {
       isAutoFramingRef.current = false
+    },
+    manualMove(): void {
+      rig.takeOver()
+      hasMovedSinceFlyRef.current = true
     },
     frame(bounds: Bounds, maxZoom: number): void {
       const controls = controlsRef.current
@@ -100,7 +105,7 @@ export function CameraRig(props: CameraRigProps) {
   gesturesRef.current = useCameraGestures({
     controlsRef,
     isReducedMotion: props.isReducedMotion,
-    onManualMove: rig.takeOver,
+    onManualMove: rig.manualMove,
     onFit: rig.fit
   })
 
@@ -116,8 +121,8 @@ export function CameraRig(props: CameraRigProps) {
     controls.touches.two = ACTION.TOUCH_ROTATE
     controls.touches.three = ACTION.NONE
     controls.truckSpeed = 1
-    controls.addEventListener('controlstart', rig.takeOver)
-    return () => controls.removeEventListener('controlstart', rig.takeOver)
+    controls.addEventListener('controlstart', rig.manualMove)
+    return () => controls.removeEventListener('controlstart', rig.manualMove)
   }, [rig])
 
   const { isReducedMotion } = props
@@ -156,7 +161,12 @@ export function CameraRig(props: CameraRigProps) {
     if (!controls || !anchor || bandRef.current !== 'desk') return
     const step = followStep(anchor, followedAgents, followedFloor.rooms)
     if (step.kind === 'stay') return
-    if (step.kind === 'lost') return rig.fit()
+    if (step.kind === 'lost') {
+      followRef.current = null
+      // The view is the owner's once they have moved it; only an untouched fly-to falls back.
+      if (!hasMovedSinceFlyRef.current) rig.fit()
+      return
+    }
     followRef.current = step.anchor
     const target = controls.getTarget(targetScratch)
     void controls.moveTo(
@@ -199,6 +209,7 @@ export function CameraRig(props: CameraRigProps) {
         rig.takeOver()
         gesturesRef.current?.cancel()
         followRef.current = followAnchor(agent, floor.rooms)
+        hasMovedSinceFlyRef.current = false
         void controls.moveTo(agent.x, LOOK_HEIGHT, agent.z, isAnimated)
         void controls.zoomTo(BAND_ZOOM.desk, isAnimated)
         return
