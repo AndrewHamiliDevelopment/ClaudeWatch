@@ -38,6 +38,10 @@ function visibleLines(screen: string[]): string[] {
 const fingerprintOf = (lines: string[]): string =>
   createHash('sha256').update(lines.join('\n')).digest('hex')
 const isPrintable = (text: string): boolean => !/\p{Cc}/u.test(text)
+const isWithin = (path: string, folder: string): boolean =>
+  path === folder || path.startsWith(`${folder.replace(/\/+$/, '')}/`)
+const paneServes = (worktreePath: string, session: SessionRef): boolean =>
+  worktreePath === session.projectRoot || isWithin(session.cwd, worktreePath)
 
 // Everything the office can do to a running agent goes through here, and only on a
 // user's click: talk, answer a permission prompt, peek at the screen, start a new agent.
@@ -117,9 +121,11 @@ export class OfficeInteractions {
     if (!session) return fail('unknown-session')
     if (session.host !== 'orca' || !session.orcaPaneKey) return fail('not-in-orca')
     try {
-      const handle = await this.deps.orca.handleFor(session.orcaPaneKey)
-      if (!handle) return fail('terminal-not-found')
-      return await action(handle)
+      const terminal = await this.deps.orca.handleFor(session.orcaPaneKey)
+      // The pane must belong to this session's folder, so a wrong pane key cannot steer input.
+      if (!terminal || !paneServes(terminal.worktreePath, session))
+        return fail('terminal-not-found')
+      return await action(terminal.handle)
     } catch {
       return fail('orca-unavailable')
     }

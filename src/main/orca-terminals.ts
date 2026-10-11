@@ -7,6 +7,12 @@ interface TerminalEntry {
   handle: string
   tabId: string
   leafId: string
+  worktreePath: string
+}
+
+export interface PaneTerminal {
+  handle: string
+  worktreePath: string
 }
 
 function result(stdout: string): Record<string, unknown> {
@@ -31,7 +37,8 @@ function isTerminalEntry(value: unknown): value is TerminalEntry {
   return (
     typeof entry.handle === 'string' &&
     typeof entry.tabId === 'string' &&
-    typeof entry.leafId === 'string'
+    typeof entry.leafId === 'string' &&
+    typeof entry.worktreePath === 'string'
   )
 }
 
@@ -39,10 +46,11 @@ function isTerminalEntry(value: unknown): value is TerminalEntry {
 export class OrcaTerminals {
   constructor(private readonly exec: OrcaExec) {}
 
-  async handleFor(paneKey: string): Promise<string | null> {
+  async handleFor(paneKey: string): Promise<PaneTerminal | null> {
     const listed = result(await this.exec(['terminal', 'list', '--json'])).terminals
     const terminals = Array.isArray(listed) ? listed.filter(isTerminalEntry) : []
-    return terminals.find((t) => `${t.tabId}:${t.leafId}` === paneKey)?.handle ?? null
+    const match = terminals.find((t) => `${t.tabId}:${t.leafId}` === paneKey)
+    return match ? { handle: match.handle, worktreePath: match.worktreePath } : null
   }
 
   async sendPrompt(handle: string, text: string): Promise<void> {

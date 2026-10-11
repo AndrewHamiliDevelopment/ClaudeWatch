@@ -48,7 +48,7 @@ describe('OfficeInteractions', () => {
 
   beforeEach(() => {
     vi.resetAllMocks()
-    orca.handleFor.mockResolvedValue('term_a')
+    orca.handleFor.mockResolvedValue({ handle: 'term_a', worktreePath: '/repo/app' })
     orca.screen.mockResolvedValue(PROMPT_SCREEN)
     openTerminalRunning.mockResolvedValue({ success: true })
     snapshot = { rev: 1, generatedAtMs: 1, sessions: [session()], sources: [] }
@@ -92,6 +92,28 @@ describe('OfficeInteractions', () => {
         reason: 'unknown-session'
       })
       expect(orca.sendPrompt).not.toHaveBeenCalled()
+    })
+
+    it('refuses a pane whose worktree is not this session’s folder', async () => {
+      orca.handleFor.mockResolvedValueOnce({ handle: 'term_x', worktreePath: '/other/repo' })
+      expect(await interactions.send('claude:s1', 'hi')).toEqual({
+        success: false,
+        reason: 'terminal-not-found'
+      })
+      expect(orca.sendPrompt).not.toHaveBeenCalled()
+    })
+
+    it('accepts a pane in the project root or in a worktree that contains the session folder', async () => {
+      snapshot.sessions = [session({ cwd: '/repo/app-wt/src', projectRoot: '/repo/app' })]
+      orca.handleFor.mockResolvedValueOnce({ handle: 'term_a', worktreePath: '/repo/app-wt' })
+      expect(await interactions.send('claude:s1', 'hi')).toEqual({ success: true })
+      orca.handleFor.mockResolvedValueOnce({ handle: 'term_a', worktreePath: '/repo/app' })
+      expect(await interactions.send('claude:s1', 'hi')).toEqual({ success: true })
+      orca.handleFor.mockResolvedValueOnce({ handle: 'term_a', worktreePath: '/repo/app-wt-other' })
+      expect(await interactions.send('claude:s1', 'hi')).toEqual({
+        success: false,
+        reason: 'terminal-not-found'
+      })
     })
 
     it('reports a missing terminal and an unreachable Orca', async () => {

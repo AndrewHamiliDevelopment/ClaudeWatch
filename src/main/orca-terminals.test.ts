@@ -15,7 +15,10 @@ describe('OrcaTerminals', () => {
     const exec = vi.fn().mockResolvedValue(terminalList)
     const orca = new OrcaTerminals(exec)
 
-    expect(await orca.handleFor('tab2:leaf9')).toBe('term_b')
+    expect(await orca.handleFor('tab2:leaf9')).toEqual({
+      handle: 'term_b',
+      worktreePath: '/repo/b'
+    })
     expect(await orca.handleFor('tab3:leaf1')).toBeNull()
     expect(exec).toHaveBeenCalledWith(['terminal', 'list', '--json'])
   })
