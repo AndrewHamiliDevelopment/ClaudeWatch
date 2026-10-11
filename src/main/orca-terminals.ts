@@ -8,11 +8,20 @@ interface TerminalEntry {
   tabId: string
   leafId: string
   worktreePath: string
+  incarnationId?: unknown
+  agentIdentity?: unknown
+  connected?: unknown
+  writable?: unknown
+  orphaned?: unknown
 }
 
 export interface PaneTerminal {
   handle: string
   worktreePath: string
+  // The agent Orca sees running in the pane right now ('claude', 'codex', …); null for a plain shell.
+  agent: string | null
+  // Changes when the pane's process is restarted.
+  incarnationId: string
 }
 
 function result(stdout: string): Record<string, unknown> {
@@ -50,7 +59,15 @@ export class OrcaTerminals {
     const listed = result(await this.exec(['terminal', 'list', '--json'])).terminals
     const terminals = Array.isArray(listed) ? listed.filter(isTerminalEntry) : []
     const match = terminals.find((t) => `${t.tabId}:${t.leafId}` === paneKey)
-    return match ? { handle: match.handle, worktreePath: match.worktreePath } : null
+    if (!match || match.connected === false || match.writable === false || match.orphaned === true)
+      return null
+    return {
+      handle: match.handle,
+      worktreePath: match.worktreePath,
+      agent:
+        typeof match.agentIdentity === 'string' && match.agentIdentity ? match.agentIdentity : null,
+      incarnationId: typeof match.incarnationId === 'string' ? match.incarnationId : ''
+    }
   }
 
   async sendPrompt(handle: string, text: string): Promise<void> {

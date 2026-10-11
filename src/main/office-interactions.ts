@@ -8,7 +8,7 @@ import type {
   ProviderId,
   SessionRef
 } from '../shared/office/types'
-import type { AgentCommand, OrcaTerminals } from './orca-terminals'
+import type { AgentCommand, OrcaTerminals, PaneTerminal } from './orca-terminals'
 
 interface OfficeInteractionsDeps {
   snapshot: () => OfficeSnapshot | null
@@ -40,12 +40,18 @@ const fingerprintOf = (lines: string[]): string =>
 const isPrintable = (text: string): boolean => !/\p{Cc}/u.test(text)
 const isWithin = (path: string, folder: string): boolean =>
   path === folder || path.startsWith(`${folder.replace(/\/+$/, '')}/`)
-const paneServes = (worktreePath: string, session: SessionRef): boolean =>
-  worktreePath === session.projectRoot || isWithin(session.cwd, worktreePath)
+// The pane must be in this session's folder and still running its agent: once the agent
+// exits the pane is a shell, and typed text would run as a command.
+const paneServes = (terminal: PaneTerminal, session: SessionRef): boolean =>
+  (terminal.worktreePath === session.projectRoot || isWithin(session.cwd, terminal.worktreePath)) &&
+  (terminal.agent === session.provider || !!terminal.agent?.startsWith(`${session.provider}-`))
 
 // Everything the office can do to a running agent goes through here, and only on a
 // user's click: talk, answer a permission prompt, peek at the screen, start a new agent.
 export class OfficeInteractions {
+  // The screen each session's owner last looked at; an answer spends it.
+  private readonly reviews = new Map<string, { fingerprint: string; incarnationId: string }>()
+
   constructor(private readonly deps: OfficeInteractionsDeps) {}
 
   async send(sessionKey: string, text: string): Promise<InteractionResult> {
@@ -55,13 +61,15 @@ export class OfficeInteractions {
     if (!prompt || prompt.length > MAX_PROMPT_LENGTH || !isPrintable(prompt)) {
       return fail('invalid-input')
     }
-    return this.withTerminal(sessionKey, async (handle) => {
+    return this.withTerminal(sessionKey, async ({ handle }) => {
       await this.deps.orca.sendPrompt(handle, prompt)
       return { success: true }
     })
   }
 
-  // Answers only the prompt the owner reviewed: if the screen changed since peek, nothing is sent.
+  // Answers only the prompt the owner reviewed, once: if the screen or the terminal changed since
+  // peek, nothing is sent. Orca has no conditional send, so a prompt replaced in the instant
+  // between the screen read and the key press is not caught.
   async respond(
     sessionKey: string,
     decision: PermissionDecision,
@@ -75,7 +83,12 @@ export class OfficeInteractions {
     if (!session) return fail('unknown-session')
     if (session.provider !== 'claude') return fail('unsupported-provider')
     if (session.attention !== 'permission') return fail('no-permission-prompt')
-    return this.withTerminal(sessionKey, async (handle) => {
+    const review = this.reviews.get(sessionKey)
+    if (review?.fingerprint !== reviewedFingerprint) return fail('prompt-changed')
+    // Spent before the first await, so two racing answers cannot share one review.
+    this.reviews.delete(sessionKey)
+    return this.withTerminal(sessionKey, async ({ handle, incarnationId }) => {
+      if (incarnationId !== review.incarnationId) return fail('prompt-changed')
       const lines = visibleLines(await this.deps.orca.screen(handle))
       if (!PERMISSION_PROMPT.test(lines.join('\n'))) return fail('no-permission-prompt')
       if (fingerprintOf(lines) !== reviewedFingerprint) return fail('prompt-changed')
@@ -86,13 +99,18 @@ export class OfficeInteractions {
 
   async peek(sessionKey: string): Promise<PeekResult> {
     let lines: string[] = []
-    const outcome = await this.withTerminal(sessionKey, async (handle) => {
-      lines = visibleLines(await this.deps.orca.screen(handle))
+    let incarnationId = ''
+    const outcome = await this.withTerminal(sessionKey, async (terminal) => {
+      lines = visibleLines(await this.deps.orca.screen(terminal.handle))
+      incarnationId = terminal.incarnationId
       return { success: true }
     })
-    return outcome.success
-      ? { ...outcome, lines, fingerprint: fingerprintOf(lines) }
-      : { ...outcome, lines }
+    if (!outcome.success) return { ...outcome, lines }
+    const fingerprint = fingerprintOf(lines)
+    const live = new Set(this.deps.snapshot()?.sessions.map((s) => s.key))
+    for (const key of this.reviews.keys()) if (!live.has(key)) this.reviews.delete(key)
+    this.reviews.set(sessionKey, { fingerprint, incarnationId })
+    return { ...outcome, lines, fingerprint }
   }
 
   async start(projectKey: string, provider: ProviderId): Promise<InteractionResult> {
@@ -115,17 +133,15 @@ export class OfficeInteractions {
   // Resolves the pane's terminal fresh each time: Orca handles go stale across reloads.
   private async withTerminal(
     sessionKey: string,
-    action: (handle: string) => Promise<InteractionResult>
+    action: (terminal: PaneTerminal) => Promise<InteractionResult>
   ): Promise<InteractionResult> {
     const session = this.session(sessionKey)
     if (!session) return fail('unknown-session')
     if (session.host !== 'orca' || !session.orcaPaneKey) return fail('not-in-orca')
     try {
       const terminal = await this.deps.orca.handleFor(session.orcaPaneKey)
-      // The pane must belong to this session's folder, so a wrong pane key cannot steer input.
-      if (!terminal || !paneServes(terminal.worktreePath, session))
-        return fail('terminal-not-found')
-      return await action(terminal.handle)
+      if (!terminal || !paneServes(terminal, session)) return fail('terminal-not-found')
+      return await action(terminal)
     } catch {
       return fail('orca-unavailable')
     }

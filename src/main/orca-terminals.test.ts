@@ -6,7 +6,28 @@ const envelope = (result: unknown): string => JSON.stringify({ id: '1', ok: true
 const terminalList = envelope({
   terminals: [
     { handle: 'term_a', tabId: 'tab1', leafId: 'leaf1', worktreePath: '/repo/a' },
-    { handle: 'term_b', tabId: 'tab2', leafId: 'leaf9', worktreePath: '/repo/b' }
+    {
+      handle: 'term_b',
+      tabId: 'tab2',
+      leafId: 'leaf9',
+      worktreePath: '/repo/b',
+      incarnationId: 'inc_b',
+      agentIdentity: 'claude',
+      connected: true,
+      writable: true,
+      orphaned: false
+    },
+    {
+      handle: 'term_c',
+      tabId: 'tab3',
+      leafId: 'leaf2',
+      worktreePath: '/repo/c',
+      incarnationId: 'inc_c',
+      agentIdentity: 'claude',
+      connected: true,
+      writable: false,
+      orphaned: false
+    }
   ]
 })
 
@@ -17,10 +38,19 @@ describe('OrcaTerminals', () => {
 
     expect(await orca.handleFor('tab2:leaf9')).toEqual({
       handle: 'term_b',
-      worktreePath: '/repo/b'
+      worktreePath: '/repo/b',
+      agent: 'claude',
+      incarnationId: 'inc_b'
     })
     expect(await orca.handleFor('tab3:leaf1')).toBeNull()
     expect(exec).toHaveBeenCalledWith(['terminal', 'list', '--json'])
+  })
+
+  it('reports no agent for a plain shell and skips terminals that cannot take input', async () => {
+    const orca = new OrcaTerminals(vi.fn().mockResolvedValue(terminalList))
+
+    expect(await orca.handleFor('tab1:leaf1')).toMatchObject({ handle: 'term_a', agent: null })
+    expect(await orca.handleFor('tab3:leaf2')).toBeNull()
   })
 
   it('sends a prompt as one argv value followed by Enter', async () => {

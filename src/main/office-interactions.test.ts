@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { OfficeInteractions } from './office-interactions'
 import type { OfficeSnapshot, SessionRef } from '../shared/office/types'
+import type { PaneTerminal } from './orca-terminals'
 
 const session = (overrides: Partial<SessionRef> = {}): SessionRef => ({
   key: 'claude:s1',
@@ -26,6 +27,14 @@ const session = (overrides: Partial<SessionRef> = {}): SessionRef => ({
   ...overrides
 })
 
+const pane = (overrides: Partial<PaneTerminal> = {}): PaneTerminal => ({
+  handle: 'term_a',
+  worktreePath: '/repo/app',
+  agent: 'claude',
+  incarnationId: 'inc_1',
+  ...overrides
+})
+
 const PROMPT_SCREEN = [
   'Bash command',
   '  npm test',
@@ -48,7 +57,7 @@ describe('OfficeInteractions', () => {
 
   beforeEach(() => {
     vi.resetAllMocks()
-    orca.handleFor.mockResolvedValue({ handle: 'term_a', worktreePath: '/repo/app' })
+    orca.handleFor.mockResolvedValue(pane())
     orca.screen.mockResolvedValue(PROMPT_SCREEN)
     openTerminalRunning.mockResolvedValue({ success: true })
     snapshot = { rev: 1, generatedAtMs: 1, sessions: [session()], sources: [] }
@@ -95,7 +104,7 @@ describe('OfficeInteractions', () => {
     })
 
     it('refuses a pane whose worktree is not this session’s folder', async () => {
-      orca.handleFor.mockResolvedValueOnce({ handle: 'term_x', worktreePath: '/other/repo' })
+      orca.handleFor.mockResolvedValueOnce(pane({ handle: 'term_x', worktreePath: '/other/repo' }))
       expect(await interactions.send('claude:s1', 'hi')).toEqual({
         success: false,
         reason: 'terminal-not-found'
@@ -105,15 +114,31 @@ describe('OfficeInteractions', () => {
 
     it('accepts a pane in the project root or in a worktree that contains the session folder', async () => {
       snapshot.sessions = [session({ cwd: '/repo/app-wt/src', projectRoot: '/repo/app' })]
-      orca.handleFor.mockResolvedValueOnce({ handle: 'term_a', worktreePath: '/repo/app-wt' })
+      orca.handleFor.mockResolvedValueOnce(pane({ worktreePath: '/repo/app-wt' }))
       expect(await interactions.send('claude:s1', 'hi')).toEqual({ success: true })
-      orca.handleFor.mockResolvedValueOnce({ handle: 'term_a', worktreePath: '/repo/app' })
+      orca.handleFor.mockResolvedValueOnce(pane())
       expect(await interactions.send('claude:s1', 'hi')).toEqual({ success: true })
-      orca.handleFor.mockResolvedValueOnce({ handle: 'term_a', worktreePath: '/repo/app-wt-other' })
+      orca.handleFor.mockResolvedValueOnce(pane({ worktreePath: '/repo/app-wt-other' }))
       expect(await interactions.send('claude:s1', 'hi')).toEqual({
         success: false,
         reason: 'terminal-not-found'
       })
+    })
+
+    it('refuses a pane where this session’s agent is no longer the running program', async () => {
+      for (const agent of [null, 'codex']) {
+        orca.handleFor.mockResolvedValueOnce(pane({ agent }))
+        expect(await interactions.send('claude:s1', 'rm -rf build')).toEqual({
+          success: false,
+          reason: 'terminal-not-found'
+        })
+      }
+      expect(orca.sendPrompt).not.toHaveBeenCalled()
+    })
+
+    it('accepts Orca’s agent-teams flavour of the same provider', async () => {
+      orca.handleFor.mockResolvedValueOnce(pane({ agent: 'claude-agent-teams' }))
+      expect(await interactions.send('claude:s1', 'hi')).toEqual({ success: true })
     })
 
     it('reports a missing terminal and an unreachable Orca', async () => {
@@ -144,10 +169,44 @@ describe('OfficeInteractions', () => {
         success: true
       })
       expect(orca.sendKey).toHaveBeenLastCalledWith('term_a', '1')
-      expect(await interactions.respond('claude:s1', 'deny', fingerprint)).toEqual({
+      expect(await interactions.respond('claude:s1', 'deny', await reviewed())).toEqual({
         success: true
       })
       expect(orca.sendKey).toHaveBeenLastCalledWith('term_a', '\u001b')
+    })
+
+    it('answers once per review, even when two answers race', async () => {
+      const fingerprint = await reviewed()
+      const answers = await Promise.all([
+        interactions.respond('claude:s1', 'approve', fingerprint),
+        interactions.respond('claude:s1', 'approve', fingerprint)
+      ])
+      expect(answers).toEqual([{ success: true }, { success: false, reason: 'prompt-changed' }])
+      expect(await interactions.respond('claude:s1', 'approve', fingerprint)).toEqual({
+        success: false,
+        reason: 'prompt-changed'
+      })
+      expect(orca.sendKey).toHaveBeenCalledOnce()
+    })
+
+    it('sends nothing for a fingerprint the office never issued for this session', async () => {
+      const { createHash } = await import('crypto')
+      const forged = createHash('sha256').update(PROMPT_SCREEN.join('\n')).digest('hex')
+      expect(await interactions.respond('claude:s1', 'approve', forged)).toEqual({
+        success: false,
+        reason: 'prompt-changed'
+      })
+      expect(orca.sendKey).not.toHaveBeenCalled()
+    })
+
+    it('sends nothing when the terminal was restarted after the review', async () => {
+      const fingerprint = await reviewed()
+      orca.handleFor.mockResolvedValue(pane({ incarnationId: 'inc_2' }))
+      expect(await interactions.respond('claude:s1', 'approve', fingerprint)).toEqual({
+        success: false,
+        reason: 'prompt-changed'
+      })
+      expect(orca.sendKey).not.toHaveBeenCalled()
     })
 
     it('sends nothing when a different prompt replaced the reviewed one', async () => {
