@@ -14,8 +14,8 @@ Validated: `node /tmp/cw-repro-2026-10-11/repro.mjs` printed `cd "/tmp/proj$(ech
 - [x] Phase 4 — Scene (mecha-steampunk isometric game, merged 2df1352)
 - [x] Phase 7 — Interactions: talk to an agent, answer Claude permission prompts, peek at its screen, start a new agent (main side 87f3e2e; UI with @lena; security review passed after the fingerprint and pane-ownership fixes)
 - [x] Phase 8 — Themes: plug-in theme system (robot model + office kit + world per team); first theme Japanese steampunk with Code Geass-inspired samurai mechs; a bigger world (district, hangar, pagoda HQ tower) (Codex)
-- [ ] Phase 9 — One floor of companies: company zones (the folder holding each project) contain project offices, which contain one office per agent ("offices within offices"); review fixes (Codex world + bridge, me, @lena scene/HUD)
-- [ ] Phase 6 — Integration: wire bridge → Office window, merge worktrees, STEP 6 gates, review, E2E video
+- [x] Phase 9 — One floor of companies: company zones (the folder holding each project) contain project offices, which contain one office per agent ("offices within offices"); review fixes (Codex world + bridge, me, @lena scene/HUD); closed 2026-10-11 with the review and owner fixes listed under Close-out fixes
+- [x] Phase 6 — Integration: wire bridge → Office window, merge worktrees, STEP 6 gates, review, E2E video (gates green at 7fc6ecc: 768 tests, typecheck, lint, build; QA and security reviews passed; runtime smoke on real sessions)
 
 ## Owner decisions (this round)
 
