@@ -107,7 +107,7 @@ describe('the default login', () => {
   })
 
   it('does not wait on a pipe left where the login file goes', async () => {
-    execFileSync('mkfifo', [path()])
+    execFileSync('/usr/bin/mkfifo', [path()])
     expect(await readDefaultIdentity(home)).toEqual({ status: 'unreadable' })
   })
 })
