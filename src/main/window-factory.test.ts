@@ -107,7 +107,7 @@ describe('assertTrustedSender', () => {
 
   it('accepts a top-level frame on the app origin', () => {
     expect(() =>
-      assertTrustedSender(event({ parent: null, url: rendererUrl('office.html') }))
+      assertTrustedSender(event({ parent: null, url: rendererUrl('office.html') }), 'office.html')
     ).not.toThrow()
   })
 
@@ -117,6 +117,49 @@ describe('assertTrustedSender', () => {
     ['a dropped local file', { parent: null, url: 'file:///tmp/dropped.html' }],
     ['another origin', { parent: null, url: 'https://example.com/' }]
   ])('rejects %s', (_name, frame) => {
-    expect(() => assertTrustedSender(event(frame))).toThrow('Untrusted IPC sender')
+    expect(() => assertTrustedSender(event(frame), 'office.html')).toThrow('Untrusted IPC sender')
+  })
+})
+
+describe('assertTrustedSender scoped to one app page', () => {
+  const event = (url: string): Electron.IpcMainInvokeEvent =>
+    ({ senderFrame: { parent: null, url } }) as unknown as Electron.IpcMainInvokeEvent
+
+  it('accepts office channels only from the Office page', () => {
+    expect(() =>
+      assertTrustedSender(event(rendererUrl('office.html')), 'office.html')
+    ).not.toThrow()
+    expect(() =>
+      assertTrustedSender(event(`${rendererUrl('index.html')}#popover`), 'office.html')
+    ).toThrow('Untrusted IPC sender')
+  })
+
+  it('accepts main-window channels only from the main page (the popover is index.html#popover)', () => {
+    expect(() =>
+      assertTrustedSender(event(`${rendererUrl('index.html')}#popover`), 'index.html')
+    ).not.toThrow()
+    expect(() => assertTrustedSender(event(rendererUrl('office.html')), 'index.html')).toThrow()
+  })
+
+  it('rejects other files inside the renderer folder', () => {
+    expect(() =>
+      assertTrustedSender(event(rendererUrl('assets/evil.html')), 'office.html')
+    ).toThrow()
+  })
+
+  it('maps dev-server URLs onto the same pages', () => {
+    vi.stubEnv('ELECTRON_RENDERER_URL', 'http://localhost:5173')
+    expect(() =>
+      assertTrustedSender(event('http://localhost:5173/office.html'), 'office.html')
+    ).not.toThrow()
+    expect(() =>
+      assertTrustedSender(event('http://localhost:5173/#popover'), 'index.html')
+    ).not.toThrow()
+    expect(() =>
+      assertTrustedSender(event('http://localhost:5173/office.html'), 'index.html')
+    ).toThrow()
+    expect(() =>
+      assertTrustedSender(event('http://localhost:5173/x.html'), 'office.html')
+    ).toThrow()
   })
 })

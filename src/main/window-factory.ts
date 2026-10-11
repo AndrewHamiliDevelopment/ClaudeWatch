@@ -1,24 +1,33 @@
 import { app, BrowserWindow } from 'electron'
-import { join, sep } from 'path'
+import { join } from 'path'
 import { fileURLToPath } from 'url'
 
-// electron-vite puts the renderer pages next to the main bundle; only these files are the app.
+export type AppPage = 'index.html' | 'office.html'
+const APP_PAGES: readonly AppPage[] = ['index.html', 'office.html']
+
+// electron-vite puts the renderer pages next to the main bundle; only these two files are the app.
 const RENDERER_DIR = join(__dirname, '../renderer')
 
-export function isAppOrigin(url: string): boolean {
+// Which app page a URL is, or null. Any other document (a dropped local file, say) is not the app.
+function appPageOf(url: string): AppPage | null {
   try {
     const target = new URL(url)
     const rendererUrl = !app.isPackaged && process.env['ELECTRON_RENDERER_URL']
     if (rendererUrl) {
-      const origin = new URL(rendererUrl).origin
-      return origin !== 'null' && target.origin === origin
+      if (target.origin === 'null' || target.origin !== new URL(rendererUrl).origin) return null
+      const page = target.pathname === '/' ? 'index.html' : target.pathname.slice(1)
+      return APP_PAGES.find((candidate) => candidate === page) ?? null
     }
-    // Any other local file (one dropped on a window, say) must not inherit the app's bridges.
-    if (target.protocol !== 'file:' || target.hostname !== '') return false
-    return fileURLToPath(target).startsWith(RENDERER_DIR + sep)
+    if (target.protocol !== 'file:' || target.hostname !== '') return null
+    const path = fileURLToPath(target)
+    return APP_PAGES.find((page) => path === join(RENDERER_DIR, page)) ?? null
   } catch {
-    return false
+    return null
   }
+}
+
+export function isAppOrigin(url: string): boolean {
+  return appPageOf(url) !== null
 }
 
 export function createAppWindow(options: Electron.BrowserWindowConstructorOptions): BrowserWindow {
@@ -44,10 +53,10 @@ export function createAppWindow(options: Electron.BrowserWindowConstructorOption
   return window
 }
 
-// IPC handlers trust only a top-level frame loaded from the app itself.
-export function assertTrustedSender(event: Electron.IpcMainInvokeEvent): void {
+// Each IPC channel belongs to one page: office:* to office.html, the rest to index.html.
+export function assertTrustedSender(event: Electron.IpcMainInvokeEvent, page: AppPage): void {
   const frame = event?.senderFrame
-  if (!frame || frame.parent !== null || !isAppOrigin(frame.url)) {
+  if (!frame || frame.parent !== null || appPageOf(frame.url) !== page) {
     throw new Error('Untrusted IPC sender')
   }
 }

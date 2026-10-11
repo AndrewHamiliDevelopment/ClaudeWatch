@@ -104,7 +104,7 @@ export function setupIpcHandlers(options: IpcHandlerOptions): void {
 
   const handle = (channel: string, listener: Parameters<typeof ipcMain.handle>[1]): void => {
     ipcMain.handle(channel, (event, ...args) => {
-      assertTrustedSender(event)
+      assertTrustedSender(event, 'index.html')
       return listener(event, ...args)
     })
   }

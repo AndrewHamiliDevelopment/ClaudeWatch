@@ -65,36 +65,39 @@ export function setupOffice(terminalResolver: Pick<TerminalResolver, 'resolve'>)
     openTerminalRunning
   })
   const asString = (value: unknown): string => (typeof value === 'string' ? value : '')
+  const isDecision = (value: unknown): value is PermissionDecision =>
+    value === 'approve' || value === 'deny'
+  const isProvider = (value: unknown): value is ProviderId =>
+    value === 'claude' || value === 'codex'
+  const invalid = { success: false, reason: 'invalid-input' } as const
 
   ipcMain.handle('office:send', (event, sessionKey: unknown, text: unknown) => {
-    assertTrustedSender(event)
+    assertTrustedSender(event, 'office.html')
     return interactions.send(asString(sessionKey), asString(text))
   })
   ipcMain.handle(
     'office:respond',
     (event, sessionKey: unknown, decision: unknown, fingerprint: unknown) => {
-      assertTrustedSender(event)
-      return interactions.respond(
-        asString(sessionKey),
-        asString(decision) as PermissionDecision,
-        asString(fingerprint)
-      )
+      assertTrustedSender(event, 'office.html')
+      if (!isDecision(decision)) return invalid
+      return interactions.respond(asString(sessionKey), decision, asString(fingerprint))
     }
   )
   ipcMain.handle('office:peek', (event, sessionKey: unknown) => {
-    assertTrustedSender(event)
+    assertTrustedSender(event, 'office.html')
     return interactions.peek(asString(sessionKey))
   })
   ipcMain.handle('office:start', (event, projectKey: unknown, provider: unknown) => {
-    assertTrustedSender(event)
-    return interactions.start(asString(projectKey), asString(provider) as ProviderId)
+    assertTrustedSender(event, 'office.html')
+    if (!isProvider(provider)) return invalid
+    return interactions.start(asString(projectKey), provider)
   })
   ipcMain.handle('office:ready', (event) => {
-    assertTrustedSender(event)
+    assertTrustedSender(event, 'office.html')
     controller.ready()
   })
   ipcMain.handle('office:jump', (event, sessionKey: unknown) => {
-    assertTrustedSender(event)
+    assertTrustedSender(event, 'office.html')
     if (typeof sessionKey !== 'string') return { success: false }
     return controller.jump(sessionKey)
   })
