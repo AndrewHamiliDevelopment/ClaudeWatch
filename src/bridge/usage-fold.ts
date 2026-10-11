@@ -27,9 +27,12 @@ export function emptyFold(): UsageFold {
   return { closed: zeroCounts(), openId: null, open: zeroCounts() }
 }
 
-// A token count as read from disk: anything that is not a positive number counts as none.
+// A token count as read from disk: anything that is not a positive number counts as none, and
+// none is larger than an exact integer, so sums stay finite and never reach the feed as null.
 export const tokenCount = (value: unknown): number =>
-  typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0
+  typeof value === 'number' && Number.isFinite(value) && value > 0
+    ? Math.min(value, Number.MAX_SAFE_INTEGER)
+    : 0
 
 // A message is written once per content block and every line repeats its usage, growing while
 // it streams. Repeats are adjacent, so one open id is enough: the same id raises each field to

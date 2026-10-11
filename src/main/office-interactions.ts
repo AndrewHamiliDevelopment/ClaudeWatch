@@ -8,7 +8,8 @@ import type {
   PeekResult,
   PermissionDecision,
   ProviderId,
-  SessionRef
+  SessionRef,
+  SubagentRef
 } from '../shared/office/types'
 import type { AgentCommand, OrcaTerminals, PaneTerminal } from './orca-terminals'
 
@@ -161,7 +162,8 @@ export class OfficeInteractions {
       incarnationId = terminal.incarnationId
       return { success: true }
     })
-    if (!outcome.success) return { ...outcome, lines }
+    // Only a session can be answered, so only a session's peek is a review.
+    if (!outcome.success || !this.session(sessionKey)) return { ...outcome, lines }
     const fingerprint = fingerprintOf(lines)
     const live = new Set(this.deps.snapshot()?.sessions.map((s) => s.key))
     for (const key of this.reviews.keys()) if (!live.has(key)) this.reviews.delete(key)
@@ -214,34 +216,39 @@ export class OfficeInteractions {
 
   // Where an agent can be looked at. A subagent lives in its lead's process and pane.
   private ownerOf(agentKey: string): PaneOwner | null {
-    return this.session(agentKey) ?? this.teammate(agentKey) ?? this.leadOf(agentKey)
+    const agent = this.resolve(agentKey)
+    if (!agent?.member) return agent?.session ?? null
+    return this.teammate(agent.session, agent.member) ?? agent.session
   }
 
   // Where an agent can be typed to or read: its own terminal only. Text for a subagent would
   // land in its lead's prompt, so a subagent has none.
   private terminalOwner(agentKey: string): PaneOwner | null {
-    return this.session(agentKey) ?? this.teammate(agentKey)
+    const agent = this.resolve(agentKey)
+    if (!agent?.member) return agent?.session ?? null
+    return this.teammate(agent.session, agent.member)
   }
 
-  private leadOf(agentKey: string): SessionRef | null {
-    const leads = this.deps.snapshot()?.sessions ?? []
-    return (
-      leads.find(
-        (lead) =>
-          agentKey.startsWith(`${lead.key}#`) &&
-          lead.subagents.some((member) => member.id === agentKey.slice(lead.key.length + 1))
-      ) ?? null
-    )
+  // The one reading of an agent key every action shares: a session, or one member of one
+  // lead. A key with two readings (a repeated id, a session key holding '#') names no one.
+  private resolve(agentKey: string): { session: SessionRef; member?: SubagentRef } | null {
+    const readings = (this.deps.snapshot()?.sessions ?? []).flatMap((session) => {
+      if (session.key === agentKey) return [{ session }]
+      if (!agentKey.startsWith(`${session.key}#`)) return []
+      const memberId = agentKey.slice(session.key.length + 1)
+      return session.subagents
+        .filter((member) => memberId !== '' && member.id === memberId)
+        .map((member) => ({ session, member }))
+    })
+    return readings.length === 1 ? readings[0] : null
   }
 
-  // A teammate has its own process and pane, in its lead's project.
-  private teammate(agentKey: string): PaneOwner | null {
-    const lead = this.leadOf(agentKey)
-    const member = lead?.subagents.find((s) => s.id === agentKey.slice(lead.key.length + 1))
-    if (!lead || member?.kind !== 'teammate') return null
+  // A teammate has its own process and pane, in its own folder when the roster names one.
+  private teammate(lead: SessionRef, member: SubagentRef): PaneOwner | null {
+    if (member.kind !== 'teammate') return null
     return {
       provider: lead.provider,
-      cwd: lead.cwd,
+      cwd: member.cwd ?? lead.cwd,
       projectRoot: lead.projectRoot,
       host: member.orcaPaneKey ? 'orca' : lead.host,
       pid: member.pid ?? null,
@@ -252,7 +259,8 @@ export class OfficeInteractions {
   }
 
   private session(sessionKey: string): SessionRef | undefined {
-    return this.deps.snapshot()?.sessions.find((s) => s.key === sessionKey)
+    const agent = this.resolve(sessionKey)
+    return agent?.member ? undefined : agent?.session
   }
 
   private async withTerminal(
@@ -270,8 +278,9 @@ export class OfficeInteractions {
   ): Promise<InteractionResult> {
     if (owner.host !== 'orca' || !owner.orcaPaneKey) return fail('not-in-orca')
     // The snapshot is a few seconds old: the agent may have exited, or its pid been reused.
-    if (owner.pid === null || (await this.deps.processStart(owner.pid)) !== owner.startedAtMs)
-      return fail('unknown-session')
+    // A dead process is refused outright, so a missing start time can never equal "no process".
+    const startedAtMs = owner.pid === null ? null : await this.deps.processStart(owner.pid)
+    if (startedAtMs === null || startedAtMs !== owner.startedAtMs) return fail('unknown-session')
     try {
       const terminal = await this.deps.orca.handleFor(owner.orcaPaneKey)
       if (!terminal || !paneServes(terminal, owner)) return fail('terminal-not-found')

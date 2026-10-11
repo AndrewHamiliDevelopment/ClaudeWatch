@@ -51,6 +51,8 @@ export interface Office {
   start: () => void
   stop: () => void
   snapshot: () => OfficeSnapshot | null
+  // How often the bridge polls: live while a window shows its data, slowly otherwise.
+  setPollInterval: (intervalMs: number) => void
   // Jumps to the terminal of a process the session tracker lists; `pid` may be renderer input.
   focusSession: (pid: unknown) => Promise<FocusResult>
 }
@@ -131,6 +133,7 @@ export function setupOffice(
     start: () => bridge.start(),
     stop: () => bridge.stop(),
     snapshot: () => host.snapshot(),
+    setPollInterval: (intervalMs) => bridge.setPollInterval(intervalMs),
     focusSession: (pid) => paneFocus.focus(pid)
   }
 }

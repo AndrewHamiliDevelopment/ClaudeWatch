@@ -35,16 +35,14 @@ const TICK_BUDGET_BYTES = 256 * 1024 * 1024
 // The longest transcript line measured is 1.3 MB; a read this size always holds a whole one.
 const CHUNK_BYTES = 8 * 1024 * 1024
 
-const spawnedPaths = (files: SessionFiles): string[] => [
-  ...files.agents.map((agent) => agent.path),
-  ...[...files.teammates.values()].flat()
-]
-
 export class UsageTracker {
   private readonly budgetBytes: number
   private readonly chunkBytes: number
   private files = new Map<string, TrackedFile>()
   private sessions: ReadonlyMap<string, SessionFiles> = new Map()
+  // Every teammate transcript a session has listed. A teammate leaves the roster when its
+  // process exits, but what it spent stays in its lead's total until the lead itself leaves.
+  private teammatePaths = new Map<string, Set<string>>()
   private counted = new Set<string>()
   private behind = true
   private failed = false
@@ -66,10 +64,15 @@ export class UsageTracker {
     onAdded?: (delta: TranscriptDelta) => void
   ): Promise<void> {
     this.sessions = sessions
+    for (const key of this.teammatePaths.keys())
+      if (!sessions.has(key)) this.teammatePaths.delete(key)
     const wanted = new Map<string, number | null>()
     const owners = new Map<string, string>()
     for (const [sessionKey, files] of sessions) {
-      for (const path of [files.main, ...spawnedPaths(files)]) {
+      const listed = this.teammatePaths.get(sessionKey) ?? new Set<string>()
+      for (const path of [...files.teammates.values()].flat()) listed.add(path)
+      this.teammatePaths.set(sessionKey, listed)
+      for (const path of [files.main, ...this.spawnedPaths(sessionKey, files)]) {
         wanted.set(path, null)
         owners.set(path, sessionKey)
       }
@@ -99,7 +102,7 @@ export class UsageTracker {
       if (!this.files.has(files.main)) this.counted.delete(key)
       // A sidecar that vanished or cannot be read holds nothing back; health reports the failure.
       else if (
-        [files.main, ...spawnedPaths(files)].every(
+        [files.main, ...this.spawnedPaths(key, files)].every(
           (path) => this.files.get(path)?.hasReachedEnd !== false
         )
       )
@@ -145,12 +148,19 @@ export class UsageTracker {
     return spent
   }
 
+  private spawnedPaths(sessionKey: string, files: SessionFiles): string[] {
+    return [
+      ...files.agents.map((agent) => agent.path),
+      ...(this.teammatePaths.get(sessionKey) ?? [])
+    ]
+  }
+
   // null until every transcript of the session has been read to its end once.
   usage(key: string): SessionUsage | null {
     const files = this.sessions.get(key)
     const main = files && this.files.get(files.main)
     if (!files || !main || !this.counted.has(key)) return null
-    const spawned = spawnedPaths(files)
+    const spawned = this.spawnedPaths(key, files)
     return {
       own: foldTotal(main.fold),
       subagents: this.tokens(spawned) ?? zeroCounts(),

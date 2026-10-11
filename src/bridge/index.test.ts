@@ -6,6 +6,7 @@ import { emptySnapshot } from './reducer'
 const mocks = vi.hoisted(() => ({
   tick: vi.fn(),
   start: vi.fn(),
+  setIntervalMs: vi.fn(),
   options: vi.fn(),
   ticksUntilCounted: 0
 }))
@@ -16,6 +17,7 @@ vi.mock('./poller', () => ({
     }
     tick = mocks.tick
     start = mocks.start
+    setIntervalMs = mocks.setIntervalMs
     get isCountingUsage(): boolean {
       return mocks.tick.mock.calls.length < mocks.ticksUntilCounted
     }
@@ -63,13 +65,25 @@ it('forwards utility-process feed messages through the parent port', async () =>
     return () => {}
   })
   const postMessage = vi.fn()
-  await main([], { postMessage })
+  await main([], { postMessage, on: vi.fn() })
   expect(postMessage).toHaveBeenCalledWith(message)
+})
+it('polls at the pace its parent asks for, and ignores anything else it is sent', async () => {
+  mocks.start.mockResolvedValue(() => {})
+  const on = vi.fn()
+  await main([], { postMessage: vi.fn(), on })
+  const [event, hear] = on.mock.calls[0]
+  expect(event).toBe('message')
+
+  hear({ data: { type: 'pace', intervalMs: 30_000 } })
+  hear({ data: { type: 'pace', intervalMs: 'fast' } })
+  hear({ data: 'pace' })
+  expect(mocks.setIntervalMs.mock.calls).toEqual([[30_000]])
 })
 it('posts added tokens to the parent as their own message, apart from the feed', async () => {
   mocks.start.mockResolvedValue(() => {})
   const postMessage = vi.fn()
-  await main([], { postMessage })
+  await main([], { postMessage, on: vi.fn() })
   const deltas = [
     {
       sessionKey: 'claude:a',

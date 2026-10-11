@@ -57,7 +57,7 @@ it('keeps two-second cadence when collection takes time', async () => {
   const io = fixtureIo()
   let discoveryCalls = 0
   io.exec = async (_file, args) => {
-    if (args[0] === '-Ao' && discoveryCalls++ > 0)
+    if (args[0] === '-xo' && discoveryCalls++ > 0)
       await new Promise((resolve) => setTimeout(resolve, 500))
     return ''
   }
@@ -203,11 +203,14 @@ it('shows a teammate under its lead with its own pane, then its tokens', async (
       members: [{ agentId: `lena-b0@${team}`, name: 'lena-b0', agentType: 'lena', cwd: '/repo' }]
     })
   })
+  let isMateAlive = true
   io.exec = async (_file, args) => {
     if (args.includes('lstart=')) return entry.procStart
     if (args[0] === '-E') return `claude ORCA_PANE_KEY=pane-${args.at(-1)}`
     if (args.includes('command=')) return 'claude'
-    return `93143 ${entry.procStart} /versions/2.1.296 --agent-id lena-b0@${team} --parent-session-id ${lead}`
+    return isMateAlive
+      ? `93143 ${entry.procStart} /versions/2.1.296 --agent-id lena-b0@${team} --parent-session-id ${lead}`
+      : ''
   }
   const poller = new BridgePoller({
     io,
@@ -224,6 +227,7 @@ it('shows a teammate under its lead with its own pane, then its tokens', async (
       activity: 'thinking',
       kind: 'teammate',
       name: 'lena-b0',
+      cwd: '/repo',
       pid: 93143,
       startedAtMs: Date.parse(`${entry.procStart} UTC`),
       orcaPaneKey: 'pane-93143',
@@ -232,9 +236,91 @@ it('shows a teammate under its lead with its own pane, then its tokens', async (
   ])
   const second = (await poller.tick()).sessions[0]
   expect(second.subagents[0].tokens).toEqual({ input: 1, output: 30, cacheWrite: 0, cacheRead: 0 })
-  expect(second.usage).toMatchObject({
-    own: { output: 2 },
-    subagents: { input: 1, output: 30 },
-    spawned: 1
-  })
+  const whileAlive = { own: { output: 2 }, subagents: { input: 1, output: 30 }, spawned: 1 }
+  expect(second.usage).toMatchObject(whileAlive)
+
+  // The teammate finishes: it leaves the office, and what it spent stays in its lead's total.
+  isMateAlive = false
+  const third = (await poller.tick()).sessions[0]
+  expect(third.subagents).toEqual([])
+  expect(third.usage).toMatchObject(whileAlive)
+})
+
+it('reads one process table per tick for the Claude and Codex sources together', async () => {
+  const entry = registryEntry()
+  const io = fixtureIo({ '/claude/sessions/42.json': JSON.stringify(entry), '/repo/.git': null })
+  const exec = vi.fn(async (_file: string, args: string[]) =>
+    args.includes('lstart=') ? entry.procStart : ''
+  )
+  io.exec = exec
+  const poller = new BridgePoller({ io, claudeRoots: ['/claude'], codexRoot: '/codex' })
+  await poller.tick()
+  await poller.tick()
+  expect(exec.mock.calls.filter(([, args]) => args[0] === '-xo')).toHaveLength(2)
+})
+
+it('carries on after a tick that fails, with no unhandled rejection', async () => {
+  vi.useFakeTimers()
+  const unhandled = vi.fn()
+  process.on('unhandledRejection', unhandled)
+  const error = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
+  try {
+    let ticks = 0
+    const poller = new BridgePoller({
+      io: fixtureIo(),
+      claudeRoots: [],
+      codexRoot: '/codex',
+      now: () => {
+        if (++ticks === 2) throw new Error('SECRET_PATH /Users/owner')
+        return Date.now()
+      }
+    })
+    const post = vi.fn()
+    const stop = await poller.start(post)
+    await vi.advanceTimersByTimeAsync(2000)
+    await vi.advanceTimersByTimeAsync(2000)
+    stop()
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(unhandled).not.toHaveBeenCalled()
+    // The hello, then the tick after the failed one.
+    expect(post).toHaveBeenCalledTimes(2)
+    expect(error.mock.calls).toEqual([['Office bridge tick failed\n']])
+  } finally {
+    process.off('unhandledRejection', unhandled)
+    error.mockRestore()
+  }
+})
+
+it('polls at the pace it is told, and at once when told to speed up', async () => {
+  vi.useFakeTimers()
+  const poller = new BridgePoller({ io: fixtureIo(), claudeRoots: [], codexRoot: '/codex' })
+  const post = vi.fn()
+  const stop = await poller.start(post)
+  expect(post).toHaveBeenCalledTimes(1)
+
+  poller.setIntervalMs(30_000)
+  await vi.advanceTimersByTimeAsync(29_999)
+  expect(post).toHaveBeenCalledTimes(1)
+  await vi.advanceTimersByTimeAsync(1)
+  expect(post).toHaveBeenCalledTimes(2)
+
+  // A window came back: it should not wait out the slow interval to see current state.
+  poller.setIntervalMs(2000)
+  await vi.advanceTimersByTimeAsync(0)
+  expect(post).toHaveBeenCalledTimes(3)
+  await vi.advanceTimersByTimeAsync(2000)
+  expect(post).toHaveBeenCalledTimes(4)
+  stop()
+})
+
+it('keeps the pace it was given before it started', async () => {
+  vi.useFakeTimers()
+  const poller = new BridgePoller({ io: fixtureIo(), claudeRoots: [], codexRoot: '/codex' })
+  poller.setIntervalMs(30_000)
+  const post = vi.fn()
+  const stop = await poller.start(post)
+  await vi.advanceTimersByTimeAsync(29_999)
+  expect(post).toHaveBeenCalledTimes(1)
+  stop()
 })

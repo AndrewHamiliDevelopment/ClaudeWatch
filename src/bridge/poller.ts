@@ -1,11 +1,13 @@
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { UsageDelta } from '../shared/accounts'
+import { LIVE_POLL_MS } from '../shared/office/pace'
 import type { FeedMessage, OfficeSnapshot } from '../shared/office/types'
 import { type BridgeIo, systemIo } from './io'
 import { type ClaudeBatch, collectClaude } from './registry'
 import { collectCodex } from './codex'
 import { claimPanes, OrcaSource } from './orca'
+import { PROCESS_TABLE_ARGS } from './process-table'
 import { diff, emptySnapshot, reduce } from './reducer'
 import { TeammateSource } from './teammates'
 import { UsageThrottle } from './usage-throttle'
@@ -21,6 +23,9 @@ export interface PollerOptions {
 }
 export class BridgePoller {
   private snapshot = emptySnapshot()
+  private intervalMs = LIVE_POLL_MS
+  // Set while polling: restarts the timer at the current interval, and polls now if asked.
+  private repace: ((pollNow: boolean) => void) | null = null
   private readonly io: BridgeIo
   private readonly orca: OrcaSource
   private readonly teammates: TeammateSource
@@ -54,9 +59,13 @@ export class BridgePoller {
   }
   private async ingest(): Promise<OfficeSnapshot> {
     const now = this.now()
+    // One process table serves both sources: it is the tick's most expensive read.
+    let processTable: Promise<string> | undefined
+    const readProcessTable = (): Promise<string> =>
+      (processTable ??= this.io.exec('/bin/ps', PROCESS_TABLE_ARGS))
     const [claude, codex, orca] = await Promise.all([
-      collectClaude(this.roots, this.io, now, this.teammates),
-      collectCodex(this.codexRoot, this.io),
+      collectClaude(this.roots, this.io, now, this.teammates, readProcessTable),
+      collectCodex(this.codexRoot, this.io, readProcessTable),
       this.orca.poll(now)
     ])
     // The first snapshot goes out with usage unknown, so no window waits on a first scan.
@@ -100,16 +109,32 @@ export class BridgePoller {
         if (stopped) return
         post(diff(previous, next, next.rev))
         previous = next
+      } catch {
+        // The next tick tries again. The cause may name local paths, so it is not written out.
+        process.stderr.write('Office bridge tick failed\n')
       } finally {
         polling = false
       }
     }
-    const timer = setInterval(() => {
-      void poll()
-    }, 2000)
+    let timer: NodeJS.Timeout | undefined
+    this.repace = (pollNow) => {
+      clearInterval(timer)
+      timer = setInterval(() => void poll(), this.intervalMs)
+      if (pollNow) void poll()
+    }
+    this.repace(false)
     return () => {
       stopped = true
+      this.repace = null
       clearInterval(timer)
     }
+  }
+
+  // Changes how often the poll repeats. Speeding up polls at once, so a window that has just
+  // come back does not wait out the slow interval to show current state.
+  setIntervalMs(intervalMs: number): void {
+    const isFaster = intervalMs < this.intervalMs
+    this.intervalMs = intervalMs
+    this.repace?.(isFaster)
   }
 }

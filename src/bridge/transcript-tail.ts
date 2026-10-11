@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import type { CurrentTool } from '../shared/office/types'
-import { type BridgeIo, isMissing, jsonObject, object } from './io'
+import { type BridgeIo, isLabel, isMissing, jsonObject, object } from './io'
 import { toolCategory } from './tool-category'
 
 export interface TranscriptState {
@@ -21,7 +21,7 @@ export function parseTranscript(text: string): TranscriptState {
         record?.type === 'assistant' &&
         block?.type === 'tool_use' &&
         typeof block.id === 'string' &&
-        typeof block.name === 'string'
+        isLabel(block.name)
       ) {
         tools.push({ id: block.id, name: block.name })
       }

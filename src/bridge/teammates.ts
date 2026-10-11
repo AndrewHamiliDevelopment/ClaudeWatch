@@ -1,9 +1,9 @@
 import { join } from 'node:path'
 import type { AgentActivity, SubagentRef } from '../shared/office/types'
-import { type BridgeIo, isMissing, jsonObject, object } from './io'
+import { type BridgeIo, isLabel, isMissing, jsonObject, object } from './io'
 import { parseProcessTable } from './process-table'
 import { listAgentFiles } from './subagents'
-import { newestTeammateTranscripts } from './teammate-transcripts'
+import { newestTeammateTranscripts, type TranscriptFile } from './teammate-transcripts'
 import { toolActivity } from './tool-category'
 import { parseTranscript, projectSlug } from './transcript-tail'
 
@@ -30,9 +30,9 @@ interface LiveMember {
   process: TeammateProcess
 }
 
-const LABEL = /^[\w.-]{1,64}$/
-const AGENT_ID = /^[\w.-]{1,64}@[\w.-]{1,64}$/
-const SEARCH_INTERVAL_MS = 10000
+const NAME = /^[\w.-]{1,64}$/
+const FIRST_SEARCH_DELAY_MS = 10_000
+const MAX_SEARCH_DELAY_MS = 5 * 60_000
 const FRESH_MS = 60000
 
 // A teammate is its own process, started with the agent id and its lead's session id as flags.
@@ -50,16 +50,19 @@ export function parseTeammateProcesses(output: string): TeammateProcess[] {
 
 export class TeammateSource {
   private transcripts = new Map<string, string>()
-  private searchAgainAt = new Map<string, number>()
+  // When each teammate's folder is next searched, and how long that wait was.
+  private searches = new Map<string, { againAt: number; delayMs: number }>()
   private seen = new Set<string>()
 
   constructor(private readonly io: BridgeIo) {}
 
   // Teammates write no registry file: the roster names them and the process table proves
-  // which are alive. `processes` is asked only when the session leads a team.
+  // which are alive. `processes` is asked only when the session leads a team. `leadCwd` is
+  // where a member works when its roster entry names no folder; null when the lead is gone.
   async collect(
     root: string,
     leadSessionId: string,
+    leadCwd: string | null,
     processes: () => Promise<TeammateProcess[]>,
     now: number
   ): Promise<Teammate[]> {
@@ -75,9 +78,9 @@ export class TeammateSource {
     if (roster?.leadSessionId !== leadSessionId || !Array.isArray(roster.members)) return []
     const live = (await processes()).filter((p) => p.parentSessionId === leadSessionId)
     const members = roster.members
-      .flatMap((value) => this.liveMember(root, object(value), live))
+      .flatMap((value) => this.liveMember(root, team, object(value), live))
       .sort((a, b) => a.agentId.localeCompare(b.agentId))
-    await this.tieTranscripts(root, team, members, now)
+    await this.tieTranscripts(root, team, members, leadCwd, now)
     const teammates: Teammate[] = []
     for (const member of members) {
       const activity = await this.activity(member.identity, now)
@@ -91,6 +94,7 @@ export class TeammateSource {
           activity,
           kind: 'teammate',
           name: member.name,
+          ...(member.cwd && { cwd: member.cwd }),
           pid: member.process.pid,
           startedAtMs: member.process.startedAtMs,
           orcaPaneKey: null,
@@ -105,32 +109,28 @@ export class TeammateSource {
   prune(): void {
     for (const identity of this.transcripts.keys())
       if (!this.seen.has(identity)) this.transcripts.delete(identity)
-    for (const identity of this.searchAgainAt.keys())
-      if (!this.seen.has(identity)) this.searchAgainAt.delete(identity)
+    for (const identity of this.searches.keys())
+      if (!this.seen.has(identity)) this.searches.delete(identity)
     this.seen.clear()
   }
 
   private liveMember(
     root: string,
+    team: string,
     member: Record<string, unknown> | null,
     live: TeammateProcess[]
   ): LiveMember[] {
-    const process = live.find((p) => p.agentId === member?.agentId)
-    if (
-      !member ||
-      !process ||
-      !AGENT_ID.test(process.agentId) ||
-      typeof member.name !== 'string' ||
-      !LABEL.test(member.name) ||
-      typeof member.agentType !== 'string'
-    )
-      return []
-    const identity = `${root}\n${process.agentId}\n${process.pid}:${process.startedAtMs}`
+    if (!member || typeof member.name !== 'string' || !NAME.test(member.name)) return []
+    // The id is the name and the team, so nothing can show one agent under another's name.
+    const agentId = `${member.name}@${team}`
+    const process = live.find((p) => p.agentId === agentId)
+    if (!process || member.agentId !== agentId || !isLabel(member.agentType)) return []
+    const identity = `${root}\n${agentId}\n${process.pid}:${process.startedAtMs}`
     this.seen.add(identity)
     return [
       {
         identity,
-        agentId: process.agentId,
+        agentId,
         name: member.name,
         agentType: member.agentType,
         cwd: typeof member.cwd === 'string' && member.cwd.startsWith('/') ? member.cwd : null,
@@ -140,34 +140,51 @@ export class TeammateSource {
     ]
   }
 
+  // Ties each member to the newest transcript that names it and was written since it joined.
+  // A tied member is looked for again too: a re-spawn under its name starts a new transcript.
   private async tieTranscripts(
     root: string,
     team: string,
     members: LiveMember[],
+    leadCwd: string | null,
     now: number
   ): Promise<void> {
-    const searches = new Map<string, LiveMember[]>()
+    const wantedIn = new Map<string, LiveMember[]>()
     for (const member of members) {
-      if (!member.cwd || this.transcripts.has(member.identity)) continue
-      if (now < (this.searchAgainAt.get(member.identity) ?? 0)) continue
-      this.searchAgainAt.set(member.identity, now + SEARCH_INTERVAL_MS)
-      const folder = join(root, 'projects', projectSlug(member.cwd))
-      searches.set(folder, [...(searches.get(folder) ?? []), member])
+      const cwd = member.cwd ?? leadCwd
+      if (!cwd || now < (this.searches.get(member.identity)?.againAt ?? 0)) continue
+      const folder = join(root, 'projects', projectSlug(cwd))
+      wantedIn.set(folder, [...(wantedIn.get(folder) ?? []), member])
     }
-    for (const [folder, wanted] of searches) {
-      try {
-        const since = Math.min(...wanted.map((member) => member.joinedAtMs))
-        const newest = await newestTeammateTranscripts(folder, team, since, this.io)
-        for (const member of wanted) {
-          const path = newest.get(member.name)
-          if (!path) continue
-          this.transcripts.set(member.identity, path)
-          this.searchAgainAt.delete(member.identity)
-        }
-      } catch {
+    for (const [folder, wanted] of wantedIn) {
+      const newest = await newestTeammateTranscripts(
+        folder,
+        team,
+        new Set(wanted.map((member) => member.name)),
+        Math.min(...wanted.map((member) => member.joinedAtMs)),
+        this.io
         // An unreadable folder leaves its teammates untied; they still show, as thinking.
+      ).catch(() => new Map<string, TranscriptFile>())
+      for (const member of wanted) {
+        const found = newest.get(member.name)
+        const isNewTie =
+          found !== undefined &&
+          found.mtimeMs >= member.joinedAtMs &&
+          found.path !== this.transcripts.get(member.identity)
+        if (isNewTie) this.transcripts.set(member.identity, found.path)
+        this.searchLater(member.identity, now, isNewTie)
       }
     }
+  }
+
+  // Each search reads transcript heads, so one that changes nothing doubles the wait.
+  private searchLater(identity: string, now: number, startOver: boolean): void {
+    const waited = this.searches.get(identity)?.delayMs
+    const delayMs =
+      startOver || waited === undefined
+        ? FIRST_SEARCH_DELAY_MS
+        : Math.min(waited * 2, MAX_SEARCH_DELAY_MS)
+    this.searches.set(identity, { againAt: now + delayMs, delayMs })
   }
 
   // A teammate has no registry status: an unfinished tool shows as that tool, a transcript
@@ -181,9 +198,9 @@ export class TeammateSource {
       if (tool) return toolActivity(tool.category)
       return now - mtimeMs < FRESH_MS ? 'thinking' : 'idle'
     } catch {
-      // The transcript went away or cannot be read: look for it again, later.
+      // The transcript went away or cannot be read: look for it again, soon.
       this.transcripts.delete(identity)
-      this.searchAgainAt.set(identity, now + SEARCH_INTERVAL_MS)
+      this.searchLater(identity, now, true)
       return 'thinking'
     }
   }

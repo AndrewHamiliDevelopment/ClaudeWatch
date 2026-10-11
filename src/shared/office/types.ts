@@ -50,6 +50,8 @@ export interface SubagentRef {
   // its parent. Absent means subagent.
   kind?: 'subagent' | 'teammate'
   name?: string // the teammate's own name, e.g. "lena-b5-themes"
+  // The teammate's own working folder, when its roster names one; else it works in its lead's.
+  cwd?: string
   pid?: number | null
   startedAtMs?: number
   orcaPaneKey?: string | null
@@ -88,6 +90,9 @@ export interface SessionRef {
   currentTool: CurrentTool | null
   subagents: SubagentRef[]
   startedAtMs: number
+  // When the conversation began, where it can outlive its process: a resumed Codex thread
+  // runs in a new process and carries its whole history in its usage.
+  threadStartedAtMs?: number
   updatedAtMs: number
   // null: not counted yet, or unreadable.
   usage?: SessionUsage | null

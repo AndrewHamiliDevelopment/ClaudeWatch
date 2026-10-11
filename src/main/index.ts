@@ -17,6 +17,7 @@ import { createWidgetStatsWriter } from './widget-stats-writer'
 import { SoundPlayer } from './sound-player'
 import { setupWidgetSync } from './widget-sync'
 import { setupOffice } from './office-setup'
+import { paceBridgeByWindows } from './bridge-pace'
 import { opensOfficeOnStart } from './office-window'
 import { createAccountLedger } from './accounts'
 
@@ -129,6 +130,8 @@ app.whenReady().then(() => {
     userData: app.getPath('userData')
   })
   const office = setupOffice(terminalResolver, store, tracker, accounts)
+  // Before any window exists, so each one is watched from its creation.
+  paceBridgeByWindows(app, () => BrowserWindow.getAllWindows(), office.setPollInterval)
   const focusSession = (pid: number): void => void office.focusSession(pid)
 
   // Initialize notifications and sound player

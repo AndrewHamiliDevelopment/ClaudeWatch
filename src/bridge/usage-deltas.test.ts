@@ -87,3 +87,30 @@ it('reports added tokens with the project of their session, on the tick they arr
   expect(onUsage).toHaveBeenCalledOnce()
   expect(JSON.stringify(onUsage.mock.calls)).not.toContain('CANARY')
 })
+
+it('reports a finished teammate’s last lines once, and never its earlier ones again', async () => {
+  const main = '/p/s.jsonl'
+  const mate = '/p/mate.jsonl'
+  const files: Record<string, string> = {
+    [main]: stamped('m1', 5, 10),
+    [mate]: stamped('t1', 3, 12)
+  }
+  const tracker = new UsageTracker(fixtureIo(files))
+  const added: unknown[] = []
+  const scan = (teammates: [string, string[]][]): Promise<void> =>
+    tracker.scan(
+      new Map([['claude:s', { main, agents: [], teammates: new Map(teammates) }]]),
+      (delta) => added.push(delta)
+    )
+  await scan([['lena@session-s', [mate]]])
+  added.length = 0
+
+  files[mate] += stamped('t2', 8, 13)
+  await scan([])
+  expect(added).toEqual([
+    { sessionKey: 'claude:s', file: mate, atMs: minuteMs(13), counts: output(8) }
+  ])
+  added.length = 0
+  await scan([])
+  expect(added).toEqual([])
+})

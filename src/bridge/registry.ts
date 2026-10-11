@@ -1,9 +1,15 @@
+const STATUSES = ['busy', 'idle', 'waiting', 'shell'] as const
+type RegistryStatus = (typeof STATUSES)[number]
+const isStatus = (value: unknown): value is RegistryStatus =>
+  STATUSES.some((status) => status === value)
+const SESSION_ID = /^[\w-]+$/
+
 export interface RegistryEntry {
   pid: number
   sessionId: string
   cwd: string
   name: string
-  status: 'busy' | 'idle' | 'waiting' | 'shell'
+  status: RegistryStatus
   waitingFor: string
   procStart: string
   updatedAtMs: number
@@ -13,12 +19,17 @@ import { join } from 'node:path'
 import type { SessionRef, SourceHealth } from '../shared/office/types'
 import { type BridgeIo, isMissing, jsonObject } from './io'
 import { isLive } from './liveness'
-import { sessionFromRegistry } from './claude'
+import { sessionFromRegistry, sessionFromTeammate } from './claude'
 import { resolveProject } from './project-root'
 import { parseTranscript, transcriptPath } from './transcript-tail'
 import { listAgentFiles, liveSubagents } from './subagents'
 import { PROCESS_TABLE_ARGS } from './process-table'
-import { parseTeammateProcesses, type TeammateProcess, TeammateSource } from './teammates'
+import {
+  parseTeammateProcesses,
+  type Teammate,
+  type TeammateProcess,
+  TeammateSource
+} from './teammates'
 import type { SessionFiles } from './usage-tracker'
 
 function parseRegistry(text: string): RegistryEntry | null {
@@ -29,11 +40,11 @@ function parseRegistry(text: string): RegistryEntry | null {
     !Number.isSafeInteger(record.pid) ||
     record.pid <= 0 ||
     typeof record.sessionId !== 'string' ||
-    !/^[\w-]+$/.test(record.sessionId) ||
+    !SESSION_ID.test(record.sessionId) ||
     typeof record.cwd !== 'string' ||
     !record.cwd.startsWith('/') ||
     typeof record.procStart !== 'string' ||
-    !['busy', 'idle', 'waiting', 'shell'].includes(String(record.status))
+    !isStatus(record.status)
   )
     return null
   const stamp = record.statusUpdatedAt ?? record.updatedAt
@@ -44,7 +55,7 @@ function parseRegistry(text: string): RegistryEntry | null {
     sessionId: record.sessionId,
     cwd: record.cwd,
     name: typeof record.name === 'string' ? record.name : '',
-    status: record.status as RegistryEntry['status'],
+    status: record.status,
     waitingFor: typeof record.waitingFor === 'string' ? record.waitingFor : '',
     procStart: record.procStart,
     updatedAtMs: Number.isFinite(updatedAtMs) ? updatedAtMs : 0
@@ -62,16 +73,19 @@ export async function collectClaude(
   roots: string[],
   io: BridgeIo,
   now: number,
-  teammates = new TeammateSource(io)
+  teammates = new TeammateSource(io),
+  readProcessTable = (): Promise<string> => io.exec('/bin/ps', PROCESS_TABLE_ARGS)
 ): Promise<ClaudeBatch> {
   const sessions: SessionRef[] = []
   const sources: SourceHealth[] = []
   const transcripts = new Map<string, SessionFiles>()
-  // Read at most once per tick, and only when some session leads a team.
+  // Read at most once per tick.
   let processTable: Promise<TeammateProcess[]> | undefined
   const processes = (): Promise<TeammateProcess[]> =>
-    (processTable ??= io.exec('/bin/ps', PROCESS_TABLE_ARGS).then(parseTeammateProcesses))
-  for (const root of [...new Set(roots)]) {
+    (processTable ??= readProcessTable().then(parseTeammateProcesses))
+  const uniqueRoots = [...new Set(roots)]
+  const liveSessionIds = new Set<string>()
+  for (const root of uniqueRoots) {
     const health: SourceHealth = { id: `claude:${root}`, ok: true, detail: 'empty' }
     try {
       const files = await io.list(join(root, 'sessions'))
@@ -79,6 +93,7 @@ export async function collectClaude(
         try {
           const entry = parseRegistry(await io.readText(join(root, 'sessions', file)))
           if (!entry || !(await isLive(entry, io))) continue
+          liveSessionIds.add(entry.sessionId)
           const project = await resolveProject(entry.cwd, io)
           const path = await transcriptPath(root, entry.cwd, entry.sessionId, io)
           const transcript = path
@@ -88,7 +103,7 @@ export async function collectClaude(
           const agents = await liveSubagents(agentFiles, io, now)
           // A team that cannot be read costs the lead its teammates, never the lead itself.
           const team = await teammates
-            .collect(root, entry.sessionId, processes, now)
+            .collect(root, entry.sessionId, entry.cwd, processes, now)
             .catch(() => null)
           const session = sessionFromRegistry(
             entry,
@@ -106,7 +121,7 @@ export async function collectClaude(
                 (team ?? []).map((teammate) => [teammate.ref.id, teammate.transcripts])
               )
             })
-          health.detail = 'live'
+          if (health.ok) health.detail = 'live'
           if (!team) {
             health.ok = false
             health.detail = 'team read failed'
@@ -126,6 +141,41 @@ export async function collectClaude(
     }
     sources.push(health)
   }
+  // Who has no lead cannot be told while a registry is unread: it may hold the lead.
+  if (sources.every((source) => source.ok)) {
+    const parents = (await processes().catch(() => [])).map((p) => p.parentSessionId)
+    for (const leadSessionId of new Set(parents)) {
+      if (liveSessionIds.has(leadSessionId) || !SESSION_ID.test(leadSessionId)) continue
+      for (const root of uniqueRoots) {
+        const orphans = await teammates
+          .collect(root, leadSessionId, null, processes, now)
+          .catch(() => [])
+        for (const orphan of orphans) {
+          const files = await orphanSession(orphan, io).catch(() => null)
+          if (!files) continue
+          sessions.push(files.session)
+          if (files.transcripts) transcripts.set(files.session.key, files.transcripts)
+        }
+      }
+    }
+  }
   teammates.prune()
   return { sessions, sources, transcripts }
+}
+
+// A teammate outlives its lead when the lead exits first. It still runs in its own process
+// and pane, so it is shown as a session of its own until it exits too.
+async function orphanSession(
+  { ref, transcripts: [main] }: Teammate,
+  io: BridgeIo
+): Promise<{ session: SessionRef; transcripts: SessionFiles | null } | null> {
+  const { cwd, pid } = ref
+  if (!cwd || typeof pid !== 'number') return null
+  const project = await resolveProject(cwd, io)
+  return {
+    session: sessionFromTeammate({ ...ref, cwd, pid }, project.root, project.worktree),
+    transcripts: main
+      ? { main, agents: await listAgentFiles(main, io), teammates: new Map() }
+      : null
+  }
 }

@@ -159,3 +159,31 @@ it('reports an unreadable transcript as unknown and unhealthy, never as zero', a
   expect(tracker.usage('claude:s')).toBeNull()
   expect(tracker.health()).toEqual({ id: 'usage', ok: false, detail: 'transcript read failed' })
 })
+
+it('keeps counting a teammate that finished, for as long as its lead session lives', async () => {
+  const mate = ['/p/mate.jsonl', '/p/mate/subagents/agent-xyz.jsonl']
+  const files: Record<string, string> = {
+    [main]: message('m1', 10, 10),
+    [mate[0]]: message('t1', 500, 500),
+    [mate[1]]: message('x1', 20, 30)
+  }
+  const io = fixtureIo(files)
+  const tracker = new UsageTracker(io)
+  await tracker.scan(await sessionFiles(io, [['lena@session-s', mate]]))
+  const whileAlive = tracker.usage('claude:s')
+  expect(whileAlive).toMatchObject({ subagents: counts(520, 530), spawned: 2 })
+
+  // The teammate's process exits, so the roster no longer lists it.
+  await tracker.scan(await sessionFiles(io))
+  expect(tracker.usage('claude:s')).toEqual(whileAlive)
+  // What it wrote last, just before leaving, still counts.
+  files[mate[0]] += message('t2', 1, 2)
+  await tracker.scan(await sessionFiles(io))
+  expect(tracker.usage('claude:s')).toMatchObject({ subagents: counts(521, 532), spawned: 2 })
+
+  // Only the lead's own exit lets go of them.
+  await tracker.scan(new Map())
+  expect(tracker.tokens(mate)).toBeNull()
+  await tracker.scan(await sessionFiles(io))
+  expect(tracker.usage('claude:s')).toMatchObject({ subagents: counts(0, 0), spawned: 0 })
+})

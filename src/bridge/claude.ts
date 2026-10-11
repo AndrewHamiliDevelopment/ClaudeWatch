@@ -3,6 +3,8 @@ import type { SessionRef, SubagentRef } from '../shared/office/types'
 import { projectKey } from '../shared/office/project-key'
 import type { RegistryEntry } from './registry'
 import type { TranscriptState } from './transcript-tail'
+
+const NO_TOOL: TranscriptState = { tool: null, error: false }
 import { toolActivity } from './tool-category'
 
 export function sessionFromRegistry(
@@ -51,4 +53,31 @@ export function sessionFromRegistry(
     updatedAtMs: entry.updatedAtMs,
     usage: null
   }
+}
+
+// A teammate shown as a session of its own (its lead has exited): placed by its own folder,
+// proven by its own process, named by its own name.
+export function sessionFromTeammate(
+  teammate: SubagentRef & { cwd: string; pid: number },
+  root: string,
+  worktree: string | null
+): SessionRef {
+  const startedAtMs = teammate.startedAtMs ?? 0
+  const placed = sessionFromRegistry(
+    {
+      pid: teammate.pid,
+      sessionId: teammate.id,
+      cwd: teammate.cwd,
+      name: teammate.name ?? teammate.type,
+      status: 'busy',
+      waitingFor: '',
+      procStart: '',
+      updatedAtMs: startedAtMs
+    },
+    NO_TOOL,
+    [],
+    root,
+    worktree
+  )
+  return { ...placed, activity: teammate.activity, startedAtMs }
 }

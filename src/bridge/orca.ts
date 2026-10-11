@@ -69,9 +69,14 @@ export function claimPanes(sessions: SessionRef[]): SessionRef[] {
   )
 }
 
+// Each ask verifies Orca's whole bundle first (about 1.3 CPU-seconds), so a healthy Orca is
+// asked once a minute. A failing one is retried sooner, then backs off to the same minute.
+const HEALTHY_POLL_MS = 60_000
+const FIRST_RETRY_MS = 10_000
+
 export class OrcaSource {
   private nextPoll = 0
-  private delay = 10000
+  private delay = FIRST_RETRY_MS
   private health: SourceHealth = { id: 'orca', ok: true, detail: 'not polled' }
   private environments = new Map<string, { value: OrcaEnvironment; retryAt: number }>()
   constructor(private readonly io: BridgeIo) {}
@@ -83,12 +88,12 @@ export class OrcaSource {
       const response = jsonObject(await this.io.exec(ORCA_CLI, ['worktree', 'ps', '--json']))
       if (!response || response.ok === false) throw new Error('invalid response')
       this.health = { id: 'orca', ok: true, detail: 'available' }
-      this.delay = 10000
-      this.nextPoll = now + this.delay
+      this.delay = FIRST_RETRY_MS
+      this.nextPoll = now + HEALTHY_POLL_MS
     } catch {
       this.health = { id: 'orca', ok: false, detail: 'unavailable' }
       this.nextPoll = now + this.delay
-      this.delay = Math.min(this.delay * 2, 60000)
+      this.delay = Math.min(this.delay * 2, HEALTHY_POLL_MS)
     }
     return { ...this.health }
   }

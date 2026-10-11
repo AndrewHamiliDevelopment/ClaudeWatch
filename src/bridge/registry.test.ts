@@ -100,7 +100,7 @@ describe('agent teams', () => {
   it('reports a live teammate under its lead, though it has no registry file of its own', async () => {
     const io = fixtureIo(files)
     const exec = vi.fn(async (_file: string, args: string[]) =>
-      args[0] === '-Ao' ? table : entry.procStart
+      args[0] === '-xo' ? table : entry.procStart
     )
     io.exec = exec
     const batch = await collectClaude([root], io, 2000)
@@ -114,6 +114,7 @@ describe('agent teams', () => {
         activity: 'thinking',
         kind: 'teammate',
         name: 'lena-b0',
+        cwd: '/repo',
         pid: 93143,
         startedAtMs: Date.parse(`${entry.procStart} UTC`),
         orcaPaneKey: null,
@@ -142,12 +143,12 @@ describe('agent teams', () => {
       ])
     })
     // One process table serves every lead in the tick.
-    expect(exec.mock.calls.filter(([, args]) => args[0] === '-Ao')).toHaveLength(1)
+    expect(exec.mock.calls.filter(([, args]) => args[0] === '-xo')).toHaveLength(1)
   })
   it('keeps the lead when its team cannot be read, and says so', async () => {
     const io = fixtureIo(files)
     io.exec = async (_file, args) => {
-      if (args[0] === '-Ao') throw new Error('timeout')
+      if (args[0] === '-xo') throw new Error('timeout')
       return entry.procStart
     }
     const batch = await collectClaude([root], io, 2000)
@@ -158,6 +159,95 @@ describe('agent teams', () => {
       id: `claude:${root}`,
       ok: false,
       detail: 'team read failed'
+    })
+  })
+  it('still says the team read failed when a later session of the same root reads fine', async () => {
+    const io = fixtureIo({
+      ...files,
+      [`${root}/sessions/43.json`]: JSON.stringify({ ...entry, pid: 43, sessionId: 'plain' })
+    })
+    io.exec = async (_file, args) => {
+      if (args[0] === '-xo') throw new Error('timeout')
+      return entry.procStart
+    }
+    const batch = await collectClaude([root], io, 2000)
+    expect(batch.sessions.map((session) => session.sessionId)).toEqual([lead, 'plain'])
+    expect(batch.sources[0]).toEqual({
+      id: `claude:${root}`,
+      ok: false,
+      detail: 'team read failed'
+    })
+  })
+
+  describe('a teammate whose lead has exited', () => {
+    // The lead's registry file is gone; its roster and its teammate's process are not.
+    const orphaned = { ...files, [file]: null as unknown as string }
+    delete (orphaned as Record<string, unknown>)[file]
+    const key = `claude:lena-b0@${team}`
+
+    it('is shown as a session of its own, with its own process, folder and transcripts', async () => {
+      const io = fixtureIo(orphaned)
+      io.exec = async (_file, args) => (args[0] === '-xo' ? table : entry.procStart)
+      const batch = await collectClaude([root], io, 2000)
+      expect(batch.sessions).toHaveLength(1)
+      expect(batch.sessions[0]).toMatchObject({
+        key,
+        provider: 'claude',
+        pid: 93143,
+        name: 'lena-b0',
+        cwd: '/repo',
+        projectLabel: 'repo',
+        activity: 'thinking',
+        attention: 'none',
+        subagents: [],
+        startedAtMs: Date.parse(`${entry.procStart} UTC`)
+      })
+      expect(batch.transcripts.get(key)).toEqual({
+        main: `${root}/projects/-repo/mate.jsonl`,
+        agents: [
+          {
+            id: 'xyz',
+            path: `${root}/projects/-repo/mate/subagents/agent-xyz.jsonl`,
+            size: 0,
+            mtimeMs: 1000
+          }
+        ],
+        teammates: new Map()
+      })
+      expect(batch.sources[0].ok).toBe(true)
+    })
+
+    it('is not shown twice while its lead lives', async () => {
+      const io = fixtureIo(files)
+      io.exec = async (_file, args) => (args[0] === '-xo' ? table : entry.procStart)
+      const batch = await collectClaude([root], io, 2000)
+      expect(batch.sessions.map((session) => session.key)).toEqual([`claude:${lead}`])
+    })
+
+    it('is looked for only under a parent id that is a session id', async () => {
+      const io = fixtureIo(orphaned)
+      const read = vi.spyOn(io, 'readText')
+      io.exec = async (_file, args) =>
+        args[0] === '-xo'
+          ? `93143 ${entry.procStart} /versions/2.1.296 --agent-id x@y --parent-session-id ../../..`
+          : entry.procStart
+      expect((await collectClaude([root], io, 2000)).sessions).toEqual([])
+      expect(read.mock.calls.flat().every((path) => !path.includes('..'))).toBe(true)
+      expect(read.mock.calls.flat().some((path) => path.includes('/teams/'))).toBe(false)
+    })
+
+    it('is not guessed at while the registry itself cannot be read', async () => {
+      const io = fixtureIo(orphaned)
+      io.exec = async (_file, args) => (args[0] === '-xo' ? table : entry.procStart)
+      const list = io.list
+      io.list = async (path) => {
+        if (path === `${root}/sessions`)
+          throw Object.assign(new Error('denied'), { code: 'EACCES' })
+        return list(path)
+      }
+      const batch = await collectClaude([root], io, 2000)
+      expect(batch.sessions).toEqual([])
+      expect(batch.sources[0].ok).toBe(false)
     })
   })
 })

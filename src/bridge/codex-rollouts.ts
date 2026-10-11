@@ -7,6 +7,8 @@ export interface Rollout {
   id: string
   cwd: string
   mtimeMs: number
+  // When the thread was first created, however often it has been resumed since.
+  startedAtMs: number | null
   // The account the session was created under, hashed here so its id never leaves this file.
   accountKey: string | null
 }
@@ -57,11 +59,14 @@ export async function findRollouts(root: string, io: BridgeIo): Promise<Rollout[
           typeof meta.id === 'string'
         ) {
           const creator = meta.creator_account_id
+          const created = meta.timestamp ?? header.timestamp
+          const startedAtMs = typeof created === 'string' ? Date.parse(created) : Number.NaN
           rollout = {
             path,
             id: meta.id,
             cwd: meta.cwd,
             mtimeMs: info.mtimeMs,
+            startedAtMs: Number.isFinite(startedAtMs) ? startedAtMs : null,
             accountKey: typeof creator === 'string' && creator ? accountKey('codex', creator) : null
           }
           rollouts.push(rollout)

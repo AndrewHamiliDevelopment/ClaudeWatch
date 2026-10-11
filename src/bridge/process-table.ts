@@ -1,5 +1,6 @@
 // `ps` with these columns, read with TZ=UTC: one row per process, its start time and argv.
-export const PROCESS_TABLE_ARGS = ['-Ao', 'pid=,lstart=,command=']
+// -x without -A: the owner's own processes, so no other account can pose as one of their agents.
+export const PROCESS_TABLE_ARGS = ['-xo', 'pid=,lstart=,command=']
 
 export interface ProcessRow {
   pid: number

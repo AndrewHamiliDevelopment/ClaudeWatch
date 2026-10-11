@@ -99,7 +99,17 @@ describe('Orca polling', () => {
       expect(io.exec).toHaveBeenCalledTimes(5)
     }
   )
-  it('polls successful responses at most every 10s and reads each new pid env once', async () => {
+  it('asks a healthy Orca at most once a minute, since each ask checks its whole bundle', async () => {
+    const io = fixtureIo({ [ORCA_CLI]: '' })
+    io.exec = vi.fn(async () => '{"ok":true,"data":[]}')
+    const source = new OrcaSource(io)
+    expect((await source.poll(0)).ok).toBe(true)
+    await source.poll(59_999)
+    expect(io.exec).toHaveBeenCalledTimes(1)
+    await source.poll(60_000)
+    expect(io.exec).toHaveBeenCalledTimes(2)
+  })
+  it('reads each new pid’s environment once', async () => {
     const io = fixtureIo({ [ORCA_CLI]: '' })
     const ps = psOf('claude', 'ORCA_PANE_KEY=p SECRET=hidden')
     io.exec = vi.fn(async (file, args) =>

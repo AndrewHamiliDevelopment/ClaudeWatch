@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import type { SubagentRef } from '../shared/office/types'
-import { type BridgeIo, isMissing, jsonObject } from './io'
+import { type BridgeIo, isLabel, isMissing, jsonObject } from './io'
 
 export interface AgentFile {
   id: string
@@ -51,7 +51,7 @@ export async function liveSubagents(
     if (now - file.mtimeMs >= 60000 || file.mtimeMs > now) continue
     try {
       const meta = jsonObject(await io.readText(file.path.replace(/\.jsonl$/, '.meta.json')))
-      if (typeof meta?.agentType === 'string')
+      if (isLabel(meta?.agentType))
         agents.push({ id: file.id, type: meta.agentType, activity: 'thinking' })
     } catch (error) {
       if (!isMissing(error)) throw error

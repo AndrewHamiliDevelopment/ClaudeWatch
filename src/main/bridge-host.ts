@@ -1,5 +1,6 @@
 import { applyFeed } from '../shared/office/apply-feed'
 import { isFeedMessage } from '../shared/office/feed-message'
+import { LIVE_POLL_MS, type PaceMessage } from '../shared/office/pace'
 import type { FeedMessage, OfficeSnapshot } from '../shared/office/types'
 
 // The subset of Electron's UtilityProcess the host relies on, so tests can fake it.
@@ -7,6 +8,8 @@ export interface BridgeProcess {
   on(event: 'message', listener: (data: unknown) => void): unknown
   on(event: 'exit', listener: (code: number) => void): unknown
   kill(): boolean
+  // Absent on a bridge that runs in this process: it polls only while it is watched.
+  postMessage?(message: PaceMessage): void
 }
 
 interface BridgeHostOptions {
@@ -25,6 +28,7 @@ export class BridgeHost {
   private restartTimer: NodeJS.Timeout | null = null
   private restartDelayMs = FIRST_RESTART_DELAY_MS
   private latest: OfficeSnapshot | null = null
+  private pollIntervalMs = LIVE_POLL_MS
   private readonly listeners = new Set<(message: FeedMessage) => void>()
 
   constructor(options: BridgeHostOptions) {
@@ -51,6 +55,17 @@ export class BridgeHost {
     return this.latest
   }
 
+  // How often the bridge polls, now and after any restart.
+  setPollInterval(intervalMs: number): void {
+    if (intervalMs === this.pollIntervalMs) return
+    this.pollIntervalMs = intervalMs
+    this.tellPace(this.child)
+  }
+
+  private tellPace(child: BridgeProcess | null): void {
+    child?.postMessage?.({ type: 'pace', intervalMs: this.pollIntervalMs })
+  }
+
   onMessage(listener: (message: FeedMessage) => void): () => void {
     this.listeners.add(listener)
     return () => {
@@ -63,7 +78,11 @@ export class BridgeHost {
     this.child = child
     child.on('message', (data) => {
       if (child !== this.child || !isFeedMessage(data)) return
-      if (data.type === 'hello') this.restartDelayMs = FIRST_RESTART_DELAY_MS
+      if (data.type === 'hello') {
+        this.restartDelayMs = FIRST_RESTART_DELAY_MS
+        // A fresh bridge polls live; its hello is the first moment it is known to be listening.
+        if (this.pollIntervalMs !== LIVE_POLL_MS) this.tellPace(child)
+      }
       this.latest = applyFeed(this.latest, data)
       for (const listener of this.listeners) listener(data)
     })

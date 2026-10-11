@@ -102,6 +102,49 @@ it('matches cwd using only rollout headers then tails the newest match', async (
   expect(tail).toHaveBeenCalledTimes(1)
   expect(batch.sources[0].ok).toBe(true)
 })
+it('keeps the last usage it read while output pushes the token count out of the tail', async () => {
+  const meta = JSON.stringify({ type: 'session_meta', payload: { id: 'a', cwd: '/repo' } })
+  const files: Record<string, string | null> = {
+    '/codex/sessions/rollout-a.jsonl': `${meta}\n${tokenCount(1000, 700, 300)}`,
+    '/repo/.git': null
+  }
+  const io = fixtureIo(files)
+  io.exec = async (file) =>
+    file.endsWith('ps') ? '42 Sat Oct 10 15:29:12 2026 /bin/codex' : 'p42\nn/repo\n'
+  const usage = async (): Promise<unknown> => (await collectCodex('/codex', io)).sessions[0].usage
+  const counted = await usage()
+  expect(counted).toMatchObject({ own: { input: 300, cacheRead: 700 } })
+
+  // What a 64 KB tail holds after a long tool output: no token count at all.
+  const output = JSON.stringify({
+    type: 'response_item',
+    payload: { type: 'function_call_output' }
+  })
+  files['/codex/sessions/rollout-a.jsonl'] = `${meta}\n${output}`
+  expect(await usage()).toEqual(counted)
+  files['/codex/sessions/rollout-a.jsonl'] = `${meta}\n${output}\n${tokenCount(2000, 700, 300)}`
+  expect(await usage()).toMatchObject({ own: { input: 1300, cacheRead: 700 } })
+})
+
+it('says when the thread itself began, which a resumed session’s process does not', async () => {
+  const meta = (extra: object): string =>
+    JSON.stringify({ type: 'session_meta', payload: { id: 'a', cwd: '/repo', ...extra } })
+  const files: Record<string, string | null> = {
+    '/codex/sessions/rollout-a.jsonl': meta({ timestamp: '2026-09-01T08:00:00.000Z' }),
+    '/repo/.git': null
+  }
+  const io = fixtureIo(files)
+  io.exec = async (file) =>
+    file.endsWith('ps') ? '42 Sat Oct 10 15:29:12 2026 /bin/codex' : 'p42\nn/repo\n'
+  const [resumed] = (await collectCodex('/codex', io)).sessions
+  expect(resumed.startedAtMs).toBe(Date.parse('Sat Oct 10 15:29:12 2026 UTC'))
+  expect(resumed.threadStartedAtMs).toBe(Date.parse('2026-09-01T08:00:00.000Z'))
+
+  const undated = fixtureIo({ ...files, '/codex/sessions/rollout-a.jsonl': meta({}) })
+  undated.exec = io.exec
+  expect('threadStartedAtMs' in (await collectCodex('/codex', undated)).sessions[0]).toBe(false)
+})
+
 it('keeps live CLI processes even without a rollout and reports process failures', async () => {
   const io = fixtureIo()
   io.exec = async (file) => (file.endsWith('ps') ? '42 Sat Oct 10 15:29:12 2026 codex' : 'n/plain')

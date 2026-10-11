@@ -3,6 +3,7 @@ import type {
   AgentActivity,
   AgentAttention,
   SessionRef,
+  SessionUsage,
   SourceHealth
 } from '../shared/office/types'
 import { projectKey } from '../shared/office/project-key'
@@ -45,14 +46,22 @@ export function parseCodexActivity(tail: string): {
   return { activity, attention, updatedAtMs }
 }
 
+// The usage last read from each live rollout. A long tool output pushes the newest
+// `token_count` out of the 64 KB tail, and the total it gave still stands until the next one.
+const lastUsage = new WeakMap<BridgeIo, Map<string, SessionUsage>>()
+
 export async function collectCodex(
   root: string,
-  io: BridgeIo
+  io: BridgeIo,
+  readProcessTable = (): Promise<string> => io.exec('/bin/ps', PROCESS_TABLE_ARGS)
 ): Promise<{ sessions: SessionRef[]; sources: SourceHealth[] }> {
   const sessions: SessionRef[] = []
   const health: SourceHealth = { id: 'codex', ok: true, detail: 'empty' }
+  let known = lastUsage.get(io)
+  if (!known) lastUsage.set(io, (known = new Map()))
+  const live = new Set<string>()
   try {
-    const processes = parseCodexProcesses(await io.exec('/bin/ps', PROCESS_TABLE_ARGS))
+    const processes = parseCodexProcesses(await readProcessTable())
     const rollouts = processes.length ? await findRollouts(root, io) : []
     const used = new Set<string>()
     for (const process of processes) {
@@ -83,6 +92,9 @@ export async function collectCodex(
                 attention: 'none' as const,
                 updatedAtMs: process.startedAtMs
               }
+        const usage = (tail !== null ? parseCodexUsage(tail) : null) ?? known.get(id) ?? null
+        if (usage) known.set(id, usage)
+        live.add(id)
         const project = await resolveProject(cwd, io)
         sessions.push({
           key: `codex:${id}`,
@@ -103,7 +115,8 @@ export async function collectCodex(
           currentTool: null,
           subagents: [],
           startedAtMs: process.startedAtMs,
-          usage: tail !== null ? parseCodexUsage(tail) : null,
+          usage,
+          ...(rollout?.startedAtMs != null && { threadStartedAtMs: rollout.startedAtMs }),
           accountKey: rollout?.accountKey ?? null,
           // A rollout names its own account, so nothing is inferred from who is signed in.
           ...(rollout?.accountKey && { accountConfidence: 'exact' as const })
@@ -114,6 +127,7 @@ export async function collectCodex(
         health.detail = 'process read failed'
       }
     }
+    for (const id of known.keys()) if (!live.has(id)) known.delete(id)
   } catch {
     health.ok = false
     health.detail = 'discovery failed'

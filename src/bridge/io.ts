@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { open, readFile, readdir, realpath, stat } from 'node:fs/promises'
+import { open, readdir, realpath, stat } from 'node:fs/promises'
 import { assertOrcaTrusted, ORCA_CLI } from '../shared/orca-bundle'
 
 interface FileInfo {
@@ -97,8 +97,24 @@ const guarded =
     return read(target, ...rest)
   }
 
+// Rosters, registry entries and agent metadata are a few kilobytes. The size is checked on
+// the open file, so a file that grows afterwards cannot be read past it.
+const MAX_WHOLE_FILE_BYTES = 1024 * 1024
+async function readWhole(path: string): Promise<string> {
+  const file = await open(path, 'r')
+  try {
+    const { size } = await file.stat()
+    if (size > MAX_WHOLE_FILE_BYTES) throw forbidden('file too large')
+    const buffer = Buffer.alloc(size)
+    const { bytesRead } = await file.read(buffer, 0, size, 0)
+    return buffer.subarray(0, bytesRead).toString('utf8')
+  } finally {
+    await file.close()
+  }
+}
+
 export const systemIo: BridgeIo = {
-  readText: guarded((path) => readFile(path, 'utf8')),
+  readText: guarded(readWhole),
   readTail: guarded(readTail),
   readFirstLine: guarded(readFirstLine),
   readFrom: guarded(readFrom),
@@ -125,11 +141,18 @@ export const systemIo: BridgeIo = {
   }
 }
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
 export function object(value: unknown): Record<string, unknown> | null {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null
+  return isRecord(value) ? value : null
 }
+
+// An agent type or a tool name read from disk, before it may enter the feed: short, one
+// line, letters and digits with the few marks real names use ("feature-dev:code-reviewer").
+const LABEL = /^[\p{L}\p{N}_.:-][\p{L}\p{N}_ .:-]{0,127}$/u
+export const isLabel = (value: unknown): value is string =>
+  typeof value === 'string' && LABEL.test(value)
 
 export function jsonObject(text: string): Record<string, unknown> | null {
   try {
