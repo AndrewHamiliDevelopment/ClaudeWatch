@@ -16,9 +16,9 @@ function hasShapeOf(value: unknown, standard: unknown): boolean {
 }
 
 function knownEntries(value: object, defaults: object): [string, unknown][] {
-  const standard = defaults as Record<string, unknown>
+  const standard = new Map<string, unknown>(Object.entries(defaults))
   return Object.entries(value).filter(
-    ([key, entry]) => Object.hasOwn(standard, key) && hasShapeOf(entry, standard[key])
+    ([key, entry]) => standard.has(key) && hasShapeOf(entry, standard.get(key))
   )
 }
 

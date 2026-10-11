@@ -4,13 +4,18 @@ import type { SessionHistoryEntry } from '../renderer/lib/types'
 import { DEFAULT_SETTINGS } from '../renderer/lib/types'
 
 // What the settings file holds before the app starts; a test sets it to model an older install.
-const seed = vi.hoisted(() => ({ file: {} as Record<string, unknown> }))
+// `written` is what the newest store has saved: the file its next start would find.
+const seed = vi.hoisted(() => ({
+  file: {} as Record<string, unknown>,
+  written: {} as Record<string, unknown>
+}))
 
 // Mock electron-store
 vi.mock('electron-store', () => {
   return {
     default: vi.fn().mockImplementation(() => {
       const data: Record<string, unknown> = { ...seed.file }
+      seed.written = data
       return {
         get: vi.fn((key: string, defaultValue?: unknown) => {
           return key in data ? data[key] : defaultValue
@@ -43,10 +48,12 @@ describe('SettingsStore', () => {
       expect(new SettingsStore().getSettings().cpuIdleThreshold).toBe(3.0)
     })
 
-    it('keeps 1.0 when the owner chooses it afterwards', () => {
+    it('keeps 1.0 when the owner chooses it afterwards, across a restart', () => {
       store.setSettings({ cpuIdleThreshold: 1.0 })
       expect(store.getSettings().cpuIdleThreshold).toBe(1.0)
-      expect(store.getSettings().cpuIdleThreshold).toBe(1.0)
+
+      seed.file = seed.written
+      expect(new SettingsStore().getSettings().cpuIdleThreshold).toBe(1.0)
     })
 
     it('does not migrate a second time on the next start', () => {
@@ -204,6 +211,28 @@ describe('SettingsStore', () => {
 
       const history = store.getHistory()
       expect(history.length).toBeLessThanOrEqual(3)
+    })
+
+    it('trims the stored list as soon as the limit is lowered, keeping the newest', () => {
+      for (let i = 0; i < 5; i++) {
+        store.addHistoryEntry({
+          pid: 2000 + i,
+          projectPath: `/project/${i}`,
+          projectName: `project/${i}`,
+          status: 'exited',
+          startedAt: new Date(),
+          endedAt: new Date(),
+          durationSeconds: 100,
+          flags: []
+        })
+      }
+
+      store.setSettings({ maxHistoryEntries: 2 })
+      expect(store.getHistory().map((entry) => entry.pid)).toEqual([2003, 2004])
+
+      // Another setting leaves the list alone.
+      store.setSettings({ theme: 'light' })
+      expect(store.getHistory()).toHaveLength(2)
     })
   })
 

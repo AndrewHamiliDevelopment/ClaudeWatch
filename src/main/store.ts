@@ -64,6 +64,8 @@ export class SettingsStore {
       notifications: { ...current.notifications, ...partial.notifications }
     }
     this.store.set('settings', merged)
+    // A lowered limit applies to what is already stored, not only from the next session's exit.
+    if (partial.maxHistoryEntries !== undefined) this.keepNewest(this.getHistory())
     return merged
   }
 
@@ -72,11 +74,12 @@ export class SettingsStore {
   }
 
   addHistoryEntry(entry: SessionHistoryEntry): void {
-    const history = this.getHistory()
-    history.push(entry)
+    this.keepNewest([...this.getHistory(), entry])
+  }
+
+  private keepNewest(history: SessionHistoryEntry[]): void {
     const max = this.getSettings().maxHistoryEntries
-    const trimmed = history.length > max ? history.slice(-max) : history
-    this.store.set('history', trimmed)
+    this.store.set('history', history.slice(Math.max(0, history.length - max)))
   }
 
   clearHistory(): void {

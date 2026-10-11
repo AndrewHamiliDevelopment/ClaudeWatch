@@ -1,3 +1,4 @@
+import { object } from '../bridge/io'
 import { clamp } from '../shared/range'
 
 export interface Bounds {
@@ -9,13 +10,20 @@ export interface Bounds {
 
 type Size = Pick<Bounds, 'width' | 'height'>
 
+const isFiniteNumber = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value)
+
 function isBounds(value: unknown): value is Bounds {
-  if (typeof value !== 'object' || value === null) return false
-  const rect = value as Record<string, unknown>
+  const rect = object(value)
+  if (!rect) return false
+  const { x, y, width, height } = rect
   return (
-    ['x', 'y', 'width', 'height'].every((key) => Number.isFinite(rect[key])) &&
-    (rect.width as number) > 0 &&
-    (rect.height as number) > 0
+    isFiniteNumber(x) &&
+    isFiniteNumber(y) &&
+    isFiniteNumber(width) &&
+    isFiniteNumber(height) &&
+    width > 0 &&
+    height > 0
   )
 }
 

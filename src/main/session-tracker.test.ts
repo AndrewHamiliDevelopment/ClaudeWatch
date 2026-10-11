@@ -531,10 +531,21 @@ describe('SessionTracker', () => {
       expect(handler).toHaveBeenCalledTimes(2) // no more calls
     })
 
-    it('should be safe to call stop() multiple times', () => {
+    it('should be safe to call stop() multiple times', async () => {
+      monitor._setPollResult([])
       tracker.start(1000)
+      await vi.advanceTimersByTimeAsync(0)
+      const pollsBeforeStop = vi.mocked(monitor.poll).mock.calls.length
+
       tracker.stop()
-      tracker.stop() // should not throw
+      expect(() => tracker.stop()).not.toThrow()
+
+      await vi.advanceTimersByTimeAsync(5000)
+      expect(monitor.poll).toHaveBeenCalledTimes(pollsBeforeStop)
+      // A stopped tracker can be started again.
+      tracker.start(1000)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(monitor.poll).toHaveBeenCalledTimes(pollsBeforeStop + 1)
     })
 
     it('should be safe to call start() multiple times (restarts)', async () => {
