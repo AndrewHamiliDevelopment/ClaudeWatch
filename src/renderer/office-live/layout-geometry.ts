@@ -1,57 +1,62 @@
-import type { LayoutMap, RoomLayout } from '../../office/sim/layout'
+import {
+  buildLayout,
+  type LayoutMap,
+  type RoomLayout,
+  type ZoneLayout
+} from '../../office/sim/layout'
 import type { AgentView, SessionRef } from '../../shared/office/types'
-import type { FloorGeometry, RoomGeometry } from '../office/scene-model'
+import type { FloorGeometry, RoomGeometry, ZoneGeometry } from '../office/scene-model'
 
-// The sim measures from the corridor's west end; the scene centres each plate on the origin.
-const BAYS_PER_SIDE = 8
-const BAY_SIZE = 6
-const CORRIDOR_WIDTH = 1.5
-const PLATE_WIDTH = BAYS_PER_SIDE * BAY_SIZE
-const PLATE_DEPTH = CORRIDOR_WIDTH + 2 * BAY_SIZE
-const X_OFFSET = PLATE_WIDTH / 2
-const ROOM_CENTRE_Z = CORRIDOR_WIDTH / 2 + BAY_SIZE / 2
+function toZone(zone: ZoneLayout, labels: Map<string, string>): ZoneGeometry {
+  return {
+    id: zone.id,
+    kind: zone.kind,
+    label: zone.sessionKey ? (labels.get(zone.sessionKey) ?? zone.label) : zone.label,
+    x: zone.x,
+    z: zone.z,
+    width: zone.width,
+    depth: zone.depth,
+    door: { ...zone.door },
+    companyKey: zone.companyKey,
+    projectKey: zone.projectKey,
+    sessionKey: zone.sessionKey,
+    children: zone.children.map((child) => toZone(child, labels))
+  }
+}
 
-// Plate 0 keeps the project's floor id; further plates of a busy project get their own.
-const plateFloorId = (floorId: string, plate: number): string =>
-  plate === 0 ? floorId : `${floorId}~${plate}`
-
-function toRoomGeometry(room: RoomLayout, labels: Map<string, string>): RoomGeometry {
-  const door = room.slots.find((slot) => slot.id === 'door') ?? room.slots[0]
-  const side = Math.sign(door.z) || 1
+function toRoom(room: RoomLayout, labels: Map<string, string>): RoomGeometry {
   return {
     id: room.id,
     sessionKey: room.sessionKey,
-    x: door.x - X_OFFSET,
-    z: side * ROOM_CENTRE_Z,
-    width: BAY_SIZE,
-    depth: BAY_SIZE,
-    door: { x: door.x - X_OFFSET, z: door.z },
-    label: room.sessionKey ? (labels.get(room.sessionKey) ?? '') : 'Team room',
-    kind: room.kind === 'team' ? 'team' : 'office'
+    x: room.x,
+    z: room.z,
+    width: room.width,
+    depth: room.depth,
+    door: { ...room.door },
+    label: room.sessionKey ? (labels.get(room.sessionKey) ?? room.label) : room.label,
+    kind: room.kind
   }
 }
 
 export function toFloorGeometry(layout: LayoutMap, sessions: SessionRef[]): FloorGeometry[] {
-  const labels = new Map(sessions.map((session) => [session.key, session.name]))
-  return layout.floors.flatMap((floor) => {
-    const plates = [...new Set(floor.rooms.map((room) => room.plate))].sort((a, b) => a - b)
-    return (plates.length ? plates : [0]).map((plate) => ({
-      floorId: plateFloorId(floor.id, plate),
-      label: plate === 0 ? floor.label : `${floor.label} (${plate + 1})`,
-      plate,
-      width: PLATE_WIDTH,
-      depth: PLATE_DEPTH,
-      corridor: { z: 0, width: CORRIDOR_WIDTH },
-      rooms: floor.rooms
-        .filter((room) => room.plate === plate)
-        .map((room) => toRoomGeometry(room, labels)),
-      zones: [],
-      elevator: { x: floor.elevator.x - X_OFFSET, z: floor.elevator.z }
-    }))
-  })
+  const labels = new Map(sessions.map((s) => [s.key, s.name]))
+  const floor = layout.floors[0] ?? buildLayout(sessions, undefined, 0).floors[0]
+  return [
+    {
+      floorId: 'hq',
+      label: floor.label,
+      plate: 0,
+      width: floor.width,
+      depth: floor.depth,
+      corridor: { z: 0, width: 3 },
+      rooms: floor.rooms.map((r) => toRoom(r, labels)),
+      zones: floor.zones.map((z) => toZone(z, labels)),
+      elevator: { x: floor.elevator.x, z: floor.elevator.z }
+    }
+  ]
 }
 
+// Sim coordinates already use the centre-based floor frame, including its arrival gate.
 export function toSceneAgent(view: AgentView): AgentView {
-  const plate = Number(view.roomId.split(':').at(-2)) || 0
-  return { ...view, floorId: plateFloorId(view.floorId, plate), x: view.x - X_OFFSET }
+  return { ...view }
 }

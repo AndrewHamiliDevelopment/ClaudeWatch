@@ -1,82 +1,75 @@
 import { describe, it, expect } from 'vitest'
 import { buildLayout } from '../../office/sim/layout'
+import { session } from '../../office/sim/fixtures'
+import { placements } from '../../office/sim/placements'
 import { toFloorGeometry, toSceneAgent } from './layout-geometry'
-import type { AgentView, SessionRef } from '../../shared/office/types'
+import type { AgentView } from '../../shared/office/types'
 
-const session = (
-  key: string,
-  projectKey: string,
-  overrides: Partial<SessionRef> = {}
-): SessionRef => ({
-  key,
-  provider: 'claude',
-  sessionId: key,
-  pid: 1,
-  name: `session ${key}`,
-  cwd: '/repo',
-  projectKey,
-  projectLabel: projectKey === 'p_a' ? 'Alpha' : 'Beta',
-  projectRoot: '/repo/app',
-  companyKey: 'c_test',
-  companyLabel: 'Test Co',
-  worktree: null,
-  host: 'terminal',
-  orcaPaneKey: null,
-  activity: 'idle',
-  attention: 'none',
-  currentTool: null,
-  subagents: [],
-  startedAtMs: 1,
-  updatedAtMs: 1,
-  ...overrides
-})
+const sessions = [
+  session('a'),
+  session('b'),
+  { ...session('c', 'p_b'), companyKey: 'c_second', companyLabel: 'Second' }
+]
 
-describe('toFloorGeometry', () => {
-  const sessions = [
-    session('claude:1', 'p_a'),
-    session('claude:2', 'p_a'),
-    session('claude:3', 'p_b')
-  ]
-  const layout = buildLayout(sessions, undefined, 0)
-  const floors = toFloorGeometry(layout, sessions)
-
-  it('makes one floor per project, labelled with the project name', () => {
-    expect(floors.map((f) => [f.floorId, f.label, f.plate])).toEqual([
-      ['p_a', 'Alpha', 0],
-      ['p_b', 'Beta', 0]
-    ])
-  })
-
-  it('centres a 48 x 13.5 m plate on the origin with a 1.5 m corridor', () => {
-    expect(floors[0]).toMatchObject({ width: 48, depth: 13.5, corridor: { z: 0, width: 1.5 } })
-  })
-
-  it('places each session room as a 6 x 6 m bay labelled with the session name', () => {
-    const room = floors[0].rooms.find((r) => r.sessionKey === 'claude:1')
-    expect(room).toMatchObject({ width: 6, depth: 6, kind: 'office', label: 'session claude:1' })
-    expect(Math.abs(room!.z)).toBe(3.75)
-    expect(Math.abs(room!.door.z)).toBe(0.75)
-    expect(room!.x).toBeGreaterThanOrEqual(-21)
-    expect(room!.x).toBeLessThanOrEqual(21)
-  })
-})
-
-describe('toSceneAgent', () => {
-  it('shifts sim coordinates into the centred floor frame', () => {
-    const view: AgentView = {
-      agentKey: 'claude:1',
-      floorId: 'p_a',
-      roomId: 'p_a:0:0',
-      slotId: 'desk_main',
-      x: 3,
-      z: 3.75,
-      heading: 0,
-      activity: 'editing',
-      attention: 'none',
-      provider: 'claude',
-      isSubagent: false,
-      label: 'a'
+describe('headquarters geometry', () => {
+  it('nests company > project > office/team and flattens precisely the leaves', () => {
+    const layout = buildLayout(sessions, undefined, 0)
+    const floors = toFloorGeometry(layout, sessions)
+    expect(floors).toHaveLength(1)
+    const floor = floors[0]
+    expect(floor.floorId).toBe('hq')
+    expect(floor.zones.map((z) => z.label)).toEqual(['Second', 'Work'])
+    for (const company of floor.zones) {
+      expect(company.kind).toBe('company')
+      for (const project of company.children) {
+        expect(project.kind).toBe('project')
+        expect(project.children.some((z) => z.kind === 'team')).toBe(true)
+        for (const leaf of project.children) {
+          expect(floor.rooms.find((r) => r.id === leaf.id)).toMatchObject({
+            x: leaf.x,
+            z: leaf.z,
+            door: leaf.door,
+            label: leaf.label
+          })
+          expect(leaf.children).toEqual([])
+        }
+      }
     }
-    expect(toSceneAgent(view)).toMatchObject({ x: -21, z: 3.75, floorId: 'p_a' })
+    expect(floor.rooms).toHaveLength(5)
   })
+  it('uses the same origin-centred metre frame for zones, leaves, entrance and agents', () => {
+    const layout = buildLayout(sessions, undefined, 0)
+    const floor = toFloorGeometry(layout, sessions)[0]
+    expect(floor.corridor.width).toBeGreaterThanOrEqual(3)
+    expect(floor.elevator).toEqual({ x: 0, z: 0 })
+    for (const zone of floor.zones) {
+      expect(Math.abs(zone.x) + zone.width / 2).toBeLessThanOrEqual(floor.width / 2)
+      expect(Math.abs(zone.z) + zone.depth / 2).toBeLessThanOrEqual(floor.depth / 2)
+    }
+    for (const placement of placements(sessions, layout)) {
+      const view: AgentView = {
+        ...placement.slot,
+        agentKey: placement.session.key,
+        floorId: placement.floorId,
+        roomId: placement.room.id,
+        slotId: placement.slot.id,
+        activity: 'idle',
+        attention: 'none',
+        provider: 'claude',
+        isSubagent: false,
+        label: placement.session.name
+      }
+      const agent = toSceneAgent(view)
+      expect(agent).toEqual(view)
+      const room = floor.rooms.find((r) => r.id === agent.roomId)!
+      expect(Math.abs(agent.x - room.x)).toBeLessThan(room.width / 2)
+      expect(Math.abs(agent.z - room.z)).toBeLessThan(room.depth / 2)
+    }
+  })
+})
+
+it('provides one empty headquarters floor before any sessions arrive', () => {
+  const floors = toFloorGeometry({ version: 1, floors: [], reservations: {} }, [])
+  expect(floors).toHaveLength(1)
+  expect(floors[0]).toMatchObject({ floorId: 'hq', rooms: [], zones: [] })
 })

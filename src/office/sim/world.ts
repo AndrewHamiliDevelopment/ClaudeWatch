@@ -1,17 +1,18 @@
 import type { AgentView, FeedMessage, SessionRef } from '../../shared/office/types'
 import { createAgent, leaveAgent, tickAgent, updateAgent, type AgentRecord } from './behaviour'
 import { buildLayout, type LayoutMap } from './layout'
-import { PathCache } from './navigation'
+import { officeGrid, PathCache } from './navigation'
 import { placements } from './placements'
 
 export class World {
   private readonly now: () => number
-  private readonly paths = new PathCache()
   private sessions = new Map<string, SessionRef>()
   private agents = new Map<string, AgentRecord>()
   private map: LayoutMap
   private accumulatedMs = 0
   private sequence = -1
+  private helloRevision = 0
+  private ready = false
 
   constructor(options: { now: () => number; saved?: LayoutMap }) {
     this.now = options.now
@@ -21,12 +22,18 @@ export class World {
   }
 
   apply(message: FeedMessage): void {
-    if (message.type === 'resync') return
+    if (message.type === 'resync') {
+      this.ready = false
+      return
+    }
     if (message.type === 'hello') {
       this.sessions = new Map(message.snapshot.sessions.map((s) => [s.key, structuredClone(s)]))
-      this.sequence = message.snapshot.rev
+      this.helloRevision = message.snapshot.rev
+      // Snapshot revisions and patch sequences are separate counters in BridgePoller.
+      this.sequence = -1
+      this.ready = true
     } else {
-      if (message.seq <= this.sequence) return
+      if (!this.ready || message.seq <= this.sequence) return
       this.sequence = message.seq
       for (const key of message.removed) this.sessions.delete(key)
       for (const session of message.upserts)
@@ -34,6 +41,8 @@ export class World {
     }
     const oldMap = this.map
     this.map = buildLayout([...this.sessions.values()], this.map, this.now())
+    const paths = new PathCache(officeGrid(this.map.floors[0]))
+    const oldPaths = oldMap.floors[0]?.zones ? new PathCache(officeGrid(oldMap.floors[0])) : paths
     const desired = placements([...this.sessions.values()], this.map)
     const active = new Set(desired.map((p) => p.session.key))
     for (const [key, agent] of this.agents) {
@@ -41,7 +50,7 @@ export class World {
       const floor = oldMap.floors.find((f) => f.id === agent.view.floorId)!
       const room = floor.rooms.find((r) => r.id === agent.view.roomId)!
       const door = room.slots.find((s) => s.id === 'door')!
-      this.agents.set(key, leaveAgent(agent, this.paths.via(agent.view, door, floor.elevator)))
+      this.agents.set(key, leaveAgent(agent, oldPaths.via(agent.view, door, floor.elevator)))
     }
     for (const placement of desired) {
       const { session, room, slot, floorId, isSubagent } = placement
@@ -50,7 +59,11 @@ export class World {
         existing &&
         existing.state !== 'leaving' &&
         existing.view.roomId === room.id &&
-        existing.view.slotId === slot.id
+        existing.view.slotId === slot.id &&
+        oldMap.floors[0]?.rooms.find((r) => r.id === room.id)?.slots.find((s) => s.id === slot.id)
+          ?.x === slot.x &&
+        oldMap.floors[0]?.rooms.find((r) => r.id === room.id)?.slots.find((s) => s.id === slot.id)
+          ?.z === slot.z
       ) {
         const updated = updateAgent(existing, session.activity, session.attention)
         updated.view.label = session.name
@@ -67,7 +80,7 @@ export class World {
         z: slot.z,
         heading: slot.heading
       }
-      const agent = createAgent(session, destination, this.paths.via(elevator, door, slot))
+      const agent = createAgent(session, destination, paths.via(elevator, door, slot))
       agent.view.isSubagent = isSubagent
       this.agents.set(session.key, agent)
     }
@@ -86,6 +99,10 @@ export class World {
     return [...this.agents.values()]
       .sort((a, b) => a.view.agentKey.localeCompare(b.view.agentKey))
       .map((a) => ({ ...a.view }))
+  }
+
+  revision(): number {
+    return this.helloRevision
   }
 
   layout(): LayoutMap {

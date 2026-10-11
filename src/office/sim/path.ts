@@ -10,53 +10,96 @@ export interface NavGrid {
   blocked: string[]
 }
 
+class Frontier {
+  private nodes: { id: number; priority: number }[] = []
+  push(id: number, priority: number): void {
+    const node = { id, priority }
+    let index = this.nodes.length
+    this.nodes.push(node)
+    while (index > 0) {
+      const parent = Math.floor((index - 1) / 2)
+      if (this.nodes[parent].priority <= priority) break
+      this.nodes[index] = this.nodes[parent]
+      index = parent
+    }
+    this.nodes[index] = node
+  }
+  pop(): number | undefined {
+    const first = this.nodes[0]
+    const last = this.nodes.pop()
+    if (!first || !last) return undefined
+    if (this.nodes.length) {
+      let index = 0
+      while (index * 2 + 1 < this.nodes.length) {
+        let child = index * 2 + 1
+        if (
+          child + 1 < this.nodes.length &&
+          this.nodes[child + 1].priority < this.nodes[child].priority
+        )
+          child++
+        if (last.priority <= this.nodes[child].priority) break
+        this.nodes[index] = this.nodes[child]
+        index = child
+      }
+      this.nodes[index] = last
+    }
+    return first.id
+  }
+}
+
 export function findPath(grid: NavGrid, from: Point, to: Point): Point[] {
-  const cell = (p: Point) => [
-    Math.round((p.x - grid.origin.x) / grid.cellSize),
-    Math.round((p.z - grid.origin.z) / grid.cellSize)
+  const cell = (point: Point) => [
+    Math.round((point.x - grid.origin.x) / grid.cellSize),
+    Math.round((point.z - grid.origin.z) / grid.cellSize)
   ]
   const [sx, sz] = cell(from),
     [tx, tz] = cell(to)
-  const start = `${sx},${sz}`,
-    target = `${tx},${tz}`
-  const blocked = new Set(grid.blocked)
-  const valid = (x: number, z: number) =>
-    x >= 0 && z >= 0 && x < grid.width && z < grid.height && !blocked.has(`${x},${z}`)
-  if (!valid(sx, sz) || !valid(tx, tz)) return []
-  const open = new Set([start]),
-    costs = new Map([[start, 0]]),
-    previous = new Map<string, string>()
-  const heuristic = (key: string) => {
+  const size = grid.width * grid.height
+  const blocked = new Uint8Array(size)
+  for (const key of grid.blocked) {
     const [x, z] = key.split(',').map(Number)
-    return Math.abs(x - tx) + Math.abs(z - tz)
+    blocked[z * grid.width + x] = 1
   }
-  while (open.size) {
-    const current = [...open].reduce((best, key) =>
-      costs.get(key)! + heuristic(key) < costs.get(best)! + heuristic(best) ? key : best
-    )
+  const valid = (x: number, z: number) =>
+    x >= 0 && z >= 0 && x < grid.width && z < grid.height && !blocked[z * grid.width + x]
+  if (!valid(sx, sz) || !valid(tx, tz)) return []
+  const start = sz * grid.width + sx,
+    target = tz * grid.width + tx
+  const costs = new Float64Array(size).fill(Infinity)
+  const previous = new Int32Array(size).fill(-1)
+  const closed = new Uint8Array(size)
+  const open = new Frontier()
+  costs[start] = 0
+  open.push(start, 0)
+  let current: number | undefined
+  while ((current = open.pop()) !== undefined) {
+    if (closed[current]) continue
     if (current === target) {
-      const keys = [current]
-      while (previous.has(keys[0])) keys.unshift(previous.get(keys[0])!)
-      return keys.map((key) => {
-        const [x, z] = key.split(',').map(Number)
-        return { x: grid.origin.x + x * grid.cellSize, z: grid.origin.z + z * grid.cellSize }
-      })
+      const path: Point[] = []
+      for (let id = target; id !== -1; id = previous[id])
+        path.push({
+          x: grid.origin.x + (id % grid.width) * grid.cellSize,
+          z: grid.origin.z + Math.floor(id / grid.width) * grid.cellSize
+        })
+      return path.reverse()
     }
-    open.delete(current)
-    const [x, z] = current.split(',').map(Number)
+    closed[current] = 1
+    const x = current % grid.width,
+      z = Math.floor(current / grid.width)
     for (const [dx, dz] of [
       [1, 0],
       [0, 1],
       [-1, 0],
       [0, -1]
     ]) {
-      const next = `${x + dx},${z + dz}`,
-        cost = costs.get(current)! + 1
-      if (valid(x + dx, z + dz) && cost < (costs.get(next) ?? Infinity)) {
-        costs.set(next, cost)
-        previous.set(next, current)
-        open.add(next)
-      }
+      const nx = x + dx,
+        nz = z + dz,
+        next = nz * grid.width + nx
+      const cost = costs[current] + 1
+      if (!valid(nx, nz) || cost >= costs[next]) continue
+      costs[next] = cost
+      previous[next] = current
+      open.push(next, cost + Math.abs(nx - tx) + Math.abs(nz - tz))
     }
   }
   return []

@@ -1,20 +1,42 @@
 import { findPath, type NavGrid, type Point } from './path'
+import type { FloorLayout, ZoneLayout } from './layout'
 
-export function officeGrid(): NavGrid {
-  const blocked: string[] = []
-  for (let x = 0; x <= 192; x++)
-    for (let z = 0; z <= 54; z++) {
-      const corridor = z > 24 && z < 30
-      const door = x % 24 === 12 && (z === 24 || z === 30)
-      if (!corridor && !door && (x % 24 === 0 || z === 0 || z === 24 || z === 30 || z === 54))
-        blocked.push(`${x},${z}`)
+export function officeGrid(floor: FloorLayout): NavGrid {
+  const cellSize = 0.25
+  const origin = { x: -floor.width / 2, z: -floor.depth / 2 }
+  const blocked = new Set<string>()
+  const wall = (zone: ZoneLayout) => {
+    const left = zone.x - zone.width / 2,
+      top = zone.z - zone.depth / 2
+    const add = (x: number, z: number) => {
+      if (z === zone.door.z && Math.abs(x - zone.door.x) <= 0.5) return
+      blocked.add(
+        `${Math.round((x - origin.x) / cellSize)},${Math.round((z - origin.z) / cellSize)}`
+      )
     }
-  return { width: 193, height: 55, cellSize: 0.25, origin: { x: 0, z: -6.75 }, blocked }
+    for (let x = left; x <= left + zone.width; x += cellSize) {
+      add(x, top)
+      add(x, top + zone.depth)
+    }
+    for (let z = top; z <= top + zone.depth; z += cellSize) {
+      add(left, z)
+      add(left + zone.width, z)
+    }
+    for (const child of zone.children) wall(child)
+  }
+  for (const company of floor.zones) wall(company)
+  return {
+    width: Math.round(floor.width / cellSize) + 1,
+    height: Math.round(floor.depth / cellSize) + 1,
+    cellSize,
+    origin,
+    blocked: [...blocked]
+  }
 }
 
 export class PathCache {
-  private readonly grid = officeGrid()
   private readonly paths = new Map<string, Point[]>()
+  constructor(private readonly grid: NavGrid) {}
   get(from: Point, to: Point): Point[] {
     const key = `${from.x},${from.z}:${to.x},${to.z}`
     let path = this.paths.get(key)
