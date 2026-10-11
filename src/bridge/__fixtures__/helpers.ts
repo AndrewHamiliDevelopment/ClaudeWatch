@@ -24,10 +24,14 @@ export function fixtureIo(files: Record<string, string | null> = {}): BridgeIo {
     stat: async (path) => {
       if (!(path in files)) {
         if (Object.keys(files).some((file) => file.startsWith(`${path}/`)))
-          return { directory: true, mtimeMs: 1000 }
+          return { directory: true, mtimeMs: 1000, size: 0 }
         throw missing()
       }
-      return { directory: files[path] === null, mtimeMs: 1000 }
+      return {
+        directory: files[path] === null,
+        mtimeMs: 1000,
+        size: Buffer.byteLength(files[path] ?? '')
+      }
     },
     exec: async () => ''
   }

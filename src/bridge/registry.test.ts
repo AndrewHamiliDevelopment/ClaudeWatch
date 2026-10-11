@@ -85,3 +85,22 @@ describe('subagents', () => {
     expect(await collectSubagents('/t.jsonl', io, 62000)).toEqual([])
   })
 })
+
+it.each(['/company/repo', '/company/repo/.claude/.worktree/task'])(
+  'keeps main project and company identity for %s',
+  async (cwd) => {
+    const io = fixtureIo({
+      '/company/repo/.git': null,
+      '/company/repo/.claude/.worktree/task/.git': 'gitdir: /company/repo/.git/worktrees/task\n',
+      '/claude/sessions/42.json': JSON.stringify({ ...registryEntry(), cwd })
+    })
+    io.exec = async () => registryEntry().procStart
+    const batch = await collectClaude(['/claude'], io, 1000)
+    expect(batch.sessions[0]).toMatchObject({
+      projectRoot: '/company/repo',
+      projectLabel: 'repo',
+      companyLabel: 'company',
+      worktree: cwd === '/company/repo' ? null : cwd
+    })
+  }
+)

@@ -65,3 +65,25 @@ it('keeps two-second cadence when collection takes time', async () => {
   expect(post).toHaveBeenCalledTimes(3)
   stop()
 })
+
+it('prunes environment identities when their sessions disappear', async () => {
+  const entry = registryEntry()
+  const io = fixtureIo({ '/claude/sessions/42.json': JSON.stringify(entry), '/repo/.git': null })
+  let live = true
+  let environmentReads = 0
+  io.exec = async (_file, args) => {
+    if (args[0] === '-o') return live ? entry.procStart : ''
+    if (args[0] === '-E') {
+      environmentReads++
+      return 'claude ORCA_PANE_KEY=p'
+    }
+    return ''
+  }
+  const poller = new BridgePoller({ io, claudeRoots: ['/claude'], codexRoot: '/codex' })
+  await poller.tick()
+  live = false
+  await poller.tick()
+  live = true
+  await poller.tick()
+  expect(environmentReads).toBe(2)
+})

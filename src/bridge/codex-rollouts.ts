@@ -7,7 +7,20 @@ export interface Rollout {
   cwd: string
   mtimeMs: number
 }
+interface CachedRollout {
+  mtimeMs: number
+  size: number
+  rollout: Rollout | null
+}
+const caches = new WeakMap<BridgeIo, Map<string, Map<string, CachedRollout>>>()
+
 export async function findRollouts(root: string, io: BridgeIo): Promise<Rollout[]> {
+  let roots = caches.get(io)
+  if (!roots) caches.set(io, (roots = new Map()))
+  let cache = roots.get(root)
+  if (!cache) roots.set(root, (cache = new Map()))
+  const entries = cache
+  const seen = new Set<string>()
   const rollouts: Rollout[] = []
   async function walk(directory: string): Promise<void> {
     let files: string[]
@@ -26,20 +39,32 @@ export async function findRollouts(root: string, io: BridgeIo): Promise<Rollout[
           continue
         }
         if (!/^rollout-.*\.jsonl$/.test(file)) continue
+        seen.add(path)
+        const cached = entries.get(path)
+        if (cached && cached.mtimeMs === info.mtimeMs && cached.size === info.size) {
+          if (cached.rollout) rollouts.push(cached.rollout)
+          continue
+        }
         const header = jsonObject(await io.readFirstLine(path))
         const meta = object(header?.payload)
+        let rollout: Rollout | null = null
         if (
           header?.type === 'session_meta' &&
           typeof meta?.cwd === 'string' &&
           typeof meta.id === 'string'
         ) {
-          rollouts.push({ path, id: meta.id, cwd: meta.cwd, mtimeMs: info.mtimeMs })
+          rollout = { path, id: meta.id, cwd: meta.cwd, mtimeMs: info.mtimeMs }
+          rollouts.push(rollout)
         }
+        entries.set(path, { mtimeMs: info.mtimeMs, size: info.size, rollout })
       } catch (error) {
         if (!isMissing(error)) throw error
       }
     }
   }
   await walk(join(root, 'sessions'))
+  for (const path of entries.keys()) {
+    if (!seen.has(path)) entries.delete(path)
+  }
   return rollouts.sort((a, b) => b.mtimeMs - a.mtimeMs || a.path.localeCompare(b.path))
 }

@@ -42,7 +42,10 @@ export class BridgePoller {
       collectCodex(this.codexRoot, this.io),
       this.orca.poll(now)
     ])
-    const sessions = await Promise.all(claude.sessions.map((session) => this.orca.enrich(session)))
+    this.orca.prune(claude.sessions)
+    const sessions = await Promise.all(
+      claude.sessions.map((session) => this.orca.enrich(session, now))
+    )
     this.snapshot = reduce(this.snapshot, {
       now,
       sessions: [...sessions, ...codex.sessions],

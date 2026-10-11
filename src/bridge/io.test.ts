@@ -20,3 +20,17 @@ it('reads bounded tails, discards partial first records and returns only header 
   expect(await systemIo.readFirstLine(path)).toBe(header)
   expect(await systemIo.readTail(path)).toBe(last)
 })
+
+it('reads complete session metadata beyond 64 KB and bounds oversized headers', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'bridge-header-'))
+  directories.push(directory)
+  const path = join(directory, 'rollout.jsonl')
+  const header = JSON.stringify({
+    type: 'session_meta',
+    payload: { padding: 'x'.repeat(100000), id: 'a', cwd: '/repo' }
+  })
+  await writeFile(path, `${header}\nignored`)
+  expect(await systemIo.readFirstLine(path)).toBe(header)
+  await writeFile(path, 'x'.repeat(262145))
+  expect(await systemIo.readFirstLine(path)).toBe('')
+})
