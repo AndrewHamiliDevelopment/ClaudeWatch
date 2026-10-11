@@ -48,14 +48,14 @@ describe('what the Office is given', () => {
       {
         key: ADA,
         provider: 'claude',
-        label: "a…'s Organization",
+        label: 'Claude account aaaa',
         plan: 'Max 20x',
         isActive: true
       },
       {
         key: GRACE,
         provider: 'claude',
-        label: 'g… (work)',
+        label: 'Claude account bbbb',
         plan: 'Max 20x',
         isActive: false
       },
@@ -73,6 +73,29 @@ describe('what the Office is given', () => {
       )
     ).map((account) => account.plan)
     expect(plans).toEqual(['Max 5x', 'Raven', null])
+  })
+
+  it.each([
+    "ada@example.test's Organization",
+    "renée@example.test's Organization",
+    "ada@exämple.test's Organization",
+    "ada@localhost's Organization",
+    '"ada lovelace"@example.test',
+    'ada＠example.test'
+  ])('never builds a label from a name that holds an address: %s', (organizationName) => {
+    const [account] = officeAccounts(ledger(record(ADA, { organizationName })))
+    expect(account.label).toBe('Claude account aaaa')
+  })
+
+  it('cuts a long name to forty characters, and drops one that would reorder the text beside it', () => {
+    const [long, reordered] = officeAccounts(
+      ledger(
+        record(ADA, { organizationName: 'x'.repeat(256) }),
+        record(GRACE, { organizationName: 'Labs\u202eevil' })
+      )
+    )
+    expect(long.label).toBe('x'.repeat(40))
+    expect(reordered.label).toBe('Claude account bbbb')
   })
 
   it('prefers the name the owner gave over the organisation', () => {
@@ -205,7 +228,7 @@ describe('what the dashboard is given', () => {
       alias: null,
       organizationName: "ada@example.test's Organization",
       sources: ['default-login'],
-      label: "a…'s Organization"
+      label: 'Claude account aaaa'
     })
   })
 })

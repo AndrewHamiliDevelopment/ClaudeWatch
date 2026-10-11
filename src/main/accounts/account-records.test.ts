@@ -162,7 +162,11 @@ describe('setAlias', () => {
     ['a number', 7],
     ['an object', { name: 'Work' }],
     ['a name that is too long', 'w'.repeat(MAX_ALIAS_LENGTH + 1)],
-    ['a name with a control character', 'Work\u0007']
+    ['a name with a control character', 'Work\u0007'],
+    ['a name with a C1 control', 'Work\u0085'],
+    ['a name with a line separator', 'Work\u2028here'],
+    ['a name with a right-to-left override', 'Work\u202e'],
+    ['a name with a directional isolate', 'Work\u2066']
   ])('refuses %s', (_case, alias) => {
     const state = withAda()
     expect(setAlias(state, keyOf('ada'), alias)).toEqual({

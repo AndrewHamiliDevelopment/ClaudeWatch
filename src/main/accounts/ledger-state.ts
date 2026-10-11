@@ -74,6 +74,15 @@ export function dayKey(atMs: number): string {
   return `${date.getFullYear()}-${twoDigits(date.getMonth() + 1)}-${twoDigits(date.getDate())}`
 }
 
+// The first of the seven local days the Accounts view counts as its week, today included.
+export function weekStartKey(now: number): string {
+  const date = new Date(now)
+  return dayKey(new Date(date.getFullYear(), date.getMonth(), date.getDate() - 6).getTime())
+}
+
+// The day of a bucket holding everything older than that week. It sorts before any real day.
+export const FOLDED_DAY = '0000-00-00'
+
 export const bucketId = (bucket: Omit<UsageBucket, 'counts'>): string =>
   [bucket.accountKey ?? '', bucket.day, bucket.projectKey, bucket.confidence].join('|')
 

@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { chmod, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'fs/promises'
+import { chmod, mkdir, mkdtemp, readdir, readFile, rm, stat, symlink, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -93,6 +93,16 @@ describe('saveLedger', () => {
     expect(await mode(path)).toBe(0o600)
   })
 
+  it('does not write through a link left where its temporary file goes', async () => {
+    const victim = join(folder, 'victim')
+    await writeFile(victim, 'KEEP')
+    await symlink(victim, `${path}.${process.pid}.tmp`)
+    saveLedger(path, filledLedger())
+    expect(await readFile(victim, 'utf8')).toBe('KEEP')
+    expect(loadLedger(path)).toEqual(filledLedger())
+    expect((await readdir(folder)).sort()).toEqual(['accounts-ledger.json', 'victim'])
+  })
+
   it('leaves the previous ledger whole when a write fails', async () => {
     saveLedger(path, filledLedger())
     const before = await readFile(path, 'utf8')
@@ -128,6 +138,34 @@ describe('loadLedger', () => {
       expect(await readdir(folder)).toEqual(['accounts-ledger.json.damaged'])
     }
   )
+
+  it('sets aside, unread, a ledger that is not a regular file or is larger than a ledger gets', async () => {
+    await mkdir(path)
+    expect(loadLedger(path)).toBeNull()
+    expect(await readdir(folder)).toEqual(['accounts-ledger.json.damaged'])
+    await rm(`${path}.damaged`, { recursive: true })
+    await writeFile(path, ' '.repeat(16 * 1024 * 1024 + 1))
+    expect(loadLedger(path)).toBeNull()
+    expect(await readdir(folder)).toEqual(['accounts-ledger.json.damaged'])
+  })
+
+  it('holds a stored name and every stored key to the rules they were written under', async () => {
+    const file = await stored()
+    const [account] = file.accounts as Record<string, unknown>[]
+    Object.assign(file, {
+      codexDefaultKey: 'ada@example.test',
+      accounts: [
+        { ...account, alias: `${'w'.repeat(417)}\n` },
+        { ...account, key: 'ada@example.test' }
+      ],
+      spans: [{ accountKey: 'ada@example.test', fromMs: 2_000, toMs: null }]
+    })
+    await writeFile(path, JSON.stringify(file))
+    const ledger = loadLedger(path)
+    expect(ledger?.accounts).toEqual([{ ...filledLedger().accounts[0], alias: null }])
+    expect(ledger?.spans).toEqual([])
+    expect(ledger?.codexDefaultKey).toBeNull()
+  })
 
   it('keeps what is sound in a hand-edited file and drops the rest', async () => {
     const file = await stored()

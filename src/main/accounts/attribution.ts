@@ -6,7 +6,14 @@ import type { SessionRef, TokenCounts } from '../../shared/office/types'
 import { upsertAccount, upsertClaudeAccount } from './account-records'
 import { isAmount } from './amount'
 import type { IdentityRead } from './identity'
-import { addUsage, dayKey, type LedgerState, RETENTION_MS } from './ledger-state'
+import {
+  addUsage,
+  dayKey,
+  FOLDED_DAY,
+  type LedgerState,
+  RETENTION_MS,
+  weekStartKey
+} from './ledger-state'
 
 // Samples closer together than this were taken by one unbroken watch, so a change between
 // them happened then. Further apart, nobody saw when it happened.
@@ -168,4 +175,12 @@ export function prune(state: LedgerState, now: number): void {
     if (countedAtMs < now - CODEX_RETENTION_MS) state.codexSessions.delete(key)
   }
   state.spans = state.spans.filter(({ toMs }) => toMs === null || toMs >= now - RETENTION_MS)
+  // The view shows today, its week and the total since tracking began, so days before the week
+  // are kept as one bucket per account, project and confidence and the file stops growing daily.
+  const weekStart = weekStartKey(now)
+  for (const [id, bucket] of state.buckets) {
+    if (bucket.day >= weekStart || bucket.day === FOLDED_DAY) continue
+    state.buckets.delete(id)
+    addUsage(state, { ...bucket, day: FOLDED_DAY })
+  }
 }

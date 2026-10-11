@@ -1,5 +1,6 @@
 import { accountKey } from '../../bridge/account-key'
 import { type AccountSource, type AliasResult, MAX_ALIAS_LENGTH } from '../../shared/accounts'
+import { isSafeName } from './display-names'
 import type { Identity } from './identity'
 import type { AccountRecord, LedgerState } from './ledger-state'
 import type { OrcaAccountList } from './orca-accounts'
@@ -91,9 +92,13 @@ export function mergeOrcaAccounts(state: LedgerState, list: OrcaAccountList, now
   state.limits.set(codex.key, list.codex.limits)
 }
 
-// Printable characters only: the name is shown in two windows.
-const hasControlCharacter = (value: string): boolean =>
-  [...value].some((character) => character < ' ' || character === '\u007f')
+// The one rule for a name the owner gives an account, when it is set and when it is read back
+// from the file: it is shown in two windows.
+export const isAlias = (value: unknown): value is string =>
+  typeof value === 'string' &&
+  value.length > 0 &&
+  value.length <= MAX_ALIAS_LENGTH &&
+  isSafeName(value)
 
 export function setAlias(state: LedgerState, key: unknown, alias: unknown): AliasResult {
   const record = state.accounts.find((account) => account.key === key)
@@ -101,9 +106,7 @@ export function setAlias(state: LedgerState, key: unknown, alias: unknown): Alia
   if (alias !== null && typeof alias !== 'string')
     return { success: false, reason: 'invalid-alias' }
   const name = alias?.trim() ?? ''
-  if (name.length > MAX_ALIAS_LENGTH || hasControlCharacter(name)) {
-    return { success: false, reason: 'invalid-alias' }
-  }
+  if (name && !isAlias(name)) return { success: false, reason: 'invalid-alias' }
   record.alias = name || null
   return { success: true }
 }

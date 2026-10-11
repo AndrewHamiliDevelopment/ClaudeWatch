@@ -1,6 +1,8 @@
+import { isAccountKey } from '../../bridge/account-key'
 import { object } from '../../bridge/io'
 import type { AccountLimit, AccountSource } from '../../shared/accounts'
 import type { AccountConfidence, ProviderId, TokenCounts } from '../../shared/office/types'
+import { isAlias } from './account-records'
 import { amountOrNull, isAmount } from './amount'
 import {
   type AccountRecord,
@@ -42,7 +44,8 @@ function toCounts(value: unknown): TokenCounts | null {
 
 function toAccount(value: unknown): AccountRecord[] {
   const account = object(value)
-  if (!account || !isText(account.key) || !isProvider(account.provider)) return []
+  // The key travels to the Office as it is, so one that is not a key is not kept.
+  if (!account || !isAccountKey(account.key) || !isProvider(account.provider)) return []
   if (!isAmount(account.firstSeenMs)) return []
   return [
     {
@@ -52,7 +55,7 @@ function toAccount(value: unknown): AccountRecord[] {
       organizationUuid: textOrNull(account.organizationUuid),
       organizationName: textOrNull(account.organizationName),
       plan: textOrNull(account.plan),
-      alias: textOrNull(account.alias),
+      alias: isAlias(account.alias) ? account.alias : null,
       orcaAccountId: textOrNull(account.orcaAccountId),
       sources: items(account.sources).filter(isSource),
       firstSeenMs: account.firstSeenMs
@@ -62,7 +65,7 @@ function toAccount(value: unknown): AccountRecord[] {
 
 function toSpan(value: unknown): IdentitySpan[] {
   const span = object(value)
-  if (!span || !isText(span.accountKey) || !isAmount(span.fromMs)) return []
+  if (!span || !isAccountKey(span.accountKey) || !isAmount(span.fromMs)) return []
   if (span.toMs !== null && !isAmount(span.toMs)) return []
   return [{ accountKey: span.accountKey, fromMs: span.fromMs, toMs: span.toMs }]
 }
@@ -122,7 +125,7 @@ export function fromStored(data: unknown): LedgerState | null {
     trackingSinceMs: stored.trackingSinceMs,
     sampledAtMs: amountOrNull(stored.sampledAtMs),
     accounts: items(stored.accounts).flatMap(toAccount),
-    codexDefaultKey: textOrNull(stored.codexDefaultKey),
+    codexDefaultKey: isAccountKey(stored.codexDefaultKey) ? stored.codexDefaultKey : null,
     spans: items(stored.spans).flatMap(toSpan),
     buckets: new Map(
       items(stored.buckets)

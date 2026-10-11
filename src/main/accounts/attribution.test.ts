@@ -5,7 +5,34 @@ import type { UsageDelta } from '../../shared/accounts'
 import type { SessionRef } from '../../shared/office/types'
 import { countCodexSessions, countUsage, prune, recordIdentity } from './attribution'
 import type { IdentityRead } from './identity'
-import { emptyLedger, type LedgerState, RETENTION_MS } from './ledger-state'
+import { toAccountsState } from './accounts-view'
+import { addUsage, dayKey, emptyLedger, type LedgerState, RETENTION_MS } from './ledger-state'
+
+it('folds days older than the view’s week into one bucket per account, project and confidence, keeping every total', () => {
+  const noon = new Date(2026, 9, 11, 12).getTime()
+  const state = emptyLedger(0)
+  const spend = (daysAgo: number, tokens: number, projectKey = 'p_repo'): void =>
+    addUsage(state, {
+      accountKey: 'claude:aaaaaaaaaaaa',
+      day: dayKey(new Date(2026, 9, 11 - daysAgo, 12).getTime()),
+      projectKey,
+      confidence: 'inferred',
+      counts: { input: 0, output: tokens, cacheWrite: 0, cacheRead: 0 }
+    })
+  spend(0, 1)
+  spend(6, 2)
+  spend(7, 4)
+  spend(30, 8)
+  spend(200, 16)
+  spend(30, 32, 'p_other')
+  const before = toAccountsState(state, noon)
+  prune(state, noon)
+  expect(toAccountsState(state, noon)).toEqual(before)
+  // Today, six days ago, and one folded bucket for each project.
+  expect(state.buckets.size).toBe(4)
+  prune(state, noon)
+  expect(state.buckets.size).toBe(4)
+})
 
 // Local wall-clock times on one day, so day buckets do not depend on the machine's zone.
 const at = (hour: number, minute = 0, second = 0): number =>

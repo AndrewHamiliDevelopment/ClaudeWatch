@@ -11,19 +11,19 @@ import type {
   OfficeSnapshot,
   SessionRef
 } from '../../shared/office/types'
-import { limitScopeName, planName } from './display-names'
-import { type AccountRecord, dayKey, type LedgerState, type UsageBucket } from './ledger-state'
+import { limitScopeName, officeLabel, planName } from './display-names'
+import {
+  type AccountRecord,
+  dayKey,
+  type LedgerState,
+  type UsageBucket,
+  weekStartKey
+} from './ledger-state'
 
-const EMAIL = /[\w.+-]+@[\w-]+(\.[\w-]+)+/g
-
-// The Office and its feed never carry an email, and an organisation is often named after
-// one ("ada@example.com's Organization"): only the first letter of the address is kept.
-function withoutEmails(text: string): string {
-  return text.replace(EMAIL, (email) => `${email[0]}…`).replaceAll('@', '')
-}
-
+// The Office and its feed never carry an email, and an organisation is often named after one
+// ("ada@example.com's Organization"): such a name gives way to the neutral label.
 function accountLabel(account: AccountRecord): string {
-  const named = withoutEmails(account.alias ?? account.organizationName ?? '').trim()
+  const named = officeLabel(account.alias ?? account.organizationName ?? '')
   if (named) return named
   const provider = account.provider === 'claude' ? 'Claude' : 'Codex'
   return `${provider} account ${account.key.slice(-4)}`
@@ -96,10 +96,7 @@ function toProjects(state: LedgerState, tally: Tally | undefined): ProjectUsage[
 
 export function toAccountsState(state: LedgerState, now: number): AccountsState {
   const today = dayKey(now)
-  const date = new Date(now)
-  const weekStart = dayKey(
-    new Date(date.getFullYear(), date.getMonth(), date.getDate() - 6).getTime()
-  )
+  const weekStart = weekStartKey(now)
   const add = (windows: UsageWindows, bucket: UsageBucket): void => {
     windows.sinceTracking = addCounts(windows.sinceTracking, bucket.counts)
     if (bucket.day >= weekStart) windows.last7Days = addCounts(windows.last7Days, bucket.counts)
