@@ -50,6 +50,9 @@ export interface CameraGestures {
   cancel(): void
 }
 
+// OfficeScene's root: the element that holds both the canvas and the name-card layer above it.
+export const SCENE_ROOT_SELECTOR = '[data-scene-root]'
+
 const SCROLLING_OVERFLOW = new Set(['auto', 'scroll'])
 
 // Arrow keys scroll a HUD panel when focus is inside one that overflows; panning as well would
@@ -201,7 +204,7 @@ function createGestureRig({ camera, domElement, invalidate, latestRef }: Gesture
     listen(): () => void {
       // The scene root, not the canvas: name-card buttons sit above the canvas and would
       // otherwise be dead zones for the wheel.
-      const surface = domElement.closest<HTMLElement>('[role="img"]') ?? domElement
+      const surface = domElement.closest<HTMLElement>(SCENE_ROOT_SELECTOR) ?? domElement
       surface.addEventListener('wheel', onWheel, { passive: false })
       surface.addEventListener('pointerdown', onPointerDown)
       window.addEventListener('pointermove', onPointerMove)

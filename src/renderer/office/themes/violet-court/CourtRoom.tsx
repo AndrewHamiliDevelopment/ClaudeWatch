@@ -6,7 +6,7 @@ import type { DeskProps, RoomProps, RoomsProps } from '../types'
 import { UNIT_SHAPES } from '../unit-parts'
 import { frameParts } from './frame-parts'
 import { COURT } from './palette'
-import { box, Parts, turned, type PartSpec } from './Parts'
+import { box, Parts, turned, type PartSpec } from '../parts'
 import { frameForBay } from './roster'
 
 const TILE = 0.75

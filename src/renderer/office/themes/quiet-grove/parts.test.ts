@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { makeGeometry } from '../geometry-audit.test-utils'
 import { UNIT_SHAPES, type UnitShape } from '../unit-parts'
-import type { PartSpec } from '../violet-court/Parts'
+import type { PartSpec } from '../parts'
 import { GROVE_CAST, type GroveCharacter } from './cast'
 import { GROVE } from './palette'
 import { spiritBuild } from './spirit-parts'

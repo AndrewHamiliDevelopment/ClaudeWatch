@@ -158,4 +158,81 @@ describe('office theme store', () => {
     store.setCompanyTheme('c_a', BRASS)
     expect(store.getAssignments().companies).toEqual({ c_a: BRASS })
   })
+  it('keeps the in-memory choices when nothing can be saved', () => {
+    const store = createOfficeThemeStore({
+      getItem: () => null,
+      setItem: () => {
+        throw new Error('quota')
+      }
+    })
+    store.setCompanyTheme('c_a', BRASS)
+    store.setCompanyTheme('c_b', EDO)
+    expect(store.getAssignments().companies).toEqual({ c_a: BRASS, c_b: EDO })
+  })
+})
+
+describe('two Office pages on one origin', () => {
+  const saved = (storage: ReturnType<typeof memoryStorage>): unknown =>
+    JSON.parse(storage.values.get(OFFICE_THEMES_STORAGE_KEY) ?? 'null')
+
+  it('keeps the theme the other page saved since this one loaded', () => {
+    const storage = memoryStorage()
+    const pageA = createOfficeThemeStore(storage)
+    const pageB = createOfficeThemeStore(storage)
+    pageA.setCompanyTheme('c_one', BRASS)
+    pageB.setCompanyTheme('c_two', EDO)
+    expect(saved(storage)).toMatchObject({ companies: { c_one: BRASS, c_two: EDO } })
+    expect(pageB.getAssignments().companies).toEqual({ c_one: BRASS, c_two: EDO })
+  })
+
+  it('does not bring back a theme the other page cleared', () => {
+    const storage = memoryStorage()
+    const pageA = createOfficeThemeStore(storage)
+    pageA.setCompanyTheme('c_one', BRASS)
+    const pageB = createOfficeThemeStore(storage)
+    pageA.clearCompanyTheme('c_one')
+    pageB.setProjectTheme('p_two', EDO)
+    expect(saved(storage)).toMatchObject({ companies: {}, projects: { p_two: EDO } })
+  })
+
+  it('follows a change the other page saves, while something is subscribed', () => {
+    const storage = memoryStorage()
+    const pageA = createOfficeThemeStore(storage, window)
+    const pageB = createOfficeThemeStore(storage)
+    const listener = vi.fn()
+    const unsubscribe = pageA.subscribe(listener)
+    const announce = (key: string | null): void =>
+      void window.dispatchEvent(
+        new StorageEvent('storage', { key, newValue: storage.values.get(key ?? '') ?? null })
+      )
+
+    pageB.setCompanyTheme('c_two', EDO)
+    announce('some.other.key')
+    expect(listener).not.toHaveBeenCalled()
+    announce(OFFICE_THEMES_STORAGE_KEY)
+    expect(pageA.getAssignments().companies).toEqual({ c_two: EDO })
+    expect(listener).toHaveBeenCalledTimes(1)
+
+    unsubscribe()
+    pageB.setCompanyTheme('c_three', BRASS)
+    announce(OFFICE_THEMES_STORAGE_KEY)
+    expect(listener).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps its snapshot when a storage event repeats what it already holds', () => {
+    const storage = memoryStorage()
+    const store = createOfficeThemeStore(storage, window)
+    store.setCompanyTheme('c_a', BRASS)
+    const listener = vi.fn()
+    store.subscribe(listener)
+    const before = store.getAssignments()
+    window.dispatchEvent(
+      new StorageEvent('storage', {
+        key: OFFICE_THEMES_STORAGE_KEY,
+        newValue: storage.values.get(OFFICE_THEMES_STORAGE_KEY) ?? null
+      })
+    )
+    expect(store.getAssignments()).toBe(before)
+    expect(listener).not.toHaveBeenCalled()
+  })
 })

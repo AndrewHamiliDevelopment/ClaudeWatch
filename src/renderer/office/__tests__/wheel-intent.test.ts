@@ -68,10 +68,26 @@ describe('zoom goal', () => {
     expect(factor ** 5).toBeLessThan(2.49 * 1.05)
   })
 
-  it('caps one wheel event at 120 px and converts lines to pixels', () => {
-    const capped = Math.exp(-120 * 0.0018)
-    expect(zoomFactor('wheel-zoom', wheel({ deltaY: 900 }))).toBeCloseTo(capped, 6)
-    expect(zoomFactor('wheel-zoom', wheel({ deltaY: 3, deltaMode: 1 }))).toBeCloseTo(capped, 6)
+  it('steps the same amount per notched event, whatever delta the browser reports', () => {
+    const oneNotchOut = Math.exp(-0.18)
+    // Chrome on macOS reports about 4 px for a slow notch and hundreds for a fast one.
+    for (const deltaY of [4, 100, 900])
+      expect(zoomFactor('wheel-zoom', wheel({ deltaY }))).toBeCloseTo(oneNotchOut, 9)
+    expect(zoomFactor('wheel-zoom', wheel({ deltaY: 3, deltaMode: 1 }))).toBeCloseTo(oneNotchOut, 9)
+    expect(zoomFactor('wheel-zoom', wheel({ deltaY: -4 }))).toBeCloseTo(Math.exp(0.18), 9)
+  })
+
+  it('does not zoom on a notched event with no vertical travel', () => {
+    expect(zoomFactor('wheel-zoom', wheel({ deltaX: 3, deltaMode: 1 }))).toBe(1)
+  })
+
+  it('zooms a Ctrl or Cmd wheel notch no further than a plain notch', () => {
+    const notch = wheel({ deltaY: 120, wheelDeltaY: -120, hasZoomModifier: true })
+    expect(zoomFactor('pinch', notch)).toBeCloseTo(zoomFactor('wheel-zoom', notch), 9)
+    expect(zoomFactor('pinch', wheel({ deltaY: -120, hasZoomModifier: true }))).toBeCloseTo(
+      Math.exp(0.18),
+      9
+    )
   })
 
   it('zooms a pinch by e^0.01 per pixel, so 60 px is about 1.82', () => {

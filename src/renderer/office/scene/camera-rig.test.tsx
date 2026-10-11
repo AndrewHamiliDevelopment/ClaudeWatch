@@ -11,7 +11,7 @@ const { controls, surface, frames } = vi.hoisted(() => {
   const camera = { zoom: 34 }
   const listeners = new Map<string, Set<() => void>>()
   const root = document.createElement('div')
-  root.setAttribute('role', 'img')
+  root.setAttribute('data-scene-root', '')
   const canvas = document.createElement('canvas')
   const badge = document.createElement('button')
   root.append(canvas, badge)
@@ -123,7 +123,6 @@ it('preserves desk zoom when the viewport or project count changes', () => {
     floorCount: 1,
     agents: [agent],
     liveSessionKeys: new Set<string>(),
-    selectedAgentKey: agent.agentKey,
     isReducedMotion: true,
     onBandChange: vi.fn()
   }
@@ -173,7 +172,6 @@ function rigProps() {
     floorCount: 1,
     agents: [],
     liveSessionKeys: new Set(['claude:a']),
-    selectedAgentKey: null,
     isReducedMotion: true,
     onBandChange: vi.fn(),
     request: null
@@ -219,7 +217,6 @@ function deskProps(roomX: number, hasAgent = true) {
     floor: makeFloor({ floorId: 'one', rooms: [makeRoom({ id: 'r1', x: roomX, z: 4 })] }),
     agents: hasAgent ? [agent] : [],
     liveSessionKeys: new Set<string>(),
-    selectedAgentKey: 'a1',
     request: { kind: 'fly' as const, agentKey: 'a1', nonce: 7 }
   }
 }
@@ -252,6 +249,41 @@ it('returns to the floor band when the followed agent leaves', () => {
   )
   runFrame()
   expect(first.onBandChange).toHaveBeenLastCalledWith('floor')
+})
+
+describe('the followed agent leaves after the owner moved the camera away', () => {
+  function leaveAfter(move: () => void) {
+    const first = deskProps(10)
+    const { rerender } = render(<CameraRig {...first} />)
+    runFrame()
+    move()
+    controls.moveTo.mockClear()
+    controls.zoomTo.mockClear()
+    const stable = { onBandChange: first.onBandChange, request: first.request }
+    rerender(<CameraRig {...deskProps(10, false)} {...stable} />)
+    runFrame()
+    return { first, rerender, stable }
+  }
+
+  it.each([
+    ['a two-finger scroll', () => wheel(surface.gl.domElement, { deltaY: 12, wheelDeltaY: -36 })],
+    ['a drag', () => controls.emit('controlstart')]
+  ])('leaves the camera where %s put it instead of re-framing the floor', (_name, move) => {
+    const { first } = leaveAfter(move)
+    expect(controls.zoomTo).not.toHaveBeenCalled()
+    expect(controls.moveTo).not.toHaveBeenCalled()
+    expect(first.onBandChange).toHaveBeenLastCalledWith('desk')
+  })
+
+  it('does not re-arm auto-framing, and stops following the room the agent had', () => {
+    const { rerender, stable } = leaveAfter(() => controls.emit('controlstart'))
+    surface.size = { width: 1300, height: 900 }
+    rerender(<CameraRig {...deskProps(10, false)} {...stable} />)
+    expect(controls.moveTo).not.toHaveBeenCalled()
+    // The agent is back in a room that has moved: a kept anchor would shift the camera.
+    rerender(<CameraRig {...deskProps(16)} {...stable} />)
+    expect(controls.moveTo).not.toHaveBeenCalled()
+  })
 })
 
 describe('continuous zoom', () => {

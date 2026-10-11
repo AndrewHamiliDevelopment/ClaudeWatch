@@ -84,6 +84,31 @@ describe('createLiveFeed', () => {
     expect(JSON.parse(storage.get('claudewatch.office.layout')!).floors).toHaveLength(1)
   })
 
+  it.each([
+    [
+      'storage that refuses every write',
+      {
+        getItem: () => null,
+        setItem: () => {
+          throw new Error('site data is blocked')
+        }
+      }
+    ],
+    ['no storage at all', null]
+  ])('keeps the feed running with %s: the layout is simply not remembered', (_name, blocked) => {
+    const frames: OfficeFrame[] = []
+    createLiveFeed(source, { storage: blocked }).subscribe((frame) => frames.push(frame))
+    const hello = (): void =>
+      listener?.({
+        type: 'hello',
+        v: 1,
+        snapshot: { rev: 1, generatedAtMs: 1, sessions: [session('claude:a')], sources: [] }
+      })
+    expect(hello).not.toThrow()
+    vi.advanceTimersByTime(300)
+    expect(frames.at(-1)?.agents.map((agent) => agent.agentKey)).toEqual(['claude:a'])
+  })
+
   it('stops ticking and unsubscribes from the bridge when the last listener leaves', () => {
     const frames: OfficeFrame[] = []
     const unsubscribe = createLiveFeed(source, { storage: store }).subscribe((frame) =>

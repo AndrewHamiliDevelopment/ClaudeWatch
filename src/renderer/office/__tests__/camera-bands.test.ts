@@ -20,9 +20,18 @@ describe('camera bands', () => {
   })
 
   it('measures the building threshold against the floor fit, not a fixed zoom', () => {
-    // A lone office fits at 60 px/m: 40 is already further out than its floor view.
-    expect(bandForZoom(40, 'floor', 60)).toBe('building')
-    expect(bandForZoom(40, 'floor', 8.2)).toBe('floor')
+    // A lone office fits at 60 px/m: 30 is already further out than its floor view.
+    expect(bandForZoom(30, 'floor', 60)).toBe('building')
+    expect(bandForZoom(30, 'floor', 8.2)).toBe('floor')
+  })
+
+  it('keeps a floor level between desk and building for a lone office that fits at 60', () => {
+    expect(bandForZoom(47, 'desk', 60)).toBe('floor')
+    expect(bandForZoom(39, 'floor', 60)).toBe('floor')
+    expect(bandForZoom(38, 'floor', 60)).toBe('building')
+    expect(bandForZoom(43, 'building', 60)).toBe('building')
+    expect(bandForZoom(44, 'building', 60)).toBe('floor')
+    expect(bandForZoom(54, 'floor', 60)).toBe('floor')
   })
 
   it('enters desk at 55 px/m and leaves it under 48', () => {

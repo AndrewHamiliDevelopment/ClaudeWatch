@@ -1,4 +1,4 @@
-import type { RosterEntry } from '../violet-court/cast'
+import type { RosterEntry } from '../types'
 import { GROVE } from './palette'
 
 type Kin = 'keeper' | 'helper'

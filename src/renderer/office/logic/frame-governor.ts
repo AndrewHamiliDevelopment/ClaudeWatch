@@ -3,7 +3,7 @@ export interface PageVisibility {
   isFocused: boolean
 }
 
-export interface VisibilityEnv {
+interface VisibilityEnv {
   read(): PageVisibility
   onChange(callback: () => void): () => void
 }

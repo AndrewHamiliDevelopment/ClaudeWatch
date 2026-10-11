@@ -1,5 +1,5 @@
 import type { FloorProps, ZoneProps } from '../types'
-import { box, Parts, type PartSpec } from '../violet-court/Parts'
+import { box, Parts, type PartSpec } from '../parts'
 import { CompanyGrounds, ProjectRoom } from '../ZoneArchitecture'
 import { GARRISON, GARRISON_PALETTE } from './palette'
 

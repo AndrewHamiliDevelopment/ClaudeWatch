@@ -35,19 +35,29 @@ interface LayoutStorage {
 const LAYOUT_KEY = 'claudewatch.office.layout'
 const TICK_MS = 100
 
-function loadLayout(storage: LayoutStorage): LayoutMap | undefined {
+// Storage is null, or throws, where site data is blocked: the office then starts from a fresh
+// layout each time.
+function loadLayout(storage: LayoutStorage | null): LayoutMap | undefined {
   try {
-    const saved = JSON.parse(storage.getItem(LAYOUT_KEY) ?? 'null')
+    const saved = JSON.parse(storage?.getItem(LAYOUT_KEY) ?? 'null')
     return saved?.version === 1 ? saved : undefined
   } catch {
     return undefined
   }
 }
 
+function saveLayout(storage: LayoutStorage | null, serialised: string): void {
+  try {
+    storage?.setItem(LAYOUT_KEY, serialised)
+  } catch {
+    // Not remembered; the feed listener that called this must keep running.
+  }
+}
+
 // Runs the office sim in the renderer on top of the bridge feed and emits a frame when it changes.
 export function createLiveFeed(
   source: FeedSource,
-  options: { storage: LayoutStorage; now?: () => number }
+  options: { storage: LayoutStorage | null; now?: () => number }
 ): OfficeFeed {
   const now = options.now ?? Date.now
   const listeners = new Set<(frame: OfficeFrame) => void>()
@@ -70,7 +80,7 @@ export function createLiveFeed(
       isDirty = true
       const serialised = JSON.stringify(layout)
       if (serialised !== savedLayout) {
-        options.storage.setItem(LAYOUT_KEY, serialised)
+        saveLayout(options.storage, serialised)
         savedLayout = serialised
       }
     })

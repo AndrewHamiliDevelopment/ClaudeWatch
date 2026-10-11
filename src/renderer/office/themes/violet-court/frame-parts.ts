@@ -1,5 +1,5 @@
 import { COURT } from './palette'
-import { box, turned, type PartSpec } from './Parts'
+import { box, turned, type PartSpec } from '../parts'
 import type { FrameKind } from './roster'
 
 interface FrameLivery {

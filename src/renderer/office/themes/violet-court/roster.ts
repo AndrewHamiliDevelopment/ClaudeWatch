@@ -1,6 +1,7 @@
 import type { AgentView } from '../../../../shared/office/types'
 import { rosterName } from '../roster-names'
-import { COURT_CAST, type RosterEntry } from './cast'
+import type { RosterEntry } from '../types'
+import { COURT_CAST } from './cast'
 
 export const VIOLET_COURT_ID = 'violet-court'
 

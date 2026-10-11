@@ -6,16 +6,14 @@ import { GroveSpirit } from './GroveSpirit'
 import { GroveWalls } from './GroveWalls'
 import { GroveDistrict, GroveHangar, GroveTower } from './GroveWorld'
 import { GROVE, GROVE_PALETTE } from './palette'
-import { QUIET_GROVE_ID } from './roster'
-
-// dead-code-allowed: the cast as { id, name, role } for the Office HUD 2026-12-31
-export { quietGroveRoster } from './roster'
+import { castIndexFor, QUIET_GROVE_ID, quietGroveRoster } from './roster'
 
 export const quietGrove: OfficeTheme = {
   id: QUIET_GROVE_ID,
   label: 'Quiet Grove',
   description: 'A studio in a forest clearing: timber desks, hedges for walls, paper lanterns.',
   palette: GROVE_PALETTE,
+  roster: { entries: quietGroveRoster, indexFor: castIndexFor },
   robot: {
     Model: GroveSpirit,
     skins: {

@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import { browserStorage } from '../../office-live/browser-storage'
 import type { FloorGeometry, RoomGeometry, ZoneGeometry } from '../scene-model'
 import { getTheme, listThemes } from '../themes/registry'
 import type { OfficeTheme } from '../themes/types'
@@ -126,33 +127,62 @@ export interface OfficeThemeStore {
   subscribe(listener: () => void): () => void
 }
 
-export function createOfficeThemeStore(storage: ThemeStorage | null): OfficeThemeStore {
+// The window's `storage` event: another page on this origin saved its assignments.
+type StorageEvents = Pick<Window, 'addEventListener' | 'removeEventListener'>
+
+const isSame = (a: ThemeAssignments, b: ThemeAssignments): boolean =>
+  JSON.stringify(a) === JSON.stringify(b)
+
+export function createOfficeThemeStore(
+  storage: ThemeStorage | null,
+  storageEvents: StorageEvents | null = null
+): OfficeThemeStore {
   const listeners = new Set<() => void>()
   let assignments = EMPTY_THEME_ASSIGNMENTS
-  try {
-    assignments = parseThemeAssignments(storage?.getItem(OFFICE_THEMES_STORAGE_KEY) ?? null)
-  } catch {
-    // A locked-down storage backend leaves every zone on the default theme.
+  // Once a write fails nothing here reaches storage, so storage stops being the newer copy.
+  let canPersist = storage !== null
+
+  const adopt = (next: ThemeAssignments): void => {
+    if (isSame(next, assignments)) return
+    assignments = next
+    for (const listener of listeners) listener()
   }
+  // Another Office page may have saved since this one last looked.
+  const latest = (): ThemeAssignments => {
+    if (!canPersist) return assignments
+    try {
+      return parseThemeAssignments(storage?.getItem(OFFICE_THEMES_STORAGE_KEY) ?? null)
+    } catch {
+      // A locked-down storage backend leaves every zone on what this page already holds.
+      return assignments
+    }
+  }
+  assignments = latest()
 
   const commit = (next: ThemeAssignments): void => {
-    assignments = next
     try {
       storage?.setItem(OFFICE_THEMES_STORAGE_KEY, JSON.stringify(next))
     } catch {
       // The choice still applies for this session when it cannot be saved.
+      canPersist = false
     }
-    for (const listener of listeners) listener()
+    adopt(next)
   }
   const assign = (scope: Scope, key: string, themeId: string): void => {
-    if (!key || !isKnownTheme(themeId) || assignedThemeId(assignments[scope], key) === themeId)
-      return
-    commit({ ...assignments, [scope]: { ...assignments[scope], [key]: themeId } })
+    if (!key || !isKnownTheme(themeId)) return
+    const current = latest()
+    if (assignedThemeId(current[scope], key) === themeId) return adopt(current)
+    commit({ ...current, [scope]: { ...current[scope], [key]: themeId } })
   }
   const clear = (scope: Scope, key: string): void => {
-    if (assignedThemeId(assignments[scope], key) === undefined) return
-    const { [key]: _removed, ...kept } = assignments[scope]
-    commit({ ...assignments, [scope]: kept })
+    const current = latest()
+    if (assignedThemeId(current[scope], key) === undefined) return adopt(current)
+    const { [key]: _removed, ...kept } = current[scope]
+    commit({ ...current, [scope]: kept })
+  }
+  // `key` is null when the other page cleared all of its storage.
+  const onStorage = (event: StorageEvent): void => {
+    if (event.key === OFFICE_THEMES_STORAGE_KEY || event.key === null) adopt(latest())
   }
 
   return {
@@ -163,22 +193,18 @@ export function createOfficeThemeStore(storage: ThemeStorage | null): OfficeThem
     setProjectTheme: (projectKey, themeId) => assign('projects', projectKey, themeId),
     clearProjectTheme: (projectKey) => clear('projects', projectKey),
     subscribe: (listener) => {
+      if (listeners.size === 0) storageEvents?.addEventListener('storage', onStorage)
       listeners.add(listener)
-      return () => void listeners.delete(listener)
+      return () => {
+        listeners.delete(listener)
+        if (listeners.size === 0) storageEvents?.removeEventListener('storage', onStorage)
+      }
     }
   }
 }
 
-function browserStorage(): ThemeStorage | null {
-  try {
-    return window.localStorage
-  } catch {
-    return null
-  }
-}
-
 // dead-code-allowed: the theme picker in the Office HUD calls the setters 2026-12-31
-export const officeThemes = createOfficeThemeStore(browserStorage())
+export const officeThemes = createOfficeThemeStore(browserStorage(), window)
 
 export function useThemeAssignments(): ThemeAssignments {
   return useSyncExternalStore(officeThemes.subscribe, officeThemes.getAssignments)

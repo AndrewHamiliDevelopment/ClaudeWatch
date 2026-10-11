@@ -1,5 +1,5 @@
 import type { ComponentType, RefObject } from 'react'
-import type { Group, Mesh, MeshStandardMaterial } from 'three'
+import type { Group, Mesh } from 'three'
 import type { AgentView, ProviderId } from '../../../shared/office/types'
 import type { DeskSlot, FloorGeometry, RoomGeometry, ZoneGeometry } from '../scene-model'
 import type { WallsMode } from '../logic/room-layout'
@@ -39,7 +39,6 @@ export interface RobotRig {
   eye: RefObject<Mesh | null>
   thought: RefObject<Group | null>
   puffs: readonly RefObject<Mesh | null>[]
-  puffMaterials: readonly RefObject<MeshStandardMaterial | null>[]
 }
 
 // Root translation, scale, hit capsule and selection remain owned by Robot's controller.
@@ -105,11 +104,27 @@ export interface ZoneKit {
   RoomSign: ComponentType<RoomProps>
 }
 
+// A character an agent plays, as the HUD names it.
+export interface RosterEntry {
+  id: string
+  name: string
+  role: string
+}
+
+interface ThemeRoster {
+  // The cast, with any names the owner changed on this machine.
+  entries(storage?: Pick<Storage, 'getItem'> | null): RosterEntry[]
+  // Which entry an agent plays: its provider and its office bay decide.
+  indexFor(agent: Pick<AgentView, 'provider' | 'isSubagent'>, bay: number): number
+}
+
 export interface OfficeTheme {
   id: string
   label: string
   description: string
   palette: ThemePalette
+  // Absent in a theme without a cast: its agents play no named character.
+  roster?: ThemeRoster
   // Zone-scoped, like the zone kit: a robot wears the theme of its own room.
   robot: { Model: ComponentType<RobotModelProps>; skins: Record<ProviderId, RobotSkin> }
   kit: { floor: FloorKit; zone: ZoneKit }
