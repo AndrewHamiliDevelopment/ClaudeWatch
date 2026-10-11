@@ -379,7 +379,7 @@ One job per surface:
 +------------------------------------------+
 | ! 2 need you          [ Next  > ]        |
 |------------------------------------------|
-| Claude  work@zk.dev    * DEFAULT  Max 20x|
+| Claude  me@a.test      * DEFAULT  Max 20x|
 |  5-hour  [#######.....]  58%  resets 3h  |
 |  Weekly  [#########...]  81% ^ live      |
 | Claude  personal       Orca              |
