@@ -33,6 +33,16 @@ export interface UsageBucket {
   counts: TokenCounts
 }
 
+// How far a transcript has been counted: the time of its latest counted line and the byte its
+// furthest one starts at.
+export interface TranscriptPlace {
+  atMs: number
+  position: number
+}
+
+// The position of a transcript counted by time alone: no line starts beyond it.
+export const BEYOND_ANY_LINE = Number.POSITIVE_INFINITY
+
 export interface LedgerState {
   // Nothing written before this moment is ever counted.
   trackingSinceMs: number
@@ -42,8 +52,7 @@ export interface LedgerState {
   spans: IdentitySpan[]
   buckets: Map<string, UsageBucket>
   projects: Map<string, string>
-  // Transcript id to the time of its last counted line.
-  files: Map<string, number>
+  files: Map<string, TranscriptPlace>
   // Codex session key to the highest running total already counted.
   codexSessions: Map<string, { counts: TokenCounts; countedAtMs: number }>
   limits: Map<string, AccountLimit[]>

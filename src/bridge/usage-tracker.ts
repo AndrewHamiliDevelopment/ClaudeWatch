@@ -29,7 +29,7 @@ interface TrackedFile {
   hasReachedEnd: boolean
 }
 
-// 650 MB of live transcripts are counted within three ticks, and one tick stays near 150 ms.
+// A full tick of this many bytes takes about 0.6 s: 880 MB of live transcripts take four.
 const TICK_BUDGET_BYTES = 256 * 1024 * 1024
 // The longest transcript line measured is 1.3 MB; a read this size always holds a whole one.
 const CHUNK_BYTES = 8 * 1024 * 1024
@@ -128,7 +128,10 @@ export class UsageTracker {
       }
       const read = await this.io.readFrom(path, file.offset, window)
       if (read.nextOffset > file.offset) {
-        file.fold = foldLines(file.fold, read.text, report)
+        // Measured back from the end of the read: one resumed inside a character after a skipped
+        // line decodes its first bytes to a different length, and every line would shift.
+        const startsAt = report ? read.nextOffset - Buffer.byteLength(read.text) : file.offset
+        file.fold = foldLines(file.fold, read.text, report, startsAt)
         spent += read.nextOffset - file.offset
         file.offset = read.nextOffset
         continue

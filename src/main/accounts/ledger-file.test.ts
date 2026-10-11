@@ -4,7 +4,7 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { loadLedger, saveLedger } from './ledger-file'
-import { emptyLedger, type LedgerState } from './ledger-state'
+import { BEYOND_ANY_LINE, emptyLedger, type LedgerState } from './ledger-state'
 
 const counts = (output: number) => ({ input: 1, output, cacheWrite: 2, cacheRead: 3 })
 const limit = {
@@ -61,7 +61,11 @@ function filledLedger(): LedgerState {
       ]
     ]),
     projects: new Map([['p_1', 'repo']]),
-    files: new Map([['file-id', 7_000]]),
+    files: new Map([
+      ['file-id', { atMs: 7_000, position: 420 }],
+      // Counted before positions were kept.
+      ['older-file-id', { atMs: 6_000, position: BEYOND_ANY_LINE }]
+    ]),
     codexSessions: new Map([['codex:c', { counts: counts(5), countedAtMs: 8_000 }]]),
     limits: new Map([['claude:aaaaaaaaaaaa', [limit]]])
   }
@@ -149,6 +153,44 @@ describe('loadLedger', () => {
     expect(await readdir(folder)).toEqual(['accounts-ledger.json.damaged'])
   })
 
+  it('keeps each file’s time where every version reads it, and its position beside it', async () => {
+    const file = await stored()
+    expect(file.files).toEqual([
+      ['file-id', 7_000],
+      ['older-file-id', 6_000]
+    ])
+    expect(file.filePositions).toEqual([['file-id', 420]])
+  })
+
+  it('reads a ledger written before positions were kept, leaving every file to its time alone', async () => {
+    const { filePositions: _notYetWritten, ...olderForm } = await stored()
+    await writeFile(path, JSON.stringify(olderForm))
+    const ledger = loadLedger(path)
+    expect([...(ledger?.files ?? [])]).toEqual([
+      ['file-id', { atMs: 7_000, position: BEYOND_ANY_LINE }],
+      ['older-file-id', { atMs: 6_000, position: BEYOND_ANY_LINE }]
+    ])
+    expect({ ...ledger, files: null }).toEqual({ ...filledLedger(), files: null })
+  })
+
+  it.each([
+    ['is negative', -1],
+    ['is not whole', 420.5],
+    ['is larger than a file gets', Number.MAX_SAFE_INTEGER + 1],
+    ['is text', '420'],
+    ['is missing', null]
+  ])('leaves a file to its time alone when its stored position %s', async (_case, position) => {
+    const file = await stored()
+    Object.assign(file, {
+      filePositions: [['file-id', position], ['never-counted', 9], 'x']
+    })
+    await writeFile(path, JSON.stringify(file))
+    expect([...(loadLedger(path)?.files ?? [])]).toEqual([
+      ['file-id', { atMs: 7_000, position: BEYOND_ANY_LINE }],
+      ['older-file-id', { atMs: 6_000, position: BEYOND_ANY_LINE }]
+    ])
+  })
+
   it('holds a stored name and every stored key to the rules they were written under', async () => {
     const file = await stored()
     const [account] = file.accounts as Record<string, unknown>[]
@@ -193,8 +235,8 @@ describe('loadLedger', () => {
     expect(ledger?.spans).toEqual([])
     expect([...(ledger?.buckets.values() ?? [])].map((kept) => kept.projectKey)).toEqual(['p_1'])
     expect([...(ledger?.files ?? [])]).toEqual([
-      ['file-id', 7_000],
-      ['__proto__', 5]
+      ['file-id', { atMs: 7_000, position: 420 }],
+      ['__proto__', { atMs: 5, position: BEYOND_ANY_LINE }]
     ])
     expect(ledger?.limits.get('claude:aaaaaaaaaaaa')).toEqual([limit])
     expect(JSON.stringify([...(ledger?.accounts ?? [])])).not.toContain('CANARY')

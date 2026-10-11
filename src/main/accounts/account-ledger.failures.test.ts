@@ -20,6 +20,7 @@ const line = (output: number): UsageDelta => ({
   projectLabel: 'repo',
   file: '/p/a.jsonl',
   atMs: Date.now(),
+  position: 0,
   counts: { input: 0, output, cacheWrite: 0, cacheRead: 0 }
 })
 

@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest'
 import { BridgePoller } from './poller'
-import { UsageTracker } from './usage-tracker'
+import { type TranscriptDelta, UsageTracker } from './usage-tracker'
 import { fixtureIo, registryEntry } from './__fixtures__/helpers'
 
 const minuteMs = (minute: number): number => Date.parse(`2026-10-11T10:${minute}:00.000Z`)
@@ -15,6 +15,7 @@ const stamped = (id: string, output: number, minute: number): string =>
     }
   })}\n`
 const output = (value: number) => ({ input: 0, output: value, cacheWrite: 0, cacheRead: 0 })
+const bytes = (text: string): number => Buffer.byteLength(text)
 
 it('reports the tokens each transcript added, once, under the session that owns the file', async () => {
   const main = '/p/s.jsonl'
@@ -42,18 +43,20 @@ it('reports the tokens each transcript added, once, under the session that owns 
       (delta) => added.push(delta)
     )
   await scan()
+  const place = { sessionKey: 'claude:s', position: 0 }
   expect(added).toEqual([
-    { sessionKey: 'claude:s', file: main, atMs: minuteMs(10), counts: output(5) },
-    { sessionKey: 'claude:s', file: agent, atMs: minuteMs(11), counts: output(7) },
-    { sessionKey: 'claude:s', file: mate, atMs: minuteMs(12), counts: output(3) }
+    { ...place, file: main, atMs: minuteMs(10), counts: output(5) },
+    { ...place, file: agent, atMs: minuteMs(11), counts: output(7) },
+    { ...place, file: mate, atMs: minuteMs(12), counts: output(3) }
   ])
   added.length = 0
   await scan()
   expect(added).toEqual([])
+  const appendedAt = bytes(files[main])
   files[main] += stamped('m1', 9, 13)
   await scan()
   expect(added).toEqual([
-    { sessionKey: 'claude:s', file: main, atMs: minuteMs(13), counts: output(4) }
+    { ...place, file: main, atMs: minuteMs(13), position: appendedAt, counts: output(4) }
   ])
   expect(JSON.stringify(added)).not.toContain('CANARY')
 })
@@ -80,6 +83,7 @@ it('reports added tokens with the project of their session, on the tick they arr
       projectLabel: 'repo',
       file: transcript,
       atMs: minuteMs(10),
+      position: 0,
       counts: output(9)
     }
   ])
@@ -105,12 +109,72 @@ it('reports a finished teammate’s last lines once, and never its earlier ones 
   await scan([['lena@session-s', [mate]]])
   added.length = 0
 
+  const appendedAt = bytes(files[mate])
   files[mate] += stamped('t2', 8, 13)
   await scan([])
   expect(added).toEqual([
-    { sessionKey: 'claude:s', file: mate, atMs: minuteMs(13), counts: output(8) }
+    {
+      sessionKey: 'claude:s',
+      file: mate,
+      atMs: minuteMs(13),
+      position: appendedAt,
+      counts: output(8)
+    }
   ])
   added.length = 0
   await scan([])
   expect(added).toEqual([])
+})
+
+// Every delta of one transcript, read by a fresh tracker until it has caught up.
+async function readAll(
+  files: Record<string, string>,
+  limits: { budgetBytes?: number; chunkBytes?: number } = {}
+): Promise<TranscriptDelta[]> {
+  const tracker = new UsageTracker(fixtureIo(files), limits)
+  const added: TranscriptDelta[] = []
+  const sessions = new Map([
+    ['claude:s', { main: '/p/s.jsonl', agents: [], teammates: new Map<string, string[]>() }]
+  ])
+  do await tracker.scan(sessions, (delta) => added.push(delta))
+  while (tracker.isBehind)
+  return added
+}
+
+it('gives a line the same place whether it is read as it is appended or again from the first line', async () => {
+  const main = '/p/s.jsonl'
+  const prompt = `${JSON.stringify({ type: 'user', message: { content: 'naïve — 🙂' } })}\n`
+  // Two lines of one message written in the same millisecond, with a read falling between them.
+  const lines = [stamped('m1', 5, 10), prompt, stamped('m1', 9, 10), stamped('m2', 3, 11)]
+  const files = { [main]: lines[0] + lines[1] }
+  const tracker = new UsageTracker(fixtureIo(files))
+  const appended: TranscriptDelta[] = []
+  const scan = (): Promise<void> =>
+    tracker.scan(
+      new Map([['claude:s', { main, agents: [], teammates: new Map<string, string[]>() }]]),
+      (delta) => appended.push(delta)
+    )
+  await scan()
+  files[main] += lines[2]
+  await scan()
+  files[main] += lines[3]
+  await scan()
+
+  expect(appended.map(({ atMs, position }) => [atMs, position])).toEqual([
+    [minuteMs(10), 0],
+    [minuteMs(10), bytes(lines[0] + lines[1])],
+    [minuteMs(11), bytes(lines[0] + lines[1] + lines[2])]
+  ])
+  expect(await readAll(files)).toEqual(appended)
+  const oneLineAtATime = Math.max(...lines.map(bytes))
+  expect(await readAll(files, { budgetBytes: oneLineAtATime })).toEqual(appended)
+})
+
+it('places the lines after one too long to read exactly, though the read resumes inside a character', async () => {
+  const main = '/p/s.jsonl'
+  // 2348 bytes: two reads of 1024 are skipped, and the third begins on the second byte of an é.
+  const tooLong = `x${'é'.repeat(1173)}\n`
+  const files = { [main]: stamped('m1', 5, 10) + tooLong + stamped('m2', 3, 11) }
+  const added = await readAll(files, { chunkBytes: 1024 })
+  expect(added.map(({ position }) => position)).toEqual([0, bytes(stamped('m1', 5, 10) + tooLong)])
 })

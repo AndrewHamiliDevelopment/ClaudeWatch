@@ -26,6 +26,7 @@ const line = (output: number, atMs = Date.now()): UsageDelta => ({
   projectLabel: 'repo',
   file: '/p/a.jsonl',
   atMs,
+  position: 0,
   counts: tokens(output)
 })
 const usage = (...deltas: unknown[]): unknown => ({ type: 'usage', v: 1, deltas })
@@ -132,6 +133,16 @@ describe('while accounts are watched', () => {
     expect(today(ledger.view())).toEqual({ [keyOf('ada')]: 5 })
   })
 
+  it('counts both lines of a message written in one millisecond, when a poll falls between them', async () => {
+    const { ledger } = await running()
+    await vi.advanceTimersByTimeAsync(1_000)
+    const writtenAtMs = Date.now()
+    ledger.ingestBridgeMessage(usage(line(5, writtenAtMs)))
+    await vi.advanceTimersByTimeAsync(2_000)
+    ledger.ingestBridgeMessage(usage({ ...line(7, writtenAtMs), position: 512 }))
+    expect(today(ledger.view())).toEqual({ [keyOf('ada')]: 12 })
+  })
+
   it('holds tokens that arrive before it knows who is signed in, then counts them once', async () => {
     const { ledger, deps } = setup()
     let finishRead = (_read: IdentityRead): void => {}
@@ -161,6 +172,11 @@ describe('while accounts are watched', () => {
       usage({ ...line(1), counts: { ...tokens(1), input: -1 } }),
       usage({ ...line(1), atMs: 'now' }),
       usage({ ...line(1), file: 7 }),
+      usage({ ...line(1), position: -1 }),
+      usage({ ...line(1), position: 0.5 }),
+      usage({ ...line(1), position: '0' }),
+      usage({ ...line(1), position: Number.POSITIVE_INFINITY }),
+      usage({ ...line(1), position: undefined }),
       usage({ ...line(1), counts: null }),
       usage('line')
     ]) {
