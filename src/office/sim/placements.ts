@@ -48,7 +48,8 @@ export function placements(
       .map((subagent) => ({
         ...session,
         key: `${session.key}#${subagent.id}`,
-        name: subagent.type,
+        // A teammate is known by its own name; a subagent only by its type.
+        name: subagent.name ?? subagent.type,
         activity: subagent.activity,
         attention: 'none' as const
       }))

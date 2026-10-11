@@ -142,6 +142,46 @@ it('keeps a subagent at its desk when a sibling finishes', () => {
   expect(views.find((a) => a.agentKey === 'a#2')!.slotId).toBe('desk_guest_0')
 })
 
+it('seats teammates like subagents, under their own names, and keeps their seats', () => {
+  const sim = new World({ now: () => 0 })
+  const mate = (name: string) => ({
+    id: `${name}@session-a`,
+    type: 'lena',
+    activity: 'thinking' as const,
+    kind: 'teammate' as const,
+    name
+  })
+  const worker = { id: 'abc', type: 'Explore', activity: 'reading' as const }
+  const lead = { ...session('a'), subagents: [worker, ...['kai', 'lena', 'ravi'].map(mate)] }
+  sim.apply({
+    type: 'hello',
+    v: 1,
+    snapshot: { rev: 0, generatedAtMs: 0, sessions: [lead], sources: [] }
+  })
+  const seats = () =>
+    Object.fromEntries(
+      sim
+        .step(0)
+        .filter((a) => a.isSubagent)
+        .map((a) => [a.label, `${a.roomId}/${a.slotId}`])
+    )
+  const before = seats()
+  expect(Object.keys(before).sort()).toEqual(['Explore', 'kai', 'lena', 'ravi'])
+  expect(new Set(Object.values(before)).size).toBe(4)
+
+  // A teammate leaves the team area; nobody else is moved, at a desk or in the team area.
+  sim.apply({
+    type: 'patch',
+    v: 1,
+    seq: 1,
+    upserts: [{ ...lead, subagents: [worker, mate('kai'), mate('lena')] }],
+    removed: []
+  })
+  const after = seats()
+  for (const name of ['Explore', 'kai', 'lena']) expect(after[name]).toBe(before[name])
+  expect(before.lena).toContain('team_seat')
+})
+
 it('walks to a moved seat from where the agent is, not from the gate', () => {
   const sim = new World({ now: () => 0 })
   const worker = (id: string) => ({ id, type: 'worker', activity: 'reading' as const })

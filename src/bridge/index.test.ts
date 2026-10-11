@@ -3,7 +3,12 @@ import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { emptySnapshot } from './reducer'
 
-const mocks = vi.hoisted(() => ({ tick: vi.fn(), start: vi.fn(), options: vi.fn() }))
+const mocks = vi.hoisted(() => ({
+  tick: vi.fn(),
+  start: vi.fn(),
+  options: vi.fn(),
+  ticksUntilCounted: 0
+}))
 vi.mock('./poller', () => ({
   BridgePoller: class {
     constructor(options: unknown) {
@@ -11,13 +16,17 @@ vi.mock('./poller', () => ({
     }
     tick = mocks.tick
     start = mocks.start
+    get isCountingUsage(): boolean {
+      return mocks.tick.mock.calls.length < mocks.ticksUntilCounted
+    }
   }
 }))
 import { main } from './index'
 
 afterEach(() => {
   vi.restoreAllMocks()
-  vi.clearAllMocks()
+  vi.resetAllMocks()
+  mocks.ticksUntilCounted = 0
 })
 it('prints exactly one JSON snapshot and does not start polling in once mode', async () => {
   const snapshot = emptySnapshot()
@@ -29,6 +38,23 @@ it('prints exactly one JSON snapshot and does not start polling in once mode', a
   expect(mocks.options).toHaveBeenCalledWith({
     claudeRoots: [join(homedir(), '.claude'), resolve('./extra')]
   })
+})
+it('keeps ticking in once mode until tokens are counted, and prints only the last snapshot', async () => {
+  const snapshots = [1, 2, 3].map((rev) => ({ ...emptySnapshot(), rev }))
+  for (const snapshot of snapshots) mocks.tick.mockResolvedValueOnce(snapshot)
+  mocks.ticksUntilCounted = 3
+  const write = vi.spyOn(process.stdout, 'write').mockReturnValue(true)
+  await main(['--once'])
+  expect(mocks.tick).toHaveBeenCalledTimes(3)
+  expect(write.mock.calls).toEqual([[`${JSON.stringify(snapshots[2])}\n`]])
+})
+it('gives up waiting in once mode when counting never finishes', async () => {
+  mocks.tick.mockResolvedValue(emptySnapshot())
+  mocks.ticksUntilCounted = Infinity
+  const write = vi.spyOn(process.stdout, 'write').mockReturnValue(true)
+  await main(['--once'])
+  expect(mocks.tick).toHaveBeenCalledTimes(30)
+  expect(write).toHaveBeenCalledTimes(1)
 })
 it('forwards utility-process feed messages through the parent port', async () => {
   const message = { type: 'hello', v: 1, snapshot: emptySnapshot() }

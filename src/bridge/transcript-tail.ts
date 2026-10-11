@@ -42,6 +42,11 @@ export function parseTranscript(text: string): TranscriptState {
   }
 }
 
+// The folder name Claude Code gives a working directory under `projects/`.
+export function projectSlug(cwd: string): string {
+  return cwd.replace(/[^a-zA-Z0-9]/g, '-')
+}
+
 const paths = new WeakMap<BridgeIo, Map<string, string>>()
 
 export async function transcriptPath(
@@ -65,7 +70,7 @@ export async function transcriptPath(
     return path
   }
   const projects = join(root, 'projects')
-  const direct = join(projects, cwd.replace(/[^a-zA-Z0-9]/g, '-'), `${sessionId}.jsonl`)
+  const direct = join(projects, projectSlug(cwd), `${sessionId}.jsonl`)
   try {
     await io.stat(direct)
     return remember(direct)

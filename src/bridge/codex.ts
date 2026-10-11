@@ -9,21 +9,17 @@ import { projectKey } from '../shared/office/project-key'
 import { type BridgeIo, jsonObject, object } from './io'
 import { resolveProject } from './project-root'
 import { findRollouts } from './codex-rollouts'
+import { parseCodexUsage } from './codex-usage'
+import { parseProcessTable, PROCESS_TABLE_ARGS } from './process-table'
 
 export function parseCodexProcesses(output: string): { pid: number; startedAtMs: number }[] {
-  const processes: { pid: number; startedAtMs: number }[] = []
-  for (const line of output.split('\n')) {
-    const match = /^\s*(\d+)\s+(\w{3}\s+\w{3}\s+\d+\s+\d\d:\d\d:\d\d\s+\d{4})\s+(.+)$/.exec(line)
-    if (!match) continue
-    const argv = match[3].trim().split(/\s+/)
-    if (
-      basename(argv[0]) !== 'codex' ||
-      argv.slice(1).some((arg) => /^(app-server|helper)/.test(arg))
+  return parseProcessTable(output)
+    .filter(
+      ({ argv }) =>
+        basename(argv[0]) === 'codex' &&
+        !argv.slice(1).some((arg) => /^(app-server|helper)/.test(arg))
     )
-      continue
-    processes.push({ pid: Number(match[1]), startedAtMs: Date.parse(`${match[2]} UTC`) })
-  }
-  return processes
+    .map(({ pid, startedAtMs }) => ({ pid, startedAtMs }))
 }
 export function parseCodexActivity(tail: string): {
   activity: AgentActivity
@@ -56,9 +52,7 @@ export async function collectCodex(
   const sessions: SessionRef[] = []
   const health: SourceHealth = { id: 'codex', ok: true, detail: 'empty' }
   try {
-    const processes = parseCodexProcesses(
-      await io.exec('/bin/ps', ['-Ao', 'pid=,lstart=,command='])
-    )
+    const processes = parseCodexProcesses(await io.exec('/bin/ps', PROCESS_TABLE_ARGS))
     const rollouts = processes.length ? await findRollouts(root, io) : []
     const used = new Set<string>()
     for (const process of processes) {
@@ -80,13 +74,15 @@ export async function collectCodex(
         const rollout = rollouts.find((item) => item.cwd === cwd && !used.has(item.id))
         if (rollout) used.add(rollout.id)
         const id = rollout?.id ?? `pid-${process.pid}-${process.startedAtMs}`
-        const state = rollout
-          ? parseCodexActivity(await io.readTail(rollout.path))
-          : {
-              activity: 'idle' as const,
-              attention: 'none' as const,
-              updatedAtMs: process.startedAtMs
-            }
+        const tail = rollout ? await io.readTail(rollout.path) : null
+        const state =
+          tail !== null
+            ? parseCodexActivity(tail)
+            : {
+                activity: 'idle' as const,
+                attention: 'none' as const,
+                updatedAtMs: process.startedAtMs
+              }
         const project = await resolveProject(cwd, io)
         sessions.push({
           key: `codex:${id}`,
@@ -106,7 +102,8 @@ export async function collectCodex(
           ...state,
           currentTool: null,
           subagents: [],
-          startedAtMs: process.startedAtMs
+          startedAtMs: process.startedAtMs,
+          usage: tail !== null ? parseCodexUsage(tail) : null
         })
         health.detail = 'live'
       } catch {

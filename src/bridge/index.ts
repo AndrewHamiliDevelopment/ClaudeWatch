@@ -7,6 +7,8 @@ interface BridgePort {
   postMessage(message: FeedMessage): void
 }
 
+const ONCE_MAX_TICKS = 30
+
 export async function main(args = process.argv.slice(2), port?: BridgePort): Promise<void> {
   const roots = [join(homedir(), '.claude')]
   for (let index = 0; index < args.length; index++) {
@@ -14,7 +16,11 @@ export async function main(args = process.argv.slice(2), port?: BridgePort): Pro
   }
   const poller = new BridgePoller({ claudeRoots: roots })
   if (args.includes('--once')) {
-    process.stdout.write(`${JSON.stringify(await poller.tick())}\n`)
+    // The first tick publishes before any transcript is counted; a one-shot run wants the numbers.
+    let snapshot = await poller.tick()
+    for (let ticks = 1; poller.isCountingUsage && ticks < ONCE_MAX_TICKS; ticks++)
+      snapshot = await poller.tick()
+    process.stdout.write(`${JSON.stringify(snapshot)}\n`)
     return
   }
   if (port) await poller.start((message) => port.postMessage(message))

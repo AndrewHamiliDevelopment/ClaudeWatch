@@ -95,3 +95,145 @@ it('prunes environment identities when their sessions disappear', async () => {
   await poller.tick()
   expect(environmentReads).toBe(2)
 })
+
+const transcript = '/claude/projects/-repo/a.jsonl'
+const usageLine = (id: string, output: number): string =>
+  `${JSON.stringify({
+    type: 'assistant',
+    message: {
+      id,
+      content: [{ type: 'text', text: 'CANARY_PROMPT' }],
+      usage: {
+        input_tokens: 1,
+        output_tokens: output,
+        cache_creation_input_tokens: 0,
+        cache_read_input_tokens: 0
+      }
+    }
+  })}\n`
+
+it('sends hello before counting any tokens, then fills usage in with the next patch', async () => {
+  vi.useFakeTimers()
+  const entry = registryEntry()
+  const io = fixtureIo({
+    '/claude/sessions/42.json': JSON.stringify(entry),
+    '/repo/.git': null,
+    [transcript]: usageLine('m1', 5) + usageLine('m1', 9)
+  })
+  io.exec = async (_file, args) => (args[0] === '-o' ? entry.procStart : '')
+  const read = vi.spyOn(io, 'readFrom')
+  const messages: FeedMessage[] = []
+  const poller = new BridgePoller({
+    io,
+    claudeRoots: ['/claude'],
+    codexRoot: '/codex',
+    now: () => Date.now()
+  })
+  const stop = await poller.start((message) => messages.push(message))
+  expect(messages[0]).toMatchObject({
+    type: 'hello',
+    snapshot: { sessions: [{ key: 'claude:a', usage: null }] }
+  })
+  expect(read).not.toHaveBeenCalled()
+  expect(poller.isCountingUsage).toBe(true)
+  await vi.advanceTimersByTimeAsync(2000)
+  expect(messages[1]).toMatchObject({
+    type: 'patch',
+    upserts: [
+      {
+        key: 'claude:a',
+        usage: {
+          own: { input: 1, output: 9, cacheWrite: 0, cacheRead: 0 },
+          spawned: 0,
+          contextTokens: 1,
+          contextLimit: null
+        }
+      }
+    ]
+  })
+  expect(poller.isCountingUsage).toBe(false)
+  // Numbers and labels cross the feed; transcript text never does.
+  expect(JSON.stringify(messages)).not.toContain('CANARY')
+  stop()
+})
+
+it('re-sends a session for its token counters at most every ten seconds', async () => {
+  vi.useFakeTimers()
+  const entry = registryEntry()
+  const files: Record<string, string | null> = {
+    '/claude/sessions/42.json': JSON.stringify(entry),
+    '/repo/.git': null,
+    [transcript]: usageLine('m0', 1)
+  }
+  const io = fixtureIo(files)
+  io.exec = async (_file, args) => (args[0] === '-o' ? entry.procStart : '')
+  const messages: FeedMessage[] = []
+  const poller = new BridgePoller({
+    io,
+    claudeRoots: ['/claude'],
+    codexRoot: '/codex',
+    now: () => Date.now()
+  })
+  const stop = await poller.start((message) => messages.push(message))
+  await vi.advanceTimersByTimeAsync(2000)
+  const outputs: (number | undefined)[] = []
+  for (let turn = 1; turn <= 5; turn++) {
+    files[transcript] += usageLine(`m${turn}`, 10)
+    await vi.advanceTimersByTimeAsync(2000)
+    const patch = messages.at(-1)
+    outputs.push(patch?.type === 'patch' ? patch.upserts[0]?.usage?.own.output : undefined)
+  }
+  expect(outputs).toEqual([undefined, undefined, undefined, undefined, 51])
+  stop()
+})
+
+it('shows a teammate under its lead with its own pane, then its tokens', async () => {
+  const lead = '6a654bca-1111-2222-3333-444444444444'
+  const team = 'session-6a654bca'
+  const entry = { ...registryEntry(), sessionId: lead }
+  const io = fixtureIo({
+    '/claude/sessions/42.json': JSON.stringify(entry),
+    '/repo/.git': null,
+    [`/claude/projects/-repo/${lead}.jsonl`]: usageLine('m1', 2),
+    '/claude/projects/-repo/mate.jsonl':
+      `${JSON.stringify({ type: 'attachment', teamName: team, agentName: 'lena-b0' })}\n` +
+      usageLine('t1', 30),
+    [`/claude/teams/${team}/config.json`]: JSON.stringify({
+      leadSessionId: lead,
+      members: [{ agentId: `lena-b0@${team}`, name: 'lena-b0', agentType: 'lena', cwd: '/repo' }]
+    })
+  })
+  io.exec = async (_file, args) => {
+    if (args[0] === '-o') return entry.procStart
+    if (args[0] === '-E') return `claude ORCA_PANE_KEY=pane-${args.at(-1)}`
+    return `93143 ${entry.procStart} /versions/2.1.296 --agent-id lena-b0@${team} --parent-session-id ${lead}`
+  }
+  const poller = new BridgePoller({
+    io,
+    claudeRoots: ['/claude'],
+    codexRoot: '/codex',
+    now: () => 2000
+  })
+  const first = (await poller.tick()).sessions[0]
+  expect(first).toMatchObject({ orcaPaneKey: 'pane-42', usage: null })
+  expect(first.subagents).toEqual([
+    {
+      id: `lena-b0@${team}`,
+      type: 'lena',
+      activity: 'thinking',
+      kind: 'teammate',
+      name: 'lena-b0',
+      pid: 93143,
+      startedAtMs: Date.parse(`${entry.procStart} UTC`),
+      orcaPaneKey: 'pane-93143',
+      tokens: null
+    }
+  ])
+  const second = (await poller.tick()).sessions[0]
+  expect(second.subagents[0].tokens).toEqual({ input: 1, output: 30, cacheWrite: 0, cacheRead: 0 })
+  expect(second.usage).toMatchObject({
+    own: { output: 2 },
+    subagents: { input: 1, output: 30 },
+    spawned: 1
+  })
+})

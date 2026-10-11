@@ -6,10 +6,16 @@ interface FileInfo {
   mtimeMs: number
   size: number
 }
+// Whole lines only: `text` ends at the last newline read, and `nextOffset` is where to resume.
+interface ForwardRead {
+  text: string
+  nextOffset: number
+}
 export interface BridgeIo {
   readText(path: string): Promise<string>
   readTail(path: string): Promise<string>
   readFirstLine(path: string): Promise<string>
+  readFrom(path: string, offset: number, maxBytes: number): Promise<ForwardRead>
   list(path: string): Promise<string[]>
   stat(path: string): Promise<FileInfo>
   exec(file: string, args: string[]): Promise<string>
@@ -60,25 +66,42 @@ async function readFirstLine(path: string): Promise<string> {
   }
 }
 
+async function readFrom(path: string, offset: number, maxBytes: number): Promise<ForwardRead> {
+  const file = await open(path, 'r')
+  try {
+    const { size } = await file.stat()
+    const buffer = Buffer.alloc(Math.max(0, Math.min(maxBytes, size - offset)))
+    const { bytesRead } = await file.read(buffer, 0, buffer.length, offset)
+    // Byte 10 never occurs inside a multi-byte UTF-8 character, so the cut is always clean.
+    const end = buffer.subarray(0, bytesRead).lastIndexOf(10) + 1
+    return { text: buffer.subarray(0, end).toString('utf8'), nextOffset: offset + end }
+  } finally {
+    await file.close()
+  }
+}
+
 // Enforced here, at the only door to the disk and to subprocesses, so no source can
 // reach a credential store or a shell by mistake.
 const CREDENTIAL_STORE = /(^|\/)(\.credentials\.json|auth\.json|orca-runtime\.json)$|\.key$/i
-const PROGRAMS = new Set(['/bin/ps', '/usr/sbin/lsof', '/opt/homebrew/bin/orca'])
+// The app-bundle copy, which the main process runs too; Homebrew's is only a symlink to it.
+export const ORCA_CLI = '/Applications/Orca.app/Contents/Resources/bin/orca'
+const PROGRAMS = new Set(['/bin/ps', '/usr/sbin/lsof', ORCA_CLI])
 const forbidden = (what: string): Error => new Error(`forbidden: ${what}`)
 const guarded =
-  (read: (path: string) => Promise<string>) =>
-  async (path: string): Promise<string> => {
+  <Rest extends unknown[], Result>(read: (path: string, ...rest: Rest) => Promise<Result>) =>
+  async (path: string, ...rest: Rest): Promise<Result> => {
     if (CREDENTIAL_STORE.test(path)) throw forbidden('credential store')
     // The file a symlink points at is checked too, and that resolved file is the one opened.
     const target = await realpath(path)
     if (CREDENTIAL_STORE.test(target)) throw forbidden('credential store')
-    return read(target)
+    return read(target, ...rest)
   }
 
 export const systemIo: BridgeIo = {
   readText: guarded((path) => readFile(path, 'utf8')),
   readTail: guarded(readTail),
   readFirstLine: guarded(readFirstLine),
+  readFrom: guarded(readFrom),
   list: (path) => readdir(path),
   stat: async (path) => {
     const info = await stat(path)

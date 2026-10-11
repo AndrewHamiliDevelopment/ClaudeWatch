@@ -1,6 +1,54 @@
 import { expect, it, vi } from 'vitest'
 import { collectCodex, parseCodexProcesses, parseCodexActivity } from './codex'
+import { parseCodexUsage } from './codex-usage'
 import { fixtureIo } from './__fixtures__/helpers'
+
+function tokenCount(total: number | null, cached = 0, last = 0): string {
+  const usage = (input: number) => ({
+    input_tokens: input,
+    cached_input_tokens: cached,
+    cache_write_input_tokens: 0,
+    output_tokens: 40,
+    reasoning_output_tokens: 30,
+    total_tokens: input + 40
+  })
+  return JSON.stringify({
+    type: 'event_msg',
+    payload: {
+      type: 'token_count',
+      info:
+        total === null
+          ? null
+          : {
+              total_token_usage: usage(total),
+              last_token_usage: usage(last),
+              model_context_window: 272000
+            },
+      rate_limits: { primary: { used_percent: 12 } }
+    }
+  })
+}
+
+it('takes Codex usage from the newest token count that carries one', () => {
+  const tail = [tokenCount(100, 60, 50), 'broken', tokenCount(1000, 700, 300), tokenCount(null)]
+  expect(parseCodexUsage(tail.join('\n'))).toEqual({
+    own: { input: 300, output: 40, cacheWrite: 0, cacheRead: 700 },
+    subagents: { input: 0, output: 0, cacheWrite: 0, cacheRead: 0 },
+    spawned: 0,
+    contextTokens: 300,
+    contextLimit: 272000
+  })
+})
+
+it('reports Codex usage as unknown when the tail holds no token count', () => {
+  const reasoning = JSON.stringify({ type: 'event_msg', payload: { type: 'reasoning' } })
+  expect(parseCodexUsage(`${reasoning}\n${tokenCount(null)}`)).toBeNull()
+  const quoted = JSON.stringify({
+    type: 'response_item',
+    payload: { type: 'message', text: '"token_count" total_token_usage' }
+  })
+  expect(parseCodexUsage(quoted)).toBeNull()
+})
 
 it('selects only CLI argv[0], excluding app-server and helpers', () => {
   const start = 'Sat Oct 10 15:29:12 2026'
@@ -30,7 +78,7 @@ it('matches cwd using only rollout headers then tails the newest match', async (
     JSON.stringify({ type: 'session_meta', payload: { id, cwd } })
   const io = fixtureIo({
     '/codex/sessions/2026/10/rollout-old.jsonl': meta('old', '/repo'),
-    '/codex/sessions/2026/10/rollout-new.jsonl': `${meta('new', '/repo')}\n${JSON.stringify({ type: 'event_msg', payload: { type: 'reasoning', text: 'SECRET_PROMPT' } })}`,
+    '/codex/sessions/2026/10/rollout-new.jsonl': `${meta('new', '/repo')}\n${JSON.stringify({ type: 'event_msg', payload: { type: 'reasoning', text: 'SECRET_PROMPT' } })}\n${tokenCount(1000, 700, 300)}`,
     '/codex/sessions/rollout-other.jsonl': meta('other', '/other'),
     '/repo/.git': null
   })
@@ -46,7 +94,8 @@ it('matches cwd using only rollout headers then tails the newest match', async (
     key: 'codex:new',
     pid: 42,
     activity: 'thinking',
-    projectLabel: 'repo'
+    projectLabel: 'repo',
+    usage: { own: { input: 300, cacheRead: 700 }, contextLimit: 272000 }
   })
   expect(JSON.stringify(batch.sessions)).not.toContain('SECRET_PROMPT')
   expect(tail).toHaveBeenCalledTimes(1)
@@ -57,7 +106,8 @@ it('keeps live CLI processes even without a rollout and reports process failures
   io.exec = async (file) => (file.endsWith('ps') ? '42 Sat Oct 10 15:29:12 2026 codex' : 'n/plain')
   expect((await collectCodex('/codex', io)).sessions[0]).toMatchObject({
     provider: 'codex',
-    projectLabel: 'plain'
+    projectLabel: 'plain',
+    usage: null
   })
   io.exec = async () => {
     throw new Error('denied')

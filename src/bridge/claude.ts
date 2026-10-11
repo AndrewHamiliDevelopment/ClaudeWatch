@@ -48,6 +48,7 @@ export function sessionFromRegistry(
     currentTool: transcript.tool,
     subagents,
     startedAtMs: Date.parse(`${entry.procStart} UTC`) || 0,
-    updatedAtMs: entry.updatedAtMs
+    updatedAtMs: entry.updatedAtMs,
+    usage: null
   }
 }

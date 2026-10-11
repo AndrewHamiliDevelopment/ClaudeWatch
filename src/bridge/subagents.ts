@@ -2,32 +2,60 @@ import { join } from 'node:path'
 import type { SubagentRef } from '../shared/office/types'
 import { type BridgeIo, isMissing, jsonObject } from './io'
 
-export async function collectSubagents(
-  transcript: string,
+export interface AgentFile {
+  id: string
+  path: string
+  size: number
+  mtimeMs: number
+}
+
+// subagents/agent-<id>.jsonl, and subagents/workflows/<wf>/agent-<id>.jsonl for workflow agents.
+const AGENT_TRANSCRIPT = /^agent-([\w-]+)\.jsonl$/
+const MAX_FOLDER_DEPTH = 3
+
+export async function listAgentFiles(transcript: string, io: BridgeIo): Promise<AgentFile[]> {
+  const found: AgentFile[] = []
+  async function walk(directory: string, depth: number): Promise<void> {
+    let names: string[]
+    try {
+      names = await io.list(directory)
+    } catch (error) {
+      if (isMissing(error)) return
+      throw error
+    }
+    for (const name of names) {
+      const id = AGENT_TRANSCRIPT.exec(name)?.[1]
+      // Meta files, journals and skill markers are never opened or descended into.
+      if (!id && (/\.jsonl?$/.test(name) || depth >= MAX_FOLDER_DEPTH)) continue
+      const path = join(directory, name)
+      try {
+        const info = await io.stat(path)
+        if (id && !info.directory) found.push({ id, path, size: info.size, mtimeMs: info.mtimeMs })
+        else if (!id && info.directory) await walk(path, depth + 1)
+      } catch (error) {
+        if (!isMissing(error)) throw error
+      }
+    }
+  }
+  await walk(join(transcript.slice(0, -6), 'subagents'), 1)
+  return found.sort((a, b) => a.id.localeCompare(b.id))
+}
+
+export async function liveSubagents(
+  files: AgentFile[],
   io: BridgeIo,
   now: number
 ): Promise<SubagentRef[]> {
-  const directory = join(transcript.slice(0, -6), 'subagents')
-  let files: string[]
-  try {
-    files = await io.list(directory)
-  } catch (error) {
-    if (isMissing(error)) return []
-    throw error
-  }
   const agents: SubagentRef[] = []
   for (const file of files) {
-    const id = /^agent-([\w-]+)\.meta\.json$/.exec(file)?.[1]
-    if (!id) continue
+    if (now - file.mtimeMs >= 60000 || file.mtimeMs > now) continue
     try {
-      const modified = (await io.stat(join(directory, `agent-${id}.jsonl`))).mtimeMs
-      if (now - modified >= 60000 || modified > now) continue
-      const meta = jsonObject(await io.readText(join(directory, file)))
+      const meta = jsonObject(await io.readText(file.path.replace(/\.jsonl$/, '.meta.json')))
       if (typeof meta?.agentType === 'string')
-        agents.push({ id, type: meta.agentType, activity: 'thinking' })
+        agents.push({ id: file.id, type: meta.agentType, activity: 'thinking' })
     } catch (error) {
       if (!isMissing(error)) throw error
     }
   }
-  return agents.sort((a, b) => a.id.localeCompare(b.id))
+  return agents
 }
