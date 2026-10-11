@@ -71,6 +71,17 @@ describe('BridgeHost', () => {
     expect(spawned).toHaveLength(3)
   })
 
+  it('drops its snapshot and tells listeners to resync when the bridge dies', () => {
+    const listener = vi.fn()
+    host.onMessage(listener)
+    host.start()
+    spawned[0].emit('message', hello(3))
+    spawned[0].emit('exit', 1)
+
+    expect(host.snapshot()).toBeNull()
+    expect(listener).toHaveBeenLastCalledWith({ type: 'resync' })
+  })
+
   it('kills the bridge on stop and does not restart it', () => {
     host.start()
     host.stop()

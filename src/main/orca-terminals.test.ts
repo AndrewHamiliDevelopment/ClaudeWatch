@@ -5,7 +5,21 @@ const envelope = (result: unknown): string => JSON.stringify({ id: '1', ok: true
 
 const terminalList = envelope({
   terminals: [
-    { handle: 'term_a', tabId: 'tab1', leafId: 'leaf1', worktreePath: '/repo/a' },
+    {
+      handle: 'term_a',
+      tabId: 'tab1',
+      leafId: 'leaf1',
+      worktreePath: '/repo/a',
+      incarnationId: 'inc_a'
+    },
+    { handle: 'term_old', tabId: 'tab4', leafId: 'leaf1', worktreePath: '/repo/d' },
+    {
+      handle: 'term_e',
+      tabId: 'tab5',
+      leafId: 'leaf1',
+      worktreePath: '/repo/e',
+      incarnationId: ''
+    },
     {
       handle: 'term_b',
       tabId: 'tab2',
@@ -51,6 +65,13 @@ describe('OrcaTerminals', () => {
 
     expect(await orca.handleFor('tab1:leaf1')).toMatchObject({ handle: 'term_a', agent: null })
     expect(await orca.handleFor('tab3:leaf2')).toBeNull()
+  })
+
+  it('does not use a terminal that Orca gives no incarnation id for', async () => {
+    const orca = new OrcaTerminals(vi.fn().mockResolvedValue(terminalList))
+
+    expect(await orca.handleFor('tab4:leaf1')).toBeNull()
+    expect(await orca.handleFor('tab5:leaf1')).toBeNull()
   })
 
   it('sends a prompt as one argv value followed by Enter', async () => {

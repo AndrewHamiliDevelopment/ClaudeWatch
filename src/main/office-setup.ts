@@ -62,7 +62,16 @@ export function setupOffice(terminalResolver: Pick<TerminalResolver, 'resolve'>)
       const { stdout } = await execFilePromise(ORCA_CLI, args, { timeout: ORCA_TIMEOUT_MS })
       return stdout
     }),
-    openTerminalRunning
+    openTerminalRunning,
+    // The bridge's own process identity: `ps` start time, read in C locale and UTC.
+    processStart: (pid) =>
+      execFilePromise('/bin/ps', ['-o', 'lstart=', '-p', String(pid)], {
+        timeout: 5000,
+        env: { LC_ALL: 'C', TZ: 'UTC' }
+      }).then(
+        ({ stdout }) => Date.parse(`${stdout.trim()} UTC`) || null,
+        () => null
+      )
   })
   const asString = (value: unknown): string => (typeof value === 'string' ? value : '')
   const isDecision = (value: unknown): value is PermissionDecision =>

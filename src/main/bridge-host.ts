@@ -75,6 +75,9 @@ export class BridgeHost {
     child.on('exit', () => {
       if (child !== this.child || !this.running) return
       this.child = null
+      // A dead bridge's sessions are no longer facts: nothing may act on them until a new hello.
+      this.latest = null
+      for (const listener of this.listeners) listener({ type: 'resync' })
       this.scheduleRestart()
     })
   }

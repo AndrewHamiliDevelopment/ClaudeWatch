@@ -59,14 +59,16 @@ export class OrcaTerminals {
     const listed = result(await this.exec(['terminal', 'list', '--json'])).terminals
     const terminals = Array.isArray(listed) ? listed.filter(isTerminalEntry) : []
     const match = terminals.find((t) => `${t.tabId}:${t.leafId}` === paneKey)
-    if (!match || match.connected === false || match.writable === false || match.orphaned === true)
+    // No incarnation id (an older Orca) means a restarted pane cannot be told apart: unusable.
+    if (!match || typeof match.incarnationId !== 'string' || !match.incarnationId) return null
+    if (match.connected === false || match.writable === false || match.orphaned === true)
       return null
     return {
       handle: match.handle,
       worktreePath: match.worktreePath,
       agent:
         typeof match.agentIdentity === 'string' && match.agentIdentity ? match.agentIdentity : null,
-      incarnationId: typeof match.incarnationId === 'string' ? match.incarnationId : ''
+      incarnationId: match.incarnationId
     }
   }
 

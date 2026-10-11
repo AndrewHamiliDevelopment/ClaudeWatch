@@ -14,6 +14,8 @@ interface OfficeInteractionsDeps {
   snapshot: () => OfficeSnapshot | null
   orca: Pick<OrcaTerminals, 'handleFor' | 'sendPrompt' | 'sendKey' | 'screen' | 'create'>
   openTerminalRunning: (path: string, command: AgentCommand) => Promise<{ success: boolean }>
+  // When the process with this pid started (epoch ms), or null when no such process runs.
+  processStart: (pid: number) => Promise<number | null>
 }
 
 const MAX_PROMPT_LENGTH = 4000
@@ -138,6 +140,9 @@ export class OfficeInteractions {
     const session = this.session(sessionKey)
     if (!session) return fail('unknown-session')
     if (session.host !== 'orca' || !session.orcaPaneKey) return fail('not-in-orca')
+    // The snapshot is a few seconds old: the agent may have exited, or its pid been reused.
+    if (session.pid === null || (await this.deps.processStart(session.pid)) !== session.startedAtMs)
+      return fail('unknown-session')
     try {
       const terminal = await this.deps.orca.handleFor(session.orcaPaneKey)
       if (!terminal || !paneServes(terminal, session)) return fail('terminal-not-found')

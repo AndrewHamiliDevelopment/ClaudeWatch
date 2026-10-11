@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { open, readFile, readdir, stat } from 'node:fs/promises'
+import { open, readFile, readdir, realpath, stat } from 'node:fs/promises'
 
 interface FileInfo {
   directory: boolean
@@ -62,14 +62,17 @@ async function readFirstLine(path: string): Promise<string> {
 
 // Enforced here, at the only door to the disk and to subprocesses, so no source can
 // reach a credential store or a shell by mistake.
-const CREDENTIAL_STORE = /(^|\/)(\.credentials\.json|auth\.json|orca-runtime\.json)$|\.key$/
+const CREDENTIAL_STORE = /(^|\/)(\.credentials\.json|auth\.json|orca-runtime\.json)$|\.key$/i
 const PROGRAMS = new Set(['/bin/ps', '/usr/sbin/lsof', '/opt/homebrew/bin/orca'])
 const forbidden = (what: string): Error => new Error(`forbidden: ${what}`)
 const guarded =
   (read: (path: string) => Promise<string>) =>
   async (path: string): Promise<string> => {
     if (CREDENTIAL_STORE.test(path)) throw forbidden('credential store')
-    return read(path)
+    // The file a symlink points at is checked too, and that resolved file is the one opened.
+    const target = await realpath(path)
+    if (CREDENTIAL_STORE.test(target)) throw forbidden('credential store')
+    return read(target)
   }
 
 export const systemIo: BridgeIo = {

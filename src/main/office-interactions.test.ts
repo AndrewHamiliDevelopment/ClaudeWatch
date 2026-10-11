@@ -53,6 +53,7 @@ describe('OfficeInteractions', () => {
     create: vi.fn()
   }
   const openTerminalRunning = vi.fn()
+  const processStart = vi.fn()
   let interactions: OfficeInteractions
 
   beforeEach(() => {
@@ -60,8 +61,14 @@ describe('OfficeInteractions', () => {
     orca.handleFor.mockResolvedValue(pane())
     orca.screen.mockResolvedValue(PROMPT_SCREEN)
     openTerminalRunning.mockResolvedValue({ success: true })
+    processStart.mockResolvedValue(1)
     snapshot = { rev: 1, generatedAtMs: 1, sessions: [session()], sources: [] }
-    interactions = new OfficeInteractions({ snapshot: () => snapshot, orca, openTerminalRunning })
+    interactions = new OfficeInteractions({
+      snapshot: () => snapshot,
+      orca,
+      openTerminalRunning,
+      processStart
+    })
   })
 
   describe('send', () => {
@@ -133,6 +140,19 @@ describe('OfficeInteractions', () => {
           reason: 'terminal-not-found'
         })
       }
+      expect(orca.sendPrompt).not.toHaveBeenCalled()
+    })
+
+    it('refuses a session whose process is gone or whose pid now belongs to another process', async () => {
+      for (const start of [null, 999]) {
+        processStart.mockResolvedValueOnce(start)
+        expect(await interactions.send('claude:s1', 'hi')).toEqual({
+          success: false,
+          reason: 'unknown-session'
+        })
+      }
+      expect(processStart).toHaveBeenCalledWith(1)
+      expect(orca.handleFor).not.toHaveBeenCalled()
       expect(orca.sendPrompt).not.toHaveBeenCalled()
     })
 

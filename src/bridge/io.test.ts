@@ -1,5 +1,5 @@
 import { afterEach, expect, it } from 'vitest'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { systemIo } from './io'
@@ -41,6 +41,19 @@ it('refuses to open credential stores, whatever a caller asks for', async () => 
   for (const name of ['.credentials.json', 'auth.json', 'orca-runtime.json', '42.key']) {
     const path = join(directory, name)
     await writeFile(path, 'DO_NOT_READ')
+    await expect(systemIo.readText(path)).rejects.toThrow('forbidden')
+    await expect(systemIo.readTail(path)).rejects.toThrow('forbidden')
+    await expect(systemIo.readFirstLine(path)).rejects.toThrow('forbidden')
+  }
+})
+
+it('refuses a credential store reached through a symlink or a different letter case', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'bridge-guard-'))
+  directories.push(directory)
+  await writeFile(join(directory, '.credentials.json'), 'DO_NOT_READ')
+  await symlink(join(directory, '.credentials.json'), join(directory, '42.json'))
+  for (const name of ['42.json', '.Credentials.JSON']) {
+    const path = join(directory, name)
     await expect(systemIo.readText(path)).rejects.toThrow('forbidden')
     await expect(systemIo.readTail(path)).rejects.toThrow('forbidden')
     await expect(systemIo.readFirstLine(path)).rejects.toThrow('forbidden')
