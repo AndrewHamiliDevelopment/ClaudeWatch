@@ -1,4 +1,5 @@
 import { applyFeed } from '../shared/office/apply-feed'
+import { isFeedMessage } from '../shared/office/feed-message'
 import type { FeedMessage, OfficeSnapshot } from '../shared/office/types'
 
 // The subset of Electron's UtilityProcess the host relies on, so tests can fake it.
@@ -14,12 +15,6 @@ interface BridgeHostOptions {
 
 const FIRST_RESTART_DELAY_MS = 1_000
 const MAX_RESTART_DELAY_MS = 30_000
-
-function isFeedMessage(data: unknown): data is FeedMessage {
-  if (typeof data !== 'object' || data === null || !('type' in data)) return false
-  if (data.type === 'resync') return true
-  return (data.type === 'hello' || data.type === 'patch') && 'v' in data && data.v === 1
-}
 
 // Runs the bridge only while something (the Office window) needs it, and keeps the
 // folded snapshot so a window that opens later starts from current state.

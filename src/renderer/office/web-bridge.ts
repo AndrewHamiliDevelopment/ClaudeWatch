@@ -5,6 +5,7 @@ import type {
   InteractionResult,
   PeekResult
 } from '../../shared/office/types'
+import { isFeedMessage } from '../../shared/office/feed-message'
 
 // The preload's own type, read off the global it fills, so the two cannot drift apart.
 type OfficeBridgeApi = NonNullable<Window['officeBridge']>
@@ -36,14 +37,6 @@ export function takeLaunchToken(
   page.sessionStorage.setItem(TOKEN_KEY, launched)
   page.history.replaceState(null, '', page.location.pathname + page.location.search)
   return launched
-}
-
-// dry-new: the same check as isFeedMessage in src/main/bridge-host.ts, which a renderer
-// cannot import; it belongs in src/shared/office once that file's owner moves it.
-function isFeedMessage(value: unknown): value is FeedMessage {
-  if (typeof value !== 'object' || value === null || !('type' in value)) return false
-  if (value.type === 'resync') return true
-  return (value.type === 'hello' || value.type === 'patch') && 'v' in value && value.v === 1
 }
 
 function parseFeedLine(line: string): FeedMessage | null {
