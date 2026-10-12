@@ -8,7 +8,13 @@ import {
   type MeshBatch
 } from './mesh-batches'
 
-function BatchUpdater({ root, revision }: { root: Group; revision: string }) {
+interface BatchUpdaterProps {
+  root: Group
+  revision: string
+  isStatic: boolean
+}
+
+function BatchUpdater({ root, revision, isStatic }: BatchUpdaterProps) {
   const batches = useRef<MeshBatch[]>([])
   useLayoutEffect(() => {
     batches.current = createMeshBatches(root)
@@ -18,16 +24,26 @@ function BatchUpdater({ root, revision }: { root: Group; revision: string }) {
     }
   }, [root, revision])
   // Mounted after the controllers so instance matrices see this frame's pose and wall height.
-  useFrame(() => updateMeshBatches(root, batches.current))
+  // Nothing in a static batch moves: it was placed once, when the batches were built.
+  useFrame(() => {
+    if (!isStatic) updateMeshBatches(root, batches.current)
+  })
   return null
 }
 
-export function BatchedScene({ children, revision }: { children: ReactNode; revision: string }) {
+interface BatchedSceneProps {
+  children: ReactNode
+  revision: string
+  // For parts that never move between revisions (buildings, props): no work per frame.
+  isStatic?: boolean
+}
+
+export function BatchedScene({ children, revision, isStatic = false }: BatchedSceneProps) {
   const root = useRef(new Group()).current
   return (
     <primitive object={root}>
       {children}
-      <BatchUpdater root={root} revision={revision} />
+      <BatchUpdater root={root} revision={revision} isStatic={isStatic} />
     </primitive>
   )
 }

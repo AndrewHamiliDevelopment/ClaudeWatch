@@ -89,10 +89,18 @@ it('gives a lot whose company is gone to the floor theme', () => {
   ])
 })
 
-it('draws each theme its own lots, merged in one batch', () => {
-  const scene = view()
-  expect(scene?.type).toBe(BatchedScene)
-  const nodes = elements(scene)
+// The buildings' batch, placed once, and the moving things' batch, followed every frame.
+function batches(scene: ReactNode): { still: ReactElement; moving: ReactElement } {
+  const found = elements(scene).filter((node) => node.type === BatchedScene)
+  expect(found).toHaveLength(2)
+  const [still, moving] = found
+  expect(still.props.isStatic).toBe(true)
+  expect(moving.props.isStatic).toBeUndefined()
+  return { still, moving }
+}
+
+it('draws each theme its own lots in a batch that is placed once', () => {
+  const nodes = elements(batches(view()).still)
   for (const theme of [filledEdo, filledBrass]) {
     const drawn = nodes.find((node) => node.type === theme.kit.zone.Surroundings)
     const expected = lots.filter((lot) =>
@@ -100,7 +108,15 @@ it('draws each theme its own lots, merged in one batch', () => {
     )
     expect(expected.length).toBeGreaterThan(0)
     expect(drawn?.props.lots).toEqual(expected)
+    expect(nodes.some((node) => node.type === theme.kit.zone.Ambient)).toBe(false)
+  }
+})
+
+it('keeps only the moving things in the batch that is followed every frame', () => {
+  const nodes = elements(batches(view()).moving)
+  for (const theme of [filledEdo, filledBrass]) {
     expect(nodes.some((node) => node.type === theme.kit.zone.Ambient)).toBe(true)
+    expect(nodes.some((node) => node.type === theme.kit.zone.Surroundings)).toBe(false)
   }
 })
 
@@ -111,7 +127,7 @@ it('mounts nothing, and so costs no frame work, when no theme draws surroundings
 
 it('rebuilds the merge only when the lots, a theme or reduced motion changes', () => {
   const revision = (...args: Parameters<typeof view>): string | undefined =>
-    view(...args)?.props.revision
+    batches(view(...args)).still.props.revision
   expect(revision()).toBe(revision(filledEdo, themeIdFor, surroundingLots(structuredClone(floor))))
   expect(revision()).not.toBe(revision(filledEdo, themeIdFor, lots.slice(1)))
   expect(revision()).not.toBe(revision(filledEdo, () => filledEdo.id))

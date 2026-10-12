@@ -31,7 +31,7 @@ export function WorldView({
   const placed = [floor.x, floor.z, floor.width, floor.depth]
   const revision = JSON.stringify([theme.id, hasTower, placed, offices, floors])
   return (
-    <BatchedScene revision={revision}>
+    <BatchedScene revision={revision} isStatic>
       <group position={[floor.x, 0, floor.z]}>
         <District floor={plate} />
         <Hangar floor={plate} />
@@ -98,19 +98,30 @@ export function SurroundingsView({
   const revision = useMemo(() => JSON.stringify([drawn, isReducedMotion]), [drawn, isReducedMotion])
   // No theme here draws surroundings: no batch, and nothing to update each frame.
   if (drawn.length === 0) return null
+  // The buildings are placed once; only the few moving things are followed frame by frame.
   return (
-    <BatchedScene revision={revision}>
-      {drawn.map(({ themeId, lots: themeLots }) => {
-        const { Surroundings, Ambient } = getTheme(themeId).kit.zone
-        return (
-          <group key={themeId}>
-            {Surroundings && <Surroundings floor={floor} lots={themeLots} />}
-            {Ambient && (
-              <Ambient floor={floor} lots={themeLots} isReducedMotion={isReducedMotion} />
-            )}
-          </group>
-        )
-      })}
-    </BatchedScene>
+    <>
+      <BatchedScene revision={revision} isStatic>
+        {drawn.map(({ themeId, lots: themeLots }) => {
+          const { Surroundings } = getTheme(themeId).kit.zone
+          return Surroundings && <Surroundings key={themeId} floor={floor} lots={themeLots} />
+        })}
+      </BatchedScene>
+      <BatchedScene revision={revision}>
+        {drawn.map(({ themeId, lots: themeLots }) => {
+          const { Ambient } = getTheme(themeId).kit.zone
+          return (
+            Ambient && (
+              <Ambient
+                key={themeId}
+                floor={floor}
+                lots={themeLots}
+                isReducedMotion={isReducedMotion}
+              />
+            )
+          )
+        })}
+      </BatchedScene>
+    </>
   )
 }
