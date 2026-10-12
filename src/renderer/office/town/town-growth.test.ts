@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { LIVE_FLOORS } from '../themes/floors.test-utils'
 import type { Rect } from '../themes/lot-math'
 import { campusClaim, neededClaim } from './town-claim'
-import { LOT_PITCH_M } from './town-grid'
 import type { TownLot } from './town-lots'
 import { townBlocks, type TownPlan } from './town-plan'
-import { LARGE_FLOOR, PAIR_FLOOR, edges, widened } from './town.test-utils'
+import { BUILDING_CAP, LOT_PITCH_M } from './town-grid'
+import { LARGE_FLOOR, LONE_FLOOR, PAIR_FLOOR, edges, widened } from './town.test-utils'
 
 const DESK_COLUMN_M = 5
 const OLD_TOWN_EAST_M = -24
@@ -17,18 +17,24 @@ const oldTown = (plan: TownPlan): TownLot[] => plan.lots.filter((lot) => lot.x <
 const spareEast = (floor: Rect, claim: Rect): number =>
   edges(claim).east - edges(neededClaim(floor)).east
 
-// Section 2.2 of the design, on the pair floor: under the building cap before and after a step.
+// Section 2.2 of the design, on a floor under the building cap before and after a step: over
+// it, the cap thins far lots too, which is a different rule.
 describe('the town as the campus grows east', () => {
-  const first = campusClaim(neededClaim(PAIR_FLOOR), null)
+  const first = campusClaim(neededClaim(LONE_FLOOR), null)
   const before = townBlocks(first, 'full')
-  const spare = spareEast(PAIR_FLOOR, first)
-  const stepped = campusClaim(neededClaim(widened(PAIR_FLOOR, spare + 1)), first)
+  const spare = spareEast(LONE_FLOOR, first)
+  const stepped = campusClaim(neededClaim(widened(LONE_FLOOR, spare + 1)), first)
   const after = townBlocks(stepped, 'full')
   const takenColumn = edges(first).east / LOT_PITCH_M
 
+  it('stays under the building cap on both sides of the step, as the rules below assume', () => {
+    expect(after.lots.length).toBeLessThan(BUILDING_CAP.full)
+    expect(before.lots.length).toBeLessThan(BUILDING_CAP.full)
+  })
+
   it('changes no lot while a desk column stops short of the claim edge', () => {
     expect(spare).toBeGreaterThanOrEqual(DESK_COLUMN_M)
-    const grown = campusClaim(neededClaim(widened(PAIR_FLOOR, DESK_COLUMN_M)), first)
+    const grown = campusClaim(neededClaim(widened(LONE_FLOOR, DESK_COLUMN_M)), first)
     expect(townBlocks(grown, 'full').lots).toEqual(before.lots)
   })
 
@@ -71,7 +77,7 @@ describe('the town as the campus grows east', () => {
   })
 
   it('changes nothing when the same column leaves again', () => {
-    const back = campusClaim(neededClaim(widened(PAIR_FLOOR, spare + 1 - DESK_COLUMN_M)), stepped)
+    const back = campusClaim(neededClaim(widened(LONE_FLOOR, spare + 1 - DESK_COLUMN_M)), stepped)
     expect(back).toEqual(stepped)
     expect(townBlocks(back, 'full')).toEqual(after)
   })

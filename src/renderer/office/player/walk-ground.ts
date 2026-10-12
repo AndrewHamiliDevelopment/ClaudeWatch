@@ -1,4 +1,5 @@
 import { findPath, type NavGrid, type Point } from '../../../office/sim/path'
+import { FURNITURE_SCALE } from '../../../shared/office/figure-scale'
 import { DESK_REACH, doorSide, SIDE_NORMAL, type DooredRect } from '../logic/room-layout'
 import type { FloorGeometry, ZoneGeometry } from '../scene-model'
 import { contains, type Rect } from '../themes/lot-math'
@@ -12,7 +13,8 @@ export interface WalkGround {
 
 const WALK_CELL_M = 0.5
 // The widest desk any theme draws, so the player stands clear of all of them.
-const DESK_M = { width: 1.3, depth: 0.65 }
+// The scene draws desks enlarged with the agents, so the footprint the player walks round is too.
+const DESK_M = { width: 1.3 * FURNITURE_SCALE, depth: 0.65 * FURNITURE_SCALE }
 // Half the opening left in a wall: one cell where the door sits on the lattice, two where it does not.
 const DOOR_HALF_M = 0.2
 const DOORSTEP_M = 1
@@ -71,11 +73,8 @@ export function walkGround(
     const ahead = { x: Math.sin(seat.heading), z: Math.cos(seat.heading) }
     const half = DESK_M.width / 2
     mark(seat, 1)
-    for (const reach of [
-      DESK_REACH - DESK_M.depth / 2,
-      DESK_REACH,
-      DESK_REACH + DESK_M.depth / 2
-    ]) {
+    const deskReach = DESK_REACH * FURNITURE_SCALE
+    for (const reach of [deskReach - DESK_M.depth / 2, deskReach, deskReach + DESK_M.depth / 2]) {
       const centre = { x: seat.x + ahead.x * reach, z: seat.z + ahead.z * reach }
       closeLine(
         { x: centre.x - ahead.z * half, z: centre.z + ahead.x * half },
