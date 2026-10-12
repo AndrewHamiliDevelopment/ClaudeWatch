@@ -48,6 +48,34 @@ describe('headquarters geometry', () => {
     }
     expect(rooms.filter((room) => room.kind === 'office').map((room) => room.bay)).toContain(1)
   })
+  it('carries each company lounge on its zone, with the seats the sim made and no desk room', () => {
+    const layout = buildLayout(sessions, undefined, 0)
+    const floor = toFloorGeometry(layout, sessions)[0]
+    for (const [index, company] of floor.zones.entries()) {
+      const lounge = layout.floors[0].zones[index].lounge!
+      expect(company.lounge).toEqual({
+        id: `${company.id}:lounge`,
+        x: lounge.x,
+        z: lounge.z,
+        width: lounge.width,
+        depth: lounge.depth,
+        door: lounge.door,
+        seats: lounge.slots.map((slot) => ({
+          slotId: slot.id,
+          x: slot.x,
+          z: slot.z,
+          heading: slot.heading
+        }))
+      })
+      expect(company.lounge!.seats.map((seat) => seat.slotId)).toEqual(
+        ['0', '1', '2', '3'].map((seat) => `lounge_seat_${seat}`)
+      )
+      for (const project of company.children) expect(project.lounge).toBeUndefined()
+    }
+    expect(floor.rooms.map((room) => room.kind).sort()).toEqual(
+      ['office', 'office', 'office', 'team', 'team'].sort()
+    )
+  })
   it('uses the same origin-centred metre frame for zones, leaves, entrance and agents', () => {
     const layout = buildLayout(sessions, undefined, 0)
     const floor = toFloorGeometry(layout, sessions)[0]

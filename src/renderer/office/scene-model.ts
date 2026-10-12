@@ -40,6 +40,17 @@ export interface RoomGeometry {
 // agent session (plus a team area for overflow subagents). Centre-based metres, like RoomGeometry.
 type ZoneKind = 'company' | 'project' | 'office' | 'team'
 
+// A company's open seating area. It is not a room, so no desk is drawn for its seats.
+export interface LoungeGeometry {
+  id: string
+  x: number
+  z: number
+  width: number
+  depth: number
+  door: { x: number; z: number }
+  seats: DeskSlot[]
+}
+
 export interface ZoneGeometry {
   id: string
   kind: ZoneKind
@@ -53,6 +64,8 @@ export interface ZoneGeometry {
   projectKey: string | null
   sessionKey: string | null
   children: ZoneGeometry[]
+  // Company zones only.
+  lounge?: LoungeGeometry
 }
 
 export interface FloorGeometry {
