@@ -1,8 +1,9 @@
 import { join } from 'node:path'
 import type { AgentActivity, CurrentTool, SubagentRef } from '../shared/office/types'
 import { type BridgeIo, isLabel, isMissing, jsonObject } from './io'
+import { isStillWorking, OPEN_TOOL_HOLD_MS, quietFor, SUBAGENT_FRESH_MS } from './liveness'
 import { toolActivity } from './tool-category'
-import { readTranscript } from './transcript-tail'
+import { readTranscript, rememberedAgentType } from './transcript-tail'
 
 export interface AgentFile {
   id: string
@@ -14,12 +15,6 @@ export interface AgentFile {
 // subagents/agent-<id>.jsonl, and subagents/workflows/<wf>/agent-<id>.jsonl for workflow agents.
 const AGENT_TRANSCRIPT = /^agent-([\w-]+)\.jsonl$/
 const MAX_FOLDER_DEPTH = 3
-// An agent whose record has been quiet this long is taken to have finished.
-export const SUBAGENT_FRESH_MS = 60_000
-// A long build or test writes nothing until it returns: an agent with a tool open stays this long.
-export const OPEN_TOOL_HOLD_MS = 15 * 60_000
-// `now` is read before the files are, so one written during the tick may look a little ahead.
-export const CLOCK_SKEW_MS = 5_000
 
 export async function listAgentFiles(transcript: string, io: BridgeIo): Promise<AgentFile[]> {
   const found: AgentFile[] = []
@@ -52,11 +47,18 @@ export async function listAgentFiles(transcript: string, io: BridgeIo): Promise<
 // The tool still open at the end of an agent's record, if any.
 async function openTool(file: AgentFile, io: BridgeIo): Promise<CurrentTool | null> {
   try {
-    return (await readTranscript(file.path, io)).tool
+    return (await readTranscript(file.path, io, file)).tool
   } catch (error) {
     if (isMissing(error)) return null
     throw error
   }
+}
+
+async function agentTypeOf(file: AgentFile, io: BridgeIo): Promise<string | null> {
+  return rememberedAgentType(file.path, io, async () => {
+    const meta = jsonObject(await io.readText(file.path.replace(/\.jsonl$/, '.meta.json')))
+    return isLabel(meta?.agentType) ? meta.agentType : null
+  })
 }
 
 export async function liveSubagents(
@@ -66,14 +68,14 @@ export async function liveSubagents(
 ): Promise<SubagentRef[]> {
   const agents: SubagentRef[] = []
   for (const file of files) {
-    const quietMs = now - file.mtimeMs
-    if (quietMs >= OPEN_TOOL_HOLD_MS || quietMs < -CLOCK_SKEW_MS) continue
+    const quietMs = quietFor(now, file.mtimeMs)
+    if (quietMs === null || quietMs >= OPEN_TOOL_HOLD_MS) continue
     try {
       const tool = await openTool(file, io)
-      if (quietMs >= SUBAGENT_FRESH_MS && !tool) continue
-      const meta = jsonObject(await io.readText(file.path.replace(/\.jsonl$/, '.meta.json')))
+      if (!isStillWorking(quietMs, SUBAGENT_FRESH_MS, tool !== null)) continue
+      const type = await agentTypeOf(file, io)
       const activity: AgentActivity = tool ? toolActivity(tool.category) : 'thinking'
-      if (isLabel(meta?.agentType)) agents.push({ id: file.id, type: meta.agentType, activity })
+      if (type) agents.push({ id: file.id, type, activity })
     } catch (error) {
       if (!isMissing(error)) throw error
     }

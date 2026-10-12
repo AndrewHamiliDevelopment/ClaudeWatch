@@ -1,4 +1,4 @@
-import type { SessionRef } from '../../shared/office/types'
+import type { SessionRef, SubagentRef } from '../../shared/office/types'
 
 export function session(key: string, project = 'p_a'): SessionRef {
   return {
@@ -23,4 +23,8 @@ export function session(key: string, project = 'p_a'): SessionRef {
     startedAtMs: 0,
     updatedAtMs: 0
   }
+}
+
+export function subagent(id: string, kind?: SubagentRef['kind']): SubagentRef {
+  return { id, type: 'Explore', activity: 'thinking', ...(kind && { kind }) }
 }

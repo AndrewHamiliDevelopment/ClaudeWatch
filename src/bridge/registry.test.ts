@@ -379,6 +379,24 @@ describe('subagents', () => {
     ])
     expect(await liveSubagents(files, io, 1000 + 16 * 60_000)).toEqual([])
   })
+  it('reads nothing more for a held subagent whose transcript has not moved', async () => {
+    const io = fixtureIo({
+      '/t/subagents/agent-b.meta.json': JSON.stringify({ agentType: 'ravi' }),
+      '/t/subagents/agent-b.jsonl': JSON.stringify({
+        type: 'assistant',
+        message: { content: [{ type: 'tool_use', id: 't1', name: 'Bash', input: {} }] }
+      })
+    })
+    const files = await listAgentFiles('/t.jsonl', io)
+    await liveSubagents(files, io, 1000 + 5 * 60_000)
+    const stat = vi.spyOn(io, 'stat')
+    const readText = vi.spyOn(io, 'readText')
+    const readTail = vi.spyOn(io, 'readTail')
+    expect(await liveSubagents(files, io, 1000 + 6 * 60_000)).toEqual([
+      { id: 'b', type: 'ravi', activity: 'running' }
+    ])
+    expect([stat, readText, readTail].map((spy) => spy.mock.calls.length)).toEqual([0, 0, 0])
+  })
   it('keeps a subagent written a moment after the tick began', async () => {
     const io = fixtureIo({
       '/t/subagents/agent-a.meta.json': JSON.stringify({ agentType: 'ravi' }),

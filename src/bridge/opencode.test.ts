@@ -245,6 +245,30 @@ it('keeps a child session written a moment after the tick began', async () => {
   expect(session.subagents.map((agent) => agent.id)).toEqual(['ses_kid'])
 })
 
+it('keeps a quiet child session while a tool it started is still running', async () => {
+  const { io, root } = setup((db) => {
+    insertSession(db, { id: 'ses_root', directory: '/repo', updatedAtMs: NOW })
+    for (const [id, status] of [
+      ['ses_build', 'running'],
+      ['ses_ended', 'completed']
+    ]) {
+      insertSession(db, {
+        id,
+        parentId: 'ses_root',
+        directory: '/repo',
+        updatedAtMs: NOW - 300_000
+      })
+      const messageId = `msg_${id}`
+      const data = { role: 'assistant', time: { created: NOW - 300_000 } }
+      insertMessage(db, { id: messageId, sessionId: id, atMs: NOW - 300_000, data })
+      const part = { type: 'tool', tool: 'bash', state: { status } }
+      insertPart(db, { id: `prt_${id}`, messageId, sessionId: id, atMs: NOW - 300_000, data: part })
+    }
+  })
+  const [session] = (await collectOpencode(root, io, undefined, NOW)).sessions
+  expect(session.subagents).toMatchObject([{ id: 'ses_build', activity: 'running' }])
+})
+
 it('says nothing and opens nothing when OpenCode is not running', async () => {
   const { io, root, opens } = setup(workingSession, {})
   const batch = await collectOpencode(root, io, undefined, NOW)

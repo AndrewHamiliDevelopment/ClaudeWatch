@@ -1,6 +1,7 @@
 import { createHash } from 'crypto'
 import { parseAgentKey } from '../shared/office/agent-key'
 import { needsHuman } from '../shared/office/attention'
+import { CONTROL_CHARACTER } from '../shared/unsafe-text'
 import type {
   FocusResult,
   InteractionFailure,
@@ -49,7 +50,7 @@ const fail = (reason: InteractionFailure): InteractionResult => ({ success: fals
 
 const fingerprintOf = (lines: string[]): string =>
   createHash('sha256').update(lines.join('\n')).digest('hex')
-const isPrintable = (text: string): boolean => !/\p{Cc}/u.test(text)
+const isPrintable = (text: string): boolean => !CONTROL_CHARACTER.test(text)
 const isWithin = (path: string, folder: string): boolean =>
   path === folder || path.startsWith(`${folder.replace(/\/+$/, '')}/`)
 // The pane must be in this session's folder and still running its agent: once the agent

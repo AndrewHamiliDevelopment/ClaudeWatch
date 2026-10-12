@@ -1,7 +1,7 @@
-import { basename, join } from 'node:path'
+import { join } from 'node:path'
 import type { SessionRef, SourceHealth, SubagentRef, TokenCounts } from '../shared/office/types'
 import { zeroCounts } from '../shared/office/token-counts'
-import { type BridgeIo, displayName, isLabel } from './io'
+import { type BridgeIo, displayName, folderName, isLabel } from './io'
 import {
   OPENCODE_IDLE,
   opencodeProcesses,
@@ -19,12 +19,14 @@ import {
   isInsideAppBundle,
   keyOf,
   newestFirst,
+  placeholderId,
   type ProcessRow,
   readProcessTable,
   rememberedFolder
 } from './process-table'
 import { placementOf, resolveProject } from './project-root'
-import { CLOCK_SKEW_MS, SUBAGENT_FRESH_MS } from './subagents'
+import { isStillWorking, OPEN_TOOL_HOLD_MS, quietFor, SUBAGENT_FRESH_MS } from './liveness'
+import { toolActivity } from './tool-category'
 import { tokenCount } from './usage-fold'
 
 const FAILURE_DETAIL: Record<OpencodeFailure, string> = {
@@ -67,16 +69,26 @@ function sessionRow(row: OpencodeRow): SessionRow | null {
   }
 }
 
-// A child session written within the last minute is an agent still at work.
-function subagentOf(row: OpencodeRow, now: number): SubagentRef | null {
+// What a session's newest message says it is doing.
+function stateOf(query: OpencodeQuery, sessionId: string, now: number): OpencodeState {
+  const [message] = query('newestMessage', sessionId)
+  const parts = typeof message?.id === 'string' ? query('messageParts', message.id, sessionId) : []
+  return opencodeState(message, parts, now)
+}
+
+// A child session written within the last minute is an agent still at work. Its row is written
+// as a step ends, not while a tool runs, so a quiet one is held while its newest tool is open.
+function subagentOf(query: OpencodeQuery, row: OpencodeRow, now: number): SubagentRef | null {
   if (typeof row.id !== 'string' || !SESSION_ID.test(row.id)) return null
   if (typeof row.time_updated !== 'number') return null
-  const quietMs = now - row.time_updated
-  if (quietMs < -CLOCK_SKEW_MS || quietMs >= SUBAGENT_FRESH_MS) return null
+  const quietMs = quietFor(now, row.time_updated)
+  if (quietMs === null || quietMs >= OPEN_TOOL_HOLD_MS) return null
+  const tool = quietMs < SUBAGENT_FRESH_MS ? null : stateOf(query, row.id, now).currentTool
+  if (!isStillWorking(quietMs, SUBAGENT_FRESH_MS, tool !== null)) return null
   return {
     id: row.id,
     type: isLabel(row.agent) ? row.agent : 'subagent',
-    activity: 'thinking',
+    activity: tool ? toolActivity(tool.category) : 'thinking',
     tokens: countsOf(row)
   }
 }
@@ -101,32 +113,34 @@ function readConversation(
     .find(({ id, updatedAtMs }) => updatedAtMs >= process.startedAtMs && !taken.has(id))
   if (!session) return null
   taken.add(session.id)
-  const [message] = query('newestMessage', session.id)
-  const parts = typeof message?.id === 'string' ? query('messageParts', message.id, session.id) : []
   return {
     session,
-    state: opencodeState(message, parts, now),
-    subagents: query('childSessions', session.id).flatMap((row) => subagentOf(row, now) ?? [])
+    state: stateOf(query, session.id, now),
+    subagents: query('childSessions', session.id).flatMap(
+      (row) => subagentOf(query, row, now) ?? []
+    )
   }
 }
 
-// Where each live process runs, and the placeholder key each was first shown under, by pid and
-// start time.
-const folders = new WeakMap<BridgeIo, Map<string, string>>()
-const placeholders = new WeakMap<BridgeIo, Map<string, string>>()
+interface Remembered {
+  // Where each live process runs, by pid and start time: asking costs an `lsof` run.
+  folders: Map<string, string>
+  // The placeholder key a process without a session was first shown under, by pid and start time.
+  placeholders: Map<string, string>
+}
+const remembered = new WeakMap<BridgeIo, Remembered>()
 
 // The OpenCode processes that are the owner's agents, each with the folder it runs in.
 async function locate(
   io: BridgeIo,
+  folders: Map<string, string>,
   processes: ReturnType<typeof opencodeProcesses>,
   health: SourceHealth
 ): Promise<AgentProcess[]> {
-  let known = folders.get(io)
-  if (!known) folders.set(io, (known = new Map()))
   const running: AgentProcess[] = []
   for (const process of processes) {
     try {
-      const cwd = await rememberedFolder(io, known, process)
+      const cwd = await rememberedFolder(io, folders, process)
       if (cwd && !isInsideAppBundle(cwd)) running.push({ ...process, cwd })
     } catch {
       // It may have exited since the table was read: the others are still shown.
@@ -134,7 +148,6 @@ async function locate(
       health.detail = 'OpenCode process read failed'
     }
   }
-  forgetExited(known, processes)
   return running
 }
 
@@ -153,10 +166,11 @@ export async function collectOpencode(
   const health: SourceHealth = { id: 'opencode', ok: true, detail: 'empty' }
   try {
     const processes = opencodeProcesses(await readProcesses())
-    let keys = placeholders.get(io)
-    if (!keys) placeholders.set(io, (keys = new Map()))
-    forgetExited(keys, processes)
-    const running = newestFirst(await locate(io, processes, health))
+    let memory = remembered.get(io)
+    if (!memory) remembered.set(io, (memory = { folders: new Map(), placeholders: new Map() }))
+    const { folders, placeholders } = memory
+    forgetExited(processes, folders, placeholders)
+    const running = newestFirst(await locate(io, folders, processes, health))
     if (!running.length) return { sessions: [], sources: [health] }
 
     const taken = new Set<string>()
@@ -177,7 +191,7 @@ export async function collectOpencode(
     for (const found of conversations) {
       if (!found) continue
       const project = await resolveProject(found.process.cwd, io, now)
-      const key = keyOf(keys, found.process, 'opencode', found.conversation?.session.id)
+      const key = keyOf(placeholders, found.process, 'opencode', found.conversation?.session.id)
       sessions.push(sessionOf(found.process, found.conversation, key, placementOf(project)))
     }
     if (health.ok) health.detail = 'live'
@@ -198,13 +212,13 @@ function sessionOf(
 ): SessionRef {
   const session = conversation?.session
   // A process that has not written a session yet is still an agent at its desk.
-  const id = session?.id ?? `pid-${process.pid}-${process.startedAtMs}`
+  const id = session?.id ?? placeholderId(process)
   return {
     key,
     provider: 'opencode',
     sessionId: id,
     pid: process.pid,
-    name: session?.title || displayName(basename(process.cwd)),
+    name: session?.title || folderName(process.cwd),
     cwd: process.cwd,
     ...placement,
     host: 'terminal',

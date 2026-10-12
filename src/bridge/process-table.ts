@@ -43,7 +43,16 @@ interface RunningProcess {
   pid: number
   startedAtMs: number
 }
-const identityOf = ({ pid, startedAtMs }: RunningProcess): string => `${pid}:${startedAtMs}`
+// A thread hosted inside an app-server has no process of its own: its pid is null.
+export interface SessionOwner {
+  pid: number | null
+  startedAtMs: number
+}
+const identityOf = ({ pid, startedAtMs }: SessionOwner): string => `${pid}:${startedAtMs}`
+
+// The id a process is shown under until its first conversation lands.
+export const placeholderId = ({ pid, startedAtMs }: SessionOwner): string =>
+  `pid-${pid}-${startedAtMs}`
 
 // Remembered by pid and start time, since asking costs an `lsof` run.
 export async function rememberedFolder(
@@ -68,22 +77,25 @@ export const newestFirst = <Process extends RunningProcess>(processes: Process[]
 // lands, so its robot stays at its desk; `placeholders` is pruned with `forgetExited`.
 export function keyOf(
   placeholders: Map<string, string>,
-  process: RunningProcess,
+  owner: SessionOwner,
   provider: string,
   sessionId: string | undefined
 ): string {
-  const identity = identityOf(process)
+  if (owner.pid === null) return `${provider}:${sessionId}`
+  const identity = identityOf(owner)
   const kept = placeholders.get(identity)
   if (kept) return kept
   if (sessionId) return `${provider}:${sessionId}`
-  const placeholder = `${provider}:pid-${process.pid}-${process.startedAtMs}`
+  const placeholder = `${provider}:${placeholderId(owner)}`
   placeholders.set(identity, placeholder)
   return placeholder
 }
 
-export function forgetExited(folders: Map<string, string>, running: RunningProcess[]): void {
+export function forgetExited(running: RunningProcess[], ...memories: Map<string, unknown>[]): void {
   const live = new Set(running.map(identityOf))
-  for (const identity of folders.keys()) if (!live.has(identity)) folders.delete(identity)
+  for (const memory of memories) {
+    for (const identity of memory.keys()) if (!live.has(identity)) memory.delete(identity)
+  }
 }
 
 // An agent bundled in an app (ChatGPT, Orca helpers) runs from inside the bundle; not a session.

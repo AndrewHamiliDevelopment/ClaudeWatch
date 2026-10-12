@@ -1,3 +1,5 @@
+import { UNSAFE_IN_A_NAME } from '../../shared/unsafe-text'
+
 // What the Accounts screen prints for the ids the ledger's sources carry. The ledger keeps the
 // ids; these names are made when a view is built.
 
@@ -9,8 +11,6 @@ const PLAN_NAMES: Readonly<Record<string, string>> = {
 const ACRONYMS: Readonly<Record<string, string>> = { ai: 'AI', api: 'API' }
 const MAX_NAME_LENGTH = 40
 
-// Controls, line breaks, and the marks that reorder or hide the text beside them.
-const UNSAFE_IN_A_NAME = /[\p{Cc}\u2028\u2029\u202a-\u202e\u2066-\u2069]/u
 const AT_SIGN = /[@\uff20\ufe6b]/u
 
 export const isSafeName = (name: string): boolean => !UNSAFE_IN_A_NAME.test(name)

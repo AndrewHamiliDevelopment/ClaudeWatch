@@ -4,6 +4,7 @@ import { basename } from 'node:path'
 import { isJsonObject } from '../shared/json-object'
 import { assertOrcaTrusted, ORCA_CLI } from '../shared/orca-bundle'
 import { PARSED_OUTPUT_ENV } from '../shared/ps'
+import { UNSAFE_IN_A_NAME } from '../shared/unsafe-text'
 import {
   OPENCODE_STATEMENTS,
   OpencodeDbError,
@@ -173,6 +174,14 @@ export const systemIo: BridgeIo = {
   }
 }
 
+export async function isDirectory(path: string, io: BridgeIo): Promise<boolean> {
+  try {
+    return (await io.stat(path)).directory
+  } catch {
+    return false
+  }
+}
+
 export function object(value: unknown): Record<string, unknown> | null {
   return isJsonObject(value) ? value : null
 }
@@ -185,11 +194,12 @@ export const isLabel = (value: unknown): value is string =>
 
 // A session name read from disk, before it may enter the feed: control characters and bidi
 // overrides can reorder or hide what the name shows.
-const UNPRINTABLE = /[\p{Cc}\u202A-\u202E\u2066-\u2069]/gu
+const UNPRINTABLE = new RegExp(UNSAFE_IN_A_NAME, 'gu')
 const MAX_NAME_LENGTH = 80
 export function displayName(text: string): string {
   return text.replace(/\s+/g, ' ').replace(UNPRINTABLE, '').trim().slice(0, MAX_NAME_LENGTH)
 }
+export const folderName = (cwd: string): string => displayName(basename(cwd))
 
 export function jsonObject(text: string): Record<string, unknown> | null {
   try {

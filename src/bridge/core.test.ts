@@ -119,6 +119,17 @@ describe('reducer and diff', () => {
       'none'
     )
   })
+  it('marks done a session whose last write looks a moment ahead of the tick', () => {
+    const prev = reduce(emptySnapshot(), {
+      now: 1000,
+      sessions: [{ ...session('a'), activity: 'thinking' }],
+      sources: []
+    })
+    const idle = { ...session('a'), updatedAtMs: 2050 }
+    expect(reduce(prev, { now: 2000, sessions: [idle], sources: [] }).sessions[0].attention).toBe(
+      'done'
+    )
+  })
 })
 
 it('keeps last-tool errors when an older parallel tool remains open', () => {

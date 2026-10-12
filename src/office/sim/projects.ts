@@ -8,6 +8,7 @@ import {
   planProject,
   room,
   type RoomLayout,
+  teamSeatsFor,
   type ZoneLayout
 } from './rooms'
 import type { LayoutMap } from './layout'
@@ -28,9 +29,8 @@ interface CompanyDraft {
 const isOrdinal = (value: unknown): value is number =>
   typeof value === 'number' && Number.isInteger(value) && value >= 0
 
-// One seat per subagent past the two guest desks.
 function teamSeats(crew: SessionRef[]): number {
-  return crew.reduce((count, s) => count + Math.max(0, s.subagents.length - 2), 0)
+  return crew.reduce((count, s) => count + teamSeatsFor(s.subagents.length), 0)
 }
 
 function heldBays(crew: SessionRef[], saved: LayoutMap | undefined): Map<string, number> {
