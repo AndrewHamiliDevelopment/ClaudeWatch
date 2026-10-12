@@ -34,6 +34,20 @@ describe('robotPose', () => {
     expect(thinking).toBeLessThan(robotPose('working', 0.3, 0).gearSpeed)
   })
 
+  it('keeps a thinking or reading agent visibly at work: hands on the desk, and moving', () => {
+    for (const mood of ['thinking', 'reading'] as const) {
+      const poses = [0, 0.2, 0.4, 0.9, 1.3].map((time) => robotPose(mood, time, 0))
+      // Hands forward on the desk, like a working agent, never hanging at its sides.
+      for (const pose of poses) {
+        expect(pose.leftArm).toBeLessThan(-0.5)
+        expect(pose.rightArm).toBeLessThan(-0.5)
+      }
+      expect(new Set(poses.map((pose) => pose.rightArm.toFixed(3))).size).toBeGreaterThan(2)
+      // Reduced motion: the same working posture, held still.
+      expect(robotPose(mood, 1.3, 0, { isReducedMotion: true }).leftArm).toBeLessThan(-0.5)
+    }
+  })
+
   it('raises an arm to wave when it needs you', () => {
     expect(robotPose('needs-you', 0.3, 0).rightArm).toBeLessThan(-2)
   })

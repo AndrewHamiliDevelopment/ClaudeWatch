@@ -32,6 +32,9 @@ export interface SteamPuff {
 
 const TAU = Math.PI * 2
 const DESK_ARMS = -0.95
+// Thinking and reading are work too: the hands stay on the desk, slower than when typing.
+const THINKING_ARMS = -0.8
+const READING_ARMS = -0.7
 const RAISED_ARM = -2.7
 const BLINK_PERIOD_SEC = 3.7
 const BLINK_SEC = 0.14
@@ -84,8 +87,8 @@ export function moodFor(
 const POSTURE: Record<RobotMood, Partial<RobotPose>> = {
   idle: {},
   working: { leftArm: DESK_ARMS, rightArm: DESK_ARMS },
-  reading: { headPitch: 0.4, leftArm: -0.6, rightArm: -0.6 },
-  thinking: { headPitch: -0.15 },
+  reading: { headPitch: 0.4, leftArm: READING_ARMS, rightArm: READING_ARMS },
+  thinking: { headPitch: -0.15, leftArm: THINKING_ARMS, rightArm: THINKING_ARMS },
   'needs-you': { rightArm: RAISED_ARM },
   walking: {},
   lounging: {
@@ -111,9 +114,21 @@ function motion(mood: RobotMood, t: number): Partial<RobotPose> {
         gearSpeed: 6
       }
     case 'reading':
-      return { headPitch: 0.4 + 0.05 * Math.sin(t * TAU * 0.25) }
+      // Follows the lines with its head and turns a page now and then with one hand.
+      return {
+        headPitch: 0.4 + 0.1 * Math.sin(t * TAU * 0.5),
+        rightArm: READING_ARMS + 0.15 * Math.sin(t * TAU * 0.7),
+        gearSpeed: 1.2
+      }
     case 'thinking':
-      return { gearSpeed: 1.2, sway: 0.05 * Math.sin(t * TAU * 0.35) }
+      // Drums on the desk, one hand then the other, and rocks a little: plainly busy.
+      return {
+        leftArm: THINKING_ARMS + 0.16 * Math.sin(t * TAU * 1.1),
+        rightArm: THINKING_ARMS + 0.16 * Math.sin(t * TAU * 1.1 + Math.PI * 0.6),
+        headPitch: -0.15 + 0.07 * Math.sin(t * TAU * 0.4),
+        sway: 0.05 * Math.sin(t * TAU * 0.35),
+        gearSpeed: 2.4
+      }
     case 'needs-you':
       return {
         rightArmRoll: 0.35 * Math.sin(t * TAU * 1.4),
