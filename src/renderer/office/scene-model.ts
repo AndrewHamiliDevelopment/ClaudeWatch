@@ -11,7 +11,8 @@ import type {
 } from '../../shared/office/types'
 
 // All lengths in metres, floor-local, 1 unit = 1 m, Y up. Plain data: Phase 6 maps the sim's LayoutMap into it.
-// The floor-local origin is the centre of the floor plate; room x/z is the room centre.
+// The floor-local origin is the gate, where agents walk in; the plate has its own centre
+// (FloorGeometry x/z). Room x/z is the room centre.
 export interface DeskSlot {
   slotId: string
   x: number
@@ -72,6 +73,9 @@ export interface FloorGeometry {
   floorId: string
   label: string
   plate: number
+  // The plate's centre. Absent means the plate is centred on the gate; read it with plateCentre.
+  x?: number
+  z?: number
   width: number
   depth: number
   corridor: { z: number; width: number }

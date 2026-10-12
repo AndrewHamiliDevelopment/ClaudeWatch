@@ -64,17 +64,18 @@ function floorOf(size: { width: number; depth: number }, zones: ZoneGeometry[]):
 }
 
 const plateOf = (floor: FloorGeometry): Rect => ({
-  x: 0,
-  z: 0,
+  x: floor.x ?? 0,
+  z: floor.z ?? 0,
   width: floor.width,
   depth: floor.depth
 })
 
 function apronOf(floor: FloorGeometry): Rect {
-  const west = -floor.width / 2 - WORLD_APRON.west
-  const east = floor.width / 2 + WORLD_APRON.east
-  const north = -floor.depth / 2 - WORLD_APRON.north
-  const south = floor.depth / 2 + WORLD_APRON.south
+  const plate = plateOf(floor)
+  const west = plate.x - floor.width / 2 - WORLD_APRON.west
+  const east = plate.x + floor.width / 2 + WORLD_APRON.east
+  const north = plate.z - floor.depth / 2 - WORLD_APRON.north
+  const south = plate.z + floor.depth / 2 + WORLD_APRON.south
   return { x: (west + east) / 2, z: (north + south) / 2, width: east - west, depth: south - north }
 }
 
@@ -309,6 +310,52 @@ describe('rule 5: a cap on the number of lots', () => {
   it('thins the ring evenly instead of dropping one side of it', () => {
     for (const [side, lots] of Object.entries(ringSides(vast)))
       expect(lots.length, side).toBeGreaterThan(4)
+  })
+})
+
+describe('a plate that is not centred on the gate', () => {
+  // The sim's lone company: a 65 x 11 m strip east of the gate, the street along its north side.
+  const strip = makeFloor({
+    floorId: 'strip',
+    width: 71,
+    depth: 17,
+    x: 31,
+    z: 7,
+    corridor: { z: 0, width: 3 },
+    elevator: { x: 0, z: 0 },
+    zones: [company('c1', { x: 31, z: 7, width: 65, depth: 11 })]
+  })
+  const lots = surroundingLots(strip)
+  const within = (inner: Rect, outer: Rect): boolean =>
+    Math.abs(inner.x - outer.x) + inner.width / 2 <= outer.width / 2 + 1e-9 &&
+    Math.abs(inner.z - outer.z) + inner.depth / 2 <= outer.depth / 2 + 1e-9
+
+  it('stands every lot wholly on the plate or wholly beyond its apron', () => {
+    expect(lots.length).toBeGreaterThan(0)
+    for (const lot of lots)
+      expect(within(lot, plateOf(strip)) || !overlaps(lot, apronOf(strip)), lot.id).toBe(true)
+  })
+
+  it('rings the plate on all four sides, where it really lies', () => {
+    for (const [side, sideLots] of Object.entries(ringSides(strip)))
+      expect(sideLots.length, side).toBeGreaterThan(0)
+  })
+
+  it('keeps off the street and away from the lift', () => {
+    const street: Rect = { x: 31, z: 0, width: 71, depth: 3 }
+    const lift: Rect = { x: 0, z: 0, width: 2, depth: 2 }
+    for (const lot of lots) {
+      expect(overlaps(lot, street), lot.id).toBe(false)
+      expect(overlaps(lot, lift), lot.id).toBe(false)
+    }
+  })
+
+  it('measures the scene extent around the plate', () => {
+    expect(sceneExtent(strip, [])).toEqual(apronOf(strip))
+    const extent = sceneExtent(strip, lots)
+    expect(extent.x).toBeGreaterThan(20)
+    for (const rect of [plateOf(strip), apronOf(strip), ...lots])
+      expect(within(rect, extent)).toBe(true)
   })
 })
 

@@ -81,8 +81,9 @@ export function packGrounds(boxes: Size[]): Grounds {
   return { width, depth: top + shelfDepth + VERGE, corners }
 }
 
-// One row of companies on each side of the street, each row centred on the gate. A company keeps
-// its side and its place in the row (its index); a new one joins the narrower row.
+// One row of companies on each side of the street. A row starts beside the gate and runs east,
+// so a company that grows moves only the ones after it in its own row. A company keeps its side
+// and its place in the row (its index); a new one joins the narrower row.
 export function packCompanies(companies: ZoneLayout[]): void {
   const row = (side: number): ZoneLayout[] =>
     companies
@@ -102,9 +103,9 @@ export function packCompanies(companies: ZoneLayout[]): void {
     company.index = index
   }
   for (const side of [0, 1]) {
-    const members = row(side)
-    let left = -span(members) / 2
-    for (const company of members) {
+    // Just east of the gate: the lift stands clear of the first company's gateway, 3 m along.
+    let left = LANE / 2
+    for (const company of row(side)) {
       company.x = left + company.width / 2
       company.z = (side === 0 ? 1 : -1) * (LANE / 2 + company.depth / 2)
       left += company.width + LANE

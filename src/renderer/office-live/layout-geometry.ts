@@ -76,6 +76,8 @@ export function toFloorGeometry(layout: LayoutMap, sessions: SessionRef[]): Floo
       floorId: 'hq',
       label: floor.label,
       plate: 0,
+      x: floor.x,
+      z: floor.z,
       width: floor.width,
       depth: floor.depth,
       corridor: { z: 0, width: 3 },

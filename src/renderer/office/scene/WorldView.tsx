@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import type { ZoomBand } from '../logic/camera-bands'
 import type { ThemeZoneGroup } from '../logic/office-themes'
+import { plateCentre, plateLocalFloor } from '../logic/zone-framing'
 import type { FloorGeometry } from '../scene-model'
 import { getTheme } from '../themes/registry'
 import type { Lot } from '../themes/surroundings'
@@ -21,16 +22,21 @@ export function WorldView({
 }) {
   const { District, Hangar, Tower } = theme.world
   const hasTower = band === 'building'
-  const revision = JSON.stringify([theme.id, hasTower, floor.width, floor.depth, floors])
+  // The district draws around its own origin from the plate's size: it goes at the plate centre.
+  const centre = plateCentre(floor)
+  const plate = plateLocalFloor(floor)
+  const revision = JSON.stringify([theme.id, hasTower, floor.width, floor.depth, centre, floors])
   return (
     <BatchedScene revision={revision}>
-      <District floor={floor} />
-      <Hangar floor={floor} />
-      {hasTower && (
-        <group position={[floor.width / 2 + 7, 0, -floor.depth / 2 - 8]}>
-          <Tower floors={floors} />
-        </group>
-      )}
+      <group position={[centre.x, 0, centre.z]}>
+        <District floor={plate} />
+        <Hangar floor={plate} />
+        {hasTower && (
+          <group position={[floor.width / 2 + 7, 0, -floor.depth / 2 - 8]}>
+            <Tower floors={floors} />
+          </group>
+        )}
+      </group>
     </BatchedScene>
   )
 }

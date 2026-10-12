@@ -82,6 +82,18 @@ it('fits the district, hangar and tall tower inside a small building viewport', 
   expect(framing.target[2]).toBeLessThan(0)
 })
 
+it('aims the building view at the scene where it lies, not at the gate', () => {
+  const viewport = { width: 800, height: 600 }
+  const centred = buildingFraming({ width: 88, depth: 42 }, 12, viewport)
+  const offCentre = buildingFraming({ x: 34, z: 7, width: 88, depth: 42 }, 12, viewport)
+  expect(offCentre.target).toEqual([
+    centred.target[0] + 34,
+    centred.target[1],
+    centred.target[2] + 7
+  ])
+  expect(offCentre.zoom).toBe(centred.zoom)
+})
+
 describe('desk follow', () => {
   const rooms = [{ id: 'r1', x: 10, z: 4 }]
   const agents = [{ agentKey: 'a', roomId: 'r1' }]

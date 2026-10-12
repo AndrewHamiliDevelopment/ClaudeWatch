@@ -1,7 +1,7 @@
 import type { SessionRef } from '../../shared/office/types'
 import { LANE, packCompanies } from './allocation'
 import { draftCompany, settleCompany } from './projects'
-import type { FloorLayout } from './rooms'
+import type { FloorLayout, ZoneLayout } from './rooms'
 export type { FloorLayout, LoungeLayout, RoomLayout, Slot, ZoneLayout } from './rooms'
 
 export interface LayoutMap {
@@ -14,6 +14,19 @@ export interface LayoutMap {
 }
 
 const EMPTY_FLOOR_SIDE = 12
+
+// The tight box around every company and its 3 m margin, the street and the gate. The gate is
+// the origin and stays put; the plate's centre is wherever that box falls.
+function plateAround(companies: ZoneLayout[]): Pick<FloorLayout, 'x' | 'z' | 'width' | 'depth'> {
+  if (companies.length === 0)
+    return { x: 0, z: 0, width: EMPTY_FLOOR_SIDE, depth: EMPTY_FLOOR_SIDE }
+  const street = LANE / 2
+  const west = Math.min(-street, ...companies.map((c) => c.x - c.width / 2 - LANE))
+  const east = Math.max(street, ...companies.map((c) => c.x + c.width / 2 + LANE))
+  const north = Math.min(-street, ...companies.map((c) => c.z - c.depth / 2 - LANE))
+  const south = Math.max(street, ...companies.map((c) => c.z + c.depth / 2 + LANE))
+  return { x: (west + east) / 2, z: (north + south) / 2, width: east - west, depth: south - north }
+}
 
 // Only order and bays are read back from `saved`. Every size and position is rebuilt from the
 // live sessions, so a map saved with larger numbers, or by an older shape, comes out compact.
@@ -36,9 +49,6 @@ export function buildLayout(
   )
   const zones = drafts.map((draft) => draft.zone)
   packCompanies(zones)
-  // The gate stays at the origin, the centre of the plate, so nothing moves when the floor
-  // grows or shrinks: the plate is the smallest box around the companies that keeps it there.
-  const side = (reach: number[]): number => 2 * Math.max(EMPTY_FLOOR_SIDE / 2, ...reach)
   return {
     version: 1,
     floors: [
@@ -48,8 +58,7 @@ export function buildLayout(
           new Set(ordered.map((s) => s.projectKey)).size === 1
             ? ordered[0].projectLabel
             : 'Headquarters',
-        width: side(zones.map((c) => Math.abs(c.x) + c.width / 2 + LANE)),
-        depth: side(zones.map((c) => Math.abs(c.z) + c.depth / 2 + LANE)),
+        ...plateAround(zones),
         rooms: drafts.flatMap((draft) => settleCompany(draft)),
         zones,
         elevator: { id: 'entrance', x: 0, z: 0, heading: 0 }

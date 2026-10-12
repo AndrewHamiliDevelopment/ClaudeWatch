@@ -38,18 +38,19 @@ export function snapAzimuth(azimuth: number, direction: -1 | 1): number {
   return ISO_START_AZIMUTH + target * SNAP_STEP
 }
 
-// The widest view: `scene` is the scene's extent, the plate with its apron and its lots.
+// The widest view: `scene` is the scene's extent, the plate with its apron and its lots. Its
+// centre is wherever the plate lies; left out, it is the gate.
 export function buildingFraming(
-  scene: { width: number; depth: number },
+  scene: { x?: number; z?: number; width: number; depth: number },
   floorCount: number,
   viewport: { width: number; height: number }
 ) {
-  const { width, depth } = scene
+  const { x = 0, z = 0, width, depth } = scene
   const height = Math.max(8, floorCount * 2.2 + 1)
   const projectedWidth = (width + depth) / Math.SQRT2
   const projectedHeight = projectedWidth * Math.cos(ISO_POLAR) + height * Math.sin(ISO_POLAR)
   return {
-    target: [0, height / 2, -6] as [number, number, number],
+    target: [x, height / 2, z - 6] as [number, number, number],
     projectedWidth,
     projectedHeight,
     zoom: Math.max(
