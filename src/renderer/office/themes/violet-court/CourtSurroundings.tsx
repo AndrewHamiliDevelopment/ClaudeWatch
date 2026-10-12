@@ -1,13 +1,13 @@
 import { useFrame } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
 import type { Group } from 'three'
-import type { FloorGeometry } from '../../scene-model'
 import { box, lit, Parts, turned, type PartSpec, cone } from '../parts'
 import type { Vector } from '../primitives'
-import { lotBase, type Lot } from '../surroundings'
+import { drawnTop } from '../../town/town-ambient'
+import type { Lot } from '../surroundings'
 import type { AmbientProps, SurroundingsProps } from '../types'
 import { COURT_LOT_KIT } from './court-lots'
-import { spread } from '../lot-kit'
+import { spread, type PlacedLot } from '../lot-kit'
 import { KitFill } from '../LotFill'
 import { COURT } from './palette'
 
@@ -17,10 +17,10 @@ export function CourtSurroundings({ floor, lots }: SurroundingsProps) {
 }
 
 const BANNER_LIMIT = 16
-const MAST = { minRoom: 3, maxHeight: 4.5, inset: 0.1 }
+const MAST = { minRoom: 1.5, maxHeight: 2.5 }
 const SWAY = { perSecond: 1.3, turn: 0.35 }
 const PATROL_LIMIT = 3
-const PATROL = { headroom: 0.35, turnPerSecond: 0.5, scale: 0.5 }
+const PATROL = { headroom: 0.35, overRoof: 0.6, turnPerSecond: 0.5, scale: 0.5 }
 
 interface Mast {
   id: string
@@ -28,18 +28,16 @@ interface Mast {
   height: number
 }
 
-// A mast on the corner of every few buildings that have the height for one.
-function bannerMasts(lots: readonly Lot[], floor: FloorGeometry): Mast[] {
-  const tall = lots.flatMap((lot) => {
-    const base = lotBase(lot, floor)
-    const room = lot.maxHeight - base
+// A mast on the roof of every few buildings that have the room above them for one.
+export function bannerMasts(placed: readonly PlacedLot[]): Mast[] {
+  const tall = placed.flatMap((each) => {
+    const { lot } = each
+    const top = drawnTop(each)
+    const room = lot.maxHeight - top
     if (lot.kind !== 'building' || room < MAST.minRoom) return []
-    const foot: Vector = [
-      lot.x - lot.width / 2 + MAST.inset,
-      base,
-      lot.z + lot.depth / 2 - MAST.inset
+    return [
+      { id: lot.id, foot: [lot.x, top, lot.z] as Vector, height: Math.min(room, MAST.maxHeight) }
     ]
-    return [{ id: lot.id, foot, height: Math.min(room, MAST.maxHeight) }]
   })
   return spread(tall, BANNER_LIMIT)
 }
@@ -64,31 +62,38 @@ const SKIFF: PartSpec[] = [
   turned(cone([0, 0, 1.34], [0.4, 0.5, 0.4], COURT.gold), [Math.PI / 2, 0, 0])
 ]
 
-// The tallest lots: a skiff circles each at its footprint's edge, just under its height limit.
-function patrolOrbits(lots: readonly Lot[]): Lot[] {
-  return lots
-    .filter((lot) => lot.kind === 'building')
-    .sort((a, b) => b.maxHeight - a.maxHeight || a.id.localeCompare(b.id))
-    .slice(0, PATROL_LIMIT)
+interface Orbit {
+  lot: Lot
+  y: number
 }
 
-function patrolPose(lot: Lot, index: number, time: number) {
+// The tallest buildings with air above them: a skiff circles each over its roof, under its limit.
+export function patrolOrbits(placed: readonly PlacedLot[]): Orbit[] {
+  return placed
+    .filter(({ lot }) => lot.kind === 'building')
+    .flatMap((each): (Orbit & { top: number })[] => {
+      const top = drawnTop(each)
+      const y = each.lot.maxHeight - PATROL.headroom
+      return y - top > PATROL.overRoof ? [{ lot: each.lot, y, top }] : []
+    })
+    .sort((a, b) => b.top - a.top || a.lot.id.localeCompare(b.lot.id))
+    .slice(0, PATROL_LIMIT)
+    .map(({ lot, y }) => ({ lot, y }))
+}
+
+function patrolPose({ lot, y }: Orbit, index: number, time: number) {
   const angle = index * 2 + time * PATROL.turnPerSecond
   const radius = Math.min(lot.width, lot.depth) / 2
-  const at: Vector = [
-    lot.x + Math.cos(angle) * radius,
-    lot.maxHeight - PATROL.headroom,
-    lot.z + Math.sin(angle) * radius
-  ]
+  const at: Vector = [lot.x + Math.cos(angle) * radius, y, lot.z + Math.sin(angle) * radius]
   return { at, heading: -angle }
 }
 
 // Banners that sway on their masts and skiffs that circle the tallest towers.
-export function CourtAmbient({ floor, lots, isReducedMotion }: AmbientProps) {
+export function CourtAmbient({ placed = [], isReducedMotion }: AmbientProps) {
   const banners = useRef<(Group | null)[]>([])
   const skiffs = useRef<(Group | null)[]>([])
-  const masts = useMemo(() => bannerMasts(lots, floor), [lots, floor])
-  const orbits = useMemo(() => patrolOrbits(lots), [lots])
+  const masts = useMemo(() => bannerMasts(placed), [placed])
+  const orbits = useMemo(() => patrolOrbits(placed), [placed])
   useFrame(({ clock }) => {
     if (isReducedMotion) return
     const time = clock.elapsedTime
@@ -96,9 +101,9 @@ export function CourtAmbient({ floor, lots, isReducedMotion }: AmbientProps) {
       if (banner) banner.rotation.y = Math.sin(time * SWAY.perSecond + index) * SWAY.turn
     })
     skiffs.current.forEach((skiff, index) => {
-      const lot = orbits[index]
-      if (!skiff || !lot) return
-      const pose = patrolPose(lot, index, time)
+      const orbit = orbits[index]
+      if (!skiff || !orbit) return
+      const pose = patrolPose(orbit, index, time)
       skiff.position.set(...pose.at)
       skiff.rotation.y = pose.heading
     })
@@ -119,11 +124,11 @@ export function CourtAmbient({ floor, lots, isReducedMotion }: AmbientProps) {
           </group>
         </group>
       ))}
-      {orbits.map((lot, index) => {
-        const rest = patrolPose(lot, index, 0)
+      {orbits.map((orbit, index) => {
+        const rest = patrolPose(orbit, index, 0)
         return (
           <group
-            key={lot.id}
+            key={orbit.lot.id}
             name="ambient-patrol"
             position={rest.at}
             rotation={[0, rest.heading, 0]}

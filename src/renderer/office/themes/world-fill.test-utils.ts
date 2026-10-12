@@ -12,6 +12,7 @@ import { everyElement, mergedDraws, type SceneElement } from './scene.test-utils
 import { surroundingLots, WORLD_APRON, type Lot } from './surroundings'
 import type { OfficeTheme } from './types'
 import { frameCallbacks } from './frame-capture.test-utils'
+import { drawnTown } from '../town/drawn-town.test-utils'
 import { GATE, hangarStand, towerStand } from './apron'
 import { DISTRICT_SIDES, HANGAR_SIDES, terraceLots } from './LotFill'
 import { placeLot, type LotKit, type PlacedLot } from './lot-kit'
@@ -95,8 +96,10 @@ function moverPoses(
   const Ambient = theme.kit.zone.Ambient
   if (!Ambient) throw new Error(`${theme.id} has no ambient part`)
   frameCallbacks.length = 0
-  const lots = surroundingLots(floor)
-  const elements = everyElement(createElement(Ambient, { floor, lots, isReducedMotion }))
+  // Handed what the zoned town draws, as TownAmbient hands it.
+  const placed = drawnTown(theme.id, floor)
+  const lots = placed.map((each) => each.lot)
+  const elements = everyElement(createElement(Ambient, { floor, lots, placed, isReducedMotion }))
   const invalidate = vi.fn()
   const movers = moverNames.map((name) => {
     const found = named(elements, name)

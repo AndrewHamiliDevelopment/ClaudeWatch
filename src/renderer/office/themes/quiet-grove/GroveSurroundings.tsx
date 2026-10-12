@@ -1,12 +1,12 @@
 import { useFrame } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
 import type { Group } from 'three'
-import type { FloorGeometry } from '../../scene-model'
 import { lit, Parts, type PartSpec, sphere } from '../parts'
 import type { Vector } from '../primitives'
-import { draw, lotBase, type Lot } from '../surroundings'
+import { drawnTop } from '../../town/town-ambient'
+import { draw } from '../surroundings'
 import type { AmbientProps, SurroundingsProps } from '../types'
-import { spread } from '../lot-kit'
+import { spread, type PlacedLot } from '../lot-kit'
 import { KitFill } from '../LotFill'
 import { GROVE_LOT_KIT } from './grove-lots'
 import { GROVE } from './palette'
@@ -17,9 +17,9 @@ export function GroveSurroundings({ floor, lots }: SurroundingsProps) {
 }
 
 const FIREFLY_LIMIT = 28
-const FIREFLY = { hover: 1.2, headroom: 0.4, bob: 0.25, turnPerSecond: 0.7 }
+const FIREFLY = { overRoof: 0.6, headroom: 0.4, bob: 0.25, turnPerSecond: 0.7 }
 const LEAF_LIMIT = 24
-const LEAF = { fromHeight: 7, headroom: 0.3, landing: 0.2, drift: 0.6, spinPerSecond: 1.5 }
+const LEAF = { fall: 3, minFall: 1, headroom: 0.3, drift: 0.6, spinPerSecond: 1.5 }
 // Draws 0 to 6 of a lot's seed are spent on its place and its design.
 const DRAW = { phase: 7, pace: 8 }
 
@@ -37,17 +37,44 @@ interface Mover {
   pace: number
 }
 
-function moverOn(lot: Lot, floor: FloorGeometry, hover: number, headroom: number): Mover {
-  const base = lotBase(lot, floor)
-  const y = Math.min(lot.maxHeight - headroom, base + hover)
-  return {
-    id: lot.id,
-    home: [lot.x, y, lot.z],
-    reach: Math.min(lot.width, lot.depth) / 2,
-    fall: y - base - LEAF.landing,
-    phase: draw(lot.seed, DRAW.phase),
-    pace: 0.7 + draw(lot.seed, DRAW.pace) * 0.6
-  }
+// Over what the town drew on the lot, `rise` above its top, or nothing when the lot's limit is
+// too close above the roof for it.
+function moverOver(placed: PlacedLot, rise: number, headroom: number, least: number): Mover[] {
+  const { lot } = placed
+  const top = drawnTop(placed)
+  const y = Math.min(lot.maxHeight - headroom, top + rise)
+  if (y - top < least) return []
+  return [
+    {
+      id: lot.id,
+      home: [lot.x, y, lot.z],
+      reach: Math.min(lot.width, lot.depth) / 2,
+      fall: y - top,
+      phase: draw(lot.seed, DRAW.phase),
+      pace: 0.7 + draw(lot.seed, DRAW.pace) * 0.6
+    }
+  ]
+}
+
+// Fireflies loop just above the roofs and treetops; the bob stays inside the room left.
+export function fireflyMovers(placed: readonly PlacedLot[]): Mover[] {
+  const hovering = placed.flatMap((each) =>
+    moverOver(
+      each,
+      FIREFLY.overRoof + FIREFLY.bob,
+      FIREFLY.headroom,
+      FIREFLY.overRoof + FIREFLY.bob
+    )
+  )
+  return spread(hovering, FIREFLY_LIMIT).map((mover) => ({ ...mover, fall: FIREFLY.bob }))
+}
+
+// Leaves drift down onto the roofs of the buildings, never through them.
+export function leafMovers(placed: readonly PlacedLot[]): Mover[] {
+  const falling = placed
+    .filter(({ lot }) => lot.kind === 'building')
+    .flatMap((each) => moverOver(each, LEAF.fall, LEAF.headroom, LEAF.minFall))
+  return spread(falling, LEAF_LIMIT)
 }
 
 // A slow loop around its lot, bobbing as it goes.
@@ -69,24 +96,11 @@ function leafAt({ home, reach, fall, phase, pace }: Mover, time: number): Vector
 }
 
 // Fireflies that loop over the lots and leaves that fall from the trees.
-export function GroveAmbient({ floor, lots, isReducedMotion }: AmbientProps) {
+export function GroveAmbient({ placed = [], isReducedMotion }: AmbientProps) {
   const fireflies = useRef<(Group | null)[]>([])
   const leaves = useRef<(Group | null)[]>([])
-  const hovering = useMemo(
-    () =>
-      spread(lots, FIREFLY_LIMIT).map((lot) =>
-        moverOn(lot, floor, FIREFLY.hover, FIREFLY.headroom)
-      ),
-    [lots, floor]
-  )
-  const falling = useMemo(
-    () =>
-      spread(
-        lots.filter((lot) => lot.kind === 'building'),
-        LEAF_LIMIT
-      ).map((lot) => moverOn(lot, floor, LEAF.fromHeight, LEAF.headroom)),
-    [lots, floor]
-  )
+  const hovering = useMemo(() => fireflyMovers(placed), [placed])
+  const falling = useMemo(() => leafMovers(placed), [placed])
   useFrame(({ clock }) => {
     if (isReducedMotion) return
     const time = clock.elapsedTime
