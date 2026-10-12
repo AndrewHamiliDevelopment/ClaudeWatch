@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useReducer, useState } from 'react'
 import { Plate } from '../components/deck/Plate'
+import { cn } from '../lib/utils'
 import { useOfficeTheme } from './hooks'
 import { buildAttentionQueue } from './logic/attention-queue'
 import {
@@ -49,7 +50,13 @@ import { themeCharacter } from './themes/registry'
 const OfficeScene = lazy(() => import('./scene/OfficeScene'))
 const SPEECH_BUBBLE_MS = 1500
 
-export function OfficeApp({ feed }: { feed: OfficeFeed }) {
+interface OfficeAppProps {
+  feed: OfficeFeed
+  // The app's window draws no title bar, so the page supplies the strip it is dragged by.
+  hasHiddenTitleBar?: boolean
+}
+
+export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
   const [state, dispatch] = useReducer(officeReducer, INITIAL_OFFICE_STATE)
   const [hasWebGL] = useState(canCreateWebGL2)
   const [hasSceneFailed, setHasSceneFailed] = useState(false)
@@ -191,7 +198,16 @@ export function OfficeApp({ feed }: { feed: OfficeFeed }) {
         </SceneErrorBoundary>
       )}
 
-      <div className="pointer-events-none absolute inset-0 grid grid-cols-1 grid-rows-[auto_minmax(0,1fr)_auto_auto] gap-3 p-3 md:grid-cols-[18.5rem_minmax(0,1fr)_20rem] md:grid-rows-[minmax(0,1fr)_auto]">
+      {hasHiddenTitleBar && (
+        <div aria-hidden="true" className="drag-region absolute inset-x-0 top-0 h-9" />
+      )}
+      <div
+        className={cn(
+          'pointer-events-none absolute inset-0 grid grid-cols-1 grid-rows-[auto_minmax(0,1fr)_auto_auto] gap-3 p-3 md:grid-cols-[18.5rem_minmax(0,1fr)_20rem] md:grid-rows-[minmax(0,1fr)_auto]',
+          // Panels start below the strip and the window's own buttons.
+          hasHiddenTitleBar && 'pt-10'
+        )}
+      >
         <div className="pointer-events-auto flex min-h-0 flex-col gap-3 self-start md:max-h-full md:overflow-y-auto">
           <OfficesPanel
             companies={companies}

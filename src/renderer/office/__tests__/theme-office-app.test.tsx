@@ -88,3 +88,16 @@ it('passes theme selection and building totals to the scene and flies to zones f
   expect(screen.getByRole('button', { name: /^Floor theme: Neo Edo Steam/ })).toBeInTheDocument()
   expect(screen.getByLabelText('Scene theme Neo Edo Steam')).toBeInTheDocument()
 })
+
+it('gives the app window a strip to drag it by, with the panels below it', () => {
+  const { container } = render(<OfficeApp feed={feed} hasHiddenTitleBar />)
+  const strip = container.querySelector('.drag-region')
+  expect(strip).not.toBeNull()
+  // The strip sits under the HUD in the DOM order's stacking, and no panel may overlap it.
+  expect(strip?.nextElementSibling?.className).toContain('pt-10')
+})
+
+it('leaves a browser tab without a drag strip', () => {
+  const { container } = render(<OfficeApp feed={feed} />)
+  expect(container.querySelector('.drag-region')).toBeNull()
+})

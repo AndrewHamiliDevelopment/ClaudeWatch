@@ -44,6 +44,12 @@ if (container) {
   // A tab whose server went away says so, instead of an office that reads "connecting" for ever.
   const showStopped = (): void => root.render(<NotConnected surface="stopped" />)
   void resolveFeed(showStopped).then((feed) =>
-    root.render(feed ? <OfficeApp feed={feed} /> : <NotConnected surface={surface} />)
+    root.render(
+      feed ? (
+        <OfficeApp feed={feed} hasHiddenTitleBar={surface === 'app'} />
+      ) : (
+        <NotConnected surface={surface} />
+      )
+    )
   )
 }
