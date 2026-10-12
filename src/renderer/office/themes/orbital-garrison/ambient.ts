@@ -1,8 +1,8 @@
 import type { FloorGeometry } from '../../scene-model'
 import { box, lit, SIDES, turned, type PartSpec } from '../parts'
-import type { Lot } from '../surroundings'
+import { lotBase, type Lot } from '../surroundings'
 import { drum } from './buildings'
-import { baseYOf, buildLot, type RadarMount } from './lots'
+import { buildLot, type RadarMount } from './lots'
 import { GARRISON } from './palette'
 
 const MAX_DISHES = 8
@@ -16,7 +16,7 @@ export const DISH: PartSpec[] = [
 ]
 
 export function radarMounts(lots: readonly Lot[], floor: FloorGeometry): RadarMount[] {
-  return lots.flatMap((lot) => buildLot(lot, baseYOf(lot, floor)).mount ?? []).slice(0, MAX_DISHES)
+  return lots.flatMap((lot) => buildLot(lot, lotBase(lot, floor)).mount ?? []).slice(0, MAX_DISHES)
 }
 
 // A stub-winged shuttle, nose toward +z.
@@ -51,26 +51,26 @@ export function circuitPose(
 ): { x: number; z: number; heading: number } {
   const radius = CIRCUIT.turnRadius
   const half = straightHalf(floor)
-  const centreZ = -floor.depth / 2 - CIRCUIT.nearGap - radius
+  const centreZ = floor.z - floor.depth / 2 - CIRCUIT.nearGap - radius
   const turn = Math.PI * radius
   let travelled = share * circuitLength(floor)
   if (travelled < 2 * half)
-    return { x: -half + travelled, z: centreZ + radius, heading: Math.PI / 2 }
+    return { x: floor.x - half + travelled, z: centreZ + radius, heading: Math.PI / 2 }
   travelled -= 2 * half
   if (travelled < turn) {
     const angle = travelled / radius
     return {
-      x: half + radius * Math.sin(angle),
+      x: floor.x + half + radius * Math.sin(angle),
       z: centreZ + radius * Math.cos(angle),
       heading: Math.atan2(Math.cos(angle), -Math.sin(angle))
     }
   }
   travelled -= turn
   if (travelled < 2 * half)
-    return { x: half - travelled, z: centreZ - radius, heading: -Math.PI / 2 }
+    return { x: floor.x + half - travelled, z: centreZ - radius, heading: -Math.PI / 2 }
   const angle = (travelled - 2 * half) / radius
   return {
-    x: -half - radius * Math.sin(angle),
+    x: floor.x - half - radius * Math.sin(angle),
     z: centreZ - radius * Math.cos(angle),
     heading: Math.atan2(-Math.cos(angle), Math.sin(angle))
   }

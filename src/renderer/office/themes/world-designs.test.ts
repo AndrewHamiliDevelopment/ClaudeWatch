@@ -1,12 +1,14 @@
 import { Box3, Euler, Matrix4, Quaternion, Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
 import { buildFixtureFrame } from '../fixture/fixture-feed'
-import { apronLots, APRON_TOP_Y } from './apron'
+import { apronLots } from './apron'
 import { BRASS_WORLD } from './BrassSurroundings'
 import { EDO_WORLD } from './EdoSurroundings'
-import { designFor, lotBase, lotContents, plotOf, PROP_PLOT, type Plot } from './lot-parts'
+import type { Plot } from './lot-kit'
+import { designFor, lotContents, plotOf, PROP_PLOT } from './lot-parts'
 import type { PartSpec } from './parts'
-import { surroundingLots } from './surroundings'
+import { lotBase, surroundingLots } from './surroundings'
+import { APRON_TOP_Y, TOWN_APRON } from './town-apron'
 
 // The box a part fills, with its rotation applied.
 function boundsOf(part: PartSpec): Box3 {
@@ -105,7 +107,7 @@ describe.each([
 
   it.each([
     ['the ring and the lanes', ringLots, (lot: (typeof ringLots)[0]) => lotBase(lot, floor)],
-    ['the apron', apronLots(floor), () => APRON_TOP_Y]
+    ['the apron', apronLots(floor, TOWN_APRON), () => APRON_TOP_Y]
   ])('fills every lot on %s, under its limit, the same on every start', (_where, lots, baseOf) => {
     expect(lots.length).toBeGreaterThan(20)
     const drawn = new Set<string>()

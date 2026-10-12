@@ -1,18 +1,18 @@
 import { useMemo } from 'react'
 import type { LoungeGeometry } from '../../scene-model'
-import { box, lit, Parts, SIDES, turned, type PartSpec } from '../parts'
+import { box, lit, Parts, SIDES, turned, type PartSpec, cylinder, sphere } from '../parts'
 import type { Vector } from '../primitives'
 import type { LoungeProps } from '../types'
 import { paperLantern } from './GroveRoom'
 import { GROVE } from './palette'
-import { ball, ON_ITS_SIDE, tube } from './spirit-features'
+import { ON_ITS_SIDE } from './spirit-features'
 
 const LENGTHWISE: Vector = [Math.PI / 2, 0, 0]
 
 // A log to sit on, with a moss cushion: the same height as the stump stool at a desk.
 const SEAT: PartSpec[] = [
-  turned(tube([0, 0.15, -0.12], [0.3, 0.62, 0.3], GROVE.bark), ON_ITS_SIDE),
-  ball([0, 0.3, -0.12], [0.44, 0.08, 0.26], GROVE.moss)
+  turned(cylinder([0, 0.15, -0.12], [0.3, 0.62, 0.3], GROVE.bark), ON_ITS_SIDE),
+  sphere([0, 0.3, -0.12], [0.44, 0.08, 0.26], GROVE.moss)
 ]
 
 const RING_STONES = 8
@@ -24,43 +24,43 @@ function campfire(x: number, z: number): PartSpec[] {
     box([x, 0.025, z], [2, 0.02, 2], GROVE.soil),
     ...Array.from({ length: RING_STONES }, (_, index) => {
       const turn = (index / RING_STONES) * Math.PI * 2
-      return ball(
+      return sphere(
         [x + Math.cos(turn) * RING_RADIUS, 0.09, z + Math.sin(turn) * RING_RADIUS],
         [0.3, 0.18, 0.26],
         GROVE.stone
       )
     }),
     ...SIDES.map((side) =>
-      turned(tube([x + side * 0.12, 0.2, z], [0.1, 0.56, 0.1], GROVE.bark), [0, 0, side * 0.6])
+      turned(cylinder([x + side * 0.12, 0.2, z], [0.1, 0.56, 0.1], GROVE.bark), [0, 0, side * 0.6])
     ),
-    turned(tube([x, 0.2, z + 0.1], [0.1, 0.56, 0.1], GROVE.bark), [0.6, 0, 0]),
-    lit(ball([x, 0.36, z], [0.34, 0.56, 0.34], GROVE.lumen)),
-    lit(ball([x + 0.1, 0.22, z - 0.08], [0.22, 0.3, 0.22], GROVE.lumen))
+    turned(cylinder([x, 0.2, z + 0.1], [0.1, 0.56, 0.1], GROVE.bark), [0.6, 0, 0]),
+    lit(sphere([x, 0.36, z], [0.34, 0.56, 0.34], GROVE.lumen)),
+    lit(sphere([x + 0.1, 0.22, z - 0.08], [0.22, 0.3, 0.22], GROVE.lumen))
   ]
 }
 
 // A hammock slung between two posts, lengthwise so it stays clear of the last row of seats.
 function hammock(x: number, z: number): PartSpec[] {
   return [
-    ...SIDES.map((end) => tube([x, 0.6, z + end * 0.95], [0.1, 1.2, 0.1], GROVE.timber)),
-    turned(tube([x, 0.58, z], [0.6, 1.7, 0.14], GROVE.paper), LENGTHWISE),
-    ball([x, 0.68, z - 0.55], [0.34, 0.12, 0.3], GROVE.fern)
+    ...SIDES.map((end) => cylinder([x, 0.6, z + end * 0.95], [0.1, 1.2, 0.1], GROVE.timber)),
+    turned(cylinder([x, 0.58, z], [0.6, 1.7, 0.14], GROVE.paper), LENGTHWISE),
+    sphere([x, 0.68, z - 0.55], [0.34, 0.12, 0.3], GROVE.fern)
   ]
 }
 
 // A stump table with two mugs, and a lantern on a post beside it.
 function stumpTable(x: number, z: number): PartSpec[] {
   return [
-    tube([x, 0.2, z], [0.56, 0.4, 0.56], GROVE.bark),
-    tube([x, 0.415, z], [0.6, 0.03, 0.6], GROVE.timber),
-    tube([x - 0.12, 0.48, z + 0.08], [0.08, 0.1, 0.08], GROVE.clay),
-    tube([x + 0.14, 0.48, z - 0.06], [0.08, 0.1, 0.08], GROVE.clay),
+    cylinder([x, 0.2, z], [0.56, 0.4, 0.56], GROVE.bark),
+    cylinder([x, 0.415, z], [0.6, 0.03, 0.6], GROVE.timber),
+    cylinder([x - 0.12, 0.48, z + 0.08], [0.08, 0.1, 0.08], GROVE.clay),
+    cylinder([x + 0.14, 0.48, z - 0.06], [0.08, 0.1, 0.08], GROVE.clay),
     ...lanternPost(x, z + 0.8)
   ]
 }
 
 function lanternPost(x: number, z: number): PartSpec[] {
-  return [tube([x, 0.6, z], [0.07, 1.2, 0.07], GROVE.timber), ...paperLantern(x, 1.3, z)]
+  return [cylinder([x, 0.6, z], [0.07, 1.2, 0.07], GROVE.timber), ...paperLantern(x, 1.3, z)]
 }
 
 const HEARTH_PAST_LAST_ROW = 1.75
@@ -78,7 +78,7 @@ function loungeDecor(lounge: LoungeGeometry): PartSpec[] {
     ...stumpTable(lounge.x - 2.2, hearthZ - 0.3),
     ...SIDES.flatMap((side) => [
       ...lanternPost(lounge.x + side * edgeX, north + 0.4),
-      ball([lounge.x + side * edgeX, 0.2, lastRow + 0.1], [0.5, 0.4, 0.5], GROVE.fern)
+      sphere([lounge.x + side * edgeX, 0.2, lastRow + 0.1], [0.5, 0.4, 0.5], GROVE.fern)
     ])
   ]
 }

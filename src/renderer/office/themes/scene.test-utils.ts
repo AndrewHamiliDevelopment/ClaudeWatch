@@ -39,7 +39,7 @@ function expand(node: ReactNode): ReactNode {
   return expand((node.type as (props: NodeProps) => ReactNode)(node.props))
 }
 
-function directChildren(node: ReactNode): SceneElement[] {
+export function directChildren(node: ReactNode): SceneElement[] {
   if (Array.isArray(node)) return node.flatMap(directChildren)
   const element = expand(node)
   if (Array.isArray(element)) return element.flatMap(directChildren)

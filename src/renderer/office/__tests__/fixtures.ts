@@ -50,6 +50,8 @@ export function makeFloor(
   return {
     label: overrides.floorId,
     plate: 1,
+    x: 0,
+    z: 0,
     width: 20,
     depth: 16,
     corridor: { z: 0, width: 3 },

@@ -1,8 +1,8 @@
 import { expect } from 'vitest'
 import { Euler, Matrix4 } from 'three'
-import { makeFloor, makeZone } from '../../__tests__/fixtures'
-import type { FloorGeometry } from '../../scene-model'
-import type { PartSpec } from '../parts'
+import { makeFloor, makeZone } from '../__tests__/fixtures'
+import type { FloorGeometry } from '../scene-model'
+import type { PartSpec } from './parts'
 import type { PlacedLot } from './lot-kit'
 
 const EPSILON = 1e-6

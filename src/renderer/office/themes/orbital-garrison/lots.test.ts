@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import { GROUND_Y, surroundingLots, type Lot } from '../surroundings'
+import { GROUND_Y, lotBase, surroundingLots, type Lot } from '../surroundings'
 import { BUILDINGS } from './buildings'
-import { baseYOf, buildLot } from './lots'
+import { buildLot } from './lots'
 import { GARRISON } from './palette'
 import { PROPS } from './yard-props'
 import { boundsOf, FLOORS } from './yard.test-utils'
@@ -40,7 +40,7 @@ describe('what Orbital Garrison stands on a lot', () => {
       const lots = surroundingLots(floor)
       expect(lots.length).toBeGreaterThan(20)
       for (const each of lots) {
-        const base = baseYOf(each, floor)
+        const base = lotBase(each, floor)
         const { parts } = buildLot(each, base)
         expect(parts.length, each.id).toBeGreaterThan(3)
         for (const part of parts) {
@@ -62,8 +62,8 @@ describe('what Orbital Garrison stands on a lot', () => {
 
   it('stands lots on the slab inside the plate and on the ground outside it', () => {
     const floor = FLOORS[0]
-    expect(baseYOf(lot({ x: 0, z: 0 }), floor)).toBe(0)
-    expect(baseYOf(lot({ x: floor.width, z: 0 }), floor)).toBe(GROUND_Y)
+    expect(lotBase(lot({ x: floor.x, z: floor.z }), floor)).toBe(0)
+    expect(lotBase(lot({ x: floor.x + floor.width, z: floor.z }), floor)).toBe(GROUND_Y)
   })
 
   it('mixes at least five buildings and six props around one floor', () => {

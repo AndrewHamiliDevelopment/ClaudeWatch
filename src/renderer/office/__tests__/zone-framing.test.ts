@@ -6,7 +6,6 @@ import {
   frameBounds,
   HUD_SAFE_INSETS,
   occupiedBounds,
-  plateCentre,
   plateLocalFloor,
   projectToScreen,
   type Bounds,
@@ -91,6 +90,16 @@ describe('occupiedBounds', () => {
 })
 
 describe('the plate and its theme parts', () => {
+  const lounge = {
+    id: 'c:lounge',
+    x: 40,
+    z: 9,
+    width: 6,
+    depth: 5,
+    door: { x: 40, z: 6.5 },
+    seats: [{ slotId: 'lounge-0', x: 39, z: 9, heading: 0 }]
+  }
+  const project = makeZone({ id: 'c/p', kind: 'project', x: 12, z: 7, door: { x: 12, z: 4.5 } })
   const strip = makeFloor({
     floorId: 'f',
     width: 71,
@@ -99,12 +108,8 @@ describe('the plate and its theme parts', () => {
     z: 7,
     corridor: { z: 0, width: 3 },
     elevator: { x: 0, z: 0 },
-    rooms: [makeRoom({ id: 'r', x: 5, z: 6 })]
-  })
-
-  it('reads the centre off the floor, and the gate for a floor that carries none', () => {
-    expect(plateCentre(strip)).toEqual({ x: 31, z: 7 })
-    expect(plateCentre(makeFloor({ floorId: 'old' }))).toEqual({ x: 0, z: 0 })
+    rooms: [makeRoom({ id: 'r', x: 5, z: 6 })],
+    zones: [makeZone({ id: 'c', kind: 'company', x: 31, z: 7, lounge, children: [project] })]
   })
 
   it('hands theme parts a floor measured from the plate centre, the same size', () => {
@@ -113,15 +118,27 @@ describe('the plate and its theme parts', () => {
     expect(local.corridor).toEqual({ z: -7, width: 3 })
     expect(local.elevator).toEqual({ x: -31, z: -7 })
     // Drawn inside a group at the plate centre, the lift lands back on the gate.
-    const centre = plateCentre(strip)
-    expect([centre.x + local.elevator.x, centre.z + local.elevator.z]).toEqual([0, 0])
-    expect(centre.z + local.corridor.z).toBe(strip.corridor.z)
+    expect([strip.x + local.elevator.x, strip.z + local.elevator.z]).toEqual([0, 0])
+    expect(strip.z + local.corridor.z).toBe(strip.corridor.z)
     expect(strip.elevator).toEqual({ x: 0, z: 0 })
+  })
+
+  it('moves every zone, lounge, room, seat and door into the same frame', () => {
+    const local = plateLocalFloor(strip)
+    const [company] = local.zones
+    expect(company).toMatchObject({ x: 0, z: 0, width: 6, depth: 5 })
+    expect(company.children[0]).toMatchObject({ x: -19, z: 0, door: { x: -19, z: -2.5 } })
+    expect(company.lounge).toMatchObject({ x: 9, z: 2, door: { x: 9, z: -0.5 } })
+    expect(company.lounge?.seats[0]).toMatchObject({ x: 8, z: 2, heading: 0 })
+    expect(local.rooms[0]).toMatchObject({ x: -26, z: -1, door: { x: -31, z: -8.5 } })
+    expect(local.rooms[0].seats[0]).toMatchObject({ x: -31, z: -10.7 })
+    // The floor it was made from is left as it was.
+    expect(strip.zones[0].children[0]).toMatchObject({ x: 12, z: 7 })
   })
 
   it('changes nothing for a plate that is centred on the gate', () => {
     const centred = makeFloor({ floorId: 'f', elevator: { x: -8, z: 2 } })
-    expect(plateLocalFloor(centred)).toEqual({ ...centred, x: 0, z: 0 })
+    expect(plateLocalFloor(centred)).toEqual(centred)
   })
 })
 

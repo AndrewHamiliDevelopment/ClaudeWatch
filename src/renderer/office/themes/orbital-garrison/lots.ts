@@ -1,5 +1,4 @@
-import type { FloorGeometry } from '../../scene-model'
-import { GROUND_Y, type Lot } from '../surroundings'
+import { draw, type Lot } from '../surroundings'
 import {
   BUILDING_SIDE_M,
   BUILDINGS,
@@ -7,7 +6,7 @@ import {
   radarDeckHeight,
   type YardDesign
 } from './buildings'
-import { place, roll, type PlacedPart } from './placed'
+import { place, type PlacedPart } from './placed'
 import { PROP_FOOTPRINT_M, PROPS } from './yard-props'
 
 // Lots beside a company stay low so the offices lead; only the far ring builds to its limit.
@@ -25,14 +24,6 @@ interface LotBuild {
   parts: PlacedPart[]
   // Where a dish turns, on a lot that drew a radar tower.
   mount: RadarMount | null
-}
-
-// The slab's top inside the plate, the open ground outside it.
-export function baseYOf(lot: Pick<Lot, 'x' | 'z' | 'width' | 'depth'>, floor: FloorGeometry) {
-  const isOnPlate =
-    Math.abs(lot.x) + lot.width / 2 <= floor.width / 2 &&
-    Math.abs(lot.z) + lot.depth / 2 <= floor.depth / 2
-  return isOnPlate ? 0 : GROUND_Y
 }
 
 function pick(designs: readonly YardDesign[], limit: number, share: number): YardDesign {
@@ -54,12 +45,12 @@ export function buildLot(lot: Lot, baseY: number): LotBuild {
   const limit =
     isProp || lot.zoneId === null
       ? room
-      : Math.min(room, NEAR_LIMIT_M.min + roll(lot.seed, 5) * NEAR_LIMIT_M.spread)
-  const design = pick(isProp ? PROPS : BUILDINGS, limit, roll(lot.seed, 6))
-  const share = roll(lot.seed, 7)
+      : Math.min(room, NEAR_LIMIT_M.min + draw(lot.seed, 5) * NEAR_LIMIT_M.spread)
+  const design = pick(isProp ? PROPS : BUILDINGS, limit, draw(lot.seed, 6))
+  const share = draw(lot.seed, 7)
   const turns = isProp
-    ? (isSideways ? 1 : 0) + (roll(lot.seed, 8) < 0.5 ? 0 : 2)
-    : Math.floor(roll(lot.seed, 8) * 4)
+    ? (isSideways ? 1 : 0) + (draw(lot.seed, 8) < 0.5 ? 0 : 2)
+    : Math.floor(draw(lot.seed, 8) * 4)
   return {
     designId: design.id,
     parts: place(design.build(limit, share), { x: lot.x, y: baseY, z: lot.z, scale, turns }),

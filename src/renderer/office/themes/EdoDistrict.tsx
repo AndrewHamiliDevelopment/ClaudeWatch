@@ -1,10 +1,12 @@
 import { useMemo } from 'react'
-import { APRON_TOP_Y, apronLots, GATE } from './apron'
+import { apronLots, GATE } from './apron'
 import { EDO_WORLD } from './EdoSurroundings'
-import { LotParts } from './lot-parts'
+import { LotFill } from './LotFill'
+import { lotContents } from './lot-parts'
 import { EDO } from './palettes'
 import { box, Parts, sphere } from './parts'
 import { Torii } from './EdoRoom'
+import { APRON_TOP_Y, TOWN_APRON } from './town-apron'
 import { ApronPaving, ThemeTower } from './WorldArchitecture'
 import type { FloorProps, TowerProps } from './types'
 
@@ -22,11 +24,11 @@ export function EdoTower(props: TowerProps) {
 
 // A raked-gravel apron of townhouses, gardens and pagodas, with the great gate on the south.
 export function EdoDistrict({ floor }: FloorProps) {
-  const lots = useMemo(() => apronLots(floor), [floor])
+  const lots = useMemo(() => apronLots(floor, TOWN_APRON), [floor])
   return (
     <group>
       <ApronPaving floor={floor} color={EDO.floor} />
-      <LotParts lots={lots} set={EDO_WORLD} baseOf={() => APRON_TOP_Y} />
+      <LotFill placed={lots.flatMap((lot) => lotContents(lot, APRON_TOP_Y, EDO_WORLD))} />
       <group position={[0, APRON_TOP_Y, floor.depth / 2 + GATE.offsetZ]}>
         <Torii scale={2} />
       </group>

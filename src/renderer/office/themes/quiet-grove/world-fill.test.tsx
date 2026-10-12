@@ -1,6 +1,6 @@
 import { describe, vi } from 'vitest'
 import { Texture } from 'three'
-import { describeWorldFill } from '../violet-court/world-fill.test-utils'
+import { describeWorldFill } from '../world-fill.test-utils'
 import { GROVE_LOT_KIT } from './grove-lots'
 import { quietGrove } from './index'
 
@@ -10,7 +10,7 @@ vi.mock('react', async (original) => ({
   useLayoutEffect: () => undefined,
   useRef: (current: object) => ({ current })
 }))
-vi.mock('@react-three/fiber', () => import('../violet-court/frame-capture.test-utils'))
+vi.mock('@react-three/fiber', () => import('../frame-capture.test-utils'))
 vi.mock('../../scene/textures', () => ({
   signTexture: () => new Texture(),
   blobShadowTexture: () => new Texture()

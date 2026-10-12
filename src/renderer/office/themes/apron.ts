@@ -1,120 +1,137 @@
+import type { WallSide } from '../logic/room-layout'
 import type { FloorGeometry } from '../scene-model'
-import { GROUND_Y, WORLD_APRON, type Lot } from './surroundings'
+import { between, overlaps, type Rect, type Span } from './lot-math'
+import {
+  apronOf,
+  draw,
+  hashOf,
+  heightLimit,
+  MIN_LOT_HEIGHT_M,
+  officesOf,
+  WORLD_APRON,
+  type Lot
+} from './surroundings'
 
-type Rect = Pick<Lot, 'x' | 'z' | 'width' | 'depth'>
-type Plate = Pick<FloorGeometry, 'width' | 'depth'>
+export interface ApronLot extends Lot {
+  side: WallSide
+  // Counted out from the plate: row 0 is the one against it.
+  row: number
+}
 
-// The paved band the floor theme lays around the plate, and where its lots stand.
-export const APRON_PAVING = { y: GROUND_Y + 0.15, thickness: 0.2 }
-export const APRON_TOP_Y = APRON_PAVING.y + APRON_PAVING.thickness / 2
-
-// surroundings.ts keeps every lot under this slope; the apron's lots obey the same rule.
-const HEIGHT_PER_METRE = 0.7
-const MAX_HEIGHT_M = 24
-export const HANGAR = { offsetX: 5.5, width: 6, depth: 7 }
-export const TOWER = { offsetX: 7, offsetZ: 8, side: 7 }
-export const GATE = { offsetZ: 5, avenue: 5 }
-
-// A row of lots beside the plate: how far out it starts and how large its lots are.
-interface Row {
+// A row of lots beside the plate. Each theme lays its own rows; the placer is the same.
+export interface ApronRow {
   kind: Lot['kind']
-  gap: number
-  along: number
-  across: number
+  // From the plate's edge to the row's centre line.
+  out: number
+  along: Span
+  across: Span
   pitch: number
+  // Whether the row runs on through the apron's corners or stops at the plate's ends.
+  reach: 'plate' | 'apron'
 }
-type Side = 'north' | 'south' | 'west' | 'east'
+export type ApronPlan = Record<WallSide, readonly ApronRow[]>
 
-const GARDEN: Row = { kind: 'prop', gap: 1.6, along: 1.8, across: 1, pitch: 3.6 }
-const ROWS: Record<Side, readonly Row[]> = {
-  north: [
-    GARDEN,
-    { kind: 'building', gap: 4.2, along: 5.5, across: 5.5, pitch: 7 },
-    { kind: 'building', gap: 11.2, along: 6.5, across: 7, pitch: 8 }
-  ],
-  south: [GARDEN, { kind: 'building', gap: 3.6, along: 5.5, across: 4, pitch: 7 }],
-  west: [GARDEN, { kind: 'building', gap: 4.2, along: 5.5, across: 6.5, pitch: 7 }],
-  east: [GARDEN, { kind: 'building', gap: 4.2, along: 5.5, across: 6.5, pitch: 7 }]
+const HANGAR_OFFSET_M = 5.5
+const TOWER_OFFSET_M = { east: 7, north: 8 }
+export const GATE = { offsetZ: 5, avenue: 5 }
+const APRON_SIDES: readonly WallSide[] = ['north', 'south', 'west', 'east']
+
+// Where every theme stands its hangar, and where the scene stands the tower.
+export function hangarStand(floor: Rect): Rect {
+  return { x: floor.x + floor.width / 2 + HANGAR_OFFSET_M, z: floor.z, width: 6.6, depth: 8 }
 }
-
-function overlaps(a: Rect, b: Rect): boolean {
-  return (
-    Math.abs(a.x - b.x) < (a.width + b.width) / 2 && Math.abs(a.z - b.z) < (a.depth + b.depth) / 2
-  )
-}
-
-function gapToPlate(rect: Rect, floor: Plate): number {
-  const dx = Math.max(0, Math.abs(rect.x) - rect.width / 2 - floor.width / 2)
-  const dz = Math.max(0, Math.abs(rect.z) - rect.depth / 2 - floor.depth / 2)
-  return Math.hypot(dx, dz)
+export function towerStand(floor: Rect): Rect {
+  return {
+    x: floor.x + floor.width / 2 + TOWER_OFFSET_M.east,
+    z: floor.z - floor.depth / 2 - TOWER_OFFSET_M.north,
+    width: 8,
+    depth: 8
+  }
 }
 
-// Where the floor theme's hangar, tower and gate avenue stand: no apron lot goes there.
-export function apronReserved(floor: Plate): Rect[] {
-  const east = floor.width / 2
-  return [
-    { x: east + HANGAR.offsetX, z: 0, width: HANGAR.width + 0.6, depth: HANGAR.depth + 0.6 },
-    {
-      x: east + TOWER.offsetX,
-      z: -floor.depth / 2 - TOWER.offsetZ,
-      width: TOWER.side,
-      depth: TOWER.side
-    },
-    {
-      x: 0,
-      z: floor.depth / 2 + WORLD_APRON.south / 2,
-      width: GATE.avenue,
-      depth: WORLD_APRON.south
-    }
-  ]
+// The hangar, the tower and the avenue to the south gate: no apron lot goes there.
+export function apronStands(floor: Rect): Rect[] {
+  const avenue: Rect = {
+    x: floor.x,
+    z: floor.z + floor.depth / 2 + WORLD_APRON.south / 2,
+    width: GATE.avenue,
+    depth: WORLD_APRON.south
+  }
+  return [hangarStand(floor), towerStand(floor), avenue]
 }
 
 // Centres of a row's lots, evenly spread from `from` to `to`.
-function spread(from: number, to: number, pitch: number): number[] {
+function centres(from: number, to: number, pitch: number): number[] {
   const count = Math.max(1, Math.floor((to - from) / pitch))
   const step = (to - from) / count
   return Array.from({ length: count }, (_, index) => from + (index + 0.5) * step)
 }
 
-function lotsBeside(side: Side, floor: Plate): Lot[] {
+function rowLots(
+  side: WallSide,
+  rowIndex: number,
+  row: ApronRow,
+  floor: Rect,
+  offices: readonly Rect[]
+): ApronLot[] {
   const isAlongX = side === 'north' || side === 'south'
-  const sign = side === 'north' || side === 'west' ? -1 : 1
-  const edge = isAlongX ? floor.depth / 2 : floor.width / 2
-  // North and south rows run on through the corners; west and east rows fill between them.
-  const reach = isAlongX ? floor.width / 2 + WORLD_APRON.west : floor.depth / 2
+  const outward = side === 'north' || side === 'west' ? -1 : 1
+  const span = row.reach === 'apron' ? apronOf(floor) : floor
+  const [middle, half] = isAlongX ? [span.x, span.width / 2] : [span.z, span.depth / 2]
   // The south rows stop either side of the gate's avenue instead of losing lots to it.
-  const spans =
+  const stretches =
     side === 'south'
       ? [
-          [-reach, -GATE.avenue / 2],
-          [GATE.avenue / 2, reach]
+          [middle - half, floor.x - GATE.avenue / 2],
+          [floor.x + GATE.avenue / 2, middle + half]
         ]
-      : [[-reach, reach]]
-  return ROWS[side].flatMap((row, rowIndex) =>
-    spans
-      .flatMap(([from, to]) => spread(from, to, row.pitch))
-      .map((along, index): Lot => {
-        const out = sign * (edge + row.gap + row.across / 2)
-        const rect: Rect = isAlongX
-          ? { x: along, z: out, width: row.along, depth: row.across }
-          : { x: out, z: along, width: row.across, depth: row.along }
-        return {
-          id: `apron:${side}:${rowIndex}:${index}`,
-          kind: row.kind,
-          ...rect,
-          maxHeight: Math.min(MAX_HEIGHT_M, gapToPlate(rect, floor) * HEIGHT_PER_METRE),
-          seed:
-            (Math.imul(index + 1 + rowIndex * 131, 0x9e3779b1) ^ (side.charCodeAt(0) << 16)) >>> 0,
-          zoneId: null
-        }
-      })
-  )
+      : [[middle - half, middle + half]]
+  const edge = isAlongX
+    ? floor.z + (outward * floor.depth) / 2
+    : floor.x + (outward * floor.width) / 2
+  const out = edge + outward * row.out
+  return stretches
+    .flatMap(([from, to]) => centres(from, to, row.pitch))
+    .flatMap((along, index): ApronLot[] => {
+      const id = `apron:${side}:${rowIndex}:${index}`
+      const seed = hashOf(id)
+      const length = between(row.along, draw(seed, 0))
+      const reach = between(row.across, draw(seed, 1))
+      const rect: Rect = isAlongX
+        ? { x: along, z: out, width: length, depth: reach }
+        : { x: out, z: along, width: reach, depth: length }
+      const maxHeight = heightLimit(rect, offices)
+      if (maxHeight < MIN_LOT_HEIGHT_M[row.kind]) return []
+      return [{ id, kind: row.kind, ...rect, maxHeight, seed, zoneId: null, side, row: rowIndex }]
+    })
 }
 
-// The floor theme's own lots on the apron, so the band between the plate and the ring is filled.
-export function apronLots(floor: Plate): Lot[] {
-  const reserved = apronReserved(floor)
-  return (['north', 'south', 'west', 'east'] as const)
-    .flatMap((side) => lotsBeside(side, floor))
-    .filter((lot) => !reserved.some((landmark) => overlaps(lot, landmark)))
+// The floor theme's lots on the apron, clear of the landmarks. Each is limited by its real
+// distance to the nearest office, so nothing on it hides a desk at any map rotation.
+export function apronLots(floor: FloorGeometry, plan: ApronPlan): ApronLot[] {
+  const offices = officesOf(floor)
+  const stands = apronStands(floor)
+  return APRON_SIDES.flatMap((side) =>
+    plan[side].flatMap((row, rowIndex) => rowLots(side, rowIndex, row, floor, offices))
+  ).filter((lot) => !stands.some((stand) => overlaps(lot, stand)))
+}
+
+// One side's band of the apron; the west and east bands take the corners.
+export function apronBand(floor: Rect, side: WallSide): Rect {
+  const apron = apronOf(floor)
+  const reach = WORLD_APRON[side]
+  const outward = side === 'north' || side === 'west' ? -1 : 1
+  return side === 'north' || side === 'south'
+    ? {
+        x: floor.x,
+        z: floor.z + outward * (floor.depth / 2 + reach / 2),
+        width: floor.width,
+        depth: reach
+      }
+    : {
+        x: floor.x + outward * (floor.width / 2 + reach / 2),
+        z: apron.z,
+        width: reach,
+        depth: apron.depth
+      }
 }

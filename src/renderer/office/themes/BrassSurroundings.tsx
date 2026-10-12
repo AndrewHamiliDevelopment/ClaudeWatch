@@ -1,5 +1,8 @@
 import { BRASS_PROPS } from './BrassProps'
-import { lotBase, LotParts, type DesignSet, type LotDesign, type Plot } from './lot-parts'
+import type { Plot } from './lot-kit'
+import { LotFill } from './LotFill'
+import { lotBase } from './surroundings'
+import { lotContents, type DesignSet, type LotDesign } from './lot-parts'
 import { BRASS } from './palettes'
 import { box, cone, cylinder, lit, turned, type PartSpec } from './parts'
 import type { SurroundingsProps } from './types'
@@ -159,5 +162,7 @@ export const BRASS_BUILDINGS: readonly LotDesign[] = [
 export const BRASS_WORLD: DesignSet = { buildings: BRASS_BUILDINGS, props: BRASS_PROPS }
 
 export function BrassSurroundings({ floor, lots }: SurroundingsProps) {
-  return <LotParts lots={lots} set={BRASS_WORLD} baseOf={(lot) => lotBase(lot, floor)} />
+  return (
+    <LotFill placed={lots.flatMap((lot) => lotContents(lot, lotBase(lot, floor), BRASS_WORLD))} />
+  )
 }

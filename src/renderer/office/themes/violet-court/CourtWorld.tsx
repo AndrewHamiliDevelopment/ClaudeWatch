@@ -3,9 +3,9 @@ import { ThemeTower } from '../WorldArchitecture'
 import { frameParts } from './frame-parts'
 import { COURT, COURT_PALETTE } from './palette'
 import { box, Parts, type PartSpec } from '../parts'
-import { hangarStand } from './apron'
+import { hangarStand } from '../apron'
 import { COURT_LOT_KIT } from './court-lots'
-import { ApronFill, DISTRICT_SIDES, HANGAR_SIDES } from './LotFill'
+import { ApronFill, DISTRICT_SIDES, HANGAR_SIDES } from '../LotFill'
 import { COURT_FRAMES } from './roster'
 
 // The palace grounds on the apron: paving, gardens by the plate and towers further out.

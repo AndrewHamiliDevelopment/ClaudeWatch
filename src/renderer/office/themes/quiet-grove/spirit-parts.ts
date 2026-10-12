@@ -1,15 +1,8 @@
 import type { Vector } from '../primitives'
-import { box, lit, turned, type PartSpec, SIDES } from '../parts'
+import { box, lit, turned, type PartSpec, SIDES, cone, cylinder, sphere } from '../parts'
 import type { GroveCharacter } from './cast'
 import { GROVE } from './palette'
-import {
-  ball,
-  FEATURE_PARTS,
-  spike,
-  tube,
-  type SpiritJoint,
-  type SpiritParts
-} from './spirit-features'
+import { FEATURE_PARTS, type SpiritJoint, type SpiritParts } from './spirit-features'
 
 export interface SpiritBuild {
   // Where each rig joint pivots, in the model's own metres; a joint's parts are relative to it.
@@ -47,9 +40,9 @@ function lantern(reach: number, width: number, lean = 0): PartSpec[] {
       color: GROVE.beacon
     }),
     ...[-1, 1].map((end) =>
-      tube(along(centre + end * width * 0.6), [width * 0.5, 0.03, width * 0.5], GROVE.bark)
+      cylinder(along(centre + end * width * 0.6), [width * 0.5, 0.03, width * 0.5], GROVE.bark)
     ),
-    turned(tube(along(reach + 0.1), [0.02, 0.3, 0.02], GROVE.bark), [0, 0, Math.atan(lean)])
+    turned(cylinder(along(reach + 0.1), [0.02, 0.3, 0.02], GROVE.bark), [0, 0, Math.atan(lean)])
   ]
 }
 
@@ -62,7 +55,7 @@ const pinwheel = (color: string): PartSpec[] => [
 function keeper(who: GroveCharacter): SpiritBuild {
   const arm = (): PartSpec[] => [
     box([0, -0.13, 0], [0.09, 0.26, 0.1], who.body),
-    ball([0, -0.3, 0], [0.085, 0.085, 0.085], GROVE.paper)
+    sphere([0, -0.3, 0], [0.085, 0.085, 0.085], GROVE.paper)
   ]
   return {
     pivot: {
@@ -75,16 +68,16 @@ function keeper(who: GroveCharacter): SpiritBuild {
     crown: 1.4,
     joints: {
       base: SIDES.map((side) => box([side * 0.08, 0.03, 0.04], [0.1, 0.06, 0.16], GROVE.soil)),
-      legs: [spike([0, 0.26, 0], [0.42, 0.52, 0.36], who.body)],
+      legs: [cone([0, 0.26, 0], [0.42, 0.52, 0.36], who.body)],
       body: [
-        tube([0, 0.52, 0], [0.28, 0.32, 0.22], who.body),
-        tube([0, 0.41, 0], [0.3, 0.05, 0.24], who.trim),
-        tube([0, 0.7, 0], [0.16, 0.06, 0.14], who.trim),
-        tube([0.31, 0.8, -0.08], [0.02, 0.4, 0.02], GROVE.bark)
+        cylinder([0, 0.52, 0], [0.28, 0.32, 0.22], who.body),
+        cylinder([0, 0.41, 0], [0.3, 0.05, 0.24], who.trim),
+        cylinder([0, 0.7, 0], [0.16, 0.06, 0.14], who.trim),
+        cylinder([0.31, 0.8, -0.08], [0.02, 0.4, 0.02], GROVE.bark)
       ],
       leftArm: arm(),
       rightArm: arm(),
-      head: [ball([0, 0.09, 0], [0.32, 0.3, 0.3], GROVE.paper), ...face(0.09, 0.15)],
+      head: [sphere([0, 0.09, 0], [0.32, 0.3, 0.3], GROVE.paper), ...face(0.09, 0.15)],
       gear: pinwheel(who.body)
     },
     beacon: lantern(0.3, 0.32)
@@ -94,8 +87,8 @@ function keeper(who: GroveCharacter): SpiritBuild {
 // Small and cool: a round river-stone helper in a pond-coloured scarf.
 function helper(who: GroveCharacter): SpiritBuild {
   const arm = (): PartSpec[] => [
-    tube([0, -0.11, 0], [0.09, 0.22, 0.09], who.body),
-    ball([0, -0.24, 0], [0.095, 0.095, 0.095], who.trim)
+    cylinder([0, -0.11, 0], [0.09, 0.22, 0.09], who.body),
+    sphere([0, -0.24, 0], [0.095, 0.095, 0.095], who.trim)
   ]
   return {
     pivot: {
@@ -108,14 +101,14 @@ function helper(who: GroveCharacter): SpiritBuild {
     crown: 1.2,
     joints: {
       base: SIDES.map((side) => box([side * 0.09, 0.03, 0.04], [0.11, 0.06, 0.16], GROVE.soil)),
-      legs: SIDES.map((side) => tube([side * 0.09, 0.12, 0], [0.1, 0.14, 0.1], who.body)),
+      legs: SIDES.map((side) => cylinder([side * 0.09, 0.12, 0], [0.1, 0.14, 0.1], who.body)),
       body: [
-        ball([0, 0.34, 0], [0.42, 0.4, 0.34], who.body),
-        tube([0, 0.52, 0], [0.3, 0.07, 0.27], who.trim)
+        sphere([0, 0.34, 0], [0.42, 0.4, 0.34], who.body),
+        cylinder([0, 0.52, 0], [0.3, 0.07, 0.27], who.trim)
       ],
       leftArm: arm(),
       rightArm: arm(),
-      head: [ball([0, 0.11, 0], [0.38, 0.3, 0.34], who.body), ...face(0.11, 0.17)],
+      head: [sphere([0, 0.11, 0], [0.38, 0.3, 0.34], who.body), ...face(0.11, 0.17)],
       gear: pinwheel(who.trim)
     },
     beacon: lantern(0.24, 0.32)
@@ -127,7 +120,7 @@ const LEAF_SPLAY = 0.78
 // A seedling in a pot: its two leaves are its arms, so they wave and type like anyone's.
 function sprout(who: GroveCharacter): SpiritBuild {
   const leaf = (side: number): PartSpec[] => [
-    turned(ball([side * 0.085, -0.085, 0], [0.08, 0.26, 0.13], GROVE.fern), [
+    turned(sphere([side * 0.085, -0.085, 0], [0.08, 0.26, 0.13], GROVE.fern), [
       0,
       0,
       side * LEAF_SPLAY
@@ -143,19 +136,19 @@ function sprout(who: GroveCharacter): SpiritBuild {
     eye: { at: eyeAt(0.08, 0.115), size: EYE_SIZE },
     crown: 1.05,
     joints: {
-      base: [tube([0, 0.02, 0], [0.32, 0.04, 0.32], GROVE.bark)],
+      base: [cylinder([0, 0.02, 0], [0.32, 0.04, 0.32], GROVE.bark)],
       legs: [],
       body: [
-        tube([0, 0.15, 0], [0.26, 0.22, 0.26], who.body),
-        tube([0, 0.27, 0], [0.3, 0.05, 0.3], who.body),
-        tube([0, 0.3, 0], [0.24, 0.02, 0.24], GROVE.soil),
-        tube([0, 0.4, 0], [0.05, 0.2, 0.05], GROVE.fern)
+        cylinder([0, 0.15, 0], [0.26, 0.22, 0.26], who.body),
+        cylinder([0, 0.27, 0], [0.3, 0.05, 0.3], who.body),
+        cylinder([0, 0.3, 0], [0.24, 0.02, 0.24], GROVE.soil),
+        cylinder([0, 0.4, 0], [0.05, 0.2, 0.05], GROVE.fern)
       ],
       leftArm: leaf(-1),
       rightArm: leaf(1),
       head: [
-        ball([0, 0.08, 0], [0.25, 0.23, 0.23], GROVE.fern),
-        spike([0, 0.24, 0], [0.09, 0.14, 0.09], GROVE.moss),
+        sphere([0, 0.08, 0], [0.25, 0.23, 0.23], GROVE.fern),
+        cone([0, 0.24, 0], [0.09, 0.14, 0.09], GROVE.moss),
         ...face(0.08, 0.115, 0.21)
       ],
       gear: pinwheel(who.trim)

@@ -1,8 +1,8 @@
-import { box, lit, SIDES, turned } from '../parts'
-import type { LotKit, PropDesign } from '../violet-court/lot-kit'
+import { box, lit, SIDES, turned, cone, cylinder, sphere } from '../parts'
+import type { LotKit, PropDesign } from '../lot-kit'
 import { GROVE_BUILDINGS } from './grove-buildings'
 import { GROVE } from './palette'
-import { ball, ON_ITS_SIDE, spike, tube } from './spirit-features'
+import { ON_ITS_SIDE } from './spirit-features'
 
 // What lines the outside of a company's wall. Each is sized as [length, height, reach].
 const GROVE_PROPS: readonly PropDesign[] = [
@@ -11,29 +11,29 @@ const GROVE_PROPS: readonly PropDesign[] = [
     size: [1.3, 0.55, 0.6],
     parts: [
       ...SIDES.map((side) =>
-        turned(tube([0, 0.13, side * 0.14], [0.26, 1.2, 0.26], GROVE.bark), ON_ITS_SIDE)
+        turned(cylinder([0, 0.13, side * 0.14], [0.26, 1.2, 0.26], GROVE.bark), ON_ITS_SIDE)
       ),
-      turned(tube([0.04, 0.36, 0], [0.26, 1.1, 0.26], GROVE.bark), ON_ITS_SIDE)
+      turned(cylinder([0.04, 0.36, 0], [0.26, 1.1, 0.26], GROVE.bark), ON_ITS_SIDE)
     ]
   },
   {
     name: 'stone-lantern',
     size: [0.5, 1, 0.5],
     parts: [
-      ball([0, 0.1, 0], [0.46, 0.2, 0.46], GROVE.stone),
-      tube([0, 0.4, 0], [0.12, 0.5, 0.12], GROVE.bark),
-      lit(ball([0, 0.74, 0], [0.26, 0.26, 0.26], GROVE.lumen)),
-      ball([0, 0.92, 0], [0.42, 0.14, 0.42], GROVE.stone)
+      sphere([0, 0.1, 0], [0.46, 0.2, 0.46], GROVE.stone),
+      cylinder([0, 0.4, 0], [0.12, 0.5, 0.12], GROVE.bark),
+      lit(sphere([0, 0.74, 0], [0.26, 0.26, 0.26], GROVE.lumen)),
+      sphere([0, 0.92, 0], [0.42, 0.14, 0.42], GROVE.stone)
     ]
   },
   {
     name: 'boulders',
     size: [1.2, 0.6, 0.7],
     parts: [
-      ball([-0.22, 0.24, 0], [0.7, 0.5, 0.6], GROVE.stone),
-      ball([0.3, 0.16, 0.08], [0.5, 0.34, 0.44], GROVE.stone),
-      ball([-0.2, 0.46, 0.02], [0.5, 0.2, 0.44], GROVE.moss),
-      ball([0.06, 0.08, -0.22], [0.26, 0.16, 0.22], GROVE.stone)
+      sphere([-0.22, 0.24, 0], [0.7, 0.5, 0.6], GROVE.stone),
+      sphere([0.3, 0.16, 0.08], [0.5, 0.34, 0.44], GROVE.stone),
+      sphere([-0.2, 0.46, 0.02], [0.5, 0.2, 0.44], GROVE.moss),
+      sphere([0.06, 0.08, -0.22], [0.26, 0.16, 0.22], GROVE.stone)
     ]
   },
   {
@@ -44,8 +44,8 @@ const GROVE_PROPS: readonly PropDesign[] = [
       [0.06, 0.22, -0.12],
       [0.3, 0.28, 0.1]
     ].flatMap(([x, tall, z]) => [
-      tube([x, tall / 2, z], [0.07, tall, 0.07], GROVE.bark),
-      lit(ball([x, tall + 0.05, z], [0.26, 0.14, 0.26], GROVE.lumen))
+      cylinder([x, tall / 2, z], [0.07, tall, 0.07], GROVE.bark),
+      lit(sphere([x, tall + 0.05, z], [0.26, 0.14, 0.26], GROVE.lumen))
     ])
   },
   {
@@ -53,7 +53,7 @@ const GROVE_PROPS: readonly PropDesign[] = [
     size: [1.4, 0.45, 0.5],
     parts: [
       box([0, 0.36, 0], [1.3, 0.07, 0.4], GROVE.timber),
-      ...SIDES.map((side) => tube([side * 0.45, 0.16, 0], [0.3, 0.32, 0.3], GROVE.bark))
+      ...SIDES.map((side) => cylinder([side * 0.45, 0.16, 0], [0.3, 0.32, 0.3], GROVE.bark))
     ]
   },
   {
@@ -61,9 +61,9 @@ const GROVE_PROPS: readonly PropDesign[] = [
     size: [0.6, 1.8, 0.6],
     parts: [
       box([0, 0.12, 0], [0.5, 0.24, 0.5], GROVE.timber),
-      tube([0, 0.6, 0], [0.08, 0.8, 0.08], GROVE.bark),
-      spike([0, 1.1, 0], [0.58, 0.7, 0.58], GROVE.pine),
-      spike([0, 1.48, 0], [0.4, 0.6, 0.4], GROVE.pine)
+      cylinder([0, 0.6, 0], [0.08, 0.8, 0.08], GROVE.bark),
+      cone([0, 1.1, 0], [0.58, 0.7, 0.58], GROVE.pine),
+      cone([0, 1.48, 0], [0.4, 0.6, 0.4], GROVE.pine)
     ]
   },
   {
@@ -80,7 +80,7 @@ const GROVE_PROPS: readonly PropDesign[] = [
     size: [1.2, 0.55, 0.6],
     parts: [
       box([0, 0.12, 0], [1.16, 0.24, 0.56], GROVE.bark),
-      ...[-0.36, 0, 0.36].map((x) => ball([x, 0.32, 0], [0.4, 0.4, 0.4], GROVE.moss))
+      ...[-0.36, 0, 0.36].map((x) => sphere([x, 0.32, 0], [0.4, 0.4, 0.4], GROVE.moss))
     ]
   }
 ]

@@ -1,7 +1,6 @@
 import { useFrame } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
 import type { Group, Object3D } from 'three'
-import type { FloorGeometry } from '../scene-model'
 import { RisingSteam, steamStacksOn, type SteamStack } from './ambient-parts'
 import {
   BRASS_BUILDINGS,
@@ -11,14 +10,13 @@ import {
   brassGearOf,
   brassStacksOf
 } from './BrassSurroundings'
-import { designFor, lotBase, plotOf, seeded } from './lot-parts'
+import { designFor, plotOf } from './lot-parts'
 import { BRASS } from './palettes'
 import { box, cylinder, Parts, turned, type PartSpec } from './parts'
 import type { Vector } from './primitives'
-import type { Lot } from './surroundings'
+import type { Rect } from './lot-math'
+import { draw, lotBase, type Lot } from './surroundings'
 import type { AmbientProps } from './types'
-
-type Plate = Pick<FloorGeometry, 'width' | 'depth'>
 
 const MAX_GEAR_TOWERS = 8
 const GEAR_TURN_RAD_PER_SEC = 0.5
@@ -39,14 +37,14 @@ function gearParts(radius: number): PartSpec[] {
   ]
 }
 
-export function brassGears(lots: readonly Lot[], floor: Plate): TowerGear[] {
+export function brassGears(lots: readonly Lot[], floor: Rect): TowerGear[] {
   return lots
     .filter((lot) => lot.kind === 'building')
     .map((lot) => ({ lot, base: lotBase(lot, floor) }))
     .filter(
       ({ lot, base }) => designFor(BRASS_BUILDINGS, plotOf(lot, base)).name === BRASS_CLOCK_TOWER
     )
-    .sort((a, b) => seeded(a.lot.seed, 80) - seeded(b.lot.seed, 80))
+    .sort((a, b) => draw(a.lot.seed, 80) - draw(b.lot.seed, 80))
     .slice(0, MAX_GEAR_TOWERS)
     .flatMap(({ lot, base }) => {
       const gear = brassGearOf(plotOf(lot, base))
@@ -67,7 +65,7 @@ export function turnGears(root: Object3D, timeSec: number): void {
   })
 }
 
-export function brassSteamStacks(lots: readonly Lot[], floor: Plate): SteamStack[] {
+export function brassSteamStacks(lots: readonly Lot[], floor: Rect): SteamStack[] {
   return steamStacksOn(
     lots,
     floor,
