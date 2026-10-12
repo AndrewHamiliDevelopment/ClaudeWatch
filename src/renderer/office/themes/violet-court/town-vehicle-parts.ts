@@ -1,14 +1,12 @@
-import { tube, type FigurePart } from '../../citizens/figure-parts'
+import { tube, wheel as figureWheel, type FigurePart } from '../../citizens/figure-parts'
 
 type Triple = readonly [number, number, number]
 
 const WHEEL_WIDTH_M = 0.07
 
-// A wheel on an axle across the vehicle: a tube stands along y, so it is laid over first.
+// The court's vehicles share one narrow wheel width.
 export function wheel(color: string, radius: number, at: Triple): FigurePart {
-  const part = tube(color, [radius, radius, WHEEL_WIDTH_M], [0, 0, 0])
-  part.geometry.rotateZ(Math.PI / 2).translate(...at)
-  return part
+  return figureWheel(color, radius, WHEEL_WIDTH_M, at)
 }
 
 // A tube laid along the vehicle, nose to tail: a log, a shaft or a rolled cloth.

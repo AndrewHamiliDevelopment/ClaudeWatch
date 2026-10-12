@@ -1,10 +1,9 @@
-import { citizenFigures } from '../../citizens/figures'
+import { GROVE_CITIZENS } from '../../citizens/figures'
 import type { TownDress } from '../../town/town-dress'
 import type { TownDistrict } from '../../town/town-zones'
 import { zonedProps } from '../heritage'
 import { GROVE_LOT_KIT } from './grove-lots'
 import { GROVE } from './palette'
-import { QUIET_GROVE_ID } from './roster'
 import { GROVE_CIVIC_DESIGNS } from './town-civic'
 import { GROVE_HERITAGE } from './town-heritage'
 import { GROVE_LEISURE_DESIGNS } from './town-leisure'
@@ -43,7 +42,7 @@ export const GROVE_TOWN: TownDress = {
   },
   // Packed earth, a gravel path and a pale stone walk: nothing here is paved.
   roads: { carriageway: '#3B3128', sidewalk: '#8A8172', promenade: '#D8D2BF' },
-  citizens: citizenFigures(QUIET_GROVE_ID),
+  citizens: GROVE_CITIZENS,
   vehicles: GROVE_VEHICLES,
   garden: {
     tree: 'sapling',
