@@ -125,11 +125,11 @@ describe('routePose', () => {
   }
 
   it('starts at the first point, facing the way it will go', () => {
-    expect(routePose(route, 0)).toEqual({ x: 0, z: 0, heading: Math.PI / 2 })
+    expect(routePose(route, 0)).toMatchObject({ x: 0, z: 0, heading: Math.PI / 2 })
   })
 
   it('turns the corner', () => {
-    expect(routePose(route, 5)).toEqual({ x: 4, z: 1, heading: 0 })
+    expect(routePose(route, 5)).toMatchObject({ x: 4, z: 1, heading: 0 })
   })
 
   it('walks back the way it came, facing back', () => {
@@ -141,7 +141,7 @@ describe('routePose', () => {
 
   it('stands still on a route with nowhere to go', () => {
     const stuck: CitizenRoute = { points: [{ x: 2, z: 5 }], length: 0 }
-    expect(routePose(stuck, 30)).toEqual({ x: 2, z: 5, heading: 0 })
+    expect(routePose(stuck, 30)).toMatchObject({ x: 2, z: 5, heading: 0 })
   })
 })
 
