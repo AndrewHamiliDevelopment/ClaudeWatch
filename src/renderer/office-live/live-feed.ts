@@ -1,5 +1,6 @@
 import { World } from '../../office/sim/world'
 import type { LayoutMap } from '../../office/sim/layout'
+import { isJsonObject } from '../../shared/json-object'
 import { applyFeed } from '../../shared/office/apply-feed'
 import type {
   FocusResult,
@@ -36,12 +37,30 @@ interface LayoutStorage {
 const LAYOUT_KEY = 'claudewatch.office.layout'
 const TICK_MS = 100
 
-// Storage is null, or throws, where site data is blocked: the office then starts from a fresh
-// layout each time.
+const isObjectArray = (value: unknown): value is Record<string, unknown>[] =>
+  Array.isArray(value) && value.every(isJsonObject)
+
+// Only the outline the sim reads order and bays through is checked; the sim never trusts more.
+function isLayoutMap(value: unknown): value is LayoutMap {
+  if (!isJsonObject(value) || value.version !== 1 || !isJsonObject(value.reservations)) return false
+  const { floors } = value
+  return (
+    isObjectArray(floors) &&
+    floors.every(
+      (floor) =>
+        isObjectArray(floor.rooms) &&
+        isObjectArray(floor.zones) &&
+        floor.zones.every((zone) => isObjectArray(zone.children))
+    )
+  )
+}
+
+// Storage is null, or throws, where site data is blocked, and anything else in it is not a
+// layout: the office then starts from a fresh one.
 function loadLayout(storage: LayoutStorage | null): LayoutMap | undefined {
   try {
-    const saved = JSON.parse(storage?.getItem(LAYOUT_KEY) ?? 'null')
-    return saved?.version === 1 ? saved : undefined
+    const saved: unknown = JSON.parse(storage?.getItem(LAYOUT_KEY) ?? 'null')
+    return isLayoutMap(saved) ? saved : undefined
   } catch {
     return undefined
   }

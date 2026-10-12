@@ -122,3 +122,80 @@ it('lets a crew whose subagents come and go every few seconds sit still between 
   // 48 s of feed: a teammate walks only when the team area loses its seat, at most twice a cycle.
   expect(moves).toBeLessThan(120)
 })
+
+const withSubagents = (key: string, ids: string[]): SessionRef => ({
+  ...session(key),
+  subagents: ids.map((id) => ({ id, type: 'Explore', activity: 'thinking' as const }))
+})
+
+// No agent lost or doubled, and no two on one seat. Agents walking out are not counted.
+function expectEverySeatOnce(sim: World, sessions: Iterable<SessionRef>): void {
+  const expected = [...sessions].flatMap((s) => [
+    s.key,
+    ...s.subagents.map((g) => `${s.key}#${g.id}`)
+  ])
+  const live = sim.step(0).filter((agent) => expected.includes(agent.agentKey))
+  expect(live.map((agent) => agent.agentKey).sort()).toEqual(expected.sort())
+  const seats = live.map((agent) => `${agent.roomId}/${agent.slotId}`)
+  expect(new Set(seats).size).toBe(seats.length)
+}
+
+it('seats every guest when a session in the team area shrinks as a neighbour grows', () => {
+  const sim = open([withSubagents('A', ['a1', 'a2', 'a3']), session('B')])
+  run(sim, SETTLE_S)
+  // a3 holds the team area's one seat; that seat now belongs to B's third guest.
+  const next = [withSubagents('A', ['a2', 'a3']), withSubagents('B', ['b1', 'b2', 'b3'])]
+  expect(() => patch(sim, next)).not.toThrow()
+  expectEverySeatOnce(sim, next)
+})
+
+// A small seeded generator, so a failing run can be replayed from its seed.
+function seeded(seed: number): () => number {
+  let state = seed >>> 0
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0
+    let mixed = Math.imul(state ^ (state >>> 15), 1 | state)
+    mixed ^= mixed + Math.imul(mixed ^ (mixed >>> 7), 61 | mixed)
+    return ((mixed ^ (mixed >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+const FUZZ_SEEDS = [7, 42, 1337]
+const FUZZ_PATCHES = 300
+
+it.each(FUZZ_SEEDS)(
+  'keeps every agent on its own seat through random feed churn (seed %i)',
+  (seed) => {
+    const random = seeded(seed)
+    const pick = <T>(choices: readonly T[]): T => choices[Math.floor(random() * choices.length)]
+    const sessions = new Map<string, SessionRef>()
+    const sim = open([])
+    for (let index = 0; index < FUZZ_PATCHES; index++) {
+      const key = `s${Math.floor(random() * 5)}`
+      const upserts: SessionRef[] = []
+      const removed: string[] = []
+      if (sessions.has(key) && random() < 0.2) {
+        sessions.delete(key)
+        removed.push(key)
+      } else {
+        const ids = ['g0', 'g1', 'g2', 'g3', 'g4', 'g5'].filter(() => random() < 0.5)
+        const next: SessionRef = {
+          ...withSubagents(key, ids),
+          projectKey: pick(['p_a', 'p_b']),
+          subagents: ids.map((id) => ({
+            id,
+            type: 'Explore',
+            activity: 'thinking' as const,
+            kind: random() < 0.3 ? ('teammate' as const) : ('subagent' as const)
+          }))
+        }
+        next.projectLabel = next.projectKey
+        sessions.set(key, next)
+        upserts.push(next)
+      }
+      expect(() => patch(sim, upserts, removed), `seed ${seed}, patch ${index}`).not.toThrow()
+      expectEverySeatOnce(sim, sessions.values())
+      run(sim, random() * 3)
+    }
+  }
+)

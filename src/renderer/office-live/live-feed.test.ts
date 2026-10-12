@@ -196,6 +196,74 @@ describe('createLiveFeed', () => {
     expect(frames.at(-1)!.floors).not.toBe(before)
   })
 
+  describe('a saved layout read back from storage', () => {
+    const LAYOUT_KEY = 'claudewatch.office.layout'
+    // The reverse of the bays a fresh layout gives, so reading it back shows.
+    const reservations = {
+      'claude:a': { floorId: 'hq', plate: 0, bay: 1, companyKey: 'c_test', projectKey: 'p_app' },
+      'claude:b': { floorId: 'hq', plate: 0, bay: 0, companyKey: 'c_test', projectKey: 'p_app' }
+    }
+    const openWith = (saved: unknown): (() => void) => {
+      storage.set(LAYOUT_KEY, JSON.stringify(saved))
+      const frames: OfficeFrame[] = []
+      createLiveFeed(source, { storage: store }).subscribe((frame) => frames.push(frame))
+      return () => {
+        listener?.({
+          type: 'hello',
+          v: 1,
+          snapshot: {
+            rev: 1,
+            generatedAtMs: 1,
+            sessions: [session('claude:a'), session('claude:b')],
+            sources: []
+          }
+        })
+        vi.advanceTimersByTime(300)
+        expect(frames.at(-1)?.agents.map((agent) => agent.agentKey)).toEqual([
+          'claude:a',
+          'claude:b'
+        ])
+      }
+    }
+    const bayOfA = (): number => JSON.parse(storage.get(LAYOUT_KEY)!).reservations['claude:a'].bay
+
+    it('is still used when it is well formed', () => {
+      const hello = openWith({ version: 1, floors: [], reservations })
+      expect(hello).not.toThrow()
+      expect(bayOfA()).toBe(1)
+    })
+
+    it('is still used when it is one the office itself saved', () => {
+      openWith({ version: 1, floors: [], reservations })()
+      const written = JSON.parse(storage.get(LAYOUT_KEY)!)
+      expect(written.floors[0].zones).not.toHaveLength(0)
+      const hello = openWith(written)
+      expect(hello).not.toThrow()
+      expect(bayOfA()).toBe(1)
+    })
+
+    it.each([
+      ['a null zone', { version: 1, floors: [{ rooms: [], zones: [null] }], reservations }],
+      ['no floors', { version: 1, reservations }],
+      ['a floor without rooms', { version: 1, floors: [{ zones: [] }], reservations }],
+      ['zones not an array', { version: 1, floors: [{ rooms: [], zones: {} }], reservations }],
+      [
+        'a null project in a zone',
+        {
+          version: 1,
+          floors: [{ rooms: [], zones: [{ id: 'company:c_test', children: [null] }] }],
+          reservations
+        }
+      ],
+      ['reservations not an object', { version: 1, floors: [], reservations: 'bays' }],
+      ['a non-object', 7]
+    ])('starts a fresh layout from %s and places every agent', (_name, saved) => {
+      const hello = openWith(saved)
+      expect(hello).not.toThrow()
+      expect(bayOfA()).toBe(0)
+    })
+  })
+
   it('does not rewrite the stored layout when it did not change', () => {
     const setItem = vi.spyOn(store, 'setItem')
     createLiveFeed(source, { storage: store }).subscribe(() => {})

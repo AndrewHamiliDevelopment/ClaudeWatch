@@ -28,7 +28,9 @@ const NO_LOUNGES: ReadonlyMap<string, LoungeLayout> = new Map()
 export class World {
   private sessions = new Map<string, SessionRef>()
   private agents = new Map<string, AgentRecord>()
-  private map: LayoutMap
+  private map: LayoutMap = { version: 1, floors: [], reservations: {} }
+  // From storage: read for order and bays by the first build, never walked on.
+  private savedMap: LayoutMap | undefined
   private paths: PathCache | null = null
   // The floor `paths` and `lounges` were made for.
   private floorJson = ''
@@ -42,9 +44,7 @@ export class World {
   // `loungeTrips: false` keeps finished agents at their desks.
   constructor(options: { saved?: LayoutMap; loungeTrips?: boolean } = {}) {
     this.hasLoungeTrips = options.loungeTrips ?? true
-    this.map = options.saved
-      ? structuredClone(options.saved)
-      : { version: 1, floors: [], reservations: {} }
+    this.savedMap = options.saved && structuredClone(options.saved)
   }
 
   apply(message: FeedMessage): void {
@@ -52,21 +52,34 @@ export class World {
       this.ready = false
       return
     }
+    // Nothing is kept until every agent has a place, so a message that cannot be placed leaves
+    // the world as it was and the next one still applies.
+    let sessions: Map<string, SessionRef>
     if (message.type === 'hello') {
-      this.sessions = new Map(message.snapshot.sessions.map((s) => [s.key, structuredClone(s)]))
+      sessions = new Map(message.snapshot.sessions.map((s) => [s.key, structuredClone(s)]))
+    } else {
+      if (!this.ready || message.seq <= this.sequence) return
+      sessions = new Map(this.sessions)
+      for (const key of message.removed) sessions.delete(key)
+      for (const session of message.upserts) sessions.set(session.key, structuredClone(session))
+    }
+    const oldMap = this.map
+    const map = buildLayout([...sessions.values()], this.savedMap ?? this.map)
+    const held = new Map(
+      [...this.agents]
+        .filter(([, agent]) => agent.state !== 'leaving')
+        .map(([key, agent]) => [key, agent.view])
+    )
+    const desired = placements([...sessions.values()], map, held)
+    this.sessions = sessions
+    this.map = map
+    this.savedMap = undefined
+    if (message.type === 'hello') {
       this.helloRevision = message.snapshot.rev
       // A patch's seq is the revision it produces, so anything at or below this one is stale.
       this.sequence = message.snapshot.rev
       this.ready = true
-    } else {
-      if (!this.ready || message.seq <= this.sequence) return
-      this.sequence = message.seq
-      for (const key of message.removed) this.sessions.delete(key)
-      for (const session of message.upserts)
-        this.sessions.set(session.key, structuredClone(session))
-    }
-    const oldMap = this.map
-    this.map = buildLayout([...this.sessions.values()], this.map)
+    } else this.sequence = message.seq
     // Routes and lounges follow from the floor alone: while it stands as it was, the routes
     // already found are kept rather than searched for again.
     const floorJson = JSON.stringify(this.map.floors[0])
@@ -79,12 +92,6 @@ export class World {
     const paths = this.paths
     const oldPaths =
       isSameFloor || !oldMap.floors[0]?.zones ? paths : new PathCache(oldMap.floors[0])
-    const held = new Map(
-      [...this.agents]
-        .filter(([, agent]) => agent.state !== 'leaving')
-        .map(([key, agent]) => [key, agent.view])
-    )
-    const desired = placements([...this.sessions.values()], this.map, held)
     const active = new Set(desired.map((p) => p.session.key))
     for (const [key, agent] of this.agents) {
       if (active.has(key) || agent.state === 'leaving') continue

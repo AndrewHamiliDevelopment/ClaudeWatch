@@ -13,6 +13,35 @@ function world() {
   world.apply({ type: 'patch', v: 1, seq: 1, upserts: [session('a')], removed: [] })
   return world
 }
+it('keeps applying later messages after one it could not place', () => {
+  const sim = world()
+  // A session the feed sent malformed: its placement throws.
+  const broken = { ...session('x'), subagents: null } as unknown as ReturnType<typeof session>
+  expect(() => sim.apply({ type: 'patch', v: 1, seq: 2, upserts: [broken], removed: [] })).toThrow()
+  // Nothing of the bad message was kept, so the next one places as if it never came.
+  expect(() =>
+    sim.apply({ type: 'patch', v: 1, seq: 3, upserts: [session('b')], removed: [] })
+  ).not.toThrow()
+  expect(sim.step(0).map((agent) => agent.agentKey)).toEqual(['a', 'b'])
+  expect(sim.layout().floors[0].rooms.map((room) => room.sessionKey)).toEqual(['a', 'b'])
+})
+it('reads a saved map only for order and bays, never as the floor it moves agents from', () => {
+  const first = new World()
+  const hello = {
+    type: 'hello' as const,
+    v: 1 as const,
+    snapshot: { rev: 1, generatedAtMs: 0, sessions: [session('a')], sources: [] }
+  }
+  first.apply(hello)
+  const saved = first.layout()
+  // Storage only vouches for the outline; what is inside a saved room is not to be trusted.
+  saved.floors[0].rooms = saved.floors[0].rooms.map(
+    (room) => ({ ...room, slots: null }) as unknown as (typeof saved.floors)[0]['rooms'][0]
+  )
+  const sim = new World({ saved })
+  expect(() => sim.apply(hello)).not.toThrow()
+  expect(sim.step(0).map((agent) => agent.agentKey)).toEqual(['a'])
+})
 it('seats the sessions that were already running when the office opens', () => {
   const sim = new World()
   sim.apply({
