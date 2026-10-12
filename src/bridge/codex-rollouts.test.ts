@@ -65,3 +65,15 @@ it('names the account a rollout was created under by its hashed key, never the r
   expect(keyOf('c')).toBeNull()
   expect(JSON.stringify(rollouts)).not.toContain('CANARY')
 })
+
+it('keeps only rollouts whose folder is an absolute path with no control characters', async () => {
+  const meta = (id: string, cwd: string): string =>
+    JSON.stringify({ type: 'session_meta', payload: { id, cwd } })
+  const io = fixtureIo({
+    '/codex/sessions/rollout-a.jsonl': meta('a', '/repo'),
+    '/codex/sessions/rollout-b.jsonl': meta('b', 'repo'),
+    '/codex/sessions/rollout-c.jsonl': meta('c', '/repo\n; open -a Calculator'),
+    '/codex/sessions/rollout-d.jsonl': meta('d', '/repo\u001b[2J')
+  })
+  expect((await findRollouts('/codex', io)).map((rollout) => rollout.id)).toEqual(['a'])
+})

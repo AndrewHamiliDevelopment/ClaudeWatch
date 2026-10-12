@@ -1,4 +1,4 @@
-import { join } from 'node:path'
+import { isAbsolute, join } from 'node:path'
 import { accountKey } from './account-key'
 import { type BridgeIo, isMissing, jsonObject, object } from './io'
 
@@ -19,6 +19,8 @@ interface CachedRollout {
   derived: boolean
   rollout: Rollout | null
 }
+// A header's folder reaches the feed and, on focus, a terminal: only a plain absolute path may.
+const isFolderPath = (cwd: string): boolean => isAbsolute(cwd) && !/\p{Cc}/u.test(cwd)
 const caches = new WeakMap<BridgeIo, Map<string, Map<string, CachedRollout>>>()
 
 // An account key is derived only when asked for: with accounts unwatched, no identity value is.
@@ -68,6 +70,7 @@ export async function findRollouts(
         if (
           header?.type === 'session_meta' &&
           typeof meta?.cwd === 'string' &&
+          isFolderPath(meta.cwd) &&
           typeof meta.id === 'string'
         ) {
           const creator = meta.creator_account_id

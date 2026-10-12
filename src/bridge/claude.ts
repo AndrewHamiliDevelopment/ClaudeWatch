@@ -1,5 +1,6 @@
 import { basename } from 'node:path'
 import type { SessionRef, SubagentRef } from '../shared/office/types'
+import { displayName } from './io'
 import { placementOf } from './project-root'
 import type { RegistryEntry } from './registry'
 import type { TranscriptState } from './transcript-tail'
@@ -20,7 +21,7 @@ export function sessionFromRegistry(
     provider: 'claude',
     sessionId: entry.sessionId,
     pid: entry.pid,
-    name: entry.name || basename(entry.cwd),
+    name: displayName(entry.name) || displayName(basename(entry.cwd)),
     cwd: entry.cwd,
     ...placementOf({ root, worktree }),
     host: 'terminal',

@@ -363,6 +363,32 @@ describe('subagents', () => {
       { id: 'r', type: 'ravi', activity: 'reading' }
     ])
   })
+  it('keeps a quiet subagent live while a tool it opened is still running, up to a cap', async () => {
+    const io = fixtureIo({
+      '/t/subagents/agent-b.meta.json': JSON.stringify({ agentType: 'ravi' }),
+      '/t/subagents/agent-b.jsonl': JSON.stringify({
+        type: 'assistant',
+        message: { content: [{ type: 'tool_use', id: 't1', name: 'Bash', input: {} }] }
+      }),
+      '/t/subagents/agent-q.meta.json': JSON.stringify({ agentType: 'maya' }),
+      '/t/subagents/agent-q.jsonl': 'PRIVATE_TRANSCRIPT'
+    })
+    const files = await listAgentFiles('/t.jsonl', io)
+    expect(await liveSubagents(files, io, 1000 + 5 * 60_000)).toEqual([
+      { id: 'b', type: 'ravi', activity: 'running' }
+    ])
+    expect(await liveSubagents(files, io, 1000 + 16 * 60_000)).toEqual([])
+  })
+  it('keeps a subagent written a moment after the tick began', async () => {
+    const io = fixtureIo({
+      '/t/subagents/agent-a.meta.json': JSON.stringify({ agentType: 'ravi' }),
+      '/t/subagents/agent-a.jsonl': 'x'
+    })
+    const files = await listAgentFiles('/t.jsonl', io)
+    expect(await liveSubagents(files, io, 0)).toEqual([
+      { id: 'a', type: 'ravi', activity: 'thinking' }
+    ])
+  })
   it('finds workflow agents beside plain ones and skips journals and stray files', async () => {
     const meta = (agentType: string) => JSON.stringify({ agentType })
     const io = fixtureIo({

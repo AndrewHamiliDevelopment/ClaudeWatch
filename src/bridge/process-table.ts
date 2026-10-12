@@ -59,6 +59,28 @@ export async function rememberedFolder(
   return cwd
 }
 
+// Processes sharing a folder claim conversations newest first: an older one would otherwise
+// take the newest conversation, written by the one that started after it.
+export const newestFirst = <Process extends RunningProcess>(processes: Process[]): Process[] =>
+  [...processes].sort((a, b) => b.startedAtMs - a.startedAtMs)
+
+// A process shown before its first conversation keeps that placeholder key once the conversation
+// lands, so its robot stays at its desk; `placeholders` is pruned with `forgetExited`.
+export function keyOf(
+  placeholders: Map<string, string>,
+  process: RunningProcess,
+  provider: string,
+  sessionId: string | undefined
+): string {
+  const identity = identityOf(process)
+  const kept = placeholders.get(identity)
+  if (kept) return kept
+  if (sessionId) return `${provider}:${sessionId}`
+  const placeholder = `${provider}:pid-${process.pid}-${process.startedAtMs}`
+  placeholders.set(identity, placeholder)
+  return placeholder
+}
+
 export function forgetExited(folders: Map<string, string>, running: RunningProcess[]): void {
   const live = new Set(running.map(identityOf))
   for (const identity of folders.keys()) if (!live.has(identity)) folders.delete(identity)
