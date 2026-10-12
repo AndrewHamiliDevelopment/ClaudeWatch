@@ -2,12 +2,15 @@ import { render } from '@testing-library/react'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { QUALITY_SETTINGS } from '../logic/quality'
 import { chooseQuality, pinQuality, readQuality } from '../quality-store'
+import type { BoostSource } from '../logic/frame-governor'
 import { FrameGovernor } from './RenderLoop'
 
 const APPLE_RENDERER = 'ANGLE (Apple, Apple M2 Pro)'
 
 const { surface, frame, graphics, draw, FakeControls } = vi.hoisted(() => {
   class FakeControls {
+    // camera-controls' own flag: false once the camera has come to rest.
+    active = true
     private readonly listeners = new Set<() => void>()
     addEventListener(_type: string, listener: () => void): void {
       this.listeners.add(listener)
@@ -43,6 +46,22 @@ const { surface, frame, graphics, draw, FakeControls } = vi.hoisted(() => {
     frame: { callback: null as ((state: object, deltaSec: number) => void) | null }
   }
 })
+const cameraBoosts = vi.hoisted(() => ({ count: 0 }))
+vi.mock('../logic/frame-governor', async (original) => {
+  const actual = await original<typeof import('../logic/frame-governor')>()
+  return {
+    ...actual,
+    startFrameGovernor: (...args: Parameters<typeof actual.startFrameGovernor>) => {
+      const governor = actual.startFrameGovernor(...args)
+      const boost = governor.boost
+      governor.boost = (source?: BoostSource) => {
+        if (source === 'camera') cameraBoosts.count += 1
+        boost(source)
+      }
+      return governor
+    }
+  }
+})
 vi.mock('@react-three/drei', () => ({ CameraControlsImpl: FakeControls }))
 vi.mock('@react-three/fiber', () => ({
   useThree: (selector: (state: typeof surface) => object) => selector(surface),
@@ -68,6 +87,8 @@ beforeEach(() => {
   vi.spyOn(document, 'hasFocus').mockReturnValue(true)
   vi.spyOn(navigator, 'hardwareConcurrency', 'get').mockReturnValue(8)
   surface.invalidate = draw
+  surface.controls.active = true
+  cameraBoosts.count = 0
   graphics.renderer = APPLE_RENDERER
   pinQuality('auto')
   chooseQuality('full')
@@ -96,6 +117,16 @@ it('leaves a camera that moves by itself, as in a fly-to, to the governor: 60 a 
   render(<FrameGovernor pace={PACE} agents={[]} />)
   surface.controls.emitUpdate()
   expect(keepsRendering()).toBe(false)
+})
+
+// Damping keeps camera-controls updating for seconds after it looks still; that tail is not paced at 60.
+it('stops pacing a camera at 60 once it has come to rest', () => {
+  render(<FrameGovernor pace={PACE} agents={[]} />)
+  surface.controls.emitUpdate()
+  expect(cameraBoosts.count).toBe(1)
+  surface.controls.active = false
+  surface.controls.emitUpdate()
+  expect(cameraBoosts.count).toBe(1)
 })
 
 it('falls back to the idle rate 400 ms after the last input', () => {
