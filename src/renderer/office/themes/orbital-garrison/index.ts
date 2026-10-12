@@ -19,6 +19,7 @@ import { GarrisonWalls } from './GarrisonWalls'
 import { GarrisonDistrict, GarrisonHangar, GarrisonTower } from './GarrisonWorld'
 import { GARRISON, GARRISON_PALETTE } from './palette'
 import { ORBITAL_GARRISON_ID, orbitalGarrisonRoster } from './roster'
+import { GARRISON_TOWN } from './town'
 
 export const orbitalGarrison: OfficeTheme = {
   id: ORBITAL_GARRISON_ID,
@@ -67,5 +68,6 @@ export const orbitalGarrison: OfficeTheme = {
       Ambient: GarrisonAmbient
     }
   },
-  world: { District: GarrisonDistrict, Hangar: GarrisonHangar, Tower: GarrisonTower }
+  world: { District: GarrisonDistrict, Hangar: GarrisonHangar, Tower: GarrisonTower },
+  town: GARRISON_TOWN
 }
