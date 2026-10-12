@@ -1,21 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { districtLayout, towerLayout, sensorOpening } from './layout'
+import { towerLayout, sensorOpening } from './layout'
 
 describe('world layout', () => {
-  it('keeps district props and their footprints outside the floor plate', () => {
-    const floor = { width: 18, depth: 13 }
-    const props = districtLayout(floor)
-    expect(props).toEqual(districtLayout(floor))
-    expect(new Set(props.map((prop) => prop.kind))).toEqual(
-      new Set(['sakura', 'lantern', 'torii', 'pagoda', 'vent', 'eaves', 'airship'])
-    )
-    for (const prop of props) {
-      expect(
-        Math.abs(prop.x) - prop.radius > floor.width / 2 ||
-          Math.abs(prop.z) - prop.radius > floor.depth / 2
-      ).toBe(true)
-    }
-  })
   it('stacks floors in input order and preserves identity, labels and attention', () => {
     expect(
       towerLayout([

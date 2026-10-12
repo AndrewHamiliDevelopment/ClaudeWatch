@@ -18,6 +18,15 @@ export const box = (at: Vector, size: Vector, color: string): PartSpec => ({
   color
 })
 
+const shaped =
+  (shape: UnitShape) =>
+  (at: Vector, size: Vector, color: string): PartSpec => ({ shape, at, size, color })
+
+// Each is one unit across before `size`: a cylinder or cone stands along y, `size` is its box.
+export const cylinder = shaped('cylinder')
+export const cone = shaped('cone')
+export const sphere = shaped('sphere')
+
 export const turned = (part: PartSpec, rotation: Vector): PartSpec => ({ ...part, rotation })
 
 export const lit = (part: PartSpec): PartSpec => ({ ...part, glow: true })

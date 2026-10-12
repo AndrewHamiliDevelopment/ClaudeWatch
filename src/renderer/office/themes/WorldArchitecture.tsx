@@ -1,7 +1,28 @@
 import { signTexture } from '../scene/textures'
+import { APRON_PAVING } from './apron'
+import { box, Parts } from './parts'
 import { Batch, Box, Lantern } from './primitives'
 import { towerLayout } from './layout'
-import type { ThemePalette, TowerProps } from './types'
+import { WORLD_APRON } from './surroundings'
+import type { FloorProps, ThemePalette, TowerProps } from './types'
+
+// The paved band round the plate, in a colour that reads against the ground beyond it.
+export function ApronPaving({ floor, color }: FloorProps & { color: string }) {
+  const { west, east, north, south } = WORLD_APRON
+  const { y, thickness } = APRON_PAVING
+  const across = floor.width + west + east
+  const centreX = (east - west) / 2
+  return (
+    <Parts
+      parts={[
+        box([centreX, y, -floor.depth / 2 - north / 2], [across, thickness, north], color),
+        box([centreX, y, floor.depth / 2 + south / 2], [across, thickness, south], color),
+        box([-floor.width / 2 - west / 2, y, 0], [west, thickness, floor.depth], color),
+        box([floor.width / 2 + east / 2, y, 0], [east, thickness, floor.depth], color)
+      ]}
+    />
+  )
+}
 
 export function Roof({ width, palette }: { width: number; palette: ThemePalette }) {
   const strips = [-1, 1].flatMap((side) =>

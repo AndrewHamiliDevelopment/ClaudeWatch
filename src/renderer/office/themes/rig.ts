@@ -33,6 +33,7 @@ export function applyThemePose(
   if (rig.body.current) {
     rig.body.current.position.y = pose.bob
     rig.body.current.rotation.z = pose.sway
+    rig.body.current.rotation.x = pose.lean
   }
   rig.head.current?.rotation.set(pose.headPitch, 0, 0)
   rig.leftArm.current?.rotation.set(pose.leftArm, 0, 0)

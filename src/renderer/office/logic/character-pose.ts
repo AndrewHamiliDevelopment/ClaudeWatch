@@ -1,11 +1,20 @@
 import { needsHuman } from '../../../shared/office/attention'
 import type { AgentView } from '../../../shared/office/types'
 
-export type RobotMood = 'idle' | 'working' | 'reading' | 'thinking' | 'needs-you' | 'walking'
+export type RobotMood =
+  | 'idle'
+  | 'working'
+  | 'reading'
+  | 'thinking'
+  | 'needs-you'
+  | 'walking'
+  | 'lounging'
 
 export interface RobotPose {
   bob: number
   sway: number
+  // Body pitch in radians; negative leans back.
+  lean: number
   headPitch: number
   // Shoulder pitch in radians; negative swings the arm forward and up.
   leftArm: number
@@ -30,10 +39,13 @@ const STEAM_PERIOD_SEC = 3
 const STEAM_LIFE_SEC = 1.2
 const STEAM_PUFF_COUNT = 3
 const STEAM_STAGGER_SEC = 0.25
+// Seated: the body sinks onto the seat and leans back, hands resting forward.
+const SEATED = { bob: -0.12, lean: -0.16, headPitch: -0.1, arms: -0.4 }
 
 const REST: RobotPose = {
   bob: 0,
   sway: 0,
+  lean: 0,
   headPitch: 0,
   leftArm: 0,
   rightArm: 0,
@@ -43,11 +55,12 @@ const REST: RobotPose = {
 }
 
 export function moodFor(
-  agent: Pick<AgentView, 'activity' | 'attention'>,
+  agent: Pick<AgentView, 'activity' | 'attention' | 'place'>,
   isMoving: boolean
 ): RobotMood {
   if (needsHuman(agent.attention)) return 'needs-you'
   if (isMoving) return 'walking'
+  if (agent.place === 'lounge') return 'lounging'
   switch (agent.activity) {
     case 'editing':
     case 'running':
@@ -74,7 +87,14 @@ const POSTURE: Record<RobotMood, Partial<RobotPose>> = {
   reading: { headPitch: 0.4, leftArm: -0.6, rightArm: -0.6 },
   thinking: { headPitch: -0.15 },
   'needs-you': { rightArm: RAISED_ARM },
-  walking: {}
+  walking: {},
+  lounging: {
+    bob: SEATED.bob,
+    lean: SEATED.lean,
+    headPitch: SEATED.headPitch,
+    leftArm: SEATED.arms,
+    rightArm: SEATED.arms
+  }
 }
 
 function motion(mood: RobotMood, t: number): Partial<RobotPose> {
@@ -103,6 +123,13 @@ function motion(mood: RobotMood, t: number): Partial<RobotPose> {
       return {
         bob: 0.04 * Math.abs(Math.sin(t * TAU * 2)),
         sway: 0.06 * Math.sin(t * TAU)
+      }
+    case 'lounging':
+      return {
+        bob: SEATED.bob + 0.012 * Math.sin(t * TAU * 0.2),
+        headPitch: SEATED.headPitch + 0.08 * Math.sin(t * TAU * 0.11),
+        sway: 0.025 * Math.sin(t * TAU * 0.07),
+        eyeOpen: t % BLINK_PERIOD_SEC < BLINK_SEC ? 0.1 : 1
       }
     default: {
       const unreachable: never = mood
