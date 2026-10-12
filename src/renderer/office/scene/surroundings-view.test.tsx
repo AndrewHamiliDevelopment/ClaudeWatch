@@ -50,7 +50,12 @@ const lots = surroundingLots(floor)
 const themeIdFor = (zone: { companyKey: string | null }): string =>
   zone.companyKey === 'c_b' ? filledBrass.id : filledEdo.id
 
-type Node = ReactElement<{ children?: ReactNode; lots?: readonly Lot[]; revision?: string }>
+type Node = ReactElement<{
+  children?: ReactNode
+  lots?: readonly Lot[]
+  revision?: string
+  isStatic?: boolean
+}>
 
 function elements(node: ReactNode): Node[] {
   if (Array.isArray(node)) return node.flatMap(elements)
@@ -90,7 +95,7 @@ it('gives a lot whose company is gone to the floor theme', () => {
 })
 
 // The buildings' batch, placed once, and the moving things' batch, followed every frame.
-function batches(scene: ReactNode): { still: ReactElement; moving: ReactElement } {
+function batches(scene: ReactNode): { still: Node; moving: Node } {
   const found = elements(scene).filter((node) => node.type === BatchedScene)
   expect(found).toHaveLength(2)
   const [still, moving] = found
