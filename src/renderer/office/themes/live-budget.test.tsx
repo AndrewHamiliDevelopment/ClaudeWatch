@@ -46,9 +46,10 @@ it.each([
 ])('three themes with %i agents and the zoned town stay within 300 draws', (agents, companies) => {
   const result = scaled(THREE_THEMES, agents, companies)
   expect(result.themeCount).toBe(3)
-  // The ground is one draw; the town's lots and the belt are a batch each, of four unit shapes.
+  // The ground is one draw; the town's lots and the belt are a batch each. A batch costs a draw
+  // per unit shape and surface, never per building: the themes' real dresses come to 19 in all.
   expect(result.townDraws).toBeGreaterThan(1)
-  expect(result.townDraws).toBeLessThanOrEqual(1 + 2 * 8)
+  expect(result.townDraws).toBeLessThanOrEqual(1 + 2 * 10)
   expect(result.lotCount).toBeGreaterThan(100)
   expect(result.draws).toBeLessThanOrEqual(DRAW_CEILING)
   expect(result.triangles).toBeLessThanOrEqual(TRIANGLE_CEILING)
