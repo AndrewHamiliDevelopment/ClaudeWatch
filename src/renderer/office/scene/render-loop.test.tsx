@@ -138,12 +138,15 @@ it('starts a machine that renders in software at the light level', () => {
 })
 
 it('steps the level down when the frames it draws keep arriving late', () => {
-  const now = vi.spyOn(performance, 'now').mockReturnValue(0)
+  // Later than any real clock reading an earlier test left in the store: on a loaded machine
+  // this file can start more than eight seconds into the process.
+  const startMs = 1e9
+  const now = vi.spyOn(performance, 'now').mockReturnValue(startMs)
   render(<FrameGovernor pace={PACE} agents={[]} />)
   // Asked for the idle rate, drawing at a third of it, for eight seconds.
   const lateSec = 3 / PACE.idleFps
   for (let timeSec = lateSec; timeSec <= 8; timeSec += lateSec) {
-    now.mockReturnValue(timeSec * 1000)
+    now.mockReturnValue(startMs + timeSec * 1000)
     drawFrame(lateSec)
   }
   expect(readQuality().chosen).toBe('balanced')
