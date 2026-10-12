@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import type { LoungeGeometry } from '../scene-model'
 import { firstClear, spotAt, type Footprint } from './lounge-layout'
 import { EDO } from './palettes'
@@ -93,5 +94,6 @@ export function edoLoungeParts(lounge: LoungeGeometry): PartSpec[] {
 }
 
 export function EdoLounge({ lounge }: LoungeProps) {
-  return <Parts parts={edoLoungeParts(lounge)} />
+  const parts = useMemo(() => edoLoungeParts(lounge), [lounge])
+  return <Parts parts={parts} />
 }
