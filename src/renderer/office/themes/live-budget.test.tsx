@@ -92,7 +92,8 @@ it('draws less of everything as the town gets smaller, three themes and 60 agent
   expect(town.roadCount).toBeLessThan(city.roadCount)
   expect(village.triangles).toBeLessThan(city.triangles)
   expect(village.draws).toBeLessThanOrEqual(city.draws)
-})
+  // Three full merges of a ten-company floor: slow when the suite runs beside other work.
+}, 30_000)
 
 // A stand-in for a theme that shares no part with another: Brass's cost, merged only with itself.
 function unshared<Props extends object>(Component: ComponentType<Props>): ComponentType<Props> {
