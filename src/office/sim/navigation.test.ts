@@ -5,7 +5,7 @@ import { officeGrid } from './navigation'
 import { findPath } from './path'
 
 it('routes from the gate through company, project and office doors only', () => {
-  const floor = buildLayout([session('a')], undefined, 0).floors[0]
+  const floor = buildLayout([session('a')], undefined).floors[0]
   const company = floor.zones[0]
   const project = company.children[0]
   const office = floor.rooms.find((r) => r.sessionKey === 'a')!
@@ -43,7 +43,7 @@ it('lays the grid over the plate and reaches every desk from the gate', () => {
     inCompany('alpha', '1', 0),
     inCompany('beta', '1', 0)
   ]
-  const floor = buildLayout(sessions, undefined, 0).floors[0]
+  const floor = buildLayout(sessions, undefined).floors[0]
   const grid = officeGrid(floor)
   expect(floor.x).not.toBe(0)
   expect(grid.origin).toEqual({ x: floor.x - floor.width / 2, z: floor.z - floor.depth / 2 })

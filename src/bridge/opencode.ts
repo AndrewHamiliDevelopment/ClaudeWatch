@@ -15,10 +15,11 @@ import {
   type OpencodeRow
 } from './opencode-db'
 import {
+  forgetExited,
   isInsideAppBundle,
   type ProcessRow,
   readProcessTable,
-  readWorkingFolder
+  rememberedFolder
 } from './process-table'
 import { placementOf, resolveProject } from './project-root'
 import { SUBAGENT_FRESH_MS } from './subagents'
@@ -109,7 +110,7 @@ function readConversation(
   }
 }
 
-// Where each live process runs, by pid and start time: asking costs an `lsof` run.
+// Where each live process runs, by pid and start time.
 const folders = new WeakMap<BridgeIo, Map<string, string>>()
 
 // The OpenCode processes that are the owner's agents, each with the folder it runs in.
@@ -121,22 +122,17 @@ async function locate(
   let known = folders.get(io)
   if (!known) folders.set(io, (known = new Map()))
   const running: AgentProcess[] = []
-  const live = new Set<string>()
   for (const process of processes) {
-    const identity = `${process.pid}:${process.startedAtMs}`
-    live.add(identity)
     try {
-      const cwd = known.get(identity) ?? (await readWorkingFolder(io, process.pid))
-      if (!cwd) continue
-      known.set(identity, cwd)
-      if (!isInsideAppBundle(cwd)) running.push({ ...process, cwd })
+      const cwd = await rememberedFolder(io, known, process)
+      if (cwd && !isInsideAppBundle(cwd)) running.push({ ...process, cwd })
     } catch {
       // It may have exited since the table was read: the others are still shown.
       health.ok = false
       health.detail = 'OpenCode process read failed'
     }
   }
-  for (const identity of known.keys()) if (!live.has(identity)) known.delete(identity)
+  forgetExited(known, processes)
   return running
 }
 

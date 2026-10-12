@@ -89,7 +89,7 @@ describe("a floor shaped like the owner's: one company of four projects and two 
     ['alpha', '1', 1],
     ['beta', '1', 1]
   ]
-  const built = () => buildLayout(sessionsOf(OWNER), undefined, 0)
+  const built = () => buildLayout(sessionsOf(OWNER), undefined)
   const sizes = (boxes: Box[]) => boxes.map((box) => [box.width, box.depth])
 
   it('keeps all the company grounds within 1,900 m2', () => {
@@ -136,7 +136,7 @@ describe("a floor shaped like the owner's: one company of four projects and two 
   })
   it("makes a lone company's plate its grounds, the street and the margins", () => {
     const alone = sessionsOf(OWNER.filter(([company]) => company === 'zkidz'))
-    const floor = buildLayout(alone, undefined, 0).floors[0]
+    const floor = buildLayout(alone, undefined).floors[0]
     expect(sizes(floor.zones)).toEqual([[67, 12]])
     // The gate's 3 m, 67 m of grounds, 3 m of margin; the 3 m street, 12 m of grounds, 3 m.
     expect(floor).toMatchObject({ width: 73, depth: 18, x: 35, z: 7.5 })
@@ -150,7 +150,7 @@ describe("a floor shaped like the owner's: one company of four projects and two 
     const roomsOf = (map: LayoutMap, companyKey: string) =>
       map.floors[0].rooms.filter((room) => room.companyKey === companyKey)
     const grownBy = (joiner: ReturnType<typeof inCompany>) =>
-      buildLayout([...sessionsOf(OWNER), joiner], layout, 1)
+      buildLayout([...sessionsOf(OWNER), joiner], layout)
     // zkidz has its side of the street to itself: a desk column or a project moves nobody else.
     for (const grown of [grownBy(inCompany('zkidz', '3', 'x')), grownBy(inCompany('zkidz', '9'))]) {
       expect(roomsOf(grown, 'c_zkidz')).not.toEqual(roomsOf(layout, 'c_zkidz'))
@@ -171,7 +171,7 @@ describe("a floor shaped like the owner's: one company of four projects and two 
   it("keeps a project's place while it and its earlier neighbours stay the same size", () => {
     const layout = built()
     const joiners = ['x', 'y'].map((seat) => inCompany('zkidz', '3', seat))
-    const grown = buildLayout([...sessionsOf(OWNER), ...joiners], layout, 1)
+    const grown = buildLayout([...sessionsOf(OWNER), ...joiners], layout)
     const moved = (key: string) => placeInCompany(grown, key).x - placeInCompany(layout, key).x
     for (const live of sessionsOf(OWNER)) {
       // Two more desk columns in project 3 push only project 4, the one after it.
@@ -184,7 +184,7 @@ describe("a floor shaped like the owner's: one company of four projects and two 
 
 it('opens every company onto the street, whichever side of it the company stands on', () => {
   const south = sessionsOf([['wide', '1', 4]]).concat(sessionsOf([['wide', '2', 4]]))
-  const layout = buildLayout([...south, inCompany('north', '1')], undefined, 0)
+  const layout = buildLayout([...south, inCompany('north', '1')], undefined)
   const [north, wide] = ['c_north', 'c_wide'].map(
     (key) => layout.floors[0].zones.find((zone) => zone.companyKey === key)!
   )
@@ -204,7 +204,7 @@ it('keeps a company north of the street where it stands when one of its projects
   const south = sessionsOf([['wide', '1', 4]]).concat(sessionsOf([['wide', '2', 4]]))
   const lead = { ...inCompany('north', '1', 'lead'), subagents: workers(3) }
   const crew = [lead, ...sessionsOf([['north', '1', 3]]), inCompany('north', '2')]
-  const before = buildLayout([...south, ...crew], undefined, 0)
+  const before = buildLayout([...south, ...crew], undefined)
   const company = before.floors[0].zones.find((zone) => zone.companyKey === 'c_north')!
   expect(company.z).toBeLessThan(0)
 
@@ -226,19 +226,18 @@ it('keeps a company north of the street where it stands when one of its projects
 
   // Nine more subagents: ten of them overflow, which takes a second row of team seats.
   const busier = [{ ...lead, subagents: workers(12) }, ...crew.slice(1)]
-  const withTeamRow = buildLayout([...south, ...busier], before, 1)
+  const withTeamRow = buildLayout([...south, ...busier], before)
   expectHeldInPlace(withTeamRow)
   expect(teamSeat(withTeamRow)).toEqual(teamSeat(before))
 
   // A fifth session adds a desk row; as on the south side, only the team area moves past it.
-  expectHeldInPlace(buildLayout([...south, ...crew, inCompany('north', '1', 'fifth')], before, 1))
+  expectHeldInPlace(buildLayout([...south, ...crew, inCompany('north', '1', 'fifth')], before))
 })
 
 it('adds a desk column for each session up to four, then a second row', () => {
   const project = (count: number) => {
     const crew = Array.from({ length: count }, (_, seat) => session(`s${seat}`))
-    const { width, depth, capacity } = buildLayout(crew, undefined, 0).floors[0].zones[0]
-      .children[0]
+    const { width, depth, capacity } = buildLayout(crew, undefined).floors[0].zones[0].children[0]
     return [width, depth, capacity]
   }
   expect([1, 2, 3, 4, 5, 8, 9].map(project)).toEqual([
@@ -255,7 +254,7 @@ it('adds a desk column for each session up to four, then a second row', () => {
 it('has no team area without subagents, and one only as large as the overflow needs', () => {
   const teamFor = (subagents: number) => {
     const sessions = [{ ...session('a'), subagents: workers(subagents) }]
-    const layout = buildLayout(sessions, undefined, 0)
+    const layout = buildLayout(sessions, undefined)
     expect(placements(sessions, layout)).toHaveLength(1 + subagents)
     const team = layout.floors[0].rooms.find((room) => room.kind === 'team')
     return team && [team.slots.filter((slot) => slot.id !== 'door').length, team.width, team.depth]
@@ -277,8 +276,8 @@ const many = (count: number) =>
 describe('nested headquarters layout', () => {
   it('is deterministic for 60 sessions in 12 projects and four companies', () => {
     const sessions = many(60)
-    const layout = buildLayout(sessions, undefined, 0)
-    expect(layout).toEqual(buildLayout([...sessions].reverse(), undefined, 0))
+    const layout = buildLayout(sessions, undefined)
+    expect(layout).toEqual(buildLayout([...sessions].reverse(), undefined))
     expect(layout.floors).toHaveLength(1)
     expect(layout.floors[0].id).toBe('hq')
     expect(layout.floors[0].zones).toHaveLength(4)
@@ -286,25 +285,24 @@ describe('nested headquarters layout', () => {
     expect(layout.floors[0].rooms.filter((r) => r.sessionKey)).toHaveLength(60)
   })
   it('keeps a desk and its place in the company across additions, removals and reloads', () => {
-    const saved = buildLayout([session('b')], undefined, 0)
+    const saved = buildLayout([session('b')], undefined)
     const before = JSON.stringify(saved)
-    const next = buildLayout([session('a'), session('b')], saved, 1)
+    const next = buildLayout([session('a'), session('b')], saved)
     expect(next.reservations.b).toEqual(saved.reservations.b)
     // The company widens to the east for the second desk column; b's office does not move.
     expect(next.floors[0].rooms.find((r) => r.sessionKey === 'b')).toEqual(saved.floors[0].rooms[0])
     expect(next.floors[0].zones[0].width).toBeGreaterThan(saved.floors[0].zones[0].width)
     expect(JSON.stringify(saved)).toBe(before)
-    const removed = buildLayout([session('b')], next, 2)
-    expect(buildLayout([session('a'), session('b')], removed, 3).reservations.a).toEqual(
+    const removed = buildLayout([session('b')], next)
+    expect(buildLayout([session('a'), session('b')], removed).reservations.a).toEqual(
       next.reservations.a
     )
   })
   it('reserves in steps of four and grows without moving an office inside its company', () => {
-    const initial = buildLayout([session('a')], undefined, 0)
+    const initial = buildLayout([session('a')], undefined)
     const expanded = buildLayout(
       Array.from({ length: 9 }, (_, i) => session(i ? `b${i}` : 'a')),
-      initial,
-      1
+      initial
     )
     expect(initial.floors[0].zones[0].children[0].capacity).toBe(4)
     expect(expanded.floors[0].zones[0].children[0].capacity).toBe(12)
@@ -312,15 +310,15 @@ describe('nested headquarters layout', () => {
   })
   it('drops a project and a company with their last session, and the floor shrinks', () => {
     const remaining = [session('b', 'p_b')]
-    const full = buildLayout([session('a'), ...remaining, inCompany('other', '1')], undefined, 0)
-    const fewer = buildLayout(remaining, full, 100)
+    const full = buildLayout([session('a'), ...remaining, inCompany('other', '1')], undefined)
+    const fewer = buildLayout(remaining, full)
     expect(fewer.floors[0].zones.map((company) => company.id)).toEqual(['company:c_work'])
     expect(fewer.floors[0].zones[0].children.map((project) => project.projectKey)).toEqual(['p_b'])
     expect(Object.keys(fewer.reservations)).toEqual(['b'])
     expect(area(fewer.floors[0])).toBeLessThan(area(full.floors[0]))
-    expect(area(fewer.floors[0])).toBe(area(buildLayout(remaining, undefined, 0).floors[0]))
+    expect(area(fewer.floors[0])).toBe(area(buildLayout(remaining, undefined).floors[0]))
 
-    const empty = buildLayout([], fewer, 200)
+    const empty = buildLayout([], fewer)
     expect(empty.floors[0]).toMatchObject({ zones: [], rooms: [], width: 12, depth: 12 })
     expect(empty.reservations).toEqual({})
   })
@@ -329,42 +327,40 @@ describe('nested headquarters layout', () => {
       Object.fromEntries(Object.entries(layout.reservations).map(([key, held]) => [key, held.bay]))
     // Seven sessions still need both rows, so the freed desk waits for a newcomer.
     const eight = Array.from({ length: 8 }, (_, seat) => session(`k${seat}`))
-    const seven = buildLayout(eight.slice(1), buildLayout(eight, undefined, 0), 1)
+    const seven = buildLayout(eight.slice(1), buildLayout(eight, undefined))
     expect(bayOf(seven)).toEqual({ k1: 1, k2: 2, k3: 3, k4: 4, k5: 5, k6: 6, k7: 7 })
-    expect(bayOf(buildLayout(eight, seven, 2)).k0).toBe(0)
+    expect(bayOf(buildLayout(eight, seven)).k0).toBe(0)
 
     const five = ['a', 'b', 'c', 'd', 'e'].map((key) => session(key))
-    const full = buildLayout(five, undefined, 0)
+    const full = buildLayout(five, undefined)
     expect(bayOf(full)).toEqual({ a: 0, b: 1, c: 2, d: 3, e: 4 })
 
     // Only the session in the last bay moves, into the freed one, and the second row closes.
     const closed = buildLayout(
       five.filter((s) => s.key !== 'b'),
-      full,
-      1
+      full
     )
     expect(bayOf(closed)).toEqual({ a: 0, c: 2, d: 3, e: 1 })
     expect(closed.floors[0].zones[0].children[0].capacity).toBe(4)
 
     const holed = buildLayout(
       five.filter((s) => s.key !== 'b' && s.key !== 'e'),
-      closed,
-      2
+      closed
     )
     // Three sessions in one row: the one in the fourth column moves in so that column closes.
     expect(bayOf(holed)).toEqual({ a: 0, c: 2, d: 1 })
     expect(holed.floors[0].zones[0].children[0].width).toBe(16)
 
-    const joined = buildLayout([...five.filter((s) => s.key !== 'b'), session('z')], holed, 3)
+    const joined = buildLayout([...five.filter((s) => s.key !== 'b'), session('z')], holed)
     expect(bayOf(joined)).toEqual({ a: 0, c: 2, d: 1, e: 3, z: 4 })
   })
   it('treats a saved order or bay that is not a whole number as never saved', () => {
     const sessions = [session('a'), session('b')]
-    const saved = buildLayout(sessions, undefined, 0)
+    const saved = buildLayout(sessions, undefined)
     saved.reservations.b.bay = 1.5
     saved.floors[0].zones[0].index = Number.NaN
     saved.floors[0].zones[0].children[0].index = -2
-    expect(buildLayout(sessions, saved, 1)).toEqual(buildLayout(sessions, undefined, 0))
+    expect(buildLayout(sessions, saved)).toEqual(buildLayout(sessions, undefined))
   })
   it('keeps two guests at their parent and allocates overflow per project', () => {
     const sessions = ['p_a', 'p_b'].map((p) => ({
@@ -375,7 +371,7 @@ describe('nested headquarters layout', () => {
         activity: 'reading' as const
       }))
     }))
-    const layout = buildLayout(sessions, undefined, 0)
+    const layout = buildLayout(sessions, undefined)
     const agents = placements(sessions, layout)
     expect(agents.filter((p) => p.slot.id.startsWith('desk_guest'))).toHaveLength(4)
     expect(agents.filter((p) => p.room.kind === 'team')).toHaveLength(30)
@@ -385,8 +381,8 @@ describe('nested headquarters layout', () => {
 })
 
 it('keeps a project in its place when a lexically earlier project arrives', () => {
-  const saved = buildLayout([session('z', 'p_z')], undefined, 0)
-  const next = buildLayout([session('z', 'p_z'), session('a', 'p_a')], saved, 1)
+  const saved = buildLayout([session('z', 'p_z')], undefined)
+  const next = buildLayout([session('z', 'p_z'), session('a', 'p_a')], saved)
   expect(placeInCompany(next, 'z')).toEqual(placeInCompany(saved, 'z'))
   const projects = next.floors[0].zones[0].children
   expect(projects[0].x === projects[1].x && projects[0].z === projects[1].z).toBe(false)
@@ -394,11 +390,10 @@ it('keeps a project in its place when a lexically earlier project arrives', () =
 
 it('moves only the projects after a busy one when it grows', () => {
   const sessions = [session('a', 'p_a'), session('b', 'p_b'), session('c', 'p_c')]
-  const saved = buildLayout(sessions, undefined, 0)
+  const saved = buildLayout(sessions, undefined)
   const grown = buildLayout(
     [...sessions, ...Array.from({ length: 20 }, (_, i) => session(`new${i}`, 'p_b'))],
-    saved,
-    1
+    saved
   )
   expect(placeInCompany(grown, 'a')).toEqual(placeInCompany(saved, 'a'))
   expect(placeInCompany(grown, 'b')).toEqual(placeInCompany(saved, 'b'))
@@ -411,17 +406,16 @@ it('moves only the projects after a busy one when it grows', () => {
 
 it('keeps every project inside its company after growth and pruning a slot', () => {
   const sessions = Array.from({ length: 7 }, (_, i) => session(`s${i}`, `p_${i}`))
-  const saved = buildLayout(sessions, undefined, 0)
-  const removed = buildLayout(sessions.slice(1), saved, 1)
-  const pruned = buildLayout(sessions.slice(1), removed, 86400001)
+  const saved = buildLayout(sessions, undefined)
+  const removed = buildLayout(sessions.slice(1), saved)
+  const pruned = buildLayout(sessions.slice(1), removed)
   const grown = buildLayout(
     [
       ...sessions.slice(1),
       session('new', 'p_new'),
       ...Array.from({ length: 30 }, (_, i) => session(`busy${i}`, 'p_3'))
     ],
-    pruned,
-    86400002
+    pruned
   )
   const company = grown.floors[0].zones[0]
   for (const project of company.children) {
@@ -437,10 +431,10 @@ it('keeps every project inside its company after growth and pruning a slot', () 
 it('keeps every company on its side when another company grows', () => {
   // Arrival order c, b, a: the rows do not follow the alphabet.
   let sessions = [inCompany('c', '0')]
-  let layout = buildLayout(sessions, undefined, 0)
+  let layout = buildLayout(sessions, undefined)
   for (const company of ['b', 'a']) {
     sessions = [...sessions, inCompany(company, '0')]
-    layout = buildLayout(sessions, layout, 1)
+    layout = buildLayout(sessions, layout)
   }
   const side = (key: string, map = layout) => {
     const zone = map.floors[0].zones.find((z) => z.companyKey === key)!
@@ -451,18 +445,18 @@ it('keeps every company on its side when another company grows', () => {
   const before = ['c_a', 'c_b', 'c_c'].map((key) => side(key))
 
   sessions = [...sessions, ...['1', '2', '3', '4'].map((project) => inCompany('a', project))]
-  const grown = buildLayout(sessions, layout, 2)
+  const grown = buildLayout(sessions, layout)
   expect(['c_a', 'c_b', 'c_c'].map((key) => side(key, grown))).toEqual(before)
 })
 
 it('stays compact after thirty short sessions have come and gone', () => {
   const lead = session('lead')
-  let layout = buildLayout([lead], undefined, 0)
+  let layout = buildLayout([lead], undefined)
   for (let minute = 1; minute <= 30; minute++) {
-    layout = buildLayout([lead, session(`worker${minute}`)], layout, minute * 60_000)
-    layout = buildLayout([lead], layout, minute * 60_000 + 30_000)
+    layout = buildLayout([lead, session(`worker${minute}`)], layout)
+    layout = buildLayout([lead], layout)
   }
-  layout = buildLayout([lead, session('last')], layout, 31 * 60_000)
+  layout = buildLayout([lead, session('last')], layout)
 
   const floor = layout.floors[0]
   expect(liveBays(layout)).toEqual([0, 1])
@@ -547,7 +541,7 @@ it('loads a map saved with oversized numbers and brings it out compact', () => {
     })
   )
 
-  const layout = buildLayout([session('lead'), session('last')], saved, 120_000)
+  const layout = buildLayout([session('lead'), session('last')], saved)
   const floor = layout.floors[0]
   expect(layout.version).toBe(1)
   expect(layout.reservations.lead.bay).toBe(0)
@@ -579,7 +573,7 @@ describe('a seeded floor of three companies, eight projects and twelve sessions'
   }
 
   it('holds exactly that many companies, projects and session offices', () => {
-    const { floor, companies, projects } = floorOf(buildLayout(seeded(), undefined, 0))
+    const { floor, companies, projects } = floorOf(buildLayout(seeded(), undefined))
     expect([companies.length, projects.length]).toEqual([3, 8])
     expect(floor.rooms.filter((room) => room.kind === 'office')).toHaveLength(12)
   })
@@ -587,7 +581,7 @@ describe('a seeded floor of three companies, eight projects and twelve sessions'
   // Offices sized to their desks are a smaller share of a floor whose lanes stay 3 m wide, so
   // the share is measured on the grounds and the floor is held to an area.
   it('uses at least 45% of the grounds and keeps the floor under 3,000 m2', () => {
-    const { floor, companies, projects, lounges } = floorOf(buildLayout(seeded(), undefined, 0))
+    const { floor, companies, projects, lounges } = floorOf(buildLayout(seeded(), undefined))
     const used = [...projects, ...lounges].reduce((total, box) => total + area(box), 0)
     const grounds = companies.reduce((total, company) => total + area(company), 0)
     expect(used / grounds).toBeGreaterThanOrEqual(0.45)
@@ -595,7 +589,7 @@ describe('a seeded floor of three companies, eight projects and twelve sessions'
   })
 
   it('overlaps nothing and keeps every lane at least 3 m wide', () => {
-    expectClearLanes(buildLayout(seeded(), undefined, 0))
+    expectClearLanes(buildLayout(seeded(), undefined))
   })
 
   it('keeps the lanes clear when one project is busy and the companies are lopsided', () => {
@@ -606,21 +600,21 @@ describe('a seeded floor of three companies, eight projects and twelve sessions'
       ...['4', '5', '6', '7'].map((project) => inCompany('a', project)),
       { ...inCompany('d', '1'), subagents: Array.from({ length: 40 }, (_, id) => worker(id)) }
     ]
-    const grown = buildLayout(lopsided, buildLayout(seeded(), undefined, 0), 1)
+    const grown = buildLayout(lopsided, buildLayout(seeded(), undefined))
     expectClearLanes(grown)
-    expectClearLanes(buildLayout(seeded(), grown, 2))
+    expectClearLanes(buildLayout(seeded(), grown))
   })
 
   it('gives the same map for the same input', () => {
-    const layout = buildLayout(seeded(), undefined, 0)
-    expect(buildLayout(seeded(), undefined, 0)).toEqual(layout)
-    expect(buildLayout(seeded().reverse(), undefined, 0)).toEqual(layout)
-    expect(buildLayout(seeded(), layout, 1)).toEqual(layout)
+    const layout = buildLayout(seeded(), undefined)
+    expect(buildLayout(seeded(), undefined)).toEqual(layout)
+    expect(buildLayout(seeded().reverse(), undefined)).toEqual(layout)
+    expect(buildLayout(seeded(), layout)).toEqual(layout)
   })
 
   it('moves only the project after the one a session joins, and nobody across the street', () => {
-    const layout = buildLayout(seeded(), undefined, 0)
-    const next = buildLayout([...seeded(), inCompany('b', '2', 'new')], layout, 1)
+    const layout = buildLayout(seeded(), undefined)
+    const next = buildLayout([...seeded(), inCompany('b', '2', 'new')], layout)
     const roomOf = (map: LayoutMap, key: string) =>
       map.floors[0].rooms.find((room) => room.sessionKey === key)
     expect(roomOf(next, 'b-2-new')).toBeDefined()
@@ -638,7 +632,7 @@ describe('a seeded floor of three companies, eight projects and twelve sessions'
   })
 
   it('gives every company a lounge of at least 6 x 5 m that the path grid reaches', () => {
-    const { floor, lounges } = floorOf(buildLayout(seeded(), undefined, 0))
+    const { floor, lounges } = floorOf(buildLayout(seeded(), undefined))
     const grid = officeGrid(floor)
     // Company a has five agents, so its lounge is the first to grow past four seats.
     expect(lounges.map((lounge) => lounge.slots.length)).toEqual([8, 4, 4])
@@ -659,7 +653,7 @@ describe('a seeded floor of three companies, eight projects and twelve sessions'
   it('multiplies every length of the lounge by the factor agents grew by', () => {
     const S = FURNITURE_SCALE
     const times = (metres: number) => expect.closeTo(metres * S, 9)
-    const [eight, four] = floorOf(buildLayout(seeded(), undefined, 0)).lounges
+    const [eight, four] = floorOf(buildLayout(seeded(), undefined)).lounges
     // 7.62 x 6.35 m for four seats and 7.62 x 8.88 m for eight; they were 6 x 5 and 6 x 7.
     expect([four.width, four.depth]).toEqual([times(6), times(5)])
     expect([eight.width, eight.depth]).toEqual([times(6), times(7)])
@@ -682,7 +676,7 @@ describe('a seeded floor of three companies, eight projects and twelve sessions'
       { size: [41, 11], corners: [1.5, 15.5, 24.5], leads: [6, 11, 20, 29], z: -5.7 },
       { size: [32, 11], corners: [1.5, 15.5], leads: [50, 55, 64], z: -5.7 }
     ]
-    const { floor, companies } = floorOf(buildLayout(seeded(), undefined, 0))
+    const { floor, companies } = floorOf(buildLayout(seeded(), undefined))
     // A lounge's plot is its size taken up to the half metre, so the grounds stay on the grid.
     const plot = (metres: number) => Math.ceil(metres * 2) / 2
     for (const [index, company] of companies.entries()) {

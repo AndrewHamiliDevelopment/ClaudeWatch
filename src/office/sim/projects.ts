@@ -15,9 +15,10 @@ import type { LayoutMap } from './layout'
 const UNSAVED = -1
 
 // A company sized from its live sessions, not yet placed on the floor.
-export interface CompanyDraft {
+interface CompanyDraft {
   zone: ZoneLayout
-  members: SessionRef[]
+  // Each project's sessions, by project zone id.
+  crews: ReadonlyMap<string, SessionRef[]>
   grounds: Grounds
   loungeSeats: number
   reservations: LayoutMap['reservations']
@@ -65,8 +66,11 @@ export function draftCompany(members: SessionRef[], saved: LayoutMap | undefined
     (a, b) => rank(a) - rank(b) || a.localeCompare(b)
   )
   const reservations: LayoutMap['reservations'] = {}
+  const crews = new Map<string, SessionRef[]>()
   const projects = projectKeys.map((projectKey, index): ZoneLayout => {
     const crew = members.filter((s) => s.projectKey === projectKey)
+    const projectId = `${id}:project:${projectKey}`
+    crews.set(projectId, crew)
     const bays = assignBays(
       crew.map((s) => s.key),
       heldBays(crew, saved)
@@ -76,7 +80,7 @@ export function draftCompany(members: SessionRef[], saved: LayoutMap | undefined
     const { width, depth, capacity } = planProject(crew.length, teamSeats(crew))
     return {
       ...bounds(0, 0, width, depth),
-      id: `${id}:project:${projectKey}`,
+      id: projectId,
       kind: 'project',
       label: crew[0].projectLabel,
       companyKey,
@@ -109,7 +113,7 @@ export function draftCompany(members: SessionRef[], saved: LayoutMap | undefined
       index: isOrdinal(savedIndex) ? savedIndex : UNSAVED,
       children: projects
     },
-    members,
+    crews,
     grounds,
     loungeSeats,
     reservations
@@ -118,7 +122,7 @@ export function draftCompany(members: SessionRef[], saved: LayoutMap | undefined
 
 // Once the company has its place on the floor: puts its projects, lounge and rooms on the map.
 export function settleCompany(draft: CompanyDraft): RoomLayout[] {
-  const { zone, members, grounds, loungeSeats, reservations } = draft
+  const { zone, crews, grounds, loungeSeats, reservations } = draft
   const left = zone.x - zone.width / 2
   const top = zone.z - zone.depth / 2
   // A company north of the street is held by its south edge, so its shelves are measured from
@@ -145,7 +149,7 @@ export function settleCompany(draft: CompanyDraft): RoomLayout[] {
   }
   zone.children.sort((a, b) => a.id.localeCompare(b.id))
   return zone.children.flatMap((project) => {
-    const crew = members.filter((s) => s.projectKey === project.projectKey)
+    const crew = crews.get(project.id) ?? []
     const offices = crew.map((s) =>
       room(project, reservations[s.key].bay, s.key, s.name, s.worktree, { growsNorth })
     )

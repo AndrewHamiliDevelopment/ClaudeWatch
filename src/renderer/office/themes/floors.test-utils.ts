@@ -16,7 +16,7 @@ function liveFloor(companies: number, projects: number, sessions: number): Floor
       projectLabel: `Project ${index % projects}`
     })
   )
-  return toFloorGeometry(buildLayout(refs, undefined, 0), refs)[0]
+  return toFloorGeometry(buildLayout(refs, undefined), refs)[0]
 }
 
 export const LIVE_FLOORS: readonly (readonly [string, FloorGeometry])[] = [

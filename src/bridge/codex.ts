@@ -12,10 +12,11 @@ import { placementOf, resolveProject } from './project-root'
 import { findRollouts } from './codex-rollouts'
 import { parseCodexUsage } from './codex-usage'
 import {
+  forgetExited,
   isInsideAppBundle,
   type ProcessRow,
   readProcessTable,
-  readWorkingFolder
+  rememberedFolder
 } from './process-table'
 
 export function codexProcesses(rows: ProcessRow[]): { pid: number; startedAtMs: number }[] {
@@ -103,12 +104,7 @@ export async function collectCodex(
     const used = new Set<string>()
     for (const process of processes) {
       try {
-        const identity = `${process.pid}:${process.startedAtMs}`
-        let cwd = folders.get(identity)
-        if (!cwd) {
-          cwd = await readWorkingFolder(io, process.pid)
-          if (cwd) folders.set(identity, cwd)
-        }
+        const cwd = await rememberedFolder(io, folders, process)
         if (!cwd || isInsideAppBundle(cwd)) continue
         const rollout = rollouts.find((item) => item.cwd === cwd && !used.has(item.id))
         if (rollout) used.add(rollout.id)
@@ -168,8 +164,7 @@ export async function collectCodex(
       }
     }
     for (const id of known.keys()) if (!live.has(id)) known.delete(id)
-    const running = new Set(processes.map((process) => `${process.pid}:${process.startedAtMs}`))
-    for (const identity of folders.keys()) if (!running.has(identity)) folders.delete(identity)
+    forgetExited(folders, processes)
     for (const [path, { session }] of tails) {
       if (liveTails.has(path)) continue
       tails.delete(path)

@@ -39,5 +39,30 @@ export async function readWorkingFolder(io: BridgeIo, pid: number): Promise<stri
     ?.slice(1)
 }
 
+interface RunningProcess {
+  pid: number
+  startedAtMs: number
+}
+const identityOf = ({ pid, startedAtMs }: RunningProcess): string => `${pid}:${startedAtMs}`
+
+// Remembered by pid and start time, since asking costs an `lsof` run.
+export async function rememberedFolder(
+  io: BridgeIo,
+  folders: Map<string, string>,
+  process: RunningProcess
+): Promise<string | undefined> {
+  const identity = identityOf(process)
+  const known = folders.get(identity)
+  if (known) return known
+  const cwd = await readWorkingFolder(io, process.pid)
+  if (cwd) folders.set(identity, cwd)
+  return cwd
+}
+
+export function forgetExited(folders: Map<string, string>, running: RunningProcess[]): void {
+  const live = new Set(running.map(identityOf))
+  for (const identity of folders.keys()) if (!live.has(identity)) folders.delete(identity)
+}
+
 // An agent bundled in an app (ChatGPT, Orca helpers) runs from inside the bundle; not a session.
 export const isInsideAppBundle = (folder: string): boolean => /\.app\/Contents(\/|$)/.test(folder)

@@ -30,11 +30,7 @@ function plateAround(companies: ZoneLayout[]): Pick<FloorLayout, 'x' | 'z' | 'wi
 
 // Only order and bays are read back from `saved`. Every size and position is rebuilt from the
 // live sessions, so a map saved with larger numbers, or by an older shape, comes out compact.
-export function buildLayout(
-  sessions: SessionRef[],
-  saved: LayoutMap | undefined,
-  _nowMs: number
-): LayoutMap {
+export function buildLayout(sessions: SessionRef[], saved: LayoutMap | undefined): LayoutMap {
   const ordered = [...sessions].sort(
     (a, b) =>
       a.companyKey.localeCompare(b.companyKey) ||

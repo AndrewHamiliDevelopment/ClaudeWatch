@@ -3,9 +3,10 @@ import type { FloorLayout, LoungeLayout, Slot } from './layout'
 
 // Each room's company lounge, by room id. Seats come from the map and nowhere else.
 export function loungesByRoom(floor: FloorLayout): Map<string, LoungeLayout> {
+  const byCompany = new Map(floor.zones.map((zone) => [zone.companyKey, zone.lounge]))
   const lounges = new Map<string, LoungeLayout>()
   for (const room of floor.rooms) {
-    const lounge = floor.zones.find((zone) => zone.companyKey === room.companyKey)?.lounge
+    const lounge = byCompany.get(room.companyKey)
     if (lounge) lounges.set(room.id, lounge)
   }
   return lounges

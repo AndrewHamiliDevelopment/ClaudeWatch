@@ -13,7 +13,7 @@ const done = (key: string, project?: string): SessionRef => ({
   attention: 'done'
 })
 function open(sessions: SessionRef[]): World {
-  const sim = new World({ now: () => 0 })
+  const sim = new World()
   sim.apply({ type: 'hello', v: 1, snapshot: { rev: 0, generatedAtMs: 0, sessions, sources: [] } })
   return sim
 }
@@ -217,7 +217,7 @@ it('leaves through the gate from the lounge when its session ends there', () => 
 })
 
 function openWithoutTrips(sessions: SessionRef[]): World {
-  const sim = new World({ now: () => 0, loungeTrips: false })
+  const sim = new World({ loungeTrips: false })
   sim.apply({ type: 'hello', v: 1, snapshot: { rev: 0, generatedAtMs: 0, sessions, sources: [] } })
   return sim
 }

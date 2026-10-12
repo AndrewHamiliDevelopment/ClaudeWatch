@@ -21,7 +21,7 @@ describe('headquarters geometry', () => {
       { ...sessions[0], subagents: ['0', '1', '2'].map(worker) },
       ...sessions.slice(1)
     ]
-    const layout = buildLayout(crowded, undefined, 0)
+    const layout = buildLayout(crowded, undefined)
     const floors = toFloorGeometry(layout, crowded)
     expect(floors).toHaveLength(1)
     const floor = floors[0]
@@ -47,7 +47,7 @@ describe('headquarters geometry', () => {
     expect(floor.rooms.map((room) => room.kind)).toEqual(['office', 'office', 'office', 'team'])
   })
   it('carries each office bay from the sim and gives a team room none', () => {
-    const layout = buildLayout(sessions, undefined, 0)
+    const layout = buildLayout(sessions, undefined)
     const rooms = toFloorGeometry(layout, sessions)[0].rooms
     for (const room of rooms) {
       const simRoom = layout.floors[0].rooms.find((candidate) => candidate.id === room.id)
@@ -56,7 +56,7 @@ describe('headquarters geometry', () => {
     expect(rooms.filter((room) => room.kind === 'office').map((room) => room.bay)).toContain(1)
   })
   it('carries each company lounge on its zone, with the seats the sim made and no desk room', () => {
-    const layout = buildLayout(sessions, undefined, 0)
+    const layout = buildLayout(sessions, undefined)
     const floor = toFloorGeometry(layout, sessions)[0]
     for (const [index, company] of floor.zones.entries()) {
       const lounge = layout.floors[0].zones[index].lounge!
@@ -82,7 +82,7 @@ describe('headquarters geometry', () => {
     expect(floor.rooms.map((room) => room.kind)).toEqual(['office', 'office', 'office'])
   })
   it('uses the same gate-anchored metre frame for the plate, zones, leaves and agents', () => {
-    const layout = buildLayout(sessions, undefined, 0)
+    const layout = buildLayout(sessions, undefined)
     const floor = toFloorGeometry(layout, sessions)[0]
     expect(floor.corridor).toEqual({ z: 0, width: 3 })
     expect(floor.elevator).toEqual({ x: 0, z: 0 })
@@ -131,7 +131,7 @@ it('seats every agent behind its own desk, inside the room and facing the defaul
     { ...session('a'), subagents: ['0', '1', '2', '3', '4'].map(worker) },
     session('b')
   ]
-  const layout = buildLayout(crowded, undefined, 0)
+  const layout = buildLayout(crowded, undefined)
   const floor = toFloorGeometry(layout, crowded)[0]
 
   for (const { room, slot } of placements(crowded, layout)) {
