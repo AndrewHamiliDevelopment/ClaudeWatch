@@ -1,7 +1,7 @@
-import { basename, join } from 'node:path'
+import { join } from 'node:path'
 import type { SessionRef, SourceHealth, SubagentRef, TokenCounts } from '../shared/office/types'
 import { zeroCounts } from '../shared/office/token-counts'
-import { type BridgeIo, displayName, isLabel } from './io'
+import { type BridgeIo, displayName, folderName, isLabel } from './io'
 import {
   OPENCODE_IDLE,
   opencodeProcesses,
@@ -218,7 +218,7 @@ function sessionOf(
     provider: 'opencode',
     sessionId: id,
     pid: process.pid,
-    name: session?.title || displayName(basename(process.cwd)),
+    name: session?.title || folderName(process.cwd),
     cwd: process.cwd,
     ...placement,
     host: 'terminal',

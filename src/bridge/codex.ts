@@ -8,7 +8,7 @@ import type {
   SourceHealth
 } from '../shared/office/types'
 import { type CodexTotal, codexTotalOf } from '../shared/accounts'
-import { type BridgeIo, displayName, isLabel, isMissing, jsonObject, object } from './io'
+import { type BridgeIo, folderName, isLabel, isMissing, jsonObject, object } from './io'
 import { placementOf, resolveProject } from './project-root'
 import { findRollouts, type Rollout } from './codex-rollouts'
 import { parseCodexUsage } from './codex-usage'
@@ -263,7 +263,7 @@ export async function collectCodex(
         provider: 'codex',
         sessionId: id,
         pid: owner.pid,
-        name: displayName(basename(cwd)),
+        name: folderName(cwd),
         cwd,
         ...placementOf(project),
         host: 'terminal',
