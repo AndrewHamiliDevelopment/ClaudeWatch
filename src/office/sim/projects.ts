@@ -5,14 +5,13 @@ import {
   lounge,
   LOUNGE_WIDTH,
   loungeDepth,
+  planProject,
   room,
-  teamDepth,
   type RoomLayout,
   type ZoneLayout
 } from './rooms'
 import type { LayoutMap } from './layout'
 
-const PROJECT_WIDTH = 24
 const UNSAVED = -1
 
 // A company sized from its live sessions, not yet placed on the floor.
@@ -28,9 +27,11 @@ export interface CompanyDraft {
 const isOrdinal = (value: unknown): value is number =>
   typeof value === 'number' && Number.isInteger(value) && value >= 0
 
+// One seat per subagent past the two guest desks. placements.ts looks the team room up for any
+// session with a subagent, so one seat stays while every guest still fits at a desk.
 function teamSeats(crew: SessionRef[]): number {
   const overflow = crew.reduce((count, s) => count + Math.max(0, s.subagents.length - 2), 0)
-  return Math.max(8, Math.ceil(overflow / 8) * 8)
+  return crew.some((s) => s.subagents.length > 0) ? Math.max(1, overflow) : 0
 }
 
 function heldBays(crew: SessionRef[], saved: LayoutMap | undefined): Map<string, number> {
@@ -74,9 +75,9 @@ export function draftCompany(members: SessionRef[], saved: LayoutMap | undefined
     )
     for (const [key, bay] of bays)
       reservations[key] = { floorId: 'hq', plate: 0, bay, companyKey, projectKey }
-    const capacity = reserveCapacity(crew.length)
+    const { width, depth, capacity } = planProject(crew.length, teamSeats(crew))
     return {
-      ...bounds(0, 0, PROJECT_WIDTH, (capacity / 4) * 6 + 4 + teamDepth(teamSeats(crew))),
+      ...bounds(0, 0, width, depth),
       id: `${id}:project:${projectKey}`,
       kind: 'project',
       label: crew[0].projectLabel,
@@ -89,7 +90,11 @@ export function draftCompany(members: SessionRef[], saved: LayoutMap | undefined
     }
   })
   const loungeSeats = reserveCapacity(members.reduce((n, s) => n + 1 + s.subagents.length, 0))
-  const grounds = packGrounds(projects, { width: LOUNGE_WIDTH, depth: loungeDepth(loungeSeats) })
+  // The lounge is the last box, so it never takes a project's place.
+  const grounds = packGrounds([
+    ...projects,
+    { width: LOUNGE_WIDTH, depth: loungeDepth(loungeSeats) }
+  ])
   return {
     zone: {
       ...bounds(0, 0, grounds.width, grounds.depth),
@@ -116,9 +121,10 @@ export function settleCompany(draft: CompanyDraft): RoomLayout[] {
   const left = zone.x - zone.width / 2
   const top = zone.z - zone.depth / 2
   zone.door = { x: left + 1.5, z: top }
-  zone.lounge = lounge(zone.id, left + grounds.lounge.x, top + grounds.lounge.z, loungeSeats)
+  const loungeCorner = grounds.corners[zone.children.length]
+  zone.lounge = lounge(zone.id, left + loungeCorner.x, top + loungeCorner.z, loungeSeats)
   for (const project of zone.children) {
-    const corner = grounds.projects[project.index]
+    const corner = grounds.corners[project.index]
     Object.assign(project, bounds(left + corner.x, top + corner.z, project.width, project.depth))
   }
   zone.children.sort((a, b) => a.id.localeCompare(b.id))
@@ -127,8 +133,13 @@ export function settleCompany(draft: CompanyDraft): RoomLayout[] {
     const offices = crew.map((s) =>
       room(project, reservations[s.key].bay, s.key, s.name, s.worktree)
     )
-    const team = room(project, -1, null, `${project.label} team`, null, teamSeats(crew))
-    project.children = [...offices, team]
-    return [...offices, team]
+    const seats = teamSeats(crew)
+    const { teamSeatsPerRow } = planProject(crew.length, seats)
+    const team = seats
+      ? [room(project, -1, null, `${project.label} team`, null, seats, teamSeatsPerRow)]
+      : []
+    const leaves = [...offices, ...team]
+    project.children = leaves
+    return leaves
   })
 }
