@@ -29,6 +29,7 @@ const categories: Record<string, ToolCategory> = {
   patch: 'edit',
   apply_patch: 'edit',
   bash: 'run',
+  exec: 'run',
   exec_command: 'run',
   web_search: 'web',
   webfetch: 'web',

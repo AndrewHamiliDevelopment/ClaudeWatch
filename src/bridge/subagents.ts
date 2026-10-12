@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import type { AgentActivity, SubagentRef } from '../shared/office/types'
+import type { AgentActivity, CurrentTool, SubagentRef } from '../shared/office/types'
 import { type BridgeIo, isLabel, isMissing, jsonObject } from './io'
 import { toolActivity } from './tool-category'
 import { readTranscript } from './transcript-tail'
@@ -16,6 +16,10 @@ const AGENT_TRANSCRIPT = /^agent-([\w-]+)\.jsonl$/
 const MAX_FOLDER_DEPTH = 3
 // An agent whose record has been quiet this long is taken to have finished.
 export const SUBAGENT_FRESH_MS = 60_000
+// A long build or test writes nothing until it returns: an agent with a tool open stays this long.
+export const OPEN_TOOL_HOLD_MS = 15 * 60_000
+// `now` is read before the files are, so one written during the tick may look a little ahead.
+export const CLOCK_SKEW_MS = 5_000
 
 export async function listAgentFiles(transcript: string, io: BridgeIo): Promise<AgentFile[]> {
   const found: AgentFile[] = []
@@ -45,13 +49,12 @@ export async function listAgentFiles(transcript: string, io: BridgeIo): Promise<
   return found.sort((a, b) => a.id.localeCompare(b.id))
 }
 
-// A fresh record with a tool still open shows as that tool; without one it is thinking.
-async function activityOf(file: AgentFile, io: BridgeIo): Promise<AgentActivity> {
+// The tool still open at the end of an agent's record, if any.
+async function openTool(file: AgentFile, io: BridgeIo): Promise<CurrentTool | null> {
   try {
-    const { tool } = await readTranscript(file.path, io)
-    return tool ? toolActivity(tool.category) : 'thinking'
+    return (await readTranscript(file.path, io)).tool
   } catch (error) {
-    if (isMissing(error)) return 'thinking'
+    if (isMissing(error)) return null
     throw error
   }
 }
@@ -63,11 +66,14 @@ export async function liveSubagents(
 ): Promise<SubagentRef[]> {
   const agents: SubagentRef[] = []
   for (const file of files) {
-    if (now - file.mtimeMs >= SUBAGENT_FRESH_MS || file.mtimeMs > now) continue
+    const quietMs = now - file.mtimeMs
+    if (quietMs >= OPEN_TOOL_HOLD_MS || quietMs < -CLOCK_SKEW_MS) continue
     try {
+      const tool = await openTool(file, io)
+      if (quietMs >= SUBAGENT_FRESH_MS && !tool) continue
       const meta = jsonObject(await io.readText(file.path.replace(/\.jsonl$/, '.meta.json')))
-      if (isLabel(meta?.agentType))
-        agents.push({ id: file.id, type: meta.agentType, activity: await activityOf(file, io) })
+      const activity: AgentActivity = tool ? toolActivity(tool.category) : 'thinking'
+      if (isLabel(meta?.agentType)) agents.push({ id: file.id, type: meta.agentType, activity })
     } catch (error) {
       if (!isMissing(error)) throw error
     }

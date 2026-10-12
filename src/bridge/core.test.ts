@@ -183,3 +183,11 @@ it('shows a busy lead with live subagents and no open tool as delegating, not th
     'thinking'
   )
 })
+
+it('strips control and bidi override characters from a Claude session name and its folder', () => {
+  const named = { ...registryEntry(), name: 'fix\u202E the\u0007 bug\u2069' }
+  const tool = { tool: null, error: false }
+  expect(sessionFromRegistry(named, tool, [], '/repo', null).name).toBe('fix the bug')
+  const unnamed = { ...registryEntry(), name: '', cwd: '/x/ap\u2066p\u0000' }
+  expect(sessionFromRegistry(unnamed, tool, [], '/repo', null).name).toBe('app')
+})

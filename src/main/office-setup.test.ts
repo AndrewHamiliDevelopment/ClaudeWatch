@@ -1,4 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdtempSync, rmSync } from 'fs'
+import { tmpdir } from 'os'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
 
@@ -83,6 +85,18 @@ describe('setupOffice', () => {
   }
   const commands = (): [string, string[]][] =>
     execFilePromise.mock.calls.map(([program, args]) => [program, args])
+
+  // A tracked agent outside Orca, in a folder that exists: only such a folder is opened.
+  const folders: string[] = []
+  const trackedFolder = (): string => {
+    const folder = mkdtempSync(join(tmpdir(), 'office-setup-'))
+    folders.push(folder)
+    tracker.getInstances.mockReturnValue([{ pid: 4242, projectPath: folder }])
+    return folder
+  }
+  afterEach(() => {
+    for (const folder of folders.splice(0)) rmSync(folder, { recursive: true, force: true })
+  })
 
   beforeEach(() => {
     vi.clearAllMocks()
@@ -185,6 +199,7 @@ describe('setupOffice', () => {
   })
 
   it('opens the tracked folder in the agent’s own terminal app outside Orca', async () => {
+    const folder = trackedFolder()
     execFilePromise.mockImplementation(async (program: string, args: string[]) =>
       args.includes('-E')
         ? { stdout: 'claude HOME=/Users/dev\n', stderr: '' }
@@ -193,11 +208,12 @@ describe('setupOffice', () => {
 
     expect(await office.focusSession(4242)).toEqual({ success: true, target: 'terminal' })
     expect(terminalResolver.resolve).toHaveBeenCalledWith(4242)
-    expect(openTerminal).toHaveBeenCalledWith('/repo/app', 'iterm2')
+    expect(openTerminal).toHaveBeenCalledWith(folder, 'iterm2')
     expect(commands().map(([program]) => program)).toEqual(['/bin/ps', '/bin/ps', '/bin/ps'])
   })
 
   it('does not take a pane key from the tracked process’s arguments', async () => {
+    trackedFolder()
     execFilePromise.mockImplementation(async (program: string, args: string[]) =>
       args.includes('command=')
         ? {

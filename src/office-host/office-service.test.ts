@@ -12,6 +12,10 @@ vi.mock('../shared/orca-bundle', async (original) => ({
   assertOrcaTrusted
 }))
 
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { ORCA_CLI } from '../shared/orca-bundle'
 import type { FeedMessage, OfficeSnapshot, SessionRef } from '../shared/office/types'
 import { createOfficeService, type OfficeService } from './office-service'
@@ -219,18 +223,38 @@ describe('createOfficeService', () => {
     })
 
     it('opens the folder in the hosting terminal app for an agent outside Orca', async () => {
+      const folder = mkdtempSync(join(tmpdir(), 'office-focus-'))
       snapshot = {
         rev: 5,
         generatedAtMs: 1,
-        sessions: [session({ host: 'terminal', orcaPaneKey: null })],
+        sessions: [session({ host: 'terminal', orcaPaneKey: null, cwd: folder })],
         sources: []
       }
 
-      expect(await service.focus('claude:s1')).toEqual({ success: true, target: 'terminal' })
+      try {
+        expect(await service.focus('claude:s1')).toEqual({ success: true, target: 'terminal' })
+      } finally {
+        rmSync(folder, { recursive: true, force: true })
+      }
       expect(terminalOf).toHaveBeenCalledWith(4242)
-      expect(openTerminal).toHaveBeenCalledWith('/repo/app', 'iterm2')
+      expect(openTerminal).toHaveBeenCalledWith(folder, 'iterm2')
       expect(raiseTerminal).not.toHaveBeenCalled()
       expect(run).not.toHaveBeenCalled()
+    })
+
+    it.each([
+      ['a folder that does not exist', () => '/no/such/folder'],
+      ['a file', () => fileURLToPath(import.meta.url)]
+    ])('opens nothing for %s', async (_case, cwdOf) => {
+      snapshot = {
+        rev: 5,
+        generatedAtMs: 1,
+        sessions: [session({ host: 'terminal', orcaPaneKey: null, cwd: cwdOf() })],
+        sources: []
+      }
+
+      expect(await service.focus('claude:s1')).toEqual({ success: false })
+      expect(openTerminal).not.toHaveBeenCalled()
     })
 
     it('only brings that app forward when it may not type: no new tab, no cd', async () => {

@@ -349,6 +349,7 @@ it.each([
 it.each([
   ['apply_patch', 'editing', 'edit'],
   ['exec_command', 'running', 'run'],
+  ['exec', 'running', 'run'],
   ['web_search', 'searching', 'web']
 ])('categorizes the open Codex tool %s', (name, activity, category) => {
   expect(
@@ -540,4 +541,108 @@ it('walks the session folders fully only every 30 s while app-servers run, and f
   const later = await collectCodex('/codex', io, undefined, false, now)
   expect(list.mock.calls.length).toBeGreaterThan(fullWalk)
   expect(later.sessions.map((session) => session.key).sort()).toEqual(['codex:late', 'codex:live'])
+})
+
+// One app-server and one hosted thread in /repo whose rollout time the test moves.
+function hostedThread(tail: string, extra: object = {}) {
+  const path = '/codex/sessions/rollout-h.jsonl'
+  const meta = JSON.stringify({
+    type: 'session_meta',
+    payload: { id: 'h', cwd: '/repo', ...extra }
+  })
+  const files: Record<string, string | null> = { [path]: `${meta}\n${tail}`, '/repo/.git': null }
+  const io = fixtureIo(files)
+  const written = { atMs: 0 }
+  const stat = io.stat
+  io.stat = async (candidate) =>
+    candidate === path
+      ? { directory: false, mtimeMs: written.atMs, size: files[path]?.length ?? 0 }
+      : stat(candidate)
+  io.exec = vi.fn(async (file: string) =>
+    file.endsWith('ps')
+      ? '43 Sat Oct 10 15:29:12 2026 /Applications/Codex.app/codex app-server'
+      : ''
+  )
+  const keys = async (now: number): Promise<string[]> =>
+    (await collectCodex('/codex', io, undefined, false, now)).sessions.map(({ key }) => key)
+  return { path, files, io, written, keys }
+}
+
+it('keeps a hosted thread written a moment after the tick began', async () => {
+  const { written, keys } = hostedThread(activityRecords([{ type: 'reasoning' }]))
+  const now = 1_000_000
+  written.atMs = now + 1_500
+  expect(await keys(now)).toEqual(['codex:h'])
+})
+
+it('keeps a quiet hosted thread live while a tool it opened is still running, up to a cap', async () => {
+  const shell = activityRecords([{ type: 'function_call', call_id: 'c1', name: 'exec_command' }])
+  const { written, keys } = hostedThread(shell)
+  const start = 1_000_000
+  written.atMs = start
+  expect(await keys(start)).toEqual(['codex:h'])
+  expect(await keys(start + 5 * 60_000)).toEqual(['codex:h'])
+  expect(await keys(start + 16 * 60_000)).toEqual([])
+})
+
+it('lets a quiet hosted thread with no open tool leave after two minutes', async () => {
+  const { written, keys } = hostedThread(activityRecords([{ type: 'reasoning' }]))
+  written.atMs = 1_000_000
+  expect(await keys(1_000_000)).toEqual(['codex:h'])
+  expect(await keys(1_000_000 + 3 * 60_000)).toEqual([])
+})
+
+it('gives a hosted thread with no start time in its rollout one start time, however often it is written', async () => {
+  const { path, files, io, written } = hostedThread(activityRecords([{ type: 'reasoning' }]))
+  const startOf = async (now: number): Promise<number | undefined> =>
+    (await collectCodex('/codex', io, undefined, false, now)).sessions[0]?.startedAtMs
+  written.atMs = 1_000_000
+  const first = await startOf(1_000_000)
+  files[path] += `\n${activityRecords([{ type: 'reasoning' }])}`
+  written.atMs = 1_005_000
+  expect(await startOf(1_005_000)).toBe(first)
+})
+
+it('keeps the key a Codex process was first shown under once its rollout appears', async () => {
+  const files: Record<string, string | null> = { '/repo/.git': null }
+  const io = fixtureIo(files)
+  io.exec = async (file) =>
+    file.endsWith('ps') ? '42 Sat Oct 10 15:29:12 2026 /bin/codex' : 'p42\nn/repo\n'
+  const [before] = (await collectCodex('/codex', io)).sessions
+  files['/codex/sessions/rollout-a.jsonl'] = JSON.stringify({
+    type: 'session_meta',
+    payload: { id: 'a', cwd: '/repo' }
+  })
+  const [after] = (await collectCodex('/codex', io, undefined, false, Date.now() + 60_000)).sessions
+  expect(before.key).toBe(`codex:pid-42-${Date.parse('Sat Oct 10 15:29:12 2026 UTC')}`)
+  expect(after).toMatchObject({ key: before.key, sessionId: 'a' })
+})
+
+it('lets the newest Codex process claim the newest rollout in a shared folder', async () => {
+  const meta = (id: string) =>
+    JSON.stringify({ type: 'session_meta', payload: { id, cwd: '/repo' } })
+  const io = fixtureIo({
+    '/codex/sessions/rollout-old.jsonl': meta('old'),
+    '/codex/sessions/rollout-new.jsonl': meta('new'),
+    '/repo/.git': null
+  })
+  const stat = io.stat
+  io.stat = async (path) =>
+    path.includes('rollout-new') ? { directory: false, mtimeMs: 2000, size: 10 } : stat(path)
+  io.exec = async (file, args) =>
+    file.endsWith('ps')
+      ? '42 Sat Oct 10 15:29:12 2026 /bin/codex\n43 Sat Oct 10 15:39:12 2026 /bin/codex'
+      : `p${args[2]}\nn/repo\n`
+  const { sessions } = await collectCodex('/codex', io)
+  const owners = Object.fromEntries(sessions.map((session) => [session.pid, session.key]))
+  expect(owners).toEqual({ 42: 'codex:old', 43: 'codex:new' })
+})
+
+it('strips control and bidi override characters from a name taken from a folder', async () => {
+  const cwd = '/x/re\u202Epo\u0007'
+  const io = fixtureIo()
+  io.exec = async (file) =>
+    file.endsWith('ps') ? '42 Sat Oct 10 15:29:12 2026 codex' : `p42\nn${cwd}\n`
+  const [session] = (await collectCodex('/codex', io)).sessions
+  expect(session.name).toBe('repo')
 })

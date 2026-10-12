@@ -183,6 +183,14 @@ const LABEL = /^[\p{L}\p{N}_.:-][\p{L}\p{N}_ .:-]{0,127}$/u
 export const isLabel = (value: unknown): value is string =>
   typeof value === 'string' && LABEL.test(value)
 
+// A session name read from disk, before it may enter the feed: control characters and bidi
+// overrides can reorder or hide what the name shows.
+const UNPRINTABLE = /[\p{Cc}\u202A-\u202E\u2066-\u2069]/gu
+const MAX_NAME_LENGTH = 80
+export function displayName(text: string): string {
+  return text.replace(/\s+/g, ' ').replace(UNPRINTABLE, '').trim().slice(0, MAX_NAME_LENGTH)
+}
+
 export function jsonObject(text: string): Record<string, unknown> | null {
   try {
     return object(JSON.parse(text))

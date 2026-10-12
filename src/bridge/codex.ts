@@ -8,15 +8,18 @@ import type {
   SourceHealth
 } from '../shared/office/types'
 import { type CodexTotal, codexTotalOf } from '../shared/accounts'
-import { type BridgeIo, isLabel, isMissing, jsonObject, object } from './io'
+import { type BridgeIo, displayName, isLabel, isMissing, jsonObject, object } from './io'
 import { placementOf, resolveProject } from './project-root'
 import { findRollouts, type Rollout } from './codex-rollouts'
 import { parseCodexUsage } from './codex-usage'
 import { NEXT_STEP_MS } from './opencode-activity'
+import { CLOCK_SKEW_MS, OPEN_TOOL_HOLD_MS } from './subagents'
 import { toolActivity, toolCategory } from './tool-category'
 import {
   forgetExited,
   isInsideAppBundle,
+  keyOf,
+  newestFirst,
   type ProcessRow,
   readProcessTable,
   rememberedFolder
@@ -102,6 +105,8 @@ interface Remembered {
   usage: Map<string, SessionUsage>
   // Where each live process runs, by pid and start time: asking costs an `lsof` run.
   folders: Map<string, string>
+  // The placeholder key a process without a rollout was first shown under, by pid and start time.
+  placeholders: Map<string, string>
   // What each live rollout's tail held, by path, with the size and time of the file it was read from.
   tails: Map<
     string,
@@ -193,10 +198,16 @@ export async function collectCodex(
   if (!memory) {
     remembered.set(
       io,
-      (memory = { walk: null, usage: new Map(), folders: new Map(), tails: new Map() })
+      (memory = {
+        walk: null,
+        usage: new Map(),
+        folders: new Map(),
+        placeholders: new Map(),
+        tails: new Map()
+      })
     )
   }
-  const { usage: known, folders, tails } = memory
+  const { usage: known, folders, placeholders, tails } = memory
   const live = new Set<string>()
   const liveTails = new Set<string>()
   try {
@@ -244,12 +255,21 @@ export async function collectCodex(
       if (usage) known.set(id, usage)
       live.add(id)
       const project = await resolveProject(cwd, io, now)
+      const key =
+        owner.pid === null
+          ? `codex:${id}`
+          : keyOf(
+              placeholders,
+              { pid: owner.pid, startedAtMs: owner.startedAtMs },
+              'codex',
+              rollout?.id
+            )
       const session: SessionRef = {
-        key: `codex:${id}`,
+        key,
         provider: 'codex',
         sessionId: id,
         pid: owner.pid,
-        name: basename(cwd),
+        name: displayName(basename(cwd)),
         cwd,
         ...placementOf(project),
         host: 'terminal',
@@ -268,7 +288,7 @@ export async function collectCodex(
       if (tail) tail.session = session
       health.detail = 'live'
     }
-    for (const process of processes) {
+    for (const process of newestFirst(processes)) {
       try {
         const cwd = await rememberedFolder(io, folders, process)
         if (!cwd || isInsideAppBundle(cwd)) continue
@@ -283,14 +303,19 @@ export async function collectCodex(
     // The desktop app, the IDE extension and plugins run their threads inside an app-server,
     // which no process maps to: a thread is live while its rollout is being written.
     for (const rollout of isHosting ? rollouts : []) {
-      // Newest first: the first one gone quiet ends the live ones.
-      if (now - rollout.mtimeMs >= HOSTED_FRESH_MS) break
-      if (used.has(rollout.id) || rollout.mtimeMs > now || isInsideAppBundle(rollout.cwd)) continue
+      const quietMs = now - rollout.mtimeMs
+      // Newest first: past the hold, every later one is quieter still.
+      if (quietMs >= OPEN_TOOL_HOLD_MS) break
+      const shown = tails.get(rollout.path)
+      const isLive = quietMs < HOSTED_FRESH_MS || shown?.state.currentTool != null
+      if (!isLive || quietMs < -CLOCK_SKEW_MS) continue
+      if (used.has(rollout.id) || isInsideAppBundle(rollout.cwd)) continue
       used.add(rollout.id)
       try {
         await show(rollout, rollout.cwd, {
           pid: null,
-          startedAtMs: rollout.startedAtMs ?? rollout.mtimeMs
+          // An undated rollout keeps the time it was first shown with, not each new write's.
+          startedAtMs: rollout.startedAtMs ?? shown?.session?.startedAtMs ?? rollout.mtimeMs
         })
       } catch {
         health.ok = false
@@ -299,6 +324,7 @@ export async function collectCodex(
     }
     for (const id of known.keys()) if (!live.has(id)) known.delete(id)
     forgetExited(folders, processes)
+    forgetExited(placeholders, processes)
     for (const [path, { session }] of tails) {
       if (liveTails.has(path)) continue
       tails.delete(path)

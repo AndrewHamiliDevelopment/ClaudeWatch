@@ -1,6 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { rmSync } from 'node:fs'
-import type { DatabaseSync } from 'node:sqlite'
+import { join } from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
 import { type BridgeIo, systemIo } from './io'
 import { collectOpencode } from './opencode'
 import { fixtureIo } from './__fixtures__/helpers'
@@ -24,13 +25,14 @@ afterEach(() => {
 // A process table and the folder each pid runs in, over a real database in a temp folder.
 function setup(
   fill: (db: DatabaseSync) => void,
-  folders: Record<number, string> = { 42: '/repo' }
+  folders: Record<number, string> = { 42: '/repo' },
+  starts: Record<number, string> = {}
 ): { io: BridgeIo; root: string; opens: () => number } {
   const { root } = buildOpencodeDb(fill)
   roots.push(root)
   const io = fixtureIo({ '/repo/.git': null, '/other/.git': null })
   const table = Object.keys(folders).map(
-    (pid) => `${pid} ${START} /Users/dev/.opencode/bin/opencode`
+    (pid) => `${pid} ${starts[Number(pid)] ?? START} /Users/dev/.opencode/bin/opencode`
   )
   io.exec = vi.fn(async (file: string, args: string[]) =>
     file.endsWith('ps') ? table.join('\n') : `p${args[2]}\nn${folders[Number(args[2])]}\n`
@@ -189,6 +191,58 @@ it('gives two processes in one folder a session each, never the same one twice',
     'opencode:ses_root',
     `opencode:pid-43-${STARTED_AT}`
   ])
+})
+
+it('lets the newest process claim the newest session, so an older one in the same folder keeps its own', async () => {
+  const { io, root } = setup(
+    (db) => {
+      insertSession(db, { id: 'ses_A', directory: '/repo', updatedAtMs: NOW - 30_000 })
+      insertSession(db, { id: 'ses_B', directory: '/repo', updatedAtMs: NOW })
+    },
+    { 42: '/repo', 43: '/repo' },
+    { 43: 'Sat Oct 10 15:39:12 2026' }
+  )
+  const { sessions } = await collectOpencode(root, io, undefined, NOW)
+  const owners = Object.fromEntries(sessions.map((session) => [session.pid, session.key]))
+  expect(owners).toEqual({ 42: 'opencode:ses_A', 43: 'opencode:ses_B' })
+})
+
+it('keeps the key a process was first shown under once its first conversation lands', async () => {
+  const { io, root } = setup(() => undefined)
+  const [before] = (await collectOpencode(root, io, undefined, NOW)).sessions
+  const db = new DatabaseSync(join(root, 'opencode.db'))
+  insertSession(db, { id: 'ses_new', directory: '/repo', title: 'First', updatedAtMs: NOW })
+  db.close()
+  const [after] = (await collectOpencode(root, io, undefined, NOW + 1000)).sessions
+  expect(after).toMatchObject({ key: before.key, sessionId: 'ses_new', name: 'First' })
+  expect(before.key).toBe(`opencode:pid-42-${STARTED_AT}`)
+})
+
+it('strips control and bidi override characters from a session title', async () => {
+  const { io, root } = setup((db) =>
+    insertSession(db, {
+      id: 'ses_root',
+      directory: '/repo',
+      title: 'Ship\u0007 the\u202E feed\u2066\u0000',
+      updatedAtMs: NOW
+    })
+  )
+  const [session] = (await collectOpencode(root, io, undefined, NOW)).sessions
+  expect(session.name).toBe('Ship the feed')
+})
+
+it('keeps a child session written a moment after the tick began', async () => {
+  const { io, root } = setup((db) => {
+    insertSession(db, { id: 'ses_root', directory: '/repo', updatedAtMs: NOW })
+    insertSession(db, {
+      id: 'ses_kid',
+      parentId: 'ses_root',
+      directory: '/repo',
+      updatedAtMs: NOW + 1500
+    })
+  })
+  const [session] = (await collectOpencode(root, io, undefined, NOW)).sessions
+  expect(session.subagents.map((agent) => agent.id)).toEqual(['ses_kid'])
 })
 
 it('says nothing and opens nothing when OpenCode is not running', async () => {

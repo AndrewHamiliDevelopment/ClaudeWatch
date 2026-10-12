@@ -1,7 +1,7 @@
 import { basename, join } from 'node:path'
 import type { SessionRef, SourceHealth, SubagentRef, TokenCounts } from '../shared/office/types'
 import { zeroCounts } from '../shared/office/token-counts'
-import { type BridgeIo, isLabel } from './io'
+import { type BridgeIo, displayName, isLabel } from './io'
 import {
   OPENCODE_IDLE,
   opencodeProcesses,
@@ -17,12 +17,14 @@ import {
 import {
   forgetExited,
   isInsideAppBundle,
+  keyOf,
+  newestFirst,
   type ProcessRow,
   readProcessTable,
   rememberedFolder
 } from './process-table'
 import { placementOf, resolveProject } from './project-root'
-import { SUBAGENT_FRESH_MS } from './subagents'
+import { CLOCK_SKEW_MS, SUBAGENT_FRESH_MS } from './subagents'
 import { tokenCount } from './usage-fold'
 
 const FAILURE_DETAIL: Record<OpencodeFailure, string> = {
@@ -33,7 +35,6 @@ const FAILURE_DETAIL: Record<OpencodeFailure, string> = {
   malformed: 'OpenCode session data could not be read'
 }
 const SESSION_ID = /^[\w-]{1,128}$/
-const MAX_NAME_LENGTH = 80
 
 // Input excludes what was read from or written to the cache, and output excludes reasoning:
 // the five columns add up to the session's total.
@@ -57,10 +58,9 @@ interface SessionRow {
 function sessionRow(row: OpencodeRow): SessionRow | null {
   if (typeof row.id !== 'string' || !SESSION_ID.test(row.id)) return null
   if (typeof row.time_updated !== 'number') return null
-  const title = typeof row.title === 'string' ? row.title.replace(/\s+/g, ' ').trim() : ''
   return {
     id: row.id,
-    title: title.slice(0, MAX_NAME_LENGTH),
+    title: typeof row.title === 'string' ? displayName(row.title) : '',
     createdAtMs: typeof row.time_created === 'number' ? row.time_created : null,
     updatedAtMs: row.time_updated,
     counts: countsOf(row)
@@ -72,7 +72,7 @@ function subagentOf(row: OpencodeRow, now: number): SubagentRef | null {
   if (typeof row.id !== 'string' || !SESSION_ID.test(row.id)) return null
   if (typeof row.time_updated !== 'number') return null
   const quietMs = now - row.time_updated
-  if (quietMs < 0 || quietMs >= SUBAGENT_FRESH_MS) return null
+  if (quietMs < -CLOCK_SKEW_MS || quietMs >= SUBAGENT_FRESH_MS) return null
   return {
     id: row.id,
     type: isLabel(row.agent) ? row.agent : 'subagent',
@@ -110,8 +110,10 @@ function readConversation(
   }
 }
 
-// Where each live process runs, by pid and start time.
+// Where each live process runs, and the placeholder key each was first shown under, by pid and
+// start time.
 const folders = new WeakMap<BridgeIo, Map<string, string>>()
+const placeholders = new WeakMap<BridgeIo, Map<string, string>>()
 
 // The OpenCode processes that are the owner's agents, each with the folder it runs in.
 async function locate(
@@ -150,7 +152,11 @@ export async function collectOpencode(
 ): Promise<OpencodeBatch> {
   const health: SourceHealth = { id: 'opencode', ok: true, detail: 'empty' }
   try {
-    const running = await locate(io, opencodeProcesses(await readProcesses()), health)
+    const processes = opencodeProcesses(await readProcesses())
+    let keys = placeholders.get(io)
+    if (!keys) placeholders.set(io, (keys = new Map()))
+    forgetExited(keys, processes)
+    const running = newestFirst(await locate(io, processes, health))
     if (!running.length) return { sessions: [], sources: [health] }
 
     const taken = new Set<string>()
@@ -171,7 +177,8 @@ export async function collectOpencode(
     for (const found of conversations) {
       if (!found) continue
       const project = await resolveProject(found.process.cwd, io, now)
-      sessions.push(sessionOf(found.process, found.conversation, placementOf(project)))
+      const key = keyOf(keys, found.process, 'opencode', found.conversation?.session.id)
+      sessions.push(sessionOf(found.process, found.conversation, key, placementOf(project)))
     }
     if (health.ok) health.detail = 'live'
     return { sessions, sources: [health] }
@@ -186,17 +193,18 @@ export async function collectOpencode(
 function sessionOf(
   process: AgentProcess,
   conversation: Conversation | null,
+  key: string,
   placement: ReturnType<typeof placementOf>
 ): SessionRef {
   const session = conversation?.session
   // A process that has not written a session yet is still an agent at its desk.
   const id = session?.id ?? `pid-${process.pid}-${process.startedAtMs}`
   return {
-    key: `opencode:${id}`,
+    key,
     provider: 'opencode',
     sessionId: id,
     pid: process.pid,
-    name: session?.title || basename(process.cwd),
+    name: session?.title || displayName(basename(process.cwd)),
     cwd: process.cwd,
     ...placement,
     host: 'terminal',
