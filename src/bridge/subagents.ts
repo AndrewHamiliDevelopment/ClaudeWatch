@@ -1,6 +1,8 @@
 import { join } from 'node:path'
-import type { SubagentRef } from '../shared/office/types'
+import type { AgentActivity, SubagentRef } from '../shared/office/types'
 import { type BridgeIo, isLabel, isMissing, jsonObject } from './io'
+import { toolActivity } from './tool-category'
+import { readTranscript } from './transcript-tail'
 
 export interface AgentFile {
   id: string
@@ -43,6 +45,17 @@ export async function listAgentFiles(transcript: string, io: BridgeIo): Promise<
   return found.sort((a, b) => a.id.localeCompare(b.id))
 }
 
+// A fresh record with a tool still open shows as that tool; without one it is thinking.
+async function activityOf(file: AgentFile, io: BridgeIo): Promise<AgentActivity> {
+  try {
+    const { tool } = await readTranscript(file.path, io)
+    return tool ? toolActivity(tool.category) : 'thinking'
+  } catch (error) {
+    if (isMissing(error)) return 'thinking'
+    throw error
+  }
+}
+
 export async function liveSubagents(
   files: AgentFile[],
   io: BridgeIo,
@@ -54,7 +67,7 @@ export async function liveSubagents(
     try {
       const meta = jsonObject(await io.readText(file.path.replace(/\.jsonl$/, '.meta.json')))
       if (isLabel(meta?.agentType))
-        agents.push({ id: file.id, type: meta.agentType, activity: 'thinking' })
+        agents.push({ id: file.id, type: meta.agentType, activity: await activityOf(file, io) })
     } catch (error) {
       if (!isMissing(error)) throw error
     }
