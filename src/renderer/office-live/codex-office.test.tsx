@@ -95,7 +95,7 @@ afterEach(() => {
 describe('Codex from the bridge feed to the Office', () => {
   it.each(['terminal', 'orca'] as const)('seats both providers once with Codex in %s', (host) => {
     const sessions = sessionsFor(host)
-    const world = new World({ now: () => 1, loungeTrips: false })
+    const world = new World({ loungeTrips: false })
     world.apply(hello(sessions))
     const layout = world.layout()
     const seats = placements(sessions, layout)
