@@ -13,7 +13,7 @@ export interface StreetRect extends Rect {
 export const STREET_CELL_M = 0.5
 // Paving reaches this far out from a building; two buildings within twice this share a street.
 const STREET_REACH_M = 2
-const RING_ROAD_M = 3
+export const RING_ROAD_M = 3
 const AVENUE_WIDTH_M = 4
 // Enough to win the depth test against the ground at the widest zoom.
 const LIFT_M = 0.03

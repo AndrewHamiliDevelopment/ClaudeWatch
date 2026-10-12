@@ -25,8 +25,9 @@ type Triple = readonly [number, number, number]
 // Few sides: a citizen is a few pixels tall at the floor's default zoom.
 const SIDES = 7
 export const SKIN = '#D9A887'
-// Figures are modelled at a metre to the crown, an agent's own height, and drawn this much smaller.
-const CITIZEN_SCALE = 0.7
+// Figures are modelled at a metre to the crown, an agent's own height, and drawn a little smaller:
+// at 0.7 they were lost among the buildings.
+const CITIZEN_SCALE = 0.92
 
 export const box = (color: string, size: Triple, at: Triple): FigurePart => ({
   geometry: new BoxGeometry(...size).translate(...at),

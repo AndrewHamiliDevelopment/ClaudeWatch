@@ -1,4 +1,4 @@
-import { STREET_CELL_M, streetRects, type StreetRect } from '../logic/streets'
+import { RING_ROAD_M, STREET_CELL_M, streetRects, type StreetRect } from '../logic/streets'
 import type { FloorGeometry } from '../scene-model'
 import { draw, WORLD_APRON, type Lot } from '../themes/surroundings'
 import type { CitizenRoute } from './route-pose'
@@ -11,9 +11,6 @@ export const CITIZEN_CAP = 48
 const STREET_M_PER_CITIZEN = 8
 // Paving reaches 2 m out from a building on each side: what a strip of it counts as one street.
 const STREET_WIDTH_M = 4
-// How far past the apron citizens go: the width of the ring road. Further out the blocks stand
-// too tall and too close for a figure this small to be seen between them.
-const TOWN_CENTRE_M = 3
 // A start that leaves a citizen less than this to walk is drawn again, this many times at most.
 const MIN_ROUTE_M = 10
 const START_DRAWS = 8
@@ -44,10 +41,12 @@ function townSeed(lots: readonly Lot[]): number {
 // `lots` is everything the streets were laid round: the same list Streets is drawn from.
 export function citizenStreets(floor: FloorGeometry, lots: readonly Lot[]): StreetRect[] {
   const snap = (metres: number): number => Math.round(metres / STREET_CELL_M) * STREET_CELL_M
-  const west = snap(floor.x - floor.width / 2 - WORLD_APRON.west - TOWN_CENTRE_M)
-  const east = snap(floor.x + floor.width / 2 + WORLD_APRON.east + TOWN_CENTRE_M)
-  const north = snap(floor.z - floor.depth / 2 - WORLD_APRON.north - TOWN_CENTRE_M)
-  const south = snap(floor.z + floor.depth / 2 + WORLD_APRON.south + TOWN_CENTRE_M)
+  // Citizens go no further out than the ring road: beyond it the blocks stand too tall and too
+  // close for a figure this small to be seen between them.
+  const west = snap(floor.x - floor.width / 2 - WORLD_APRON.west - RING_ROAD_M)
+  const east = snap(floor.x + floor.width / 2 + WORLD_APRON.east + RING_ROAD_M)
+  const north = snap(floor.z - floor.depth / 2 - WORLD_APRON.north - RING_ROAD_M)
+  const south = snap(floor.z + floor.depth / 2 + WORLD_APRON.south + RING_ROAD_M)
   return streetRects(floor, lots).flatMap((street) => {
     const left = Math.max(west, street.x - street.width / 2)
     const right = Math.min(east, street.x + street.width / 2)

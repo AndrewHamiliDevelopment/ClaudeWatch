@@ -3,9 +3,9 @@ import { describe, expect, it } from 'vitest'
 import { listThemes } from '../themes/registry'
 import { citizenFigures, citizenGeometry } from './figures'
 
-// An agent's head sits 0.8 m up and its crest tops a metre: a citizen's crown is at 0.7 m, and
-// only what it carries (a parasol, a banner, a lamp pole) reaches higher.
-const TALLEST_CITIZEN_M = 0.92
+// An agent's head sits 0.8 m up and its crest tops a metre: a citizen's crown is just under
+// that, and only what it carries (a parasol, a banner, a lamp pole) reaches higher.
+const TALLEST_CITIZEN_M = 1.25
 const FLOAT_SLACK_M = 1e-6
 
 describe.each(listThemes().map((theme) => [theme.label, theme] as const))(
