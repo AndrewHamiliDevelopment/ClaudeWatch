@@ -47,9 +47,9 @@ const BLURRED_IDLE_FPS = 5
 const BOOST_HOLD_MS = 400
 // Longer than the gap between two position frames of a walk, and than a robot's ease to rest.
 const MOVING_HOLD_MS = 1500
-// Half a 120 Hz frame: a display frame this close to due counts as due, so 30 fps is exactly
-// every second frame at 60 Hz instead of drifting between two and three.
-const DUE_TOLERANCE_MS = 4
+// A display frame this close to due counts as due, so 30 fps is exactly every second frame at
+// 60 Hz. Kept under a third of a 144 Hz frame, which at 4 ms drew a 60 fps camera at 72.
+const DUE_TOLERANCE_MS = 2
 // A camera that moves by itself re-frames for seconds at a time; at a 144 Hz display's own rate
 // that was the costliest thing the idle Office did.
 const CAMERA_FPS = 60
