@@ -72,7 +72,11 @@ export function FrameGovernor({ pace, agents }: FrameGovernorProps) {
 
   useEffect(() => {
     if (!(controls instanceof CameraControlsImpl)) return
-    const boost = (): void => governorRef.current?.boost('camera')
+    // Damping keeps updates coming for seconds after the camera looks still (`rest`); that
+    // tail is drawn at the level's own rate.
+    const boost = (): void => {
+      if (controls.active) governorRef.current?.boost('camera')
+    }
     controls.addEventListener('update', boost)
     return () => controls.removeEventListener('update', boost)
   }, [controls])
