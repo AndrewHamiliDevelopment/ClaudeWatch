@@ -1,5 +1,5 @@
 import { useFrame, type ThreeEvent } from '@react-three/fiber'
-import { useLayoutEffect, useMemo, useRef } from 'react'
+import { useLayoutEffect, useMemo, useRef, type ReactElement } from 'react'
 import type { Group } from 'three'
 import { AGENT_SCALE, SUBAGENT_SCALE } from '../../../shared/office/figure-scale'
 import type { AgentView } from '../../../shared/office/types'
@@ -151,7 +151,32 @@ interface RobotCrewProps extends Pick<RobotProps, 'isReducedMotion' | 'onSelect'
   speakingAgentKey: string | null
 }
 
+// Shallow value equality: a sim step hands over fresh agent objects whose fields mostly match.
+function isShallowEqual(prev: object, next: object): boolean {
+  const prevEntries = new Map(Object.entries(prev))
+  const nextEntries = Object.entries(next)
+  return (
+    prevEntries.size === nextEntries.length &&
+    nextEntries.every(
+      ([key, value]) => prevEntries.has(key) && Object.is(prevEntries.get(key), value)
+    )
+  )
+}
+
+function isSameRobot(prev: RobotProps, next: RobotProps): boolean {
+  return (
+    isShallowEqual({ ...prev, agent: null }, { ...next, agent: null }) &&
+    isShallowEqual(prev.agent, next.agent)
+  )
+}
+
+interface DrawnRobot {
+  props: RobotProps
+  element: ReactElement
+}
+
 // A robot wears the theme of its own room, and keeps it while it walks through other zones.
+// An unchanged robot gets its previous element back, so React skips it on every sim step.
 export function RobotCrew({
   agents,
   zoneGroups,
@@ -160,30 +185,39 @@ export function RobotCrew({
   speakingAgentKey,
   ...robotProps
 }: RobotCrewProps) {
-  const homes = new Map(
-    zoneGroups.flatMap((zoneGroup) =>
-      zoneGroup.rooms.map(
-        (room) =>
-          [room.id, { theme: getTheme(zoneGroup.themeId), rosterIndex: room.bay ?? 0 }] as const
-      )
-    )
-  )
-  return (
-    <>
-      {agents.map((agent) => {
-        const home = homes.get(agent.roomId)
-        return (
-          <Robot
-            key={agent.agentKey}
-            {...robotProps}
-            agent={agent}
-            theme={home?.theme ?? floorTheme}
-            rosterIndex={home?.rosterIndex ?? 0}
-            isSelected={agent.agentKey === selectedAgentKey}
-            isSpeaking={agent.agentKey === speakingAgentKey}
-          />
+  const drawn = useRef<Map<string, DrawnRobot>>(null)
+  const homes = useMemo(
+    () =>
+      new Map(
+        zoneGroups.flatMap((zoneGroup) =>
+          zoneGroup.rooms.map(
+            (room) =>
+              [room.id, { theme: getTheme(zoneGroup.themeId), rosterIndex: room.bay ?? 0 }] as const
+          )
         )
-      })}
-    </>
+      ),
+    [zoneGroups]
   )
+  const previous = drawn.current
+  const next = new Map<string, DrawnRobot>()
+  const elements = agents.map((agent) => {
+    const home = homes.get(agent.roomId)
+    const props: RobotProps = {
+      ...robotProps,
+      agent,
+      theme: home?.theme ?? floorTheme,
+      rosterIndex: home?.rosterIndex ?? 0,
+      isSelected: agent.agentKey === selectedAgentKey,
+      isSpeaking: agent.agentKey === speakingAgentKey
+    }
+    const kept = previous?.get(agent.agentKey)
+    const robot =
+      kept && isSameRobot(kept.props, props)
+        ? kept
+        : { props, element: <Robot key={agent.agentKey} {...props} /> }
+    next.set(agent.agentKey, robot)
+    return robot.element
+  })
+  drawn.current = next
+  return <>{elements}</>
 }
