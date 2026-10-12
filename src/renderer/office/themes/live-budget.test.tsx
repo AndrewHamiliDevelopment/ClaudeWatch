@@ -2,10 +2,12 @@ import { createElement, type ComponentType } from 'react'
 import { expect, it, vi } from 'vitest'
 import { Texture } from 'three'
 import { FloorView } from '../scene/FloorView'
+import { Horizon } from '../scene/Horizon'
 import { RobotCrew } from '../scene/Robot'
-import { WorldView } from '../scene/WorldView'
+import { SurroundingsView, WorldView } from '../scene/WorldView'
 import { getTheme, listThemes, registerTheme } from './registry'
-import { mergedDraws } from './scene.test-utils'
+import { mergedDraws, withBoxSurroundings } from './scene.test-utils'
+import { GROUND_Y, LOT_CAP, sceneExtent, surroundingLots } from './surroundings'
 import type { OfficeTheme } from './types'
 import { makeSession } from '../__tests__/fixtures'
 import { agentsForFloor, layoutFloor } from '../fixture/fixture-layout'
@@ -21,6 +23,7 @@ vi.mock('react', async (original) => ({
   useRef: (current: object) => ({ current })
 }))
 vi.mock('@react-three/fiber', () => ({ useFrame: () => undefined }))
+vi.mock('@react-three/drei', () => ({ CameraControlsImpl: class {} }))
 vi.mock('../scene/textures', () => ({
   signTexture: () => new Texture(),
   blobShadowTexture: () => new Texture()
@@ -71,11 +74,24 @@ function measure({ floor, agents, floorTheme, themeIdFor }: Composition) {
       ]
     })
   )
+  const lots = surroundingLots(floor)
+  const horizon = mergedDraws(
+    createElement(Horizon, {
+      box: { ...sceneExtent(floor, lots), minY: GROUND_Y, maxY: 1 },
+      color: floorTheme.palette.stone
+    })
+  )
+  const surroundings = mergedDraws(
+    createElement(SurroundingsView, { floor, floorTheme, zoneGroups, lots, isReducedMotion: true })
+  )
   return {
     themeCount: zoneGroups.length,
+    lotCount: lots.length,
     worldDraws: world.draws,
-    draws: focused.draws + world.draws,
-    triangles: focused.triangles + world.triangles
+    horizonDraws: horizon.draws,
+    surroundingsDraws: surroundings.draws,
+    draws: focused.draws + world.draws + horizon.draws + surroundings.draws,
+    triangles: focused.triangles + world.triangles + horizon.triangles + surroundings.triangles
   }
 }
 
@@ -98,7 +114,7 @@ function agentsOn(companyCount: number, agentCount = 20): Pick<Composition, 'flo
 
 function report(name: string, result: ReturnType<typeof measure>): void {
   console.info(
-    `${name}: ${result.draws} draw calls (${result.worldDraws} world), ${result.triangles} triangles`
+    `${name}: ${result.draws} draw calls (${result.worldDraws} world, ${result.surroundingsDraws} surroundings on ${result.lotCount} lots), ${result.triangles} triangles`
   )
 }
 
@@ -244,6 +260,39 @@ it.each([
     expect(result.triangles).toBeLessThanOrEqual(TRIANGLE_CEILING)
   }
 )
+
+// Stand-ins for the three themes once each draws its lots: its own cost, plus four box parts.
+const FILLED_THEMES = THREE_THEMES.map((themeId) => {
+  const filled = withBoxSurroundings(getTheme(themeId), `test-filled-${themeId}`)
+  registerTheme(filled)
+  return filled.id
+})
+// A body, a roof, a crate and a mover per theme, however many lots there are.
+const FIXTURE_DRAWS_PER_THEME = 4
+
+it.each([
+  [20, 4],
+  [40, 4],
+  [60, 10]
+])(
+  '%i agents in %i companies on three themes that fill their lots stay inside the draw ceiling',
+  (agents, companies) => {
+    const result = scaled(FILLED_THEMES, agents, companies)
+    expect(result.themeCount).toBe(3)
+    expect(result.lotCount).toBeGreaterThan(40)
+    expect(result.lotCount).toBeLessThanOrEqual(LOT_CAP)
+    expect(result.horizonDraws).toBe(1)
+    expect(result.surroundingsDraws).toBe(3 * FIXTURE_DRAWS_PER_THEME)
+    expect(result.draws).toBeLessThanOrEqual(DRAW_CEILING)
+    expect(result.triangles).toBeLessThanOrEqual(TRIANGLE_CEILING)
+  }
+)
+
+it('adds nothing but the ground while no theme fills its lots', () => {
+  const result = scaled(THREE_THEMES, 20, 4)
+  expect(result.surroundingsDraws).toBe(0)
+  expect(result.horizonDraws).toBe(1)
+})
 
 // What an agent may add once the floor's parts are merged: the textured door sign of its room.
 const DRAWS_PER_AGENT = 1

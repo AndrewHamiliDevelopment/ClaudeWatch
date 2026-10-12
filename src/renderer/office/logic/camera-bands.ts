@@ -38,14 +38,13 @@ export function snapAzimuth(azimuth: number, direction: -1 | 1): number {
   return ISO_START_AZIMUTH + target * SNAP_STEP
 }
 
+// The widest view: `scene` is the scene's extent, the plate with its apron and its lots.
 export function buildingFraming(
-  floor: { width: number; depth: number },
+  scene: { width: number; depth: number },
   floorCount: number,
   viewport: { width: number; height: number }
 ) {
-  // World props reach 12 m beyond either side, 19 m north and 7 m south of the plate.
-  const width = floor.width + 24
-  const depth = floor.depth + 26
+  const { width, depth } = scene
   const height = Math.max(8, floorCount * 2.2 + 1)
   const projectedWidth = (width + depth) / Math.SQRT2
   const projectedHeight = projectedWidth * Math.cos(ISO_POLAR) + height * Math.sin(ISO_POLAR)
@@ -61,6 +60,82 @@ export function buildingFraming(
         viewport.height / (projectedHeight * 1.2)
       )
     )
+  }
+}
+
+interface Point3 {
+  x: number
+  y: number
+  z: number
+}
+
+// Everything that is drawn: the scene's extent on the ground, and how low and high it reaches.
+export interface SceneBox {
+  x: number
+  z: number
+  width: number
+  depth: number
+  minY: number
+  maxY: number
+}
+
+// `forward` is the unit direction the camera looks along; the half sizes are the view's, in metres.
+export interface CameraPose {
+  position: Point3
+  forward: Point3
+  halfWidth: number
+  halfHeight: number
+}
+
+const CLIP_MARGIN_M = 1
+const MIN_NEAR_M = 0.1
+// Where a retreat leaves the nearest thing: clear of the minimum, so rounding never asks again.
+const RESTING_NEAR_M = 1
+const GROUND_OVERSCAN = 1.05
+
+// How much deeper the ground at the top edge of the view is than the ground at its centre.
+function groundDepth(groundY: number, pose: CameraPose): { centre: number; spread: number } {
+  const { position, forward, halfHeight } = pose
+  return {
+    centre: (groundY - position.y) / forward.y,
+    spread: (halfHeight * Math.hypot(forward.x, forward.z)) / Math.abs(forward.y)
+  }
+}
+
+// Near and far planes that hold the whole scene and the ground across the whole view. Whatever
+// is behind the camera is neither drawn nor picked, so `pushBack` is how far it must retreat
+// along its own line of sight first; the planes are measured from there.
+export function clipPlanes(
+  box: SceneBox,
+  pose: CameraPose
+): { near: number; far: number; pushBack: number } {
+  const { position, forward } = pose
+  const depths = [box.x - box.width / 2, box.x + box.width / 2].flatMap((x) =>
+    [box.z - box.depth / 2, box.z + box.depth / 2].flatMap((z) =>
+      [box.minY, box.maxY].map(
+        (y) =>
+          (x - position.x) * forward.x + (y - position.y) * forward.y + (z - position.z) * forward.z
+      )
+    )
+  )
+  const ground = groundDepth(box.minY, pose)
+  const nearest = Math.min(...depths, ground.centre - ground.spread) - CLIP_MARGIN_M
+  const farthest = Math.max(...depths, ground.centre + ground.spread) + CLIP_MARGIN_M
+  const pushBack = nearest < MIN_NEAR_M ? RESTING_NEAR_M - nearest : 0
+  return { near: nearest + pushBack, far: farthest + pushBack, pushBack }
+}
+
+// A square of ground under the view, large enough to pass every edge of it at any map rotation.
+export function groundCover(
+  groundY: number,
+  pose: CameraPose
+): { x: number; z: number; size: number } {
+  const { position, forward, halfWidth, halfHeight } = pose
+  const { centre } = groundDepth(groundY, pose)
+  return {
+    x: position.x + forward.x * centre,
+    z: position.z + forward.z * centre,
+    size: 2 * GROUND_OVERSCAN * Math.hypot(halfWidth, halfHeight / Math.abs(forward.y))
   }
 }
 
