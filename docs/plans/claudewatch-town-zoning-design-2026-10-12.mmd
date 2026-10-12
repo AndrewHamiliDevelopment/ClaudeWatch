@@ -1,0 +1,31 @@
+flowchart LR
+  subgraph West["West of the gate: the old town, never moves"]
+    M["Market on the avenue"]
+    C["Civic: gate plaza"]
+    E["Entertainment, south-west"]
+    R1["Residential, north-west"]
+  end
+  subgraph Campus["Campus claim, snapped to 12 m and held"]
+    B["Boulevard with promenade"] --> G["Green belt"] --> W["Working centre: companies and lounges"]
+  end
+  subgraph Flanks["Flanks, grow east with the campus"]
+    R2["Residential, north"]
+    K["Workshops, south and east"]
+  end
+  M --> C --> B
+  E --> B
+  R1 --> B
+  B --> R2
+  B --> K
+%% ---
+flowchart LR
+  A1["A1 plan core: lattices, zones, lots, dressLot"] --> A2["A2 Orbital Garrison dress"]
+  A1 --> BB["B ground, view, scale, wiring"]
+  A1 --> CC["C trips, citizens, vehicles, sightline"]
+  A1 --> D["D Neo Edo and Brass dress"]
+  A1 --> EE["E Violet Court and Quiet Grove dress"]
+  A2 --> Z["Z close: old contract removed, budgets, four rotations"]
+  BB --> Z
+  CC --> Z
+  D --> Z
+  EE --> Z

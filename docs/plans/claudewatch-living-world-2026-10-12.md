@@ -17,6 +17,7 @@ Validated: `npx vitest run src/office/sim/zz-repro-sprawl.test.ts` (a throwaway 
 | Working agents wander instead of sitting at their desks      | When a neighbouring project or company changes size, every office after it slides over, and each agent in them was left where its desk used to be and walked to the new place; on the old 138 × 186 m floor those walks took minutes | `src/office/sim/world.ts:114-126` (a seat that moved always sent its agent walking)                                                                                                                 |
 | A busy agent looks frozen                                    | The poses for thinking, waiting on a subagent and reading left the arms at the sides with a 3° sway, so only typing and running read as work                                                                                         | `src/renderer/office/logic/character-pose.ts:71-77, 89-92`                                                                                                                                          |
 | The Office costs about 45% CPU with the window in front      | Every frame walked and recomputed thousands of town parts that never move (fixed: 29% → 13% of the page's main thread); the rest is drawing the whole town 30 times a second at full detail on any machine                           | `src/renderer/office/scene/BatchedScene.tsx`, `src/renderer/office/logic/frame-governor.ts`                                                                                                         |
+| The town looks random and the citizens cannot be seen        | Every company has its own jittered lot grid anchored at its centre, streets are whatever paving is left over, no lot has a zone, and citizens walked the dark leftover paving behind the buildings                                   | `src/renderer/office/themes/surroundings.ts:170-188`, `src/renderer/office/logic/streets.ts:143-163`, `src/renderer/office/citizens/routes.ts:43-64`                                                |
 
 ## Tickets
 
@@ -35,6 +36,8 @@ Validated: `npx vitest run src/office/sim/zz-repro-sprawl.test.ts` (a throwaway 
 | none — needs filing (LW-11) | Planned; follow-up commits on draft PR #3     | https://github.com/theangeloumali/ClaudeWatch/pull/3 | "There, I notice an issue where an agent is actually working but it's just fucking hanging and doesn't type anything or what. There's also an issue on I think the world right now is filled. I feel that the world is dead because there are no roaming citizens so we need to also introduce citizens. I want you to dispatch a team of agents that can create citizens and we need to differentiate it from our workers Also as much as possible, we need to have different models. For example on the Neo, Neo Steampunk, Japanese, it needs to have distinctions on models. They are all the same As much as possible we would want to have randomized or uniform types of agents that have their own unique look We can coordinate with Codex so now we can do this efficiently and we also need to make sure that this platform is optimized for any other computers too" |
 | none — needs filing (LW-12) | Planned; follow-up commits on draft PR #3     | https://github.com/theangeloumali/ClaudeWatch/pull/3 | "There, I notice an issue where an agent is actually working but it's just fucking hanging and doesn't type anything or what. There's also an issue on I think the world right now is filled. I feel that the world is dead because there are no roaming citizens so we need to also introduce citizens. I want you to dispatch a team of agents that can create citizens and we need to differentiate it from our workers Also as much as possible, we need to have different models. For example on the Neo, Neo Steampunk, Japanese, it needs to have distinctions on models. They are all the same As much as possible we would want to have randomized or uniform types of agents that have their own unique look We can coordinate with Codex so now we can do this efficiently and we also need to make sure that this platform is optimized for any other computers too" |
 | none — needs filing (LW-13) | In progress; follow-up commits on draft PR #3 | https://github.com/theangeloumali/ClaudeWatch/pull/3 | "There, I notice an issue where an agent is actually working but it's just fucking hanging and doesn't type anything or what. There's also an issue on I think the world right now is filled. I feel that the world is dead because there are no roaming citizens so we need to also introduce citizens. I want you to dispatch a team of agents that can create citizens and we need to differentiate it from our workers Also as much as possible, we need to have different models. For example on the Neo, Neo Steampunk, Japanese, it needs to have distinctions on models. They are all the same As much as possible we would want to have randomized or uniform types of agents that have their own unique look We can coordinate with Codex so now we can do this efficiently and we also need to make sure that this platform is optimized for any other computers too" |
+| none — needs filing (LW-14) | Planned; follow-up commits on draft PR #3     | https://github.com/theangeloumali/ClaudeWatch/pull/3 | "What do you mean citizens are already merged? I don't fucking see any citizens. There are no citizens walking in the fucking map We can have the same size as what we have on the agents and then we can just enlarge our current agents Also we need to properly implement the town structure. We need to have zoning in the structure so it doesn't look like it's fucking random. It needs to be designed in a city skylines design so we have zoning: entertainment zone, working zone, residential zone, and so on. I want you to deeply research how we can implement this. Make sure the citizens are fucking visible. We can also implement vehicles based on the fucking theme"                                                                                                                                                                                        |
+| none — needs filing (LW-15) | Planned; follow-up commits on draft PR #3     | https://github.com/theangeloumali/ClaudeWatch/pull/3 | "By the way we can have a settings or configuration page so some users can turn off some of the features that we built here They can turn it on or turn that off"                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 
 Per-item tier: LW-1 T2 (fix, sim logic, risk 1) · LW-2 T1 (fix, risk 1) · LW-3 T3 (five themes, risk 1) · LW-4 T2 (sim + scene, risk 1) · LW-5 T2 (HUD, risk 1) · LW-6 T1 (fix, main process and one component, risk 1) · LW-7 T2 (new scene feature, risk 1) · LW-8 T2 (new provider in the bridge, risk 2: it reads another tool's local database). Session profile T3, `BUDGET: T3 active=5 total=12`. One review at the end (Maya, risk 1).
 
@@ -52,8 +55,10 @@ Per-item tier: LW-1 T2 (fix, sim logic, risk 1) · LW-2 T1 (fix, risk 1) · LW-3
 - [x] Phase 10 — Citizens roam the town, plainly not workers
 - [x] Phase 11 — Every agent has its own look, in every theme
 - [x] Phase 12 — Light on any computer: detail and frame rate fit the machine
-- [ ] Phase 13 — Ready for the owner: every test green, installed on this Mac, the two screenshots re-taken
-- [ ] Phase 14 — Close, after the owner approves the changes: gates, review, cleanup, install, the two screenshots re-taken, demo re-recorded, pushed to PR #3
+- [ ] Phase 13 — A zoned town: districts, a road hierarchy, citizens that are seen, vehicles
+- [ ] Phase 14 — Office settings: turn each feature on or off
+- [ ] Phase 15 — Ready for the owner: every test green, installed on this Mac, the two screenshots re-taken
+- [ ] Phase 16 — Close, after the owner approves the changes: gates, review, cleanup, install, the two screenshots re-taken, demo re-recorded, pushed to PR #3
 
 ## How it fits
 
@@ -226,7 +231,29 @@ Per-item tier: LW-1 T2 (fix, sim logic, risk 1) · LW-2 T1 (fix, risk 1) · LW-3
 - Verify: `npx vitest run src/renderer/office && npm run typecheck`, plus the profile script against the built app.
 - 2h with Claude | 10h without.
 
-**Phase 13 — Ready for the owner.** Owner: primary.
+**Phase 13 — A zoned town (LW-14).** Owners: A1 (plan core), then A2, B, C, D, E in parallel, then the primary.
+
+- Design of record, with its research basis and sources: `docs/plans/claudewatch-town-zoning-design-2026-10-12.md`. This phase builds that design; the sections named below are its sections.
+- The town is graph paper pinned at the gate: 12 m lots, 24 m blocks, an avenue from the gate (12 m), a boulevard round the campus (10 m) with a promenade, collectors on the block lines (6 m) and footpaths between. Zones are per block: civic at the gate plaza, market along the avenue, entertainment to the south-west, residential to the north, workshops to the south and east, parks through it, and the campus as the working centre inside a green belt (sections 1.3 and 1.4).
+- The campus is a rectangle cut out of that paper, snapped to 12 m and held, so one more agent moves nothing in town and the old town west of the gate never moves at all (section 2).
+- A theme dresses zones from data: building designs tagged by zone, one roof colour and one ground tint per zone, a landmark for civic and for workshops, citizens and three vehicles (section 3). One shared view draws every theme.
+- Citizens live in residential lots and walk to the market, the entertainment quarter, a park or the gate plaza along the avenue's median and the boulevard's promenade, which nothing in town may hide. Vehicles: transit on the boulevard, freight from a workshop to the market, a runabout on the avenue, each in its theme's form (section 4).
+- Sizes: agents 1.65, subagents 1.4, citizens and vehicles 1.3; desks and lounges grow by 1.27 to fit the larger agents (section 4.4).
+- Slices and file ownership: section 5 of the design. New code goes under `src/renderer/office/town/`.
+- AC: every lot has a zone, fronts a road and faces it; a zone border always lies on a road; one desk column arriving and leaving again changes no lot; a 40 m growth and return ends on the first claim; nothing hides a desk or a promenade at any of the four rotations; at each rotation at least 60% of citizens outdoors are in plain sight; three themes and 60 agents stay within 300 draws; every theme dresses every zone and has three vehicles.
+- Verify: `npx vitest run src/renderer/office src/office && npm run typecheck && npx eslint src/renderer/office src/office`
+- 14h with Claude | 65h without.
+
+**Phase 14 — Office settings (LW-15).** Owner: S.
+
+- Files: new `src/renderer/office/logic/office-settings.ts` and `src/renderer/office/hud/OfficeSettings.tsx` with tests, `src/renderer/office/hud/BottomBar.tsx`, `src/renderer/office/OfficeApp.tsx`, `src/renderer/office-live/live-feed.ts`, `src/office/sim/world.ts`.
+- A settings panel in the Office, opened from the bar, where each feature built here can be switched off and on: the town's buildings, citizens, vehicles, ambient motion, lounge trips, the player, and the detail level (moved here from the Metrics overlay). Each switch says in a line what it does and what turning it off saves.
+- Choices are remembered on this machine and apply at once, in the app's window and on the standalone page.
+- AC: each switch removes its feature from the scene and its cost from the frame (no hidden layer left mounted); with everything off the Office is the compact floor with agents at their desks; the choices survive a restart; a stored value of the wrong shape is ignored.
+- Verify: `npx vitest run src/renderer/office src/office && npm run typecheck && npx eslint src/renderer/office`
+- 1.5h with Claude | 6h without.
+
+**Phase 15 — Ready for the owner.** Owner: primary.
 
 - prettier, typecheck, eslint, the whole test suite, `npm run build`, `npm run build:office-web`, the seeded preview in a browser with 0 console errors.
 - Install on this Mac and re-take the owner's two screenshots on live sessions: one company close up and the whole floor at the widest zoom.
@@ -234,7 +261,7 @@ Per-item tier: LW-1 T2 (fix, sim logic, risk 1) · LW-2 T1 (fix, risk 1) · LW-3
 - Verify: every command above exits 0; the installed app's Office shows the compact floor inside its town.
 - 1h with Claude | 3h without.
 
-**Phase 14 — Close, after the owner approves the changes.** Owner: primary, with Maya reviewing.
+**Phase 16 — Close, after the owner approves the changes.** Owner: primary, with Maya reviewing.
 
 - The owner's instruction of 2026-10-12: "let's avoid doing the code review immediately. I'm going to ask you to do the code review once I approve all of the changes so we won't be wasting time."
 - One review of the whole diff (with a security review of the OpenCode reader, which is risk 2), the cleanup pass, reuse audit, dead-code scan, fixes in session.
@@ -282,7 +309,7 @@ Follow-up commits are pushed to `origin feature/prerelease-batch` (draft PR #3).
 
 ## Estimate
 
-Total **27h with Claude | 120h without** (about 4x): Phase 1 2|8, Phase 2 1|3, Phase 3 2|8, Phase 4 1.5|6, Phase 5 4|20, Phase 6 1.5|6, Phase 7 0.5|2, Phase 8 2.5|12, Phase 9 2|10, Phase 10 2|10, Phase 11 3|16, Phase 12 2|10, Phase 13 1|3, Phase 14 2|6. Phases 1, 2+3 and 6 run together; Phases 4 and 5 run together after them; Phases 10, 11 and 12 run together; Phase 13 ends with the install; Phase 14 waits for the owner's approval.
+Total **42.5h with Claude | 191h without** (about 4x): Phase 1 2|8, Phase 2 1|3, Phase 3 2|8, Phase 4 1.5|6, Phase 5 4|20, Phase 6 1.5|6, Phase 7 0.5|2, Phase 8 2.5|12, Phase 9 2|10, Phase 10 2|10, Phase 11 3|16, Phase 12 2|10, Phase 13 14|65, Phase 14 1.5|6, Phase 15 1|3, Phase 16 2|6. Phases 1, 2+3 and 6 run together; Phases 4 and 5 run together after them; Phases 10, 11 and 12 ran together; Phases 13 and 14 run together; Phase 15 ends with the install; Phase 16 waits for the owner's approval.
 
 ## Deviations
 
