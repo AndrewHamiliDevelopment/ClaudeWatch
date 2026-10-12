@@ -1,8 +1,10 @@
 import { BrassRoomSign } from '../BrassKit'
 import type { OfficeTheme } from '../types'
 import { CourtCompanyZone, CourtElevator, CourtProjectOffice, CourtSlab } from './CourtGrounds'
+import { CourtLounge } from './CourtLounge'
 import { CourtPilot } from './CourtPilot'
 import { CourtDesk, CourtDoorway, CourtRoomDressing, CourtRoomFloors } from './CourtRoom'
+import { CourtAmbient, CourtSurroundings } from './CourtSurroundings'
 import { CourtWalls } from './CourtWalls'
 import { CourtDistrict, CourtHangar, CourtTower } from './CourtWorld'
 import { COURT, COURT_PALETTE } from './palette'
@@ -32,7 +34,10 @@ export const violetCourt: OfficeTheme = {
       Desk: CourtDesk,
       RoomDressing: CourtRoomDressing,
       // The door plaque is one shared textured sign in every theme.
-      RoomSign: BrassRoomSign
+      RoomSign: BrassRoomSign,
+      Lounge: CourtLounge,
+      Surroundings: CourtSurroundings,
+      Ambient: CourtAmbient
     }
   },
   world: { District: CourtDistrict, Hangar: CourtHangar, Tower: CourtTower }

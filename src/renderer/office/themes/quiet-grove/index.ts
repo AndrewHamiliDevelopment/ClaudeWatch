@@ -2,7 +2,9 @@ import { BrassRoomSign } from '../BrassKit'
 import type { OfficeTheme } from '../types'
 import { GroveCompanyZone, GroveElevator, GroveProjectOffice, GroveSlab } from './GroveGrounds'
 import { GroveDesk, GroveDoorway, GroveRoomDressing, GroveRoomFloors } from './GroveRoom'
+import { GroveLounge } from './GroveLounge'
 import { GroveSpirit } from './GroveSpirit'
+import { GroveAmbient, GroveSurroundings } from './GroveSurroundings'
 import { GroveWalls } from './GroveWalls'
 import { GroveDistrict, GroveHangar, GroveTower } from './GroveWorld'
 import { GROVE, GROVE_PALETTE } from './palette'
@@ -32,7 +34,10 @@ export const quietGrove: OfficeTheme = {
       Desk: GroveDesk,
       RoomDressing: GroveRoomDressing,
       // The door plaque is one shared textured sign in every theme.
-      RoomSign: BrassRoomSign
+      RoomSign: BrassRoomSign,
+      Lounge: GroveLounge,
+      Surroundings: GroveSurroundings,
+      Ambient: GroveAmbient
     }
   },
   world: { District: GroveDistrict, Hangar: GroveHangar, Tower: GroveTower }
