@@ -1,14 +1,22 @@
-import { Maximize, RotateCcw, RotateCw, ZoomIn, ZoomOut, type LucideIcon } from 'lucide-react'
+import {
+  ChevronUp,
+  Maximize,
+  RotateCcw,
+  RotateCw,
+  ZoomIn,
+  ZoomOut,
+  type LucideIcon
+} from 'lucide-react'
+import { useId, useRef, useState, type ReactNode } from 'react'
 import { Plate } from '../../components/deck/Plate'
 import type { ZoomDirection } from '../logic/camera-bands'
 import type { WallsMode } from '../logic/room-layout'
 import { BAR_BUTTON_CLASS, KBD_CLASS } from './hud-styles'
 
 interface BottomBarProps {
-  // The focused company or project whose theme T cycles; null cycles the office default.
-  themeScope: string | null
-  themeLabel: string
-  onCycleTheme: () => void
+  floorThemeLabel: string
+  // The themes list, shown above the bar while its button is open.
+  renderThemes: (id: string, close: () => void) => ReactNode
   wallsMode: WallsMode
   isListView: boolean
   is3DAvailable: boolean
@@ -78,77 +86,95 @@ function Divider() {
 
 export function BottomBar(props: BottomBarProps) {
   const isShowing3D = props.is3DAvailable && !props.isListView
-  const themeTitle = props.themeScope ? `${props.themeScope} theme` : 'Theme'
+  const [isThemesOpen, setIsThemesOpen] = useState(false)
+  const themesButtonRef = useRef<HTMLButtonElement>(null)
+  const themesId = useId()
+  const closeThemes = (): void => {
+    setIsThemesOpen(false)
+    themesButtonRef.current?.focus()
+  }
   return (
-    <Plate faceClassName="flex flex-wrap items-center gap-1 p-1.5">
-      <div role="group" aria-label="Walls" className="flex gap-1">
-        {WALL_OPTIONS.map((option) => (
-          <ToggleButton
-            key={option.mode}
-            label={option.label}
-            shortcut={option.key}
-            isPressed={props.wallsMode === option.mode}
+    <div className="relative">
+      {isThemesOpen && props.renderThemes(themesId, closeThemes)}
+      <Plate faceClassName="flex flex-wrap items-center gap-1 p-1.5">
+        <div role="group" aria-label="Walls" className="flex gap-1">
+          {WALL_OPTIONS.map((option) => (
+            <ToggleButton
+              key={option.mode}
+              label={option.label}
+              shortcut={option.key}
+              isPressed={props.wallsMode === option.mode}
+              isDisabled={!isShowing3D}
+              onClick={() => props.onWallsMode(option.mode)}
+            />
+          ))}
+        </div>
+        <Divider />
+        {/* The same moves as the keys; right-drag turns the map freely and the wheel zooms. */}
+        <div role="group" aria-label="Camera" className="flex gap-1">
+          <CameraButton
+            label="Rotate left"
+            shortcut="Q"
+            Icon={RotateCcw}
             isDisabled={!isShowing3D}
-            onClick={() => props.onWallsMode(option.mode)}
+            onClick={() => props.onRotate(-1)}
           />
-        ))}
-      </div>
-      <Divider />
-      {/* The same moves as the keys; right-drag turns the map freely and the wheel zooms. */}
-      <div role="group" aria-label="Camera" className="flex gap-1">
-        <CameraButton
-          label="Rotate left"
-          shortcut="Q"
-          Icon={RotateCcw}
-          isDisabled={!isShowing3D}
-          onClick={() => props.onRotate(-1)}
+          <CameraButton
+            label="Rotate right"
+            shortcut="E"
+            Icon={RotateCw}
+            isDisabled={!isShowing3D}
+            onClick={() => props.onRotate(1)}
+          />
+          <CameraButton
+            label="Zoom out"
+            shortcut="-"
+            Icon={ZoomOut}
+            isDisabled={!isShowing3D}
+            onClick={() => props.onZoom('out')}
+          />
+          <CameraButton
+            label="Zoom in"
+            shortcut="="
+            Icon={ZoomIn}
+            isDisabled={!isShowing3D}
+            onClick={() => props.onZoom('in')}
+          />
+          <CameraButton
+            label="Fit"
+            shortcut="0"
+            Icon={Maximize}
+            isDisabled={!isShowing3D}
+            onClick={props.onFit}
+          />
+        </div>
+        <Divider />
+        <ToggleButton
+          label="List view"
+          shortcut="L"
+          isPressed={props.isListView || !props.is3DAvailable}
+          isDisabled={!props.is3DAvailable}
+          onClick={props.onToggleList}
         />
-        <CameraButton
-          label="Rotate right"
-          shortcut="E"
-          Icon={RotateCw}
+        {/* Opens the list and changes nothing itself: a theme is only set where its scope is named. */}
+        <button
+          type="button"
+          ref={themesButtonRef}
+          aria-expanded={isThemesOpen}
+          aria-controls={isThemesOpen ? themesId : undefined}
+          onClick={() => setIsThemesOpen((isOpen) => !isOpen)}
+          className={BAR_BUTTON_CLASS}
+        >
+          Floor theme: {props.floorThemeLabel}
+          <ChevronUp aria-hidden="true" className="size-3.5" />
+        </button>
+        <ToggleButton
+          label="Metrics"
+          isPressed={props.isMetricsVisible}
           isDisabled={!isShowing3D}
-          onClick={() => props.onRotate(1)}
+          onClick={props.onToggleMetrics}
         />
-        <CameraButton
-          label="Zoom out"
-          shortcut="-"
-          Icon={ZoomOut}
-          isDisabled={!isShowing3D}
-          onClick={() => props.onZoom('out')}
-        />
-        <CameraButton
-          label="Zoom in"
-          shortcut="="
-          Icon={ZoomIn}
-          isDisabled={!isShowing3D}
-          onClick={() => props.onZoom('in')}
-        />
-        <CameraButton
-          label="Fit"
-          shortcut="0"
-          Icon={Maximize}
-          isDisabled={!isShowing3D}
-          onClick={props.onFit}
-        />
-      </div>
-      <Divider />
-      <ToggleButton
-        label="List view"
-        shortcut="L"
-        isPressed={props.isListView || !props.is3DAvailable}
-        isDisabled={!props.is3DAvailable}
-        onClick={props.onToggleList}
-      />
-      <button type="button" onClick={props.onCycleTheme} className={BAR_BUTTON_CLASS}>
-        {themeTitle}: {props.themeLabel} <kbd className={KBD_CLASS}>T</kbd>
-      </button>
-      <ToggleButton
-        label="Metrics"
-        isPressed={props.isMetricsVisible}
-        isDisabled={!isShowing3D}
-        onClick={props.onToggleMetrics}
-      />
-    </Plate>
+      </Plate>
+    </div>
   )
 }

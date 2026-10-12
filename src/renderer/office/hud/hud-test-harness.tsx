@@ -141,7 +141,15 @@ const frame = makeFrame({
   ]
 })
 
-export function setupHud(focusResult: FocusResult = { success: true, target: 'pane' }) {
+interface HudOptions {
+  frame?: OfficeFrame
+  isViewOnly?: boolean
+}
+
+export function setupHud(
+  focusResult: FocusResult = { success: true, target: 'pane' },
+  options: HudOptions = {}
+) {
   let push: (next: OfficeFrame) => void = () => undefined
   const focus = vi.fn(async (): Promise<FocusResult> => focusResult)
   const send = vi.fn(async (): Promise<InteractionResult> => ({ success: true }))
@@ -155,10 +163,11 @@ export function setupHud(focusResult: FocusResult = { success: true, target: 'pa
     send,
     respond: vi.fn(async (): Promise<InteractionResult> => ({ success: true })),
     peek,
-    start: vi.fn(async (): Promise<InteractionResult> => ({ success: true }))
+    start: vi.fn(async (): Promise<InteractionResult> => ({ success: true })),
+    isViewOnly: options.isViewOnly
   }
   render(<OfficeApp feed={feed} />)
-  act(() => push(frame))
+  act(() => push(options.frame ?? frame))
   return { focus, send, peek }
 }
 
@@ -178,9 +187,7 @@ export function officesPanel(): HTMLElement {
 // The theme store is one per page, so each test starts from no assignments and a fixed clock.
 export function resetHud(): () => void {
   localStorage.clear()
-  const { companies, projects } = officeThemes.getAssignments()
-  for (const key of Object.keys(companies)) officeThemes.clearCompanyTheme(key)
-  for (const key of Object.keys(projects)) officeThemes.clearProjectTheme(key)
+  officeThemes.clearAll()
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(NOW)
   return () => vi.useRealTimers()

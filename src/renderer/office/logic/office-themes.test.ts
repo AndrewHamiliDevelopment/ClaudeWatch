@@ -1,15 +1,22 @@
 import { describe, expect, it, vi } from 'vitest'
+import { makeFloor, makeZone } from '../__tests__/fixtures'
 import {
+  buildThemeRows,
   createOfficeThemeStore,
   EMPTY_THEME_ASSIGNMENTS,
+  everyOfficeNotice,
+  groupZonesByTheme,
   OFFICE_THEMES_STORAGE_KEY,
   parseThemeAssignments,
   resolveTheme,
+  themeChangeNotice,
   type ThemeStorage
 } from './office-themes'
 
 const EDO = 'neo-edo-steam'
 const BRASS = 'brass-workshop'
+const VIOLET = 'violet-court'
+const GROVE = 'quiet-grove'
 
 function memoryStorage(initial: Record<string, string> = {}): ThemeStorage & {
   values: Map<string, string>
@@ -232,5 +239,105 @@ describe('two Office pages on one origin', () => {
     )
     expect(store.getAssignments()).toBe(before)
     expect(listener).not.toHaveBeenCalled()
+  })
+})
+
+describe('a theme per company', () => {
+  const companyZone = (key: string, projectKey: string) =>
+    makeZone({
+      id: `z-${key}`,
+      kind: 'company',
+      companyKey: key,
+      children: [makeZone({ id: `z-${projectKey}`, kind: 'project', companyKey: key, projectKey })]
+    })
+  const floor = makeFloor({
+    floorId: 'one',
+    zones: [companyZone('c_a', 'p_a'), companyZone('c_b', 'p_b'), companyZone('c_c', 'p_c')]
+  })
+  const companies = [
+    { companyKey: 'c_a', label: 'Alpha', projects: [{ projectKey: 'p_a', label: 'Api' }] },
+    { companyKey: 'c_b', label: 'Beta', projects: [{ projectKey: 'p_b', label: 'Web' }] },
+    { companyKey: 'c_c', label: 'Gamma', projects: [{ projectKey: 'p_c', label: 'Ops' }] }
+  ]
+
+  it('draws three companies in three themes once each has its own', () => {
+    const store = createOfficeThemeStore(memoryStorage())
+    store.setCompanyTheme('c_a', BRASS)
+    store.setCompanyTheme('c_b', VIOLET)
+    store.setCompanyTheme('c_c', GROVE)
+    const assignments = store.getAssignments()
+    const themeOf = (companyKey: string): string =>
+      resolveTheme({ companyKey, projectKey: null }, assignments, EDO)
+    expect(['c_a', 'c_b', 'c_c'].map(themeOf)).toEqual([BRASS, VIOLET, GROVE])
+    const groups = groupZonesByTheme(floor, (zone) => resolveTheme(zone, assignments, EDO))
+    expect(
+      groups.map((group) => [group.themeId, group.companies[0]?.companyKey, group.projects.length])
+    ).toEqual([
+      [BRASS, 'c_a', 1],
+      [VIOLET, 'c_b', 1],
+      [GROVE, 'c_c', 1]
+    ])
+  })
+
+  it('lists each office with its theme and whom it follows', () => {
+    const assignments = {
+      version: 1 as const,
+      companies: { c_a: BRASS },
+      projects: { p_b: VIOLET }
+    }
+    const [alpha, beta] = buildThemeRows(companies, assignments, EDO)
+    expect(alpha).toMatchObject({ themeId: BRASS, ownThemeId: BRASS, inheritedThemeId: EDO })
+    expect(alpha.projects[0]).toMatchObject({
+      target: { companyKey: 'c_a', projectKey: 'p_a', label: 'Api' },
+      themeId: BRASS,
+      ownThemeId: null,
+      followsLabel: 'Alpha',
+      inheritedThemeId: BRASS
+    })
+    expect(beta).toMatchObject({ themeId: EDO, ownThemeId: null, followsLabel: 'the floor' })
+    expect(beta.projects[0]).toMatchObject({ themeId: VIOLET, ownThemeId: VIOLET })
+  })
+
+  it('clears every company and project choice at once, here and in storage', () => {
+    const storage = memoryStorage()
+    const store = createOfficeThemeStore(storage)
+    store.setCompanyTheme('c_a', BRASS)
+    store.setProjectTheme('p_b', VIOLET)
+    store.clearAll()
+    expect(store.getAssignments()).toEqual(EMPTY_THEME_ASSIGNMENTS)
+    expect(createOfficeThemeStore(storage).getAssignments()).toEqual(EMPTY_THEME_ASSIGNMENTS)
+  })
+})
+
+describe('theme change notices', () => {
+  const project = { companyKey: 'c_a', projectKey: 'p_a', label: 'ClaudeWatch' }
+  const company = { companyKey: 'c_a', projectKey: null, label: 'ZKidz' }
+
+  it('names the one office that changed and says the others did not', () => {
+    expect(themeChangeNotice(project, 'Violet Court', false)).toBe(
+      'ClaudeWatch office is now Violet Court. Other offices keep their themes.'
+    )
+  })
+  it('names a company and what it leaves alone', () => {
+    expect(themeChangeNotice(company, 'Quiet Grove', false)).toBe(
+      'ZKidz company is now Quiet Grove. Projects with their own theme and other companies keep theirs.'
+    )
+  })
+  it('says whom an office follows once it is put back', () => {
+    expect(themeChangeNotice(project, 'Quiet Grove', true)).toBe(
+      'ClaudeWatch office now follows its company: Quiet Grove. Other offices keep their themes.'
+    )
+    expect(themeChangeNotice(company, 'Neo Edo Steam', true)).toMatch(
+      /^ZKidz company now follows the floor: Neo Edo Steam\./
+    )
+  })
+  it('says how many choices setting every office removed', () => {
+    expect(everyOfficeNotice('Brass Workshop', 0)).toBe('Every office is now Brass Workshop.')
+    expect(everyOfficeNotice('Brass Workshop', 1)).toBe(
+      'Every office is now Brass Workshop. 1 company or project choice was removed.'
+    )
+    expect(everyOfficeNotice('Brass Workshop', 3)).toBe(
+      'Every office is now Brass Workshop. 3 company and project choices were removed.'
+    )
   })
 })

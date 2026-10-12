@@ -8,9 +8,8 @@ function setup(overrides: Partial<Parameters<typeof BottomBar>[0]> = {}) {
   const onFit = vi.fn()
   render(
     <BottomBar
-      themeScope={null}
-      themeLabel="Neo Edo Steam"
-      onCycleTheme={vi.fn()}
+      floorThemeLabel="Neo Edo Steam"
+      renderThemes={() => <p>Themes list</p>}
       wallsMode="cutaway"
       isListView={false}
       is3DAvailable
@@ -63,8 +62,13 @@ describe('BottomBar camera controls', () => {
       expect(screen.getByRole('button', { name })).toBeDisabled()
   })
 
-  it('names the zone whose theme T cycles', () => {
-    setup({ themeScope: 'ZKidz' })
-    expect(screen.getByRole('button', { name: /ZKidz theme: Neo Edo Steam/ })).toBeInTheDocument()
+  it('names the floor theme and opens the themes list', () => {
+    setup()
+    const themes = screen.getByRole('button', { name: /^Floor theme: Neo Edo Steam/ })
+    expect(themes).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByText('Themes list')).toBeNull()
+    fireEvent.click(themes)
+    expect(themes).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByText('Themes list')).toBeInTheDocument()
   })
 })

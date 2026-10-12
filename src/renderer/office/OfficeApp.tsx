@@ -12,7 +12,12 @@ import {
 import { canRespond, reachTarget } from './logic/interactions'
 import { buildNameCards, buildProjectStacks } from './logic/name-cards'
 import { INITIAL_OFFICE_STATE, officeReducer } from './logic/office-reducer'
-import { resolveTheme, useThemeAssignments } from './logic/office-themes'
+import {
+  buildThemeRows,
+  countThemeChoices,
+  resolveTheme,
+  useThemeAssignments
+} from './logic/office-themes'
 import { buildCompanyList, buildOfficesTree, findZone } from './logic/zone-model'
 import { createFrameMetrics } from './frame-metrics'
 import { AgentActions } from './hud/AgentActions'
@@ -27,6 +32,7 @@ import { ListView } from './hud/ListView'
 import { MetricsOverlay } from './hud/MetricsOverlay'
 import { OfficesPanel } from './hud/OfficesPanel'
 import { ResourceBar } from './hud/ResourceBar'
+import { ThemesList } from './hud/ThemesList'
 import { buildTokenLedger } from '../deck/tokens'
 import { SceneErrorBoundary } from './SceneErrorBoundary'
 import type { OfficeFeed } from './scene-model'
@@ -61,7 +67,8 @@ export function OfficeApp({ feed }: { feed: OfficeFeed }) {
     if (!frame || !zoneId) return undefined
     return frame.floors.flatMap((floor) => findZone(floor, zoneId) ?? [])[0]
   }, [frame, state.focusedZoneId])
-  const { theme, cycleTheme, cycled } = useOfficeTheme(focusedZone)
+  const officeTheme = useOfficeTheme(focusedZone)
+  const { theme, cycleTheme } = officeTheme
   const themeAssignments = useThemeAssignments()
 
   // The feed keeps this array between its messages, while a frame arrives for every step.
@@ -71,6 +78,10 @@ export function OfficeApp({ feed }: { feed: OfficeFeed }) {
   // The Tower stays as a landmark showing the building's totals; it no longer picks floors.
   const towerFloors = useMemo(() => (frame ? summariseFloors(frame) : []), [frame])
   const companies = useMemo(() => (frame ? buildOfficesTree(frame) : []), [frame])
+  const themeRows = useMemo(
+    () => buildThemeRows(companies, themeAssignments, theme.id),
+    [companies, themeAssignments, theme.id]
+  )
   const ledger = useMemo(() => buildTokenLedger(sessions ?? []), [sessions])
   const agentFacts = useMemo(
     () => (frame ? buildAgentFacts(frame) : new Map<string, AgentFacts>()),
@@ -185,7 +196,8 @@ export function OfficeApp({ feed }: { feed: OfficeFeed }) {
           <OfficesPanel
             companies={companies}
             ledger={ledger}
-            defaultTheme={theme}
+            themeRows={themeRows}
+            onChooseTheme={officeTheme.chooseTheme}
             focusedZoneId={state.focusedZoneId}
             onFlyToZone={flyToZone}
             onStart={isViewOnly ? null : (projectKey, provider) => feed.start(projectKey, provider)}
@@ -215,6 +227,7 @@ export function OfficeApp({ feed }: { feed: OfficeFeed }) {
               isPartial={ledger.isOfficePartial}
             />
             <FocusNotice message={notice} onDismiss={dismissNotice} />
+            <FocusNotice message={officeTheme.notice} onDismiss={officeTheme.dismissNotice} />
             {state.isMetricsVisible && !isShowingList && <MetricsOverlay metrics={metrics} />}
           </div>
           <div className="flex min-h-0 w-full flex-1 items-center justify-center">
@@ -271,9 +284,18 @@ export function OfficeApp({ feed }: { feed: OfficeFeed }) {
 
         <div className="pointer-events-auto justify-self-center md:col-span-3">
           <BottomBar
-            themeScope={cycled.scope}
-            themeLabel={cycled.theme.label}
-            onCycleTheme={cycleTheme}
+            floorThemeLabel={theme.label}
+            renderThemes={(id, close) => (
+              <ThemesList
+                id={id}
+                companies={themeRows}
+                floorTheme={theme}
+                choiceCount={countThemeChoices(themeAssignments)}
+                cycleScope={officeTheme.cycleScope}
+                onChoose={officeTheme.chooseTheme}
+                onClose={close}
+              />
+            )}
             wallsMode={state.wallsMode}
             isListView={state.isListView}
             is3DAvailable={is3DAvailable}

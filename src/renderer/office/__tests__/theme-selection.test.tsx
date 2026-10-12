@@ -1,8 +1,7 @@
-import { act, fireEvent, render, renderHook, screen } from '@testing-library/react'
+import { act, fireEvent, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useOfficeTheme } from '../hooks'
 import { useOfficeHotkeys } from '../use-office-effects'
-import { BottomBar } from '../hud/BottomBar'
 import { listThemes, themeForTeam } from '../themes/registry'
 
 beforeEach(() => localStorage.clear())
@@ -54,25 +53,12 @@ it('cycles from T without dispatching a reducer action or intercepting editable 
   input.remove()
 })
 
-it('exposes the current theme and cycles from the BottomBar', () => {
-  const cycle = vi.fn()
-  render(
-    <BottomBar
-      wallsMode="cutaway"
-      isListView={false}
-      is3DAvailable
-      isMetricsVisible={false}
-      onWallsMode={vi.fn()}
-      onToggleList={vi.fn()}
-      onToggleMetrics={vi.fn()}
-      themeScope={null}
-      themeLabel="Neo Edo Steam"
-      onCycleTheme={cycle}
-      onRotate={vi.fn()}
-      onZoom={vi.fn()}
-      onFit={vi.fn()}
-    />
+it('says the floor default changed when T cycles with no office in focus', () => {
+  const { result } = renderHook(useOfficeTheme)
+  act(() => result.current.cycleTheme())
+  expect(result.current.notice).toBe(
+    'The floor default is now Brass Workshop. Offices with their own theme keep it.'
   )
-  fireEvent.click(screen.getByRole('button', { name: /Theme: Neo Edo Steam/ }))
-  expect(cycle).toHaveBeenCalledOnce()
+  act(() => result.current.dismissNotice())
+  expect(result.current.notice).toBe('')
 })

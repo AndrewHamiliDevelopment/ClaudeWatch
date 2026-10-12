@@ -3,6 +3,7 @@ import { isJsonObject } from '../../../shared/json-object'
 import { browserStorage } from '../../office-live/browser-storage'
 import type { FloorGeometry, RoomGeometry, ZoneGeometry } from '../scene-model'
 import { listThemes } from '../themes/registry'
+import type { OfficeCompanyRow, OfficeProjectRow } from './zone-model'
 
 export const OFFICE_THEMES_STORAGE_KEY = 'claudewatch.office.themes'
 const STORAGE_VERSION = 1
@@ -52,6 +53,92 @@ export function resolveTheme(
     assignedThemeId(assignments.companies, zone.companyKey) ??
     defaultThemeId
   )
+}
+
+// What a theme choice applies to: no keys is the floor, and a project carries its company's key too.
+export type ThemeTarget = ThemedZone & { label: string }
+
+export const EVERY_OFFICE: ThemeTarget = {
+  companyKey: null,
+  projectKey: null,
+  label: 'Every office'
+}
+
+export interface ThemeRow {
+  target: ThemeTarget
+  themeId: string
+  // Null while it follows its parent.
+  ownThemeId: string | null
+  followsLabel: string
+  inheritedThemeId: string
+}
+
+export interface CompanyThemeRow extends ThemeRow {
+  projects: ThemeRow[]
+}
+
+type ThemedCompany = Pick<OfficeCompanyRow, 'companyKey' | 'label'> & {
+  projects: readonly Pick<OfficeProjectRow, 'projectKey' | 'label'>[]
+}
+
+export function buildThemeRows(
+  companies: readonly ThemedCompany[],
+  assignments: ThemeAssignments,
+  defaultThemeId: string
+): CompanyThemeRow[] {
+  return companies.map((company) => {
+    const ownThemeId = assignedThemeId(assignments.companies, company.companyKey) ?? null
+    const themeId = ownThemeId ?? defaultThemeId
+    return {
+      target: { companyKey: company.companyKey, projectKey: null, label: company.label },
+      themeId,
+      ownThemeId,
+      followsLabel: 'the floor',
+      inheritedThemeId: defaultThemeId,
+      projects: company.projects.map((project) => {
+        const ownProjectThemeId = assignedThemeId(assignments.projects, project.projectKey) ?? null
+        return {
+          target: {
+            companyKey: company.companyKey,
+            projectKey: project.projectKey,
+            label: project.label
+          },
+          themeId: ownProjectThemeId ?? themeId,
+          ownThemeId: ownProjectThemeId,
+          followsLabel: company.label,
+          inheritedThemeId: themeId
+        }
+      })
+    }
+  })
+}
+
+export function countThemeChoices(assignments: ThemeAssignments): number {
+  return Object.keys(assignments.companies).length + Object.keys(assignments.projects).length
+}
+
+// Every change names its scope, so one office changing is never mistaken for all of them.
+export function themeChangeNotice(
+  target: ThemeTarget,
+  themeLabel: string,
+  isFollowing: boolean
+): string {
+  const isProject = target.projectKey !== null
+  const change = isFollowing
+    ? `now follows ${isProject ? 'its company' : 'the floor'}: ${themeLabel}`
+    : `is now ${themeLabel}`
+  const untouched = isProject
+    ? 'Other offices keep their themes.'
+    : 'Projects with their own theme and other companies keep theirs.'
+  return `${target.label} ${isProject ? 'office' : 'company'} ${change}. ${untouched}`
+}
+
+export function everyOfficeNotice(themeLabel: string, removedCount: number): string {
+  const applied = `Every office is now ${themeLabel}.`
+  if (removedCount === 0) return applied
+  return removedCount === 1
+    ? `${applied} 1 company or project choice was removed.`
+    : `${applied} ${removedCount} company and project choices were removed.`
 }
 
 const UNASSIGNED_ZONE: ThemedZone = { companyKey: null, projectKey: null }
@@ -119,6 +206,7 @@ export interface OfficeThemeStore {
   clearCompanyTheme(companyKey: string): void
   setProjectTheme(projectKey: string, themeId: string): void
   clearProjectTheme(projectKey: string): void
+  clearAll(): void
   subscribe(listener: () => void): () => void
 }
 
@@ -186,6 +274,7 @@ export function createOfficeThemeStore(
     clearCompanyTheme: (companyKey) => clear('companies', companyKey),
     setProjectTheme: (projectKey, themeId) => assign('projects', projectKey, themeId),
     clearProjectTheme: (projectKey) => clear('projects', projectKey),
+    clearAll: () => commit(EMPTY_THEME_ASSIGNMENTS),
     subscribe: (listener) => {
       if (listeners.size === 0) storageEvents?.addEventListener('storage', onStorage)
       listeners.add(listener)

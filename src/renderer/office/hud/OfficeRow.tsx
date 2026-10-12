@@ -1,6 +1,5 @@
-import { Diamond } from 'lucide-react'
+import { ChevronDown, Diamond } from 'lucide-react'
 import type { ReactNode } from 'react'
-import { ICON_BUTTON_CLASS } from '../../components/deck/deck-styles'
 import { agentCountLabel, needsYouLabel } from '../logic/floor-model'
 import type { OfficeProjectRow } from '../logic/zone-model'
 import type { OfficeTheme } from '../themes/types'
@@ -72,26 +71,36 @@ interface ThemeToggleProps {
   buttonRef: (element: HTMLButtonElement | null) => void
 }
 
-// The swatch is the theme's own lacquer and gold; its name is in the label and the tooltip.
+// A theme's own lacquer and gold. Decoration only: the name is always written beside it.
+export function ThemeSwatch({ theme }: { theme: OfficeTheme }) {
+  return (
+    <span
+      aria-hidden="true"
+      className="size-3 shrink-0 rounded-sm ring-1 ring-border-strong"
+      style={{
+        background: `linear-gradient(135deg, ${theme.palette.lacquer} 50%, ${theme.palette.gold} 50%)`
+      }}
+    />
+  )
+}
+
+const THEME_TOGGLE_CLASS =
+  'ml-1.5 flex min-h-[24px] items-center gap-1.5 self-start rounded-md px-1.5 text-caption text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary'
+
+// Sits under its row, so the theme's name is read without a tooltip.
 export function ThemeToggle({ zoneLabel, theme, isOpen, onToggle, buttonRef }: ThemeToggleProps) {
-  const name = `Theme for ${zoneLabel}: ${theme.label}`
   return (
     <button
       type="button"
       ref={buttonRef}
-      aria-label={name}
-      title={name}
+      aria-label={`Theme for ${zoneLabel}: ${theme.label}`}
       aria-expanded={isOpen}
       onClick={onToggle}
-      className={ICON_BUTTON_CLASS}
+      className={THEME_TOGGLE_CLASS}
     >
-      <span
-        aria-hidden="true"
-        className="size-3.5 rounded-sm ring-1 ring-border-strong"
-        style={{
-          background: `linear-gradient(135deg, ${theme.palette.lacquer} 50%, ${theme.palette.gold} 50%)`
-        }}
-      />
+      <ThemeSwatch theme={theme} />
+      {theme.label}
+      <ChevronDown aria-hidden="true" className="size-3" />
     </button>
   )
 }

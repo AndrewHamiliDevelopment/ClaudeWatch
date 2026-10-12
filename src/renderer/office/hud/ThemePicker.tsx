@@ -1,11 +1,13 @@
 import { useId } from 'react'
-import { listThemes } from '../themes/registry'
+import type { ThemeRow, ThemeTarget } from '../logic/office-themes'
+import { getTheme, listThemes } from '../themes/registry'
 
 interface ThemePickerProps {
   zoneLabel: string
-  // The zone's own choice; null while it inherits.
+  // The zone's own choice; null while it inherits, or while nothing is chosen yet.
   themeId: string | null
-  inheritLabel: string
+  // Absent for the floor, which has nothing to follow.
+  inheritLabel?: string
   onChoose: (themeId: string | null) => void
   onDismiss: () => void
 }
@@ -22,15 +24,19 @@ export function ThemePicker({
   onDismiss
 }: ThemePickerProps) {
   const groupName = useId()
-  const options = [
-    { id: null, label: inheritLabel },
-    ...listThemes().map((theme) => ({ id: theme.id, label: theme.label }))
-  ]
+  const options: { id: string | null; label: string }[] = listThemes().map((theme) => ({
+    id: theme.id,
+    label: theme.label
+  }))
+  if (inheritLabel) options.unshift({ id: null, label: inheritLabel })
   return (
     <fieldset
       className="flex flex-col py-1.5 pl-3 pr-1"
       onKeyDown={(event) => {
-        if (event.key === 'Escape') onDismiss()
+        if (event.key !== 'Escape') return
+        // The themes list closes on Escape too; this closes only the choice.
+        event.stopPropagation()
+        onDismiss()
       }}
     >
       <legend className="pb-1 text-caption text-text-secondary">Theme for {zoneLabel}</legend>
@@ -47,5 +53,24 @@ export function ThemePicker({
         </label>
       ))}
     </fieldset>
+  )
+}
+
+interface OfficeThemePickerProps {
+  row: ThemeRow
+  onChoose: (target: ThemeTarget, themeId: string | null) => void
+  onDismiss: () => void
+}
+
+// The one choice a company or project gets, from its Offices row and from the themes list.
+export function OfficeThemePicker({ row, onChoose, onDismiss }: OfficeThemePickerProps) {
+  return (
+    <ThemePicker
+      zoneLabel={row.target.label}
+      themeId={row.ownThemeId}
+      inheritLabel={`Follow ${row.followsLabel} (${getTheme(row.inheritedThemeId).label})`}
+      onChoose={(themeId) => onChoose(row.target, themeId)}
+      onDismiss={onDismiss}
+    />
   )
 }

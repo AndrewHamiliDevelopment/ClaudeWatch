@@ -4,29 +4,25 @@ import type { InteractionResult, ProviderId } from '../../../shared/office/types
 import { ICON_BUTTON_CLASS, PLATE_TITLE_CLASS } from '../../components/deck/deck-styles'
 import { Plate } from '../../components/deck/Plate'
 import { agentCountLabel } from '../logic/floor-model'
-import { officeThemes, resolveTheme, useThemeAssignments } from '../logic/office-themes'
+import type { CompanyThemeRow, ThemeTarget } from '../logic/office-themes'
 import type { OfficeCompanyRow } from '../logic/zone-model'
 import { getTheme } from '../themes/registry'
-import type { OfficeTheme } from '../themes/types'
 import { NewAgentMenu } from './NewAgentMenu'
 import { ThemeToggle, ZoneButton } from './OfficeRow'
-import { ThemePicker } from './ThemePicker'
+import { OfficeThemePicker } from './ThemePicker'
 import type { TokenLedger } from '../../deck/tokens'
 import { tokensText } from './tokens'
 
 interface OfficesPanelProps {
   companies: readonly OfficeCompanyRow[]
   ledger: TokenLedger
-  // The floor's theme, which a company without a choice of its own inherits.
-  defaultTheme: OfficeTheme
+  // One per company, in the same order, with one per project inside.
+  themeRows: readonly CompanyThemeRow[]
+  onChooseTheme: (target: ThemeTarget, themeId: string | null) => void
   focusedZoneId: string | null
   onFlyToZone: (zoneId: string) => void
   // Null where the page may only watch: then no office offers a new agent.
   onStart: ((projectKey: string, provider: ProviderId) => Promise<InteractionResult>) | null
-}
-
-function ownThemeId(themeIds: Readonly<Record<string, string>>, key: string): string | null {
-  return Object.hasOwn(themeIds, key) ? themeIds[key] : null
 }
 
 // Company › Project tree: each row flies to its zone and picks its theme, and a project row
@@ -34,12 +30,12 @@ function ownThemeId(themeIds: Readonly<Record<string, string>>, key: string): st
 export function OfficesPanel({
   companies,
   ledger,
-  defaultTheme,
+  themeRows,
+  onChooseTheme,
   focusedZoneId,
   onFlyToZone,
   onStart
 }: OfficesPanelProps) {
-  const assignments = useThemeAssignments()
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const toggleRefs = useRef(new Map<string, HTMLButtonElement>())
   const refFor = (menuId: string) => (element: HTMLButtonElement | null) => {
@@ -68,14 +64,8 @@ export function OfficesPanel({
               </span>
             )}
           </li>
-          {companies.map((company) => {
-            const companyTheme = getTheme(
-              resolveTheme(
-                { companyKey: company.companyKey, projectKey: null },
-                assignments,
-                defaultTheme.id
-              )
-            )
+          {companies.map((company, companyIndex) => {
+            const companyTheme = themeRows[companyIndex]
             const companyMenuId = `theme:company:${company.companyKey}`
             return (
               <li key={company.companyKey} className="flex flex-col">
@@ -91,33 +81,28 @@ export function OfficesPanel({
                       {company.label}
                     </span>
                   </ZoneButton>
-                  <ThemeToggle
-                    zoneLabel={company.label}
-                    theme={companyTheme}
-                    isOpen={openMenuId === companyMenuId}
-                    onToggle={() => toggleMenu(companyMenuId)}
-                    buttonRef={refFor(companyMenuId)}
-                  />
                 </div>
+                <ThemeToggle
+                  zoneLabel={company.label}
+                  theme={getTheme(companyTheme.themeId)}
+                  isOpen={openMenuId === companyMenuId}
+                  onToggle={() => toggleMenu(companyMenuId)}
+                  buttonRef={refFor(companyMenuId)}
+                />
                 {openMenuId === companyMenuId && (
-                  <ThemePicker
-                    zoneLabel={company.label}
-                    themeId={ownThemeId(assignments.companies, company.companyKey)}
-                    inheritLabel={`Office default (${defaultTheme.label})`}
-                    onChoose={(themeId) =>
-                      themeId
-                        ? officeThemes.setCompanyTheme(company.companyKey, themeId)
-                        : officeThemes.clearCompanyTheme(company.companyKey)
-                    }
+                  <OfficeThemePicker
+                    row={companyTheme}
+                    onChoose={onChooseTheme}
                     onDismiss={() => closeMenu(companyMenuId)}
                   />
                 )}
                 <ul className="ml-2.5 flex flex-col gap-0.5 border-l border-border pl-1">
-                  {company.projects.map((project) => {
+                  {company.projects.map((project, projectIndex) => {
+                    const projectTheme = companyTheme.projects[projectIndex]
                     const themeMenuId = `theme:project:${project.projectKey}`
                     const agentMenuId = `agent:${project.projectKey}`
                     return (
-                      <li key={project.projectKey}>
+                      <li key={project.projectKey} className="flex flex-col">
                         <div className="flex items-center gap-0.5">
                           <ZoneButton
                             row={project}
@@ -130,19 +115,6 @@ export function OfficesPanel({
                               {project.label}
                             </span>
                           </ZoneButton>
-                          <ThemeToggle
-                            zoneLabel={project.label}
-                            theme={getTheme(
-                              resolveTheme(
-                                { companyKey: company.companyKey, projectKey: project.projectKey },
-                                assignments,
-                                defaultTheme.id
-                              )
-                            )}
-                            isOpen={openMenuId === themeMenuId}
-                            onToggle={() => toggleMenu(themeMenuId)}
-                            buttonRef={refFor(themeMenuId)}
-                          />
                           {/* Starting an agent needs a running session's folder; an emptied office has none. */}
                           {onStart && project.agentCount > 0 && (
                             <button
@@ -157,16 +129,17 @@ export function OfficesPanel({
                             </button>
                           )}
                         </div>
+                        <ThemeToggle
+                          zoneLabel={project.label}
+                          theme={getTheme(projectTheme.themeId)}
+                          isOpen={openMenuId === themeMenuId}
+                          onToggle={() => toggleMenu(themeMenuId)}
+                          buttonRef={refFor(themeMenuId)}
+                        />
                         {openMenuId === themeMenuId && (
-                          <ThemePicker
-                            zoneLabel={project.label}
-                            themeId={ownThemeId(assignments.projects, project.projectKey)}
-                            inheritLabel={`Use company theme (${companyTheme.label})`}
-                            onChoose={(themeId) =>
-                              themeId
-                                ? officeThemes.setProjectTheme(project.projectKey, themeId)
-                                : officeThemes.clearProjectTheme(project.projectKey)
-                            }
+                          <OfficeThemePicker
+                            row={projectTheme}
+                            onChoose={onChooseTheme}
                             onDismiss={() => closeMenu(themeMenuId)}
                           />
                         )}
