@@ -1,4 +1,4 @@
-import { createElement } from 'react'
+import { createElement, isValidElement, type ReactElement, type ReactNode } from 'react'
 import { expect } from 'vitest'
 import type { AgentView } from '../../../shared/office/types'
 import { makeSession } from '../__tests__/fixtures'
@@ -8,10 +8,14 @@ import type { FloorGeometry } from '../scene-model'
 import { FloorView } from '../scene/FloorView'
 import { Horizon } from '../scene/Horizon'
 import { RobotCrew } from '../scene/Robot'
-import { SurroundingsView, WorldView } from '../scene/WorldView'
+import { BatchedScene } from '../scene/BatchedScene'
+import { TowerView } from '../scene/WorldView'
+import { groundBuffers, groundQuads } from '../town/town-ground'
+import { dressOf, TownAmbient, TownView } from '../town/TownView'
+import { townOf } from '../town/use-town-plan'
 import { getTheme, listThemes } from './registry'
-import { mergedDraws } from './scene.test-utils'
-import { GROUND_Y, sceneExtent, surroundingLots } from './surroundings'
+import { mergedDraws, type DrawCount } from './scene.test-utils'
+import { GROUND_Y } from './surroundings'
 import type { OfficeTheme } from './types'
 
 export const DRAW_CEILING = 300
@@ -28,6 +32,25 @@ export interface Composition {
   agents: readonly AgentView[]
   floorTheme: OfficeTheme
   themeIdFor: (zone: ThemedZone) => string
+}
+
+// Each BatchedScene under a layer merges on its own at runtime, so each is counted on its own.
+function batchDraws(layer: ReactNode): DrawCount {
+  const batches = (node: ReactNode): ReactElement<{ children?: ReactNode }>[] => {
+    if (Array.isArray(node)) return node.flatMap(batches)
+    if (!isValidElement<{ children?: ReactNode }>(node)) return []
+    return node.type === BatchedScene ? [node] : batches(node.props.children)
+  }
+  return batches(layer)
+    .map((batch) => mergedDraws(batch.props.children))
+    .reduce(
+      (sum, each) => ({
+        draws: sum.draws + each.draws,
+        untextured: sum.untextured + each.untextured,
+        triangles: sum.triangles + each.triangles
+      }),
+      { draws: 0, untextured: 0, triangles: 0 }
+    )
 }
 
 // An upper bound: every thought dot and steam puff at once, and the world at building zoom.
@@ -53,9 +76,11 @@ export function measure({ floor, agents, floorTheme, themeIdFor }: Composition) 
       onFly: () => undefined
     })
   ])
-  const world = mergedDraws(
-    createElement(WorldView, {
-      floor,
+  // The town of a first start at full detail: the most there is to draw.
+  const town = townOf(floor, null, 'full')
+  const world = batchDraws(
+    TowerView({
+      plan: town.plan,
       theme: floorTheme,
       band: 'building',
       floors: [
@@ -63,25 +88,36 @@ export function measure({ floor, agents, floorTheme, themeIdFor }: Composition) 
       ]
     })
   )
-  const lots = surroundingLots(floor)
   const horizon = mergedDraws(
     createElement(Horizon, {
-      box: { ...sceneExtent(floor, lots), minY: GROUND_Y, maxY: 1 },
+      box: { ...town.plan.extent, minY: GROUND_Y, maxY: 1 },
       color: floorTheme.palette.stone
     })
   )
-  const surroundings = mergedDraws(
-    createElement(SurroundingsView, { floor, floorTheme, zoneGroups, lots, isReducedMotion: true })
-  )
+  // TownGround is one mesh by construction (town/town-view.test.tsx holds that).
+  const ground = groundBuffers(groundQuads(town.plan, dressOf(floorTheme)))
+  const shared = { town, floor, floorTheme, zoneGroups }
+  const buildings = batchDraws(TownView(shared))
+  const ambient = batchDraws(TownAmbient({ ...shared, share: 1, isReducedMotion: true }))
+  const townDraws = 1 + buildings.draws
   return {
     themeCount: zoneGroups.length,
-    lotCount: lots.length,
+    lotCount: town.plan.lots.length + town.green.length,
     focusedDraws: focused.draws,
     worldDraws: world.draws,
     horizonDraws: horizon.draws,
-    surroundingsDraws: surroundings.draws,
-    draws: focused.draws + world.draws + horizon.draws + surroundings.draws,
-    triangles: focused.triangles + world.triangles + horizon.triangles + surroundings.triangles
+    // The ground, the town's lots and the belt: shared by every theme on the floor.
+    townDraws,
+    // What the themes add of their own around the offices: their ambient life.
+    surroundingsDraws: ambient.draws,
+    draws: focused.draws + world.draws + horizon.draws + townDraws + ambient.draws,
+    triangles:
+      focused.triangles +
+      world.triangles +
+      horizon.triangles +
+      ground.positions.length / 9 +
+      buildings.triangles +
+      ambient.triangles
   }
 }
 
@@ -107,7 +143,7 @@ export function agentsOn(
 
 export function report(name: string, result: ReturnType<typeof measure>): void {
   console.info(
-    `${name}: ${result.draws} draw calls (${result.worldDraws} world, ${result.surroundingsDraws} surroundings on ${result.lotCount} lots), ${result.triangles} triangles`
+    `${name}: ${result.draws} draw calls (${result.worldDraws} tower, ${result.townDraws} town on ${result.lotCount} lots, ${result.surroundingsDraws} ambient), ${result.triangles} triangles`
   )
 }
 

@@ -12,6 +12,8 @@ import {
   measure,
   REAL_THEMES,
   report,
+  scaled,
+  THREE_THEMES,
   TRIANGLE_CEILING
 } from './live-budget.test-utils'
 import { getTheme, registerTheme } from './registry'
@@ -36,6 +38,21 @@ for (const theme of REAL_THEMES)
     expect(result.draws).toBeLessThanOrEqual(DRAW_CEILING)
     expect(result.triangles).toBeLessThanOrEqual(TRIANGLE_CEILING)
   })
+
+it.each([
+  [20, 4],
+  [40, 4],
+  [60, 10]
+])('three themes with %i agents and the zoned town stay within 300 draws', (agents, companies) => {
+  const result = scaled(THREE_THEMES, agents, companies)
+  expect(result.themeCount).toBe(3)
+  // The ground is one draw; the town's lots and the belt are a batch each, of four unit shapes.
+  expect(result.townDraws).toBeGreaterThan(1)
+  expect(result.townDraws).toBeLessThanOrEqual(1 + 2 * 8)
+  expect(result.lotCount).toBeGreaterThan(100)
+  expect(result.draws).toBeLessThanOrEqual(DRAW_CEILING)
+  expect(result.triangles).toBeLessThanOrEqual(TRIANGLE_CEILING)
+})
 
 // A stand-in for a theme that shares no part with another: Brass's cost, merged only with itself.
 function unshared<Props extends object>(Component: ComponentType<Props>): ComponentType<Props> {

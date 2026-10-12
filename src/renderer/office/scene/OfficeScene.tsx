@@ -19,18 +19,18 @@ import { NameCardLayer } from './NameCards'
 import { FrameGovernor, MetricsProbe } from './RenderLoop'
 import { RobotCrew } from './Robot'
 import { BatchedScene } from './BatchedScene'
-import { SurroundingsView, WorldView } from './WorldView'
+import { TowerView } from './WorldView'
 import { ZonePickers } from './ZonePickers'
 import { CitizenLayer } from '../citizens/CitizenLayer'
-import { districtLots } from '../player/district-lots'
 import { PlayerLayer } from '../player/PlayerLayer'
-import { Streets } from '../player/Streets'
 import { sendPlayer, type Player } from '../player/walking'
 import { useQualitySettings } from '../quality-store'
 import { TOWER_STOREY_M } from '../themes/layout'
-import { thinnedLots } from '../themes/lot-thinning'
-import { GROUND_Y, MAX_LOT_HEIGHT_M, sceneExtent, surroundingLots } from '../themes/surroundings'
+import { GROUND_Y, MAX_LOT_HEIGHT_M, sceneExtent } from '../themes/surroundings'
 import type { OfficeTheme, TowerFloor } from '../themes/types'
+import { TownGround } from '../town/TownGround'
+import { dressOf, TownAmbient, TownView } from '../town/TownView'
+import { useTownPlan } from '../town/use-town-plan'
 
 interface OfficeSceneProps {
   // The floor's default: zones without a company or project theme inherit it.
@@ -98,21 +98,24 @@ function OfficeScene(props: OfficeSceneProps) {
       ]),
     [theme.id, zoneGroups, floor, agents, selectedAgentKey, speakingAgentKey]
   )
-  // The detail level in use: how much of the town is drawn, how sharply and how often.
+  // The detail level in use: how sharply and how often the scene is drawn. The plan thins the
+  // town by that level itself.
   const quality = useQualitySettings()
-  const lots = useMemo(
-    () => (settings.town ? thinnedLots(surroundingLots(floor), quality.ringShare, floor) : []),
-    [floor, quality.ringShare, settings.town]
-  )
+  const town = useTownPlan(floor)
   // In walk mode the owner's character may set off at any moment, so the walking rate holds.
   const pace = useMemo(
     () => ({ idleFps: isWalking ? quality.walkFps : quality.idleFps, walkFps: quality.walkFps }),
     [isWalking, quality.idleFps, quality.walkFps]
   )
-  // What the player and the streets go round: the ring's lots and the floor theme's district.
+  // What the player and the citizens go round: the town's lots and the plots of the belt.
   const solids = useMemo(
-    () => (settings.town ? [...lots, ...districtLots(theme.id, floor)] : lots),
-    [lots, theme.id, floor, settings.town]
+    () => (settings.town ? [...town.plan.lots, ...town.green] : []),
+    [town, settings.town]
+  )
+  // How far the scene reaches: the town to its last road, or the floor alone without one.
+  const reach = useMemo(
+    () => (settings.town ? town.plan.extent : sceneExtent(floor, [])),
+    [town.plan, floor, settings.town]
   )
   const walkTo = useMemo(
     () =>
@@ -124,11 +127,11 @@ function OfficeScene(props: OfficeSceneProps) {
   const storeyCount = props.floors.length
   const sceneBox = useMemo(
     () => ({
-      ...sceneExtent(floor, lots),
+      ...reach,
       minY: GROUND_Y,
       maxY: MAX_LOT_HEIGHT_M + storeyCount * TOWER_STOREY_M
     }),
-    [floor, lots, storeyCount]
+    [reach, storeyCount]
   )
   const liveSessionKeys = useMemo(
     () => new Set(props.sessions.map((session) => session.key)),
@@ -152,7 +155,7 @@ function OfficeScene(props: OfficeSceneProps) {
         <hemisphereLight args={['#FFF3DD', '#3A3A40', 2.2]} />
         <directionalLight position={[10, 20, 6]} intensity={1.8} />
         <Horizon box={sceneBox} color={theme.palette.stone} />
-        {settings.town && <Streets floor={floor} solids={solids} color={theme.palette.ink} />}
+        {settings.town && <TownGround plan={town.plan} dress={dressOf(theme)} />}
         <BatchedScene revision={revision}>
           <FloorView
             floorTheme={theme}
@@ -174,15 +177,18 @@ function OfficeScene(props: OfficeSceneProps) {
         </BatchedScene>
         {settings.town && (
           <>
-            <WorldView theme={props.theme} floor={props.floor} floors={props.floors} band={band} />
-            <SurroundingsView
-              floor={floor}
-              floorTheme={theme}
-              zoneGroups={zoneGroups}
-              lots={lots}
-              ambientShare={settings.ambient ? quality.ambientShare : 0}
-              isReducedMotion={isReducedMotion}
-            />
+            <TowerView plan={town.plan} theme={theme} floors={props.floors} band={band} />
+            <TownView town={town} floor={floor} floorTheme={theme} zoneGroups={zoneGroups} />
+            {settings.ambient && (
+              <TownAmbient
+                town={town}
+                floor={floor}
+                floorTheme={theme}
+                zoneGroups={zoneGroups}
+                share={quality.ambientShare}
+                isReducedMotion={isReducedMotion}
+              />
+            )}
           </>
         )}
         <ZonePickers
@@ -208,6 +214,7 @@ function OfficeScene(props: OfficeSceneProps) {
             isWalking={isWalking}
             floor={floor}
             solids={solids}
+            extent={reach}
             agents={agents}
             palette={theme.palette}
             isReducedMotion={isReducedMotion}

@@ -1,17 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import { buildFixtureFrame } from '../fixture/fixture-feed'
-import { streetRects } from '../logic/streets'
 import { DESK_REACH, doorSide, roomWallSegments, SIDE_NORMAL } from '../logic/room-layout'
-import { APRON_TOP_Y } from '../themes/town-apron'
-import { DEFAULT_THEME_ID } from '../themes/registry'
-import { GROUND_Y, surroundingLots } from '../themes/surroundings'
+import { boundsOfZone } from '../logic/zone-framing'
+import { GROUND_Y, sceneExtent } from '../themes/surroundings'
+import { townOf } from '../town/use-town-plan'
 import type { ZoneGeometry } from '../scene-model'
-import { districtLots } from './district-lots'
 import { doorstep, groundHeight, nearestOpen, walkGround, walkPath } from './walk-ground'
 
 const [floor] = buildFixtureFrame(0, 0).floors
-const lots = surroundingLots(floor)
-const ground = walkGround(floor, lots)
+const { plan, green } = townOf(floor, null, 'full')
+const lots = [...plan.lots, ...green]
+const ground = walkGround(floor, lots, plan.extent)
 
 function flatten(zones: readonly ZoneGeometry[]): ZoneGeometry[] {
   return zones.flatMap((zone) => [zone, ...flatten(zone.children)])
@@ -63,22 +62,30 @@ describe('walkGround', () => {
       }
   })
 
-  it('leaves the gate, the lounges and the streets open', () => {
+  it('leaves the gate, the lounges and every road crossing open', () => {
     expect(ground.isOpen(floor.elevator)).toBe(true)
     for (const company of floor.zones)
       if (company.lounge) expect(ground.isOpen(company.lounge)).toBe(true)
-    const streets = streetRects(floor, lots)
-    expect(streets.filter((street) => !ground.isOpen(street))).toEqual([])
+    expect(plan.graph.nodes.length).toBeGreaterThan(50)
+    expect(plan.graph.nodes.filter((node) => !ground.isOpen(node))).toEqual([])
   })
 
-  it('is closed outside the scene', () => {
+  it('is closed outside the town', () => {
     expect(ground.isOpen({ x: 10_000, z: 0 })).toBe(false)
+    const { minX } = boundsOfZone(plan.extent)
+    expect(ground.isOpen({ x: minX - 5, z: 0 })).toBe(false)
+  })
+
+  it('is the floor and its apron alone when there is no town', () => {
+    const bare = walkGround(floor, [], sceneExtent(floor, []))
+    expect(bare.isOpen(floor.elevator)).toBe(true)
+    expect(bare.isOpen(plan.lots[0])).toBe(false)
   })
 })
 
 describe('nearestOpen', () => {
   it('moves a target inside a building to the nearest open ground', () => {
-    const building = lots.find((lot) => lot.kind === 'building')
+    const building = plan.lots.find((lot) => lot.kind === 'building')
     if (!building) throw new Error('the seeded town has no building')
     const spot = nearestOpen(ground, building)
     if (!spot) throw new Error('no open ground near the building')
@@ -118,22 +125,35 @@ describe('walkPath', () => {
     expect(passesDoor).toBe(true)
   })
 
-  it('reaches a street out in the ring', () => {
-    const building = lots.find((lot) => lot.kind === 'building' && lot.zoneId === null)
+  it('walks from the gate to a road in the far ring without standing in a lot', () => {
+    const far = [...plan.lots]
+      .filter((lot) => lot.isFarRing)
+      .sort((a, b) => Math.hypot(b.x, b.z) - Math.hypot(a.x, a.z))[0]
+    const path = walkPath(ground, floor.elevator, far.door)
+    expect(path.length).toBeGreaterThan(1)
+    const walked = pointsAlong(path)
+    for (const point of walked) expect(ground.isOpen(point)).toBe(true)
+    const inLot = (point: { x: number; z: number }): boolean =>
+      lots.some(
+        (lot) =>
+          Math.abs(point.x - lot.x) < lot.width / 2 - 0.3 &&
+          Math.abs(point.z - lot.z) < lot.depth / 2 - 0.3
+      )
+    expect(walked.filter(inLot)).toEqual([])
+    const end = path[path.length - 1]
+    expect(Math.hypot(end.x - far.door.x, end.z - far.door.z)).toBeLessThan(1)
+  })
+
+  it('sends a click on a building to the open ground beside it', () => {
+    const building = plan.lots.find((lot) => lot.kind === 'building' && lot.isFarRing)
     if (!building) throw new Error('the seeded town has no far ring')
     const path = walkPath(ground, floor.elevator, building)
     expect(path.length).toBeGreaterThan(1)
-    for (const point of pointsAlong(path)) expect(ground.isOpen(point)).toBe(true)
-  })
-
-  it('still reaches the ring with the district standing on the apron', () => {
-    const town = [...lots, ...districtLots(DEFAULT_THEME_ID, floor)]
-    const withDistrict = walkGround(floor, town)
-    const building = lots.find((lot) => lot.kind === 'building' && lot.zoneId === null)
-    if (!building) throw new Error('the seeded town has no far ring')
-    const path = walkPath(withDistrict, floor.elevator, building)
-    expect(path.length).toBeGreaterThan(1)
-    for (const point of pointsAlong(path)) expect(withDistrict.isOpen(point)).toBe(true)
+    const end = path[path.length - 1]
+    expect(ground.isOpen(end)).toBe(true)
+    expect(Math.hypot(end.x - building.x, end.z - building.z)).toBeLessThan(
+      Math.hypot(building.width, building.depth) / 2 + 1
+    )
   })
 
   it('takes far fewer turns than the grid it searched', () => {
@@ -155,10 +175,10 @@ describe('doorstep', () => {
 })
 
 describe('groundHeight', () => {
-  it('is the slab on the plate, the paving on the apron and the ground beyond', () => {
+  it('is the slab on the plate and the town’s ground everywhere else', () => {
     expect(groundHeight(floor, floor.elevator)).toBe(0)
-    const west = (floor.x ?? 0) - floor.width / 2
-    expect(groundHeight(floor, { x: west - 3, z: 0 })).toBe(APRON_TOP_Y)
+    const west = floor.x - floor.width / 2
+    expect(groundHeight(floor, { x: west - 3, z: 0 })).toBe(GROUND_Y)
     expect(groundHeight(floor, { x: west - 40, z: 0 })).toBe(GROUND_Y)
   })
 })
