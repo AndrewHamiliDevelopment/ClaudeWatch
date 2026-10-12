@@ -167,6 +167,34 @@ describe('createLiveFeed', () => {
     expect(frames).toHaveLength(settled)
   })
 
+  it('hands the scene the same floors until the floor itself changes', () => {
+    const frames: OfficeFrame[] = []
+    createLiveFeed(source, { storage: store }).subscribe((frame) => frames.push(frame))
+    listener?.({
+      type: 'hello',
+      v: 1,
+      snapshot: { rev: 1, generatedAtMs: 1, sessions: [session('claude:a')], sources: [] }
+    })
+    vi.advanceTimersByTime(300)
+    const before = frames.at(-1)!.floors
+
+    // Activity only: nothing about the floor moved, so the scene must not rebuild its world.
+    listener?.({
+      type: 'patch',
+      v: 1,
+      seq: 2,
+      upserts: [{ ...session('claude:a'), activity: 'editing' }],
+      removed: []
+    })
+    vi.advanceTimersByTime(300)
+    expect(frames.at(-1)!.sessions[0].activity).toBe('editing')
+    expect(frames.at(-1)!.floors).toBe(before)
+
+    listener?.({ type: 'patch', v: 1, seq: 3, upserts: [session('claude:b')], removed: [] })
+    vi.advanceTimersByTime(300)
+    expect(frames.at(-1)!.floors).not.toBe(before)
+  })
+
   it('does not rewrite the stored layout when it did not change', () => {
     const setItem = vi.spyOn(store, 'setItem')
     createLiveFeed(source, { storage: store }).subscribe(() => {})

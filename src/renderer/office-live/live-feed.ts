@@ -67,6 +67,7 @@ export function createLiveFeed(
     const world = new World({ now, saved: loadLayout(options.storage) })
     let snapshot: OfficeSnapshot | null = null
     let floors: FloorGeometry[] = []
+    let floorsKey = ''
     let lastTick = now()
     let savedLayout = ''
     let lastAgents = ''
@@ -76,7 +77,13 @@ export function createLiveFeed(
       snapshot = applyFeed(snapshot, message)
       world.apply(message)
       const layout = world.layout()
-      floors = toFloorGeometry(layout, snapshot?.sessions ?? [])
+      // Most messages change no geometry: the scene keeps its world while the floors are the same.
+      const nextFloors = toFloorGeometry(layout, snapshot?.sessions ?? [])
+      const nextFloorsKey = JSON.stringify(nextFloors)
+      if (nextFloorsKey !== floorsKey) {
+        floors = nextFloors
+        floorsKey = nextFloorsKey
+      }
       isDirty = true
       const serialised = JSON.stringify(layout)
       if (serialised !== savedLayout) {
