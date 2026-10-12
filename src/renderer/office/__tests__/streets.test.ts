@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { buildFixtureFrame } from '../fixture/fixture-feed'
 import { avenueOf, STREET_CELL_M, streetRects, streetVertices } from '../logic/streets'
-import { plateCentre } from '../logic/zone-framing'
 import { apronLots } from '../themes/apron'
+import { TOWN_APRON } from '../themes/town-apron'
 import { GROUND_Y, sceneExtent, surroundingLots, type Lot } from '../themes/surroundings'
 import { makeFloor } from './fixtures'
 
@@ -19,14 +19,9 @@ function overlaps(a: Rect, b: Rect): boolean {
 
 function seededTown() {
   const [floor] = buildFixtureFrame(0, 0).floors
-  const centre = plateCentre(floor)
-  const district = apronLots(floor).map((lot) => ({
-    ...lot,
-    x: lot.x + centre.x,
-    z: lot.z + centre.z
-  }))
-  const lots = [...surroundingLots(floor), ...district]
-  return { floor, lots, plate: { ...centre, width: floor.width, depth: floor.depth } }
+  // The apron placer works in the floor's own frame, so its lots need no shift.
+  const lots = [...surroundingLots(floor), ...apronLots(floor, TOWN_APRON)]
+  return { floor, lots, plate: { x: floor.x, z: floor.z, width: floor.width, depth: floor.depth } }
 }
 
 const cellOf = (metres: number): number => Math.round(metres / STREET_CELL_M)

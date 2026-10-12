@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Vector3, type Group } from 'three'
 import type { AgentView } from '../../../shared/office/types'
 import { ISO_START_AZIMUTH } from '../logic/camera-bands'
-import { plateCentre, projectToScreen, screenAxes } from '../logic/zone-framing'
+import { projectToScreen, screenAxes } from '../logic/zone-framing'
 import type { FloorGeometry } from '../scene-model'
 import { BEFORE_CONTROLS } from '../scene/use-camera-gestures'
 import { isStillClick, trackPress } from '../scene/ZonePickers'
@@ -193,7 +193,7 @@ export function PlayerLayer(props: PlayerLayerProps) {
     event.stopPropagation()
     sendPlayer(player, event.point)
   }
-  const plate = plateCentre(floor)
+  const plate = { x: floor.x, z: floor.z }
   return (
     <>
       <group ref={figureRef}>

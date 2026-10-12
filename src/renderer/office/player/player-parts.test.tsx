@@ -1,7 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { buildFixtureFrame } from '../fixture/fixture-feed'
-import { plateCentre } from '../logic/zone-framing'
 import { EDO } from '../themes/palettes'
 import { listThemes } from '../themes/registry'
 import { surroundingLots } from '../themes/surroundings'
@@ -105,7 +104,7 @@ describe('districtLots', () => {
   it.each(listThemes().map((theme) => theme.id))(
     'places the %s district on the apron, clear of the plate and the ring',
     (themeId) => {
-      const centre = plateCentre(floor)
+      const centre = { x: floor.x, z: floor.z }
       const ring = surroundingLots(floor)
       const lots = districtLots(themeId, floor)
       expect(lots.length).toBeGreaterThan(4)

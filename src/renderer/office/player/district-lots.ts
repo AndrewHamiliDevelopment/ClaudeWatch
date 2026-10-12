@@ -1,14 +1,11 @@
-import { plateCentre, plateLocalFloor } from '../logic/zone-framing'
 import type { FloorGeometry } from '../scene-model'
-import { apronLots, HANGAR, TOWER } from '../themes/apron'
-import {
-  apronLots as garrisonLots,
-  apronReserved as garrisonStands
-} from '../themes/orbital-garrison/apron'
+import { apronLots, hangarStand, towerStand } from '../themes/apron'
+import { DISTRICT_SIDES, HANGAR_SIDES, terraceLots } from '../themes/LotFill'
+import { colonyStand, padLots } from '../themes/orbital-garrison/apron'
 import { ORBITAL_GARRISON_ID } from '../themes/orbital-garrison/roster'
 import { QUIET_GROVE_ID } from '../themes/quiet-grove/roster'
 import type { Lot } from '../themes/surroundings'
-import { apronLots as courtLots, hangarStand, towerStand } from '../themes/violet-court/apron'
+import { TOWN_APRON } from '../themes/town-apron'
 import { VIOLET_COURT_ID } from '../themes/violet-court/roster'
 
 type Rect = Pick<Lot, 'x' | 'z' | 'width' | 'depth'>
@@ -18,47 +15,23 @@ function stand(id: string, rect: Rect): Lot {
   return { id: `stand:${id}`, kind: 'building', ...rect, maxHeight: 0, seed: 0, zoneId: null }
 }
 
-function sharedDistrict(plate: FloorGeometry): Lot[] {
-  const east = plate.width / 2
-  return [
-    ...apronLots(plate),
-    stand('hangar', { x: east + HANGAR.offsetX, z: 0, width: HANGAR.width, depth: HANGAR.depth }),
-    stand('tower', {
-      x: east + TOWER.offsetX,
-      z: -plate.depth / 2 - TOWER.offsetZ,
-      width: TOWER.side,
-      depth: TOWER.side
-    })
-  ]
-}
+// The court and the grove fill every side of the apron with terraces, district and hangar alike.
+const terraces = (floor: FloorGeometry): Lot[] =>
+  terraceLots(floor, [...DISTRICT_SIDES, ...HANGAR_SIDES])
 
-function courtDistrict(plate: FloorGeometry): Lot[] {
-  return [
-    ...courtLots(plate),
-    stand('hangar', hangarStand(plate)),
-    stand('tower', towerStand(plate))
-  ]
-}
-
-const DISTRICTS: Record<string, ((plate: FloorGeometry) => Lot[]) | undefined> = {
-  [ORBITAL_GARRISON_ID]: (plate) => [
-    ...garrisonLots(plate),
-    ...garrisonStands(plate).map((rect, index) => stand(String(index), rect))
-  ],
-  [VIOLET_COURT_ID]: courtDistrict,
-  // The grove fills its apron from the court's lot grid.
-  [QUIET_GROVE_ID]: courtDistrict
+const DISTRICTS: Record<string, ((floor: FloorGeometry) => Lot[]) | undefined> = {
+  [ORBITAL_GARRISON_ID]: (floor) => [...padLots(floor), stand('colony', colonyStand(floor))],
+  [VIOLET_COURT_ID]: terraces,
+  [QUIET_GROVE_ID]: terraces
 }
 
 // What the floor theme stands on the apron, where the player and the streets must go round it.
-// Each theme lays its district out around the plate's own centre; these are moved to the floor's.
+// The apron placer works in whatever frame the floor is in, so these come out in the floor's own.
 export function districtLots(themeId: string, floor: FloorGeometry): Lot[] {
-  const centre = plateCentre(floor)
-  const district = DISTRICTS[themeId] ?? sharedDistrict
-  return district(plateLocalFloor(floor)).map((lot) => ({
-    ...lot,
-    id: `district:${lot.id}`,
-    x: lot.x + centre.x,
-    z: lot.z + centre.z
-  }))
+  const lots = (DISTRICTS[themeId] ?? ((plate) => apronLots(plate, TOWN_APRON)))(floor)
+  return [
+    ...lots.map((lot) => ({ ...lot, id: `district:${lot.id}` })),
+    stand('hangar', hangarStand(floor)),
+    stand('tower', towerStand(floor))
+  ]
 }

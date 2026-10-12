@@ -1,8 +1,7 @@
 import { findPath, type NavGrid, type Point } from '../../../office/sim/path'
 import { DESK_REACH, doorSide, SIDE_NORMAL, type DooredRect } from '../logic/room-layout'
-import { plateCentre } from '../logic/zone-framing'
 import type { FloorGeometry, ZoneGeometry } from '../scene-model'
-import { APRON_TOP_Y } from '../themes/apron'
+import { APRON_TOP_Y } from '../themes/town-apron'
 import { GROUND_Y, sceneExtent, WORLD_APRON, type Lot } from '../themes/surroundings'
 
 type Rect = Pick<Lot, 'x' | 'z' | 'width' | 'depth'>
@@ -177,7 +176,7 @@ export function doorstep(zone: DooredRect): Point {
 
 // What is underfoot: the slab on the plate, the district's paving round it, bare ground beyond.
 export function groundHeight(floor: FloorGeometry, point: Point): number {
-  const centre = plateCentre(floor)
+  const centre = { x: floor.x, z: floor.z }
   const east = Math.abs(point.x - centre.x) - floor.width / 2
   const south = Math.abs(point.z - centre.z) - floor.depth / 2
   if (east <= 0 && south <= 0) return 0

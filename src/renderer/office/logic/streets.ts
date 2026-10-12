@@ -1,7 +1,6 @@
 import type { FloorGeometry } from '../scene-model'
-import { APRON_TOP_Y } from '../themes/apron'
+import { APRON_TOP_Y } from '../themes/town-apron'
 import { GROUND_Y, sceneExtent, WORLD_APRON, type Lot } from '../themes/surroundings'
-import { plateCentre } from './zone-framing'
 
 type Rect = Pick<Lot, 'x' | 'z' | 'width' | 'depth'>
 
@@ -55,7 +54,7 @@ function contains(outer: Rect, point: { x: number; z: number }): boolean {
 
 // The strip from the plate's edge nearest the gate straight out to the edge of the scene.
 export function avenueOf(floor: FloorGeometry, extent: Rect): Rect {
-  const plate = spanOf({ ...plateCentre(floor), width: floor.width, depth: floor.depth })
+  const plate = spanOf(floor)
   const outer = spanOf(extent)
   const gate = floor.elevator
   const half = AVENUE_WIDTH_M / 2
@@ -142,7 +141,7 @@ function createPaving(extent: Rect) {
 // become streets), a ring road between the apron and the first ring, and an avenue from the gate.
 // `lots` is everything that stands on the ground, the district's own buildings included.
 export function streetRects(floor: FloorGeometry, lots: readonly Lot[]): StreetRect[] {
-  const plate: Rect = { ...plateCentre(floor), width: floor.width, depth: floor.depth }
+  const plate: Rect = { x: floor.x, z: floor.z, width: floor.width, depth: floor.depth }
   const { west, east, north, south } = spanOf(plate)
   const apron = rectOf({
     west: west - WORLD_APRON.west,
