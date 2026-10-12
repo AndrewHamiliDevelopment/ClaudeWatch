@@ -5,6 +5,7 @@ import { groupZonesByTheme } from '../logic/office-themes'
 import { getTheme, registerTheme } from '../themes/registry'
 import { withBoxSurroundings } from '../themes/scene.test-utils'
 import { surroundingLots, type Lot } from '../themes/surroundings'
+import type { OfficeTheme } from '../themes/types'
 import { BatchedScene } from './BatchedScene'
 import { lotsByTheme, SurroundingsView } from './WorldView'
 
@@ -18,6 +19,10 @@ const filledEdo = withBoxSurroundings(edo, 'test-filled-edo')
 const filledBrass = withBoxSurroundings(getTheme('brass-workshop'), 'test-filled-brass')
 registerTheme(filledEdo)
 registerTheme(filledBrass)
+// Edo with no world of its own: a theme that draws neither surroundings nor ambient life.
+const { Surroundings: _surroundings, Ambient: _ambient, ...bareZone } = edo.kit.zone
+const bareEdo: OfficeTheme = { ...edo, id: 'test-bare-edo', kit: { ...edo.kit, zone: bareZone } }
+registerTheme(bareEdo)
 
 function company(id: string, x: number) {
   return makeZone({
@@ -100,8 +105,8 @@ it('draws each theme its own lots, merged in one batch', () => {
 })
 
 it('mounts nothing, and so costs no frame work, when no theme draws surroundings', () => {
-  expect(edo.kit.zone.Surroundings).toBeUndefined()
-  expect(view(edo, () => edo.id)).toBeNull()
+  expect(bareEdo.kit.zone.Surroundings).toBeUndefined()
+  expect(view(bareEdo, () => bareEdo.id)).toBeNull()
 })
 
 it('rebuilds the merge only when the lots, a theme or reduced motion changes', () => {

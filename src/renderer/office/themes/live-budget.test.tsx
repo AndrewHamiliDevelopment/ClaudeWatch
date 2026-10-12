@@ -6,7 +6,7 @@ import { Horizon } from '../scene/Horizon'
 import { RobotCrew } from '../scene/Robot'
 import { SurroundingsView, WorldView } from '../scene/WorldView'
 import { getTheme, listThemes, registerTheme } from './registry'
-import { mergedDraws, withBoxSurroundings } from './scene.test-utils'
+import { mergedDraws } from './scene.test-utils'
 import { GROUND_Y, LOT_CAP, sceneExtent, surroundingLots } from './surroundings'
 import type { OfficeTheme } from './types'
 import { makeSession } from '../__tests__/fixtures'
@@ -31,8 +31,12 @@ vi.mock('../scene/textures', () => ({
 
 const DRAW_CEILING = 300
 const TRIANGLE_CEILING = 600_000
+// What a theme may add for its surroundings, lounge and ambient life together.
+const ADDED_DRAWS_PER_THEME = 9
 const EDO = 'neo-edo-steam'
 const BRASS = 'brass-workshop'
+// The shipped themes, listed before any test stand-in is registered.
+const REAL_THEMES = listThemes()
 
 interface Composition {
   floor: FloorGeometry
@@ -87,6 +91,7 @@ function measure({ floor, agents, floorTheme, themeIdFor }: Composition) {
   return {
     themeCount: zoneGroups.length,
     lotCount: lots.length,
+    focusedDraws: focused.draws,
     worldDraws: world.draws,
     horizonDraws: horizon.draws,
     surroundingsDraws: surroundings.draws,
@@ -118,7 +123,7 @@ function report(name: string, result: ReturnType<typeof measure>): void {
   )
 }
 
-for (const theme of listThemes())
+for (const theme of REAL_THEMES)
   it(`${theme.id} live composition with 20 agents stays below 300 draws and 600k triangles`, () => {
     const result = measure({ ...agentsOn(1), floorTheme: theme, themeIdFor: () => theme.id })
     report(`${theme.id} live, 20 agents`, result)
@@ -261,44 +266,71 @@ it.each([
   }
 )
 
-// Stand-ins for the three themes once each draws its lots: its own cost, plus four box parts.
-const FILLED_THEMES = THREE_THEMES.map((themeId) => {
-  const filled = withBoxSurroundings(getTheme(themeId), `test-filled-${themeId}`)
-  registerTheme(filled)
-  return filled.id
-})
-// A body, a roof, a crate and a mover per theme, however many lots there are.
-const FIXTURE_DRAWS_PER_THEME = 4
+// The same theme with no world of its own: what its offices and agents cost alone.
+function bare(theme: OfficeTheme): OfficeTheme {
+  const { Lounge, Surroundings, Ambient, ...zone } = theme.kit.zone
+  void Lounge
+  void Surroundings
+  void Ambient
+  const stripped = { ...theme, id: `test-bare-${theme.id}`, kit: { ...theme.kit, zone } }
+  registerTheme(stripped)
+  return stripped
+}
 
-it.each([
+for (const theme of REAL_THEMES) {
+  const unfilled = bare(theme)
+  it(`${theme.id} adds at most ${ADDED_DRAWS_PER_THEME} draws for its surroundings, lounge and ambient life`, () => {
+    const composition = agentsOn(4, 40)
+    expect(composition.floor.zones.every((company) => company.lounge)).toBe(true)
+    const filled = measure({ ...composition, floorTheme: theme, themeIdFor: () => theme.id })
+    const empty = measure({ ...composition, floorTheme: unfilled, themeIdFor: () => unfilled.id })
+    const loungeDraws = filled.focusedDraws - empty.focusedDraws
+    console.info(
+      `${theme.id} adds ${filled.surroundingsDraws} draws around the offices and ${loungeDraws} for its lounges`
+    )
+    // A theme with none of the three parts adds nothing but the ground.
+    expect(empty.surroundingsDraws).toBe(0)
+    expect(empty.horizonDraws).toBe(1)
+    expect(filled.horizonDraws).toBe(1)
+    expect(filled.lotCount).toBeGreaterThan(40)
+    expect(filled.lotCount).toBeLessThanOrEqual(LOT_CAP)
+    expect(filled.surroundingsDraws + loungeDraws).toBeLessThanOrEqual(ADDED_DRAWS_PER_THEME)
+  })
+}
+
+const BUSY_FLOORS = [
   [20, 4],
   [40, 4],
   [60, 10]
-])(
-  '%i agents in %i companies on three themes that fill their lots stay inside the draw ceiling',
+]
+
+it.each(BUSY_FLOORS)(
+  '%i agents in %i companies on Neo Edo Steam, Brass Workshop and Orbital Garrison stay inside the draw ceiling',
   (agents, companies) => {
-    const result = scaled(FILLED_THEMES, agents, companies)
+    const result = scaled([EDO, BRASS, 'orbital-garrison'], agents, companies)
     expect(result.themeCount).toBe(3)
-    expect(result.lotCount).toBeGreaterThan(40)
-    expect(result.lotCount).toBeLessThanOrEqual(LOT_CAP)
-    expect(result.horizonDraws).toBe(1)
-    expect(result.surroundingsDraws).toBe(3 * FIXTURE_DRAWS_PER_THEME)
     expect(result.draws).toBeLessThanOrEqual(DRAW_CEILING)
     expect(result.triangles).toBeLessThanOrEqual(TRIANGLE_CEILING)
   }
 )
 
-it('adds nothing but the ground while no theme fills its lots', () => {
-  const result = scaled(THREE_THEMES, 20, 4)
-  expect(result.surroundingsDraws).toBe(0)
-  expect(result.horizonDraws).toBe(1)
-})
+// Measured, not yet inside the ceiling at 60 agents: five themes share few parts with each other.
+it.each(BUSY_FLOORS)(
+  'reports %i agents in %i companies on every shipped theme at once',
+  (agents, companies) => {
+    const themeIds = REAL_THEMES.map((theme) => theme.id)
+    const result = scaled(themeIds, agents, Math.max(companies, themeIds.length))
+    expect(result.themeCount).toBe(themeIds.length)
+    expect(result.triangles).toBeLessThanOrEqual(TRIANGLE_CEILING)
+    if (agents <= 40) expect(result.draws).toBeLessThanOrEqual(DRAW_CEILING)
+  }
+)
 
 // What an agent may add once the floor's parts are merged: the textured door sign of its room.
 const DRAWS_PER_AGENT = 1
 
 it.each([
-  ...listThemes().map((theme) => [theme.id, [theme.id]] as const),
+  ...REAL_THEMES.map((theme) => [theme.id, [theme.id]] as const),
   ['three themes', THREE_THEMES] as const
 ])('%s adds at most one draw per agent', (_name, themeIds) => {
   const perAgent = (scaled(themeIds, 40, 4).draws - scaled(themeIds, 20, 4).draws) / 20

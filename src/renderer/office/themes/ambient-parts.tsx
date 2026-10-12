@@ -4,6 +4,7 @@ import type { Group, Object3D } from 'three'
 import type { FloorGeometry } from '../scene-model'
 import { designFor, lotBase, plotOf, seeded, type LotDesign, type Plot } from './lot-parts'
 import type { Lot } from './surroundings'
+import type { Vector } from './primitives'
 import { UnitPart } from './unit-parts'
 
 // Where steam leaves a stack, and how far it may rise before the lot's height limit.
@@ -29,16 +30,19 @@ export function steamPuffAt(timeSec: number, nth: number): { lift: number; size:
   return { lift, size: (PUFF_SIZE.start + PUFF_SIZE.growth * lift) * fade }
 }
 
-function placePuff(puff: Object3D, stack: SteamStack, timeSec: number, index: number): void {
+// Stacks are out of step with each other, so a street of chimneys does not puff in unison.
+function puffOf(stack: SteamStack, timeSec: number, index: number): { at: Vector; size: number } {
   const { lift, size } = steamPuffAt(timeSec + stack.x * 0.37, index % PUFFS_PER_STACK)
-  puff.position.set(stack.x, stack.y + lift * (stack.rise - MAX_PUFF_M / 2), stack.z)
-  puff.scale.setScalar(size)
+  return { at: [stack.x, stack.y + lift * (stack.rise - MAX_PUFF_M / 2), stack.z], size }
 }
 
 export function moveSteam(root: Object3D, stacks: readonly SteamStack[], timeSec: number): void {
   root.children.forEach((puff, index) => {
     const stack = stacks[Math.floor(index / PUFFS_PER_STACK)]
-    if (stack) placePuff(puff, stack, timeSec, index)
+    if (!stack) return
+    const { at, size } = puffOf(stack, timeSec, index)
+    puff.position.set(...at)
+    puff.scale.setScalar(size)
   })
 }
 
@@ -85,12 +89,12 @@ export function RisingSteam({
     <group ref={root}>
       {stacks.flatMap((stack, stackIndex) =>
         Array.from({ length: PUFFS_PER_STACK }, (_, nth) => {
-          const { lift, size } = steamPuffAt(HELD_TIME_SEC + stack.x * 0.37, nth)
+          const { at, size } = puffOf(stack, HELD_TIME_SEC, nth)
           return (
             <UnitPart
               key={`${stackIndex}:${nth}`}
               shape="sphere"
-              at={[stack.x, stack.y + lift * (stack.rise - MAX_PUFF_M / 2), stack.z]}
+              at={at}
               size={[size, size, size]}
               color={color}
             />

@@ -9,10 +9,11 @@ import { BatchedScene } from './BatchedScene'
 import { groupZonesByTheme } from '../logic/office-themes'
 import { ParkedFrames } from '../themes/ParkedFrames'
 import { ThemeTower } from '../themes/WorldArchitecture'
-import { getTheme, themeForTeam } from '../themes/registry'
+import { getTheme, registerTheme, themeForTeam } from '../themes/registry'
 import { BAND_ZOOM } from '../logic/camera-bands'
 import { makeAgent, makeFloor, makeRoom, makeZone } from '../__tests__/fixtures'
 import type { RobotModelProps } from '../themes/types'
+import type { LoungeGeometry } from '../scene-model'
 
 vi.mock('react', async (original) => ({
   ...(await original<typeof import('react')>()),
@@ -62,6 +63,18 @@ it('delegates the live Robot model to the theme with provider skin and articulat
   expect(nodes.some((node) => node.type === 'ringGeometry')).toBe(true)
 })
 
+function makeLounge(companyId: string): LoungeGeometry {
+  return {
+    id: `${companyId}:lounge`,
+    x: 0,
+    z: 0,
+    width: 6,
+    depth: 5,
+    door: { x: 0, z: 2.5 },
+    seats: [{ slotId: 'lounge_seat_0', x: -1.875, z: -0.5, heading: 0 }]
+  }
+}
+
 it('renders every floor surface through the theme kit', () => {
   const theme = themeForTeam()
   const floor = makeFloor({
@@ -71,6 +84,7 @@ it('renders every floor surface through the theme kit', () => {
       makeZone({
         id: 'c',
         kind: 'company',
+        lounge: makeLounge('c'),
         children: [makeZone({ id: 'p', kind: 'project', projectKey: 'p_1' })]
       })
     ]
@@ -84,7 +98,11 @@ it('renders every floor surface through the theme kit', () => {
       isReducedMotion: true
     })
   )
-  for (const Component of [...Object.values(theme.kit.floor), ...Object.values(theme.kit.zone)]) {
+  // Surroundings and Ambient are drawn by SurroundingsView, outside the floor.
+  const { Surroundings, Ambient, ...floorParts } = theme.kit.zone
+  expect(Surroundings).toBeDefined()
+  expect(Ambient).toBeDefined()
+  for (const Component of [...Object.values(theme.kit.floor), ...Object.values(floorParts)]) {
     expect(nodes.some((node) => node.type === Component)).toBe(true)
   }
 })
@@ -154,6 +172,49 @@ it('draws each zone with its own theme, and the slab and lift once with the floo
     expect(drawnBy(edo.kit.floor[part])).toHaveLength(1)
     expect(drawnBy(brass.kit.floor[part])).toHaveLength(0)
   }
+})
+
+it("draws a company's lounge with that company's theme, and nothing where there is none", () => {
+  const withLounge = (zone: (typeof mixedFloor.zones)[0]) => ({
+    ...zone,
+    lounge: makeLounge(zone.id)
+  })
+  const { Lounge, ...zoneWithoutLounge } = brass.kit.zone
+  expect(Lounge).toBeDefined()
+  const loungeless = {
+    ...brass,
+    id: 'test-loungeless',
+    kit: { ...brass.kit, zone: zoneWithoutLounge }
+  }
+  registerTheme(loungeless)
+  const [edoCompany, brassCompany] = mixedFloor.zones
+  const bare = companyZone('c_c', 'p_c', 'room_c')
+  const unthemed = companyZone('c_d', 'p_d', 'room_d')
+  const floor = {
+    ...mixedFloor,
+    zones: [withLounge(edoCompany), withLounge(brassCompany), bare, withLounge(unthemed)]
+  }
+  const themeIds: Record<string, string> = { c_a: edo.id, c_b: brass.id, c_c: edo.id }
+  const nodes = elements(
+    FloorView({
+      floor,
+      floorTheme: edo,
+      zoneGroups: groupZonesByTheme(
+        floor,
+        (zone) => themeIds[zone.companyKey ?? ''] ?? loungeless.id
+      ),
+      wallsMode: 'cutaway',
+      isReducedMotion: true
+    })
+  )
+  const loungesBy = (component: unknown) =>
+    nodes
+      .filter((node) => node.type === component)
+      .map((node) => (node.props.lounge as LoungeGeometry).id)
+  // c_c has no lounge; c_d has one, but its theme has no Lounge part.
+  expect(loungesBy(edo.kit.zone.Lounge)).toEqual(['c_a:lounge'])
+  expect(loungesBy(brass.kit.zone.Lounge)).toEqual(['c_b:lounge'])
+  expect(nodes.filter((node) => 'lounge' in node.props)).toHaveLength(2)
 })
 
 it('gives each robot the theme and roster place of its own room', () => {
