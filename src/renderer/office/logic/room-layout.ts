@@ -26,7 +26,7 @@ export const DESK_REACH = 0.62
 const CUTAWAY_FACING_THRESHOLD = 0.2
 
 // North is -z, south is +z, east is +x, west is -x; normals point out of the room.
-const SIDE_NORMAL: Record<WallSide, { x: number; z: number }> = {
+export const SIDE_NORMAL: Record<WallSide, { x: number; z: number }> = {
   north: { x: 0, z: -1 },
   south: { x: 0, z: 1 },
   east: { x: 1, z: 0 },

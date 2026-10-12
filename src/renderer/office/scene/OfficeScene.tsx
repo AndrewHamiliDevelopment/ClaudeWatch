@@ -20,6 +20,7 @@ import { RobotCrew } from './Robot'
 import { BatchedScene } from './BatchedScene'
 import { SurroundingsView, WorldView } from './WorldView'
 import { ZonePickers } from './ZonePickers'
+import { TOWER_STOREY_M } from '../themes/layout'
 import { GROUND_Y, MAX_LOT_HEIGHT_M, sceneExtent, surroundingLots } from '../themes/surroundings'
 import type { OfficeTheme, TowerFloor } from '../themes/types'
 
@@ -51,9 +52,6 @@ const INITIAL_CAMERA_POSITION: [number, number, number] = [
   CAMERA_DISTANCE * Math.cos(ISO_POLAR),
   CAMERA_DISTANCE * Math.sin(ISO_POLAR) * Math.cos(ISO_START_AZIMUTH)
 ]
-
-// One storey of the district's tower, the tallest thing the floor theme draws.
-const TOWER_STOREY_M = 2.2
 
 // Other floors are storeys in the building overview; only the focused plate has agents.
 function OfficeScene(props: OfficeSceneProps) {

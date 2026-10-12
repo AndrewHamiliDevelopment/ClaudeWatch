@@ -28,10 +28,13 @@ export function districtLayout(floor: Pick<FloorGeometry, 'width' | 'depth'>): D
   ]
 }
 
+// One storey of a district's tower.
+export const TOWER_STOREY_M = 2.2
+
 export function towerLayout(floors: readonly TowerFloor[]) {
   return floors.map((floor, index) => ({
     ...floor,
-    y: index * 2.2,
+    y: index * TOWER_STOREY_M,
     width: Math.max(2.5, 5 - index * 0.2)
   }))
 }

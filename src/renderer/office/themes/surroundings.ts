@@ -1,4 +1,4 @@
-import { doorSide, type WallSide } from '../logic/room-layout'
+import { doorSide, SIDE_NORMAL, type WallSide } from '../logic/room-layout'
 import type { FloorGeometry, ZoneGeometry } from '../scene-model'
 
 export interface Lot {
@@ -54,12 +54,6 @@ const PROP_WALKWAY_M = 1.5
 const DOOR_CLEAR_M = { ahead: 2, across: 4 }
 const LIFT_CLEAR_M = 4
 
-const SIDE_NORMAL: Record<WallSide, { x: number; z: number }> = {
-  north: { x: 0, z: -1 },
-  south: { x: 0, z: 1 },
-  east: { x: 1, z: 0 },
-  west: { x: -1, z: 0 }
-}
 const SIDES: readonly WallSide[] = ['north', 'east', 'south', 'west']
 
 function rectOf(west: number, east: number, north: number, south: number): Rect {
