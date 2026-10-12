@@ -72,7 +72,6 @@ export function createLiveFeed(
 
   const start = (): (() => void) => {
     const world = new World({
-      now,
       saved: loadLayout(options.storage),
       loungeTrips: settings.get().loungeTrips
     })

@@ -77,7 +77,7 @@ describe('furniture sized for the larger agents', () => {
   const worker = (id: string) => ({ id, type: 'worker', activity: 'reading' as const })
   // Two guests at their lead's desks and a third in the team area.
   const sessions = [{ ...session('lead'), subagents: ['0', '1', '2'].map(worker) }, session('b')]
-  const layout = buildLayout(sessions, undefined, 0)
+  const layout = buildLayout(sessions, undefined)
   const floor = toFloorGeometry(layout, sessions)[0]
   const view = viewOf(floor)
   const desks = locateAll(view, theme.kit.zone.Desk, { at: [0, 0, 0], scale: 1 })
@@ -178,7 +178,7 @@ describe.each([
   ['the owner-like floor', [...ZKIDZ, ['alpha', '1', 1], ['beta', '1', 1]] as Seed]
 ])('theme parts on the plate of %s', (_name, seed) => {
   const sessions = sessionsOf(seed)
-  const layout = buildLayout(sessions, undefined, 0)
+  const layout = buildLayout(sessions, undefined)
   const floor = toFloorGeometry(layout, sessions)[0]
   // The sim says where the plate lies; it is never centred on the gate here.
   const centre = { x: layout.floors[0].x, z: layout.floors[0].z }

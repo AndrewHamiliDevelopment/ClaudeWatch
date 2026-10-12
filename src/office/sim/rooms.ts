@@ -65,7 +65,7 @@ export function bounds(left: number, top: number, width: number, depth: number):
   }
 }
 
-export interface ProjectPlan {
+interface ProjectPlan {
   width: number
   depth: number
   capacity: number

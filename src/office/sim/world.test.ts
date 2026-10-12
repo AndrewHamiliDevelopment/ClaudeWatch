@@ -4,7 +4,7 @@ import { session } from './fixtures'
 
 // An office that was open and empty when session `a` started, so `a` walks in.
 function world() {
-  const world = new World({ now: () => 0 })
+  const world = new World()
   world.apply({
     type: 'hello',
     v: 1,
@@ -14,7 +14,7 @@ function world() {
   return world
 }
 it('seats the sessions that were already running when the office opens', () => {
-  const sim = new World({ now: () => 0 })
+  const sim = new World()
   sim.apply({
     type: 'hello',
     v: 1,
@@ -47,7 +47,7 @@ it('leaves after removal and disappears at the elevator', () => {
   expect(sim.step(0)).toEqual([])
 })
 it('creates distinct subagent views', () => {
-  const sim = new World({ now: () => 0 })
+  const sim = new World()
   const main = session('a')
   main.subagents = Array.from({ length: 6 }, (_, i) => ({
     id: String(i),
@@ -76,7 +76,7 @@ it('uses fixed ticks and protects returned layout data', () => {
 })
 
 it('applies the patch that follows the hello revision, then rejects duplicates and late ones', () => {
-  const sim = new World({ now: () => 0 })
+  const sim = new World()
   // A patch's seq is the snapshot revision it produces, so it continues from the hello.
   sim.apply({
     type: 'hello',
@@ -99,7 +99,7 @@ it('applies the patch that follows the hello revision, then rejects duplicates a
 })
 
 it('arrives from the same gate for all 60 agents across four companies', () => {
-  const sim = new World({ now: () => 0 })
+  const sim = new World()
   const sessions = Array.from({ length: 60 }, (_, i) => ({
     ...session(`s${i}`, `p_${i % 12}`),
     companyKey: `c_${i % 4}`,
@@ -116,7 +116,7 @@ it('arrives from the same gate for all 60 agents across four companies', () => {
     expect({ x: view.x, z: view.z, floorId: view.floorId }).toEqual({ x: 0, z: 0, floorId: 'hq' })
 })
 it('keeps a subagent at its desk when a sibling finishes', () => {
-  const sim = new World({ now: () => 0 })
+  const sim = new World()
   const worker = (id: string) => ({ id, type: 'worker', activity: 'reading' as const })
   const main = { ...session('a'), subagents: ['0', '1', '2'].map(worker) }
   sim.apply({
@@ -143,7 +143,7 @@ it('keeps a subagent at its desk when a sibling finishes', () => {
 })
 
 it('seats teammates like subagents, under their own names, and keeps their seats', () => {
-  const sim = new World({ now: () => 0 })
+  const sim = new World()
   const mate = (name: string) => ({
     id: `${name}@session-a`,
     type: 'lena',
@@ -195,7 +195,7 @@ const seatOf = (sim: World, agent: { roomId: string; slotId: string }) => {
 }
 
 it('moves a seated team-area sitter with its seat when a desk row pushes the team area down', () => {
-  const sim = new World({ now: () => 0 })
+  const sim = new World()
   const worker = (id: string) => ({ id, type: 'worker', activity: 'reading' as const })
   const main = { ...session('a'), subagents: ['0', '1', '2'].map(worker) }
   sim.apply({
@@ -220,7 +220,7 @@ it('moves a seated team-area sitter with its seat when a desk row pushes the tea
   expect(after.z).toBeGreaterThan(before.z)
 })
 it('never leaves a team-area sitter where a new office is built over its old seat', () => {
-  const sim = new World({ now: () => 0 })
+  const sim = new World()
   const worker = (id: string) => ({ id: `s${id}`, type: 'worker', activity: 'reading' as const })
   const busy = { ...session('a'), subagents: ['0', '1', '2', '3'].map(worker) }
   sim.apply({
@@ -240,7 +240,7 @@ it('never leaves a team-area sitter where a new office is built over its old sea
   expect({ x: after.x, z: after.z }).not.toEqual({ x: before.x, z: before.z })
 })
 it('keeps a seated agent at its desk when the floor shrinks and its company slides over', () => {
-  const sim = new World({ now: () => 0 })
+  const sim = new World()
   const neighbours = Array.from({ length: 4 }, (_, index) => ({
     ...session(`n${index}`, `p_n${index}`),
     companyKey: `c_${index}`,
@@ -269,7 +269,7 @@ it('brings a new arrival to rest exactly on its seat', () => {
   expect({ x: arrived.x, z: arrived.z }).toEqual({ x: seat.x, z: seat.z })
 })
 it('turns a robot that was walking out back to its desk when its session returns', () => {
-  const sim = new World({ now: () => 0 })
+  const sim = new World()
   const hello = (rev: number, sessions: ReturnType<typeof session>[]) =>
     sim.apply({ type: 'hello', v: 1, snapshot: { rev, generatedAtMs: 0, sessions, sources: [] } })
   hello(1, [session('a')])

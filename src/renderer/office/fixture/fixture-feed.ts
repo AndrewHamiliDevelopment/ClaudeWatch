@@ -19,7 +19,7 @@ function fixtureSessions(tick: number, nowMs: number): SessionRef[] {
 // the sim in `createFixtureFeed`.
 export function buildFixtureFrame(tick: number, nowMs: number): OfficeFrame {
   const sessions = fixtureSessions(tick, nowMs)
-  const { floors, agents } = fixtureLayout(sessions, undefined, nowMs)
+  const { floors, agents } = fixtureLayout(sessions)
   return { floors, agents, sessions, connected: true, sources: [] }
 }
 

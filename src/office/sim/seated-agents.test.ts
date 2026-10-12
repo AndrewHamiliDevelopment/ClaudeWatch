@@ -5,7 +5,7 @@ import { World } from './world'
 
 const SETTLE_S = 120
 function open(sessions: SessionRef[]): World {
-  const sim = new World({ now: () => 0 })
+  const sim = new World()
   sim.apply({ type: 'hello', v: 1, snapshot: { rev: 0, generatedAtMs: 0, sessions, sources: [] } })
   return sim
 }

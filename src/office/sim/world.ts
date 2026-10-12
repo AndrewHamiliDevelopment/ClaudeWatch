@@ -26,11 +26,12 @@ function wayTo(paths: PathCache, from: Point, to: Point): Point[] {
 const NO_LOUNGES: ReadonlyMap<string, LoungeLayout> = new Map()
 
 export class World {
-  private readonly now: () => number
   private sessions = new Map<string, SessionRef>()
   private agents = new Map<string, AgentRecord>()
   private map: LayoutMap
   private paths: PathCache | null = null
+  // The floor `paths` and `lounges` were made for.
+  private floorJson = ''
   private lounges = new Map<string, LoungeLayout>()
   private accumulatedMs = 0
   private sequence = -1
@@ -39,8 +40,7 @@ export class World {
   private hasLoungeTrips: boolean
 
   // `loungeTrips: false` keeps finished agents at their desks.
-  constructor(options: { now: () => number; saved?: LayoutMap; loungeTrips?: boolean }) {
-    this.now = options.now
+  constructor(options: { saved?: LayoutMap; loungeTrips?: boolean } = {}) {
     this.hasLoungeTrips = options.loungeTrips ?? true
     this.map = options.saved
       ? structuredClone(options.saved)
@@ -66,11 +66,19 @@ export class World {
         this.sessions.set(session.key, structuredClone(session))
     }
     const oldMap = this.map
-    this.map = buildLayout([...this.sessions.values()], this.map, this.now())
-    const paths = new PathCache(this.map.floors[0])
-    this.paths = paths
-    this.lounges = loungesByRoom(this.map.floors[0])
-    const oldPaths = oldMap.floors[0]?.zones ? new PathCache(oldMap.floors[0]) : paths
+    this.map = buildLayout([...this.sessions.values()], this.map)
+    // Routes and lounges follow from the floor alone: while it stands as it was, the routes
+    // already found are kept rather than searched for again.
+    const floorJson = JSON.stringify(this.map.floors[0])
+    const isSameFloor = floorJson === this.floorJson
+    if (!isSameFloor || !this.paths) {
+      this.paths = new PathCache(this.map.floors[0])
+      this.lounges = loungesByRoom(this.map.floors[0])
+      this.floorJson = floorJson
+    }
+    const paths = this.paths
+    const oldPaths =
+      isSameFloor || !oldMap.floors[0]?.zones ? paths : new PathCache(oldMap.floors[0])
     const held = new Map(
       [...this.agents]
         .filter(([, agent]) => agent.state !== 'leaving')
@@ -90,6 +98,7 @@ export class World {
           : oldPaths.via(agent.view, door, floor.elevator)
       this.agents.set(key, leaveAgent(agent, exit))
     }
+    const oldRooms = new Map(oldMap.floors[0]?.rooms.map((r) => [r.id, r]))
     for (const placement of desired) {
       const { session, room, slot, floorId, isSubagent, isFinished } = placement
       const existing = this.agents.get(session.key)
@@ -113,9 +122,7 @@ export class World {
         )
         continue
       }
-      const oldSlot = oldMap.floors[0]?.rooms
-        .find((r) => r.id === room.id)
-        ?.slots.find((s) => s.id === slot.id)
+      const oldSlot = oldRooms.get(room.id)?.slots.find((s) => s.id === slot.id)
       if (
         existing &&
         oldSlot &&

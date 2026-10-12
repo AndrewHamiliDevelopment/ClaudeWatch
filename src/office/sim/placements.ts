@@ -13,7 +13,7 @@ export interface Placement {
 }
 
 // Where an agent already sits, so a finishing sibling never re-seats the ones still working.
-export type HeldSeats = ReadonlyMap<string, { roomId: string; slotId: string }>
+type HeldSeats = ReadonlyMap<string, { roomId: string; slotId: string }>
 
 const GUEST_DESKS = ['desk_guest_0', 'desk_guest_1']
 
@@ -28,8 +28,15 @@ export function placements(
   const seated: { session: SessionRef; room: RoomLayout; slotId: string }[] = []
   const unseated: { session: SessionRef; team: RoomLayout }[] = []
   const takenSeats = new Map<string, Set<string>>()
+  const teamKey = (companyKey: string, projectKey: string | null) => `${companyKey}\n${projectKey}`
+  const offices = new Map(floor.rooms.map((room) => [room.sessionKey, room]))
+  const teams = new Map(
+    floor.rooms
+      .filter((room) => room.kind === 'team')
+      .map((room) => [teamKey(room.companyKey, room.projectKey), room])
+  )
   for (const session of [...sessions].sort((a, b) => a.key.localeCompare(b.key))) {
-    const main = floor.rooms.find((r) => r.sessionKey === session.key)
+    const main = offices.get(session.key)
     if (!main) continue
     result.push({
       session,
@@ -41,12 +48,7 @@ export function placements(
     })
     if (!session.subagents.length) continue
     // Absent while every guest in the project fits at a desk's own guest seats.
-    const team = floor.rooms.find(
-      (r) =>
-        r.kind === 'team' &&
-        r.companyKey === session.companyKey &&
-        r.projectKey === session.projectKey
-    )
+    const team = teams.get(teamKey(session.companyKey, session.projectKey))
     const taken = team && (takenSeats.get(team.id) ?? new Set<string>())
     if (team && taken) takenSeats.set(team.id, taken)
     // Teammates stay for the whole job and subagents come and go, so teammates sit at the desks

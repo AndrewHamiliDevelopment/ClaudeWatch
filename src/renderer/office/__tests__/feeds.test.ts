@@ -69,8 +69,8 @@ describe('fixture layout memory', () => {
     floors[0].rooms.find((room) => room.sessionKey === sessionKey)
 
   it('keeps the remaining offices in place when a session leaves, given the saved layout', () => {
-    const before = fixtureLayout(sessions, undefined, 1_000_000)
-    const after = fixtureLayout(remaining, before.layout, 1_002_000)
+    const before = fixtureLayout(sessions)
+    const after = fixtureLayout(remaining, before.layout)
     for (const session of remaining) {
       const was = roomOf(before.floors, session.key)
       const now = roomOf(after.floors, session.key)

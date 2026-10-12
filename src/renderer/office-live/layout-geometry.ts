@@ -70,7 +70,7 @@ export function toFloorGeometry(layout: LayoutMap, sessions: SessionRef[]): Floo
   // A map saved by the floor-per-project version has no zones and is replaced, as buildLayout does.
   const floor = layout.floors[0]?.zones
     ? layout.floors[0]
-    : buildLayout(sessions, undefined, 0).floors[0]
+    : buildLayout(sessions, undefined).floors[0]
   return [
     {
       floorId: 'hq',

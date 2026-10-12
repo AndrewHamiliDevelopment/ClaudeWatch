@@ -11,7 +11,7 @@ it('previews the same nested single floor with companies, projects, agents and p
   expect(frame.floors[0].zones.length).toBeLessThanOrEqual(3)
   expect(frame.floors[0].zones.flatMap((c) => c.children).length).toBeGreaterThan(3)
   expect(frame.floors).toEqual(
-    toFloorGeometry(buildLayout(frame.sessions, undefined, 0), frame.sessions)
+    toFloorGeometry(buildLayout(frame.sessions, undefined), frame.sessions)
   )
   expect(frame.sessions.filter((s) => s.attention === 'permission')).toHaveLength(1)
   expect(frame.agents.some((a) => a.isSubagent)).toBe(true)
