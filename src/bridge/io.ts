@@ -174,6 +174,14 @@ export const systemIo: BridgeIo = {
   }
 }
 
+export async function isDirectory(path: string, io: BridgeIo): Promise<boolean> {
+  try {
+    return (await io.stat(path)).directory
+  } catch {
+    return false
+  }
+}
+
 export function object(value: unknown): Record<string, unknown> | null {
   return isJsonObject(value) ? value : null
 }

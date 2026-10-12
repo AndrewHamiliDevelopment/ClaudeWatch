@@ -1,17 +1,9 @@
 import { basename, dirname, join, resolve } from 'node:path'
 import { projectKey } from '../shared/office/project-key'
 import type { SessionRef } from '../shared/office/types'
-import { type BridgeIo, isMissing } from './io'
+import { type BridgeIo, isDirectory, isMissing } from './io'
 
 const COMMONDIR_MAX_BYTES = 1024
-
-async function isDirectory(path: string, io: BridgeIo): Promise<boolean> {
-  try {
-    return (await io.stat(path)).directory
-  } catch {
-    return false
-  }
-}
 
 interface Project {
   root: string

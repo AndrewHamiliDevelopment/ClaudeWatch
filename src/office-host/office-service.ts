@@ -1,4 +1,4 @@
-import { stat } from 'node:fs/promises'
+import { isDirectory, systemIo } from '../bridge/io'
 import type { BridgeHost } from '../main/bridge-host'
 import { OfficeInteractions, type PaneOwner } from '../main/office-interactions'
 import { createOrcaCli } from '../main/orca-cli'
@@ -71,10 +71,7 @@ export function createOfficeService({
       // Opening the folder types `cd` into the terminal app, which a view-only page may not.
       if (isInteractive) {
         // The path came from a file on disk: only a folder that exists is handed to `open`.
-        const isFolder = await stat(path).then(
-          (info) => info.isDirectory(),
-          () => false
-        )
+        const isFolder = await isDirectory(path, systemIo)
         return isFolder ? openTerminal(path, terminal) : { success: false }
       }
       return { ...(await raiseTerminal(terminal)), target: 'terminal-app' }
