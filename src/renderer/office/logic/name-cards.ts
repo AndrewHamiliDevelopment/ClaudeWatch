@@ -102,12 +102,14 @@ export function buildNameCards(
           ...meta
         }
       }
+      // A card floats over the desk in front of its agent; in the lounge there is no desk.
+      const reach = agent.place === 'lounge' ? 0 : DESK_REACH
       return {
         agentKey: agent.agentKey,
         kind: 'card',
         sessionKey: session?.key ?? null,
-        x: agent.x + Math.sin(agent.heading) * DESK_REACH,
-        z: agent.z + Math.cos(agent.heading) * DESK_REACH,
+        x: agent.x + Math.sin(agent.heading) * reach,
+        z: agent.z + Math.cos(agent.heading) * reach,
         title: session?.name ?? agent.label,
         detail: detailFor(agent, session?.currentTool?.name),
         status: statusFor(agent),
