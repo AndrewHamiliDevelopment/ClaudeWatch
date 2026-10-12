@@ -1,8 +1,9 @@
 import type { FloorGeometry } from '../../scene-model'
 import { box, lit, SIDES, turned, type PartSpec } from '../parts'
-import { lotBase, type Lot } from '../surroundings'
-import { drum } from './buildings'
-import { buildLot, type RadarMount } from './lots'
+import { drawnTop } from '../../town/town-ambient'
+import type { PlacedLot } from '../lot-kit'
+import { BUILDING_SIDE_M, drum } from './buildings'
+import type { RadarMount } from './lots'
 import { GARRISON } from './palette'
 
 const MAX_DISHES = 8
@@ -15,8 +16,17 @@ export const DISH: PartSpec[] = [
   turned(box([0, 0.66, 0.25], [0.06, 0.5, 0.06], GARRISON.orange), [DISH_TILT, 0, 0])
 ]
 
-export function radarMounts(lots: readonly Lot[], floor: FloorGeometry): RadarMount[] {
-  return lots.flatMap((lot) => buildLot(lot, lotBase(lot, floor)).mount ?? []).slice(0, MAX_DISHES)
+// On every radar tower the town drew: the dish turns on top of its pedestal, the tower's peak.
+export function radarMounts(placed: readonly PlacedLot[]): RadarMount[] {
+  return placed
+    .filter((tower) => tower.design === 'radar-tower')
+    .slice(0, MAX_DISHES)
+    .map((tower) => ({
+      x: tower.at[0],
+      y: drawnTop(tower),
+      z: tower.at[2],
+      scale: (tower.scale * Math.min(tower.lot.width, tower.lot.depth)) / BUILDING_SIDE_M
+    }))
 }
 
 // A stub-winged shuttle, nose toward +z.

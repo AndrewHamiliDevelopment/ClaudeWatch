@@ -1,10 +1,6 @@
 import { useFrame } from '@react-three/fiber'
 import { useRef } from 'react'
 import type { Group, Object3D } from 'three'
-import type { Plot } from './lot-kit'
-import type { Rect } from './lot-math'
-import { designFor, plotOf, type LotDesign } from './lot-parts'
-import { draw, lotBase, type Lot } from './surroundings'
 import type { Vector } from './primitives'
 import { UnitPart } from './unit-parts'
 
@@ -20,7 +16,6 @@ const PUFFS_PER_STACK = 3
 const PUFF_PERIOD_SEC = 4
 const PUFF_SIZE = { start: 0.3, growth: 0.8 }
 const MAX_PUFF_M = PUFF_SIZE.start + PUFF_SIZE.growth
-const MAX_STACK_LOTS = 4
 // What a still frame shows: three puffs caught mid-rise.
 const HELD_TIME_SEC = 1.7
 
@@ -45,31 +40,6 @@ export function moveSteam(root: Object3D, stacks: readonly SteamStack[], timeSec
     puff.position.set(...at)
     puff.scale.setScalar(size)
   })
-}
-
-// The stacks on the few lots that drew `design`, picked by seed so they are the same every start.
-export function steamStacksOn(
-  lots: readonly Lot[],
-  floor: Rect,
-  buildings: readonly LotDesign[],
-  design: string,
-  stacksOf: (plot: Plot) => { x: number; z: number; top: number }[],
-  rise: number
-): SteamStack[] {
-  return lots
-    .filter((lot) => lot.kind === 'building')
-    .map((lot) => ({ lot, plot: plotOf(lot, lotBase(lot, floor)) }))
-    .filter(({ plot }) => designFor(buildings, plot).name === design)
-    .sort((a, b) => draw(a.lot.seed, 70) - draw(b.lot.seed, 70))
-    .slice(0, MAX_STACK_LOTS)
-    .flatMap(({ lot, plot }) =>
-      stacksOf(plot).map((stack) => ({
-        x: lot.x + stack.x,
-        y: lot.maxHeight - plot.height + stack.top,
-        z: lot.z + stack.z,
-        rise
-      }))
-    )
 }
 
 // Opaque puffs that shrink away instead of fading: they merge into one draw with no sorting.

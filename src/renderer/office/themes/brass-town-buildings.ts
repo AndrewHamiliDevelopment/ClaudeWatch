@@ -229,14 +229,22 @@ export const BRASS_TOWN_DESIGNS: readonly ZoneDesign[] = [
   townBuilding('automaton fairground booth', 'entertainment', 5, automatonBooth),
   townBuilding('lodging row', 'residential', 6, lodgingRow),
   townBuilding('terraced tenement', 'residential', 9, tenement),
-  legacyTownDesign({
-    source: old('foundry'),
-    zones: ['workshop'],
-    max: 12,
-    isLandmark: true,
-    roof: roofOf
-  }),
-  townBuilding('boiler house', 'workshop', 8, boilerHouse, 3),
+  {
+    ...legacyTownDesign({
+      source: old('foundry'),
+      zones: ['workshop'],
+      max: 12,
+      isLandmark: true,
+      roof: roofOf
+    }),
+    // The old foundry ends with two stacks, each a chimney and then its ring.
+    vents: (parts) => parts.slice(-4).filter((_, index) => index % 2 === 0)
+  },
+  // The old boiler house's little stack, under the roof this design adds last.
+  {
+    ...townBuilding('boiler house', 'workshop', 8, boilerHouse, 3),
+    vents: (parts) => parts.slice(-2, -1)
+  },
   townBuilding('pipe yard', 'workshop', 5, pipeYard),
   legacyTownDesign({ source: old('gasometer'), zones: ['workshop'], max: 8, roof: roofOf }),
   townBuilding('bandstand green', 'park', 5, bandstand),

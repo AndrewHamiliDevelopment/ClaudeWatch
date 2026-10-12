@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { groupZonesByTheme, type ThemedZone } from '../logic/office-themes'
 import { BatchedScene } from '../scene/BatchedScene'
 import type { FloorGeometry } from '../scene-model'
+import { RisingSteam, type SteamStack } from '../themes/ambient-parts'
 import type { PlacedLot } from '../themes/lot-kit'
 import { LotFill } from '../themes/LotFill'
 import { getTheme, registerTheme } from '../themes/registry'
@@ -48,6 +49,8 @@ type Node = ReactElement<{
   children?: ReactNode
   placed?: readonly PlacedLot[]
   lots?: readonly Lot[]
+  stacks?: readonly SteamStack[]
+  color?: string
   revision?: string
   isStatic?: boolean
 }>
@@ -181,7 +184,40 @@ describe('TownAmbient', () => {
     const [northLots, southLots] = handed
     expect(southLots.length).toBeGreaterThan(0)
     for (const lot of southLots) expect(town.owners.get(lot.id)).toBe(firstCompany.id)
-    expect(northLots.length + southLots.length).toBe(town.plan.lots.length)
+    // Not the landmark's lot: the world layer's tower stands there.
+    expect(northLots.length + southLots.length).toBe(town.plan.lots.length - 1)
+  })
+
+  it('hands each theme what the town drew on its lots, the very placements TownView drew', () => {
+    const drawn = new Set(
+      elements(TownView({ town, floor: PAIR_FLOOR, floorTheme: north, zoneGroups })).flatMap(
+        (node) => (node.type === LotFill ? (node.props.placed ?? []) : [])
+      )
+    )
+    for (const theme of [north, south]) {
+      const handed = elements(ambient(1)).find((node) => node.type === theme.kit.zone.Ambient)
+      const { lots = [], placed = [] } = handed?.props ?? {}
+      expect(placed.map((each) => each.lot)).toEqual(lots)
+      for (const each of placed) expect(drawn.has(each)).toBe(true)
+    }
+  })
+
+  it('draws each theme’s steam once for the town, in the theme’s steam colour', () => {
+    const edo = getTheme('neo-edo-steam')
+    const brass = getTheme('brass-workshop')
+    const groups = groupZonesByTheme(PAIR_FLOOR, (zone) =>
+      zone.companyKey === firstCompany.companyKey ? brass.id : edo.id
+    )
+    const steamAt = (share: number) =>
+      elements(ambient(share, edo, groups)).filter((node) => node.type === RisingSteam)
+    const steam = steamAt(1)
+    expect(steam.map((node) => node.props.color).sort()).toEqual(
+      [edo.palette.steam, brass.palette.steam].sort()
+    )
+    for (const node of steam) expect(node.props.stacks?.length).toBeGreaterThan(0)
+    const stacksAt = (share: number): number =>
+      steamAt(share).reduce((sum, node) => sum + (node.props.stacks?.length ?? 0), 0)
+    expect(stacksAt(0.2)).toBeLessThanOrEqual(stacksAt(1))
   })
 
   it('hands over the share of the lots the detail level allows', () => {

@@ -164,6 +164,9 @@ function lanternTheatre(plot: ZonePlot): PartSpec[] {
   ]
 }
 
+// The foundry's ink stack, which stands above the brass ring round it.
+const chimney = (parts: readonly PartSpec[]): PartSpec[] => parts.slice(-3, -2)
+
 function foundry(plot: ZonePlot): PartSpec[] {
   return [
     ...hall({ ...plot, height: plot.height * 0.54 }),
@@ -259,14 +262,23 @@ export const EDO_TOWN_DESIGNS: readonly ZoneDesign[] = [
     roof: roofOf
   }),
   townBuilding('merchant stalls', 'market', 4, merchantStalls),
-  legacyTownDesign({ source: old('bathhouse'), zones: ['entertainment'], max: 9, roof: roofOf }),
+  {
+    ...legacyTownDesign({
+      source: old('bathhouse'),
+      zones: ['entertainment'],
+      max: 9,
+      roof: roofOf
+    }),
+    // The old bathhouse ends with its chimney and the cap on it.
+    vents: (parts) => parts.slice(-1)
+  },
   townBuilding('lantern theatre', 'entertainment', 12, lanternTheatre, 5, true),
   townBuilding('teahouse', 'entertainment', 6, hall),
   legacyTownDesign({ source: old('townhouse'), zones: ['residential'], max: 9, roof: roofOf }),
   townBuilding('row house', 'residential', 9, rowHouse),
   townBuilding('gabled cottage', 'residential', 5, cottage),
   legacyTownDesign({ source: old('storehouse'), zones: ['workshop'], max: 7, roof: roofOf }),
-  townBuilding('foundry with chimney', 'workshop', 12, foundry, 5, true),
+  { ...townBuilding('foundry with chimney', 'workshop', 12, foundry, 5, true), vents: chimney },
   townBuilding('smithy', 'workshop', 6, smithy),
   legacyTownDesign({
     source: old('shrine garden'),
