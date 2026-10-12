@@ -13,7 +13,7 @@ import {
   TRIANGLE_CEILING
 } from './live-budget.test-utils'
 import { registerTheme } from './registry'
-import { LOT_CAP } from './surroundings'
+import { BUILDING_CAP } from '../town/town-grid'
 import type { OfficeTheme } from './types'
 
 vi.mock('react', async (original) => ({
@@ -55,6 +55,9 @@ function bare(theme: OfficeTheme): OfficeTheme {
   return stripped
 }
 
+// A tree every 6 m with lamps and seats between, round the largest campus these floors make.
+const GARDEN_PIECE_CEILING = 160
+
 for (const theme of REAL_THEMES) {
   const unfilled = bare(theme)
   it(`${theme.id} adds at most ${ADDED_DRAWS_PER_THEME} draws for its surroundings, lounge and ambient life`, () => {
@@ -71,7 +74,9 @@ for (const theme of REAL_THEMES) {
     expect(empty.horizonDraws).toBe(1)
     expect(filled.horizonDraws).toBe(1)
     expect(filled.lotCount).toBeGreaterThan(40)
-    expect(filled.lotCount).toBeLessThanOrEqual(LOT_CAP)
+    // The town's lots are capped by the plan; the garden's pieces cost triangles, not draws.
+    expect(filled.lotCount).toBeLessThanOrEqual(BUILDING_CAP.full + GARDEN_PIECE_CEILING)
+    expect(filled.triangles).toBeLessThanOrEqual(TRIANGLE_CEILING)
     expect(filled.surroundingsDraws + loungeDraws).toBeLessThanOrEqual(ADDED_DRAWS_PER_THEME)
   })
 }

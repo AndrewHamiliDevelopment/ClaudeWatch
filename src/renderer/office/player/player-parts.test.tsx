@@ -1,16 +1,10 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { buildFixtureFrame } from '../fixture/fixture-feed'
 import { EDO } from '../themes/palettes'
-import { listThemes } from '../themes/registry'
-import { surroundingLots } from '../themes/surroundings'
-import { districtLots } from './district-lots'
 import { MARKER_Y, playerGeometry } from './figure'
 import { TalkPrompt } from './TalkPrompt'
 import { listenForWalkKeys } from './walk-keys'
 import { createPlayer, sendPlayer } from './walking'
-
-const [floor] = buildFixtureFrame(0, 0).floors
 
 describe('listenForWalkKeys', () => {
   let stop = (): void => {}
@@ -98,25 +92,6 @@ describe('sendPlayer', () => {
     expect(player.goal).toEqual({ x: 4, z: 2 })
     expect(player.onGoal).toHaveBeenCalledOnce()
   })
-})
-
-describe('districtLots', () => {
-  it.each(listThemes().map((theme) => theme.id))(
-    'places the %s district on the apron, clear of the plate and the ring',
-    (themeId) => {
-      const centre = { x: floor.x, z: floor.z }
-      const ring = surroundingLots(floor)
-      const lots = districtLots(themeId, floor)
-      expect(lots.length).toBeGreaterThan(4)
-      for (const lot of lots) {
-        const isOffPlate =
-          Math.abs(lot.x - centre.x) >= (floor.width + lot.width) / 2 - 1e-6 ||
-          Math.abs(lot.z - centre.z) >= (floor.depth + lot.depth) / 2 - 1e-6
-        expect(isOffPlate, lot.id).toBe(true)
-        expect(ring.some((other) => other.id === lot.id)).toBe(false)
-      }
-    }
-  )
 })
 
 describe('playerGeometry', () => {
