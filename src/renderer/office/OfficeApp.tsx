@@ -2,27 +2,13 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useReducer, useState }
 import { Plate } from '../components/deck/Plate'
 import { cn } from '../lib/utils'
 import { useOfficeTheme } from './hooks'
-import { buildAttentionQueue } from './logic/attention-queue'
-import {
-  bayForAgent,
-  mainAgentForSession,
-  memberForAgent,
-  sessionForAgent,
-  summariseFloors
-} from './logic/floor-model'
-import { canRespond, reachTarget } from './logic/interactions'
-import { buildNameCards, buildProjectStacks } from './logic/name-cards'
+import { mainAgentForSession } from './logic/floor-model'
+import { canRespond } from './logic/interactions'
 import { INITIAL_OFFICE_STATE, officeReducer } from './logic/office-reducer'
-import {
-  buildThemeRows,
-  countThemeChoices,
-  resolveTheme,
-  useThemeAssignments
-} from './logic/office-themes'
-import { buildCompanyList, buildOfficesTree, findZone } from './logic/zone-model'
+import { buildThemeRows, countThemeChoices, useThemeAssignments } from './logic/office-themes'
+import { findZone } from './logic/zone-model'
 import { createFrameMetrics } from './frame-metrics'
 import { AgentActions } from './hud/AgentActions'
-import { buildAgentFacts, type AgentFacts } from './hud/agent-facts'
 import { AttentionRail } from './hud/AttentionRail'
 import { BottomBar } from './hud/BottomBar'
 import { EmptyState } from './hud/EmptyState'
@@ -34,7 +20,6 @@ import { MetricsOverlay } from './hud/MetricsOverlay'
 import { OfficesPanel } from './hud/OfficesPanel'
 import { ResourceBar } from './hud/ResourceBar'
 import { ThemesList } from './hud/ThemesList'
-import { buildTokenLedger } from '../deck/tokens'
 import { SceneErrorBoundary } from './SceneErrorBoundary'
 import type { OfficeFeed } from './scene-model'
 import {
@@ -43,8 +28,8 @@ import {
   useFocusTerminal,
   useOfficeHotkeys
 } from './use-office-effects'
+import { selectionOf, useOfficeLists } from './use-office-model'
 import { canCreateWebGL2 } from './webgl-support'
-import { themeCharacter } from './themes/registry'
 
 // The scene component loads separately so the HUD can paint before Canvas mounts.
 const OfficeScene = lazy(() => import('./scene/OfficeScene'))
@@ -78,53 +63,25 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
   const { theme, cycleTheme } = officeTheme
   const themeAssignments = useThemeAssignments()
 
-  // The feed keeps this array between its messages, while a frame arrives for every step.
-  const sessions = frame?.sessions
-  const queue = useMemo(() => buildAttentionQueue(sessions ?? []), [sessions])
+  const floorId = state.focusedFloorId
+  const lists = useOfficeLists(frame, floorId, state.selectedAgentKey)
+  const { sessions, queue, towerFloors, companies, ledger, agentFacts } = lists
+  const { floorAgents, cards, stacks, companyList } = lists
   const announcement = useAttentionAnnouncement(queue)
-  // The Tower stays as a landmark showing the building's totals; it no longer picks floors.
-  const towerFloors = useMemo(() => (frame ? summariseFloors(frame) : []), [frame])
-  const companies = useMemo(() => (frame ? buildOfficesTree(frame) : []), [frame])
   const themeRows = useMemo(
     () => buildThemeRows(companies, themeAssignments, theme.id),
     [companies, themeAssignments, theme.id]
   )
-  const ledger = useMemo(() => buildTokenLedger(sessions ?? []), [sessions])
-  const agentFacts = useMemo(
-    () => (frame ? buildAgentFacts(frame) : new Map<string, AgentFacts>()),
-    [frame]
-  )
-  const floorId = state.focusedFloorId
-  const floorAgents = useMemo(
-    () => (frame ? frame.agents.filter((agent) => agent.floorId === floorId) : []),
-    [frame, floorId]
-  )
-  const cards = useMemo(
-    () => (frame && floorId ? buildNameCards(frame, floorId, state.selectedAgentKey) : []),
-    [frame, floorId, state.selectedAgentKey]
-  )
-  const stacks = useMemo(
-    () => (frame && floorId ? buildProjectStacks(frame, floorId) : []),
-    [frame, floorId]
-  )
-  const companyList = useMemo(() => (frame ? buildCompanyList(frame) : []), [frame])
   const isConnecting = !frame || (!frame.connected && frame.sessions.length === 0)
-  const focusedFloor = frame?.floors.find((floor) => floor.floorId === state.focusedFloorId)
-  const selectedAgent = frame?.agents.find((agent) => agent.agentKey === state.selectedAgentKey)
-  const selectedSession = frame && selectedAgent ? sessionForAgent(frame, selectedAgent) : undefined
-  const selectedMember = selectedAgent
-    ? memberForAgent(selectedSession, selectedAgent.agentKey)
-    : undefined
-  const selectedTarget = selectedSession ? reachTarget(selectedSession, selectedMember) : undefined
+  const focusedFloor = frame?.floors.find((floor) => floor.floorId === floorId)
+  const {
+    agent: selectedAgent,
+    session: selectedSession,
+    member: selectedMember,
+    target: selectedTarget,
+    character: selectedCharacter
+  } = selectionOf(frame, state.selectedAgentKey, themeAssignments, theme.id)
   const selectedTargetKey = selectedTarget?.key
-  const selectedCharacter =
-    frame && selectedAgent && selectedSession
-      ? themeCharacter(
-          resolveTheme(selectedSession, themeAssignments, theme.id),
-          selectedAgent,
-          bayForAgent(frame, selectedAgent)
-        )
-      : null
   const isViewOnly = feed.isViewOnly === true
   const reviewableKeys = useMemo(
     () =>
