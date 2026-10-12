@@ -54,7 +54,7 @@ const RING_DEPTH_M = 3 * BLOCK_M
 // Ring lots this far past the apron are the far ring.
 const FAR_RING_FROM_M = 2 * BLOCK_M
 // The walkway the floor packs between companies; a building keeps this far from every company.
-const LANE_M = 3
+export const LANE_M = 3
 
 const PROP_SPACING_M = 5
 const PROP_WALL_GAP_M = 0.2
@@ -84,12 +84,12 @@ function doorClearance(rect: Rect & { door: { x: number; z: number } }): Rect {
 }
 
 // What lots are grown around: a company, or the bare plate on a floor that has none yet.
-interface Anchor extends Rect {
+export interface Anchor extends Rect {
   id: string
   zoneId: string | null
 }
 
-interface Site {
+export interface Site {
   plate: Rect
   apron: Rect
   ringEdge: Rect
@@ -128,7 +128,7 @@ export function lotBase(lot: Rect, plate: Rect): number {
   return contains(plate, lot) ? 0 : GROUND_Y
 }
 
-function surveySite(floor: FloorGeometry): Site {
+export function surveySite(floor: FloorGeometry): Site {
   const plate: Rect = floor
   const apron = apronOf(plate)
   const zones = flatten(floor.zones)
