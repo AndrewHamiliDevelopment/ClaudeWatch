@@ -195,6 +195,7 @@ function OfficeScene(props: OfficeSceneProps) {
           zoneGroups={zoneGroups}
           player={player}
           isReducedMotion={isReducedMotion}
+          share={quality.citizenShare}
         />
         {player && (
           <PlayerLayer
