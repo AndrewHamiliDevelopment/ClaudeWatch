@@ -17,6 +17,8 @@ export interface ZoneDesign extends Omit<BuildingDesign, 'build'> {
   // Origin at the lot's centre on the ground; the front faces +z.
   build: (plot: ZonePlot) => PartSpec[]
   isLandmark?: true
+  // Its chimneys among the parts `build` made: steam leaves the top of each.
+  vents?: (parts: readonly PartSpec[]) => readonly PartSpec[]
 }
 
 export interface ZoneProp extends PropDesign {

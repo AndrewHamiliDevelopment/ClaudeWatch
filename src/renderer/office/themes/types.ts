@@ -10,6 +10,7 @@ import type {
 } from '../scene-model'
 import type { WallsMode } from '../logic/room-layout'
 import type { TownDress } from '../town/town-dress'
+import type { PlacedLot } from './lot-kit'
 import type { Lot } from './surroundings'
 
 export interface ThemePalette {
@@ -89,6 +90,8 @@ export interface SurroundingsProps {
 }
 export interface AmbientProps extends SurroundingsProps {
   isReducedMotion: boolean
+  // What the zoned town drew on `lots`: movers keep to the buildings actually there.
+  placed?: readonly PlacedLot[]
 }
 export interface TowerFloor {
   floorId: string

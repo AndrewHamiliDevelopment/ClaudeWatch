@@ -1,14 +1,17 @@
-import { useMemo } from 'react'
+import { Fragment, useMemo } from 'react'
 import type { ThemeZoneGroup } from '../logic/office-themes'
 import { boundsOfZone } from '../logic/zone-framing'
 import { BatchedScene } from '../scene/BatchedScene'
 import type { FloorGeometry } from '../scene-model'
+import { RisingSteam } from '../themes/ambient-parts'
+import type { PlacedLot } from '../themes/lot-kit'
 import { LotFill } from '../themes/LotFill'
 import { thinnedLots } from '../themes/lot-thinning'
 import { getTheme } from '../themes/registry'
 import { GROUND_Y, lotBase } from '../themes/surroundings'
 import type { OfficeTheme } from '../themes/types'
 import { fallbackDress } from './fallback-dress'
+import { townSteamStacks } from './town-ambient'
 import { dressLot, type TownDress } from './town-dress'
 import type { TownLot } from './town-lots'
 import type { TownPlan } from './town-plan'
@@ -64,6 +67,29 @@ function townRevision(props: TownProps, themeIdOf: ThemeFinder): string {
   ])
 }
 
+interface DressedLot {
+  themeId: string
+  placed: PlacedLot
+}
+
+let dressedCache: { revision: string; lots: DressedLot[] } | null = null
+
+// Every lot but the landmark's, in its theme. TownView and TownAmbient share one dressing per
+// revision: the movers keep to exactly what was drawn, and nothing is dressed twice.
+function dressedTown(plan: TownPlan, themeIdOf: ThemeFinder, revision: string): DressedLot[] {
+  if (dressedCache?.revision !== revision) {
+    const landmark = townLandmark(plan)
+    const lots = plan.lots
+      .filter((lot) => lot !== landmark)
+      .map((lot) => {
+        const themeId = themeIdOf(lot)
+        return { themeId, placed: dressLot(lot, GROUND_Y, dressOf(getTheme(themeId))) }
+      })
+    dressedCache = { revision, lots }
+  }
+  return dressedCache.lots
+}
+
 // The buildings of the zoned town and the planted belt round the campus, each merged once.
 // The belt has its own batch so that ordinary growth of the plate never rebuilds the town.
 export function TownView(props: TownProps) {
@@ -86,10 +112,7 @@ export function TownView(props: TownProps) {
   // The same elements while a revision stands: an agent's step re-renders the scene, and React
   // must find nothing to do here.
   const lots = useMemo(() => {
-    const landmark = townLandmark(town.plan)
-    const placed = town.plan.lots
-      .filter((lot) => lot !== landmark)
-      .map((lot) => dressLot(lot, GROUND_Y, dressOf(getTheme(themeIdOf(lot)))))
+    const placed = dressedTown(town.plan, themeIdOf, lotsRevision).map((each) => each.placed)
     return (
       <BatchedScene revision={lotsRevision} isStatic>
         <LotFill placed={placed} />
@@ -122,23 +145,42 @@ interface TownAmbientProps extends TownProps {
   isReducedMotion: boolean
 }
 
-// Each theme's moving things, on the lots that theme dresses. Followed frame by frame, so it is
-// kept apart from the buildings, which are placed once.
+// Each theme's moving things on the lots that theme dresses, and the steam off its chimneys.
+// Followed frame by frame, so it is kept apart from the buildings, which are placed once.
 export function TownAmbient(props: TownAmbientProps) {
   const { town, floor, share, isReducedMotion } = props
   const themeIdOf = useMemo(() => themeFinder(props), [town, props.floorTheme, props.zoneGroups])
   const lotsRevision = useMemo(() => townRevision(props, themeIdOf), [themeIdOf])
   return useMemo(() => {
-    const lotsByTheme = Map.groupBy(town.plan.lots, themeIdOf)
-    const moving = [...lotsByTheme].flatMap(([themeId, lots]) => {
-      const { Ambient } = getTheme(themeId).kit.zone
-      return Ambient ? [{ themeId, Ambient, lots: thinnedLots(lots, share, floor) }] : []
+    if (share <= 0) return null
+    const byTheme = Map.groupBy(
+      dressedTown(town.plan, themeIdOf, lotsRevision),
+      (each) => each.themeId
+    )
+    // A theme with no Ambient part has opted out of moving things, its steam included.
+    const moving = [...byTheme].flatMap(([themeId, dressed]) => {
+      const theme = getTheme(themeId)
+      const { Ambient } = theme.kit.zone
+      if (!Ambient) return []
+      const placedOf = new Map(dressed.map(({ placed }) => [placed.lot, placed]))
+      const lots = thinnedLots([...placedOf.keys()], share, floor)
+      const placed = lots.flatMap((lot) => placedOf.get(lot) ?? [])
+      return [{ theme, Ambient, lots, placed, stacks: townSteamStacks(placed, dressOf(theme)) }]
     })
-    if (share <= 0 || moving.length === 0) return null
+    if (moving.length === 0) return null
     return (
       <BatchedScene revision={JSON.stringify([lotsRevision, share, isReducedMotion])}>
-        {moving.map(({ themeId, Ambient, lots }) => (
-          <Ambient key={themeId} floor={floor} lots={lots} isReducedMotion={isReducedMotion} />
+        {moving.map(({ theme, Ambient, lots, placed, stacks }) => (
+          <Fragment key={theme.id}>
+            <Ambient floor={floor} lots={lots} placed={placed} isReducedMotion={isReducedMotion} />
+            {stacks.length > 0 && (
+              <RisingSteam
+                stacks={stacks}
+                color={theme.palette.steam}
+                isReducedMotion={isReducedMotion}
+              />
+            )}
+          </Fragment>
         ))}
       </BatchedScene>
     )

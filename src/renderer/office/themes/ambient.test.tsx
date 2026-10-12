@@ -1,11 +1,14 @@
 import { createElement, type ReactNode } from 'react'
 import { Group } from 'three'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { buildFixtureFrame } from '../fixture/fixture-feed'
-import { moveSteam, steamPuffAt } from './ambient-parts'
-import { BrassAmbient, brassGears, brassSteamStacks, turnGears } from './BrassAmbient'
-import { dronePosition, EdoAmbient, edoSteamStacks, lanternDrones } from './EdoAmbient'
-import { surroundingLots } from './surroundings'
+import { drawnTown, townDressOf } from '../town/drawn-town.test-utils'
+import { drawnTop } from '../town/town-ambient'
+import { dressLot } from '../town/town-dress'
+import { steamPuffAt } from './ambient-parts'
+import { BrassAmbient, brassGears, turnGears } from './BrassAmbient'
+import { dronePosition, EdoAmbient, lanternDrones } from './EdoAmbient'
+import { LIVE_FLOORS } from './floors.test-utils'
+import { GROUND_Y } from './surroundings'
 import type { AmbientProps } from './types'
 
 type FrameState = { clock: { elapsedTime: number }; invalidate: () => void }
@@ -22,10 +25,28 @@ vi.mock('react', async (original) => ({
   useRef: () => ({ current: frame.root })
 }))
 
-const floor = buildFixtureFrame(0, 0).floors[0]
-const lots = surroundingLots(floor)
-const lotById = new Map(lots.map((lot) => [lot.id, lot]))
+const floor = LIVE_FLOORS[2][1]
 const TIMES = Array.from({ length: 120 }, (_, index) => index * 0.37)
+const DRONE_HALF = { side: 0.18, height: 0.3 }
+// The Brass civic landmark, as a lot of the town would draw it were the tower not standing there.
+const clockTower = dressLot(
+  {
+    id: 'lot:clock',
+    kind: 'building',
+    x: 30,
+    z: -20,
+    width: 8,
+    depth: 7,
+    maxHeight: 20,
+    seed: 77,
+    zoneId: null,
+    zone: 'civic',
+    facing: 'east',
+    isLandmark: true
+  },
+  GROUND_Y,
+  townDressOf('brass-workshop')
+)
 
 beforeEach(() => {
   frame.callbacks.length = 0
@@ -41,25 +62,28 @@ const placesOf = (root: Group): number[][] =>
   root.children.map((child) => [...child.position.toArray(), child.rotation.z, child.scale.x])
 
 describe('lantern drones', () => {
-  const drones = lanternDrones(lots, floor)
+  const placed = drawnTown('neo-edo-steam', floor)
+  const drones = lanternDrones(placed)
 
   it('patrol a handful of lots, the same ones on every start', () => {
     expect(drones.length).toBeGreaterThan(2)
     expect(drones.length).toBeLessThanOrEqual(10)
-    expect(lanternDrones(lots, floor)).toEqual(drones)
+    expect(lanternDrones(drawnTown('neo-edo-steam', floor))).toEqual(drones)
   })
 
-  it('stay beside their lot and under its height limit while they drift', () => {
+  it('stay over their own lot, clear of the building drawn and under the height limit', () => {
     for (const drone of drones) {
-      const lot = lotById.get(drone.lotId)
-      if (!lot) throw new Error('drone without a lot')
+      const under = placed.find((each) => each.key === drone.lotId)
+      if (!under) throw new Error('drone without a lot')
+      const { lot } = under
       const seen = new Set<string>()
       for (const time of TIMES) {
         const [x, y, z] = dronePosition(drone, time)
         seen.add(`${x.toFixed(1)}:${z.toFixed(1)}`)
-        expect(Math.abs(x - lot.x)).toBeLessThanOrEqual(lot.width / 2 + 0.5)
-        expect(Math.abs(z - lot.z)).toBeLessThanOrEqual(lot.depth / 2 + 0.5)
-        expect(y + 0.3).toBeLessThanOrEqual(lot.maxHeight)
+        expect(Math.abs(x - lot.x) + DRONE_HALF.side).toBeLessThanOrEqual(lot.width / 2)
+        expect(Math.abs(z - lot.z) + DRONE_HALF.side).toBeLessThanOrEqual(lot.depth / 2)
+        expect(y - DRONE_HALF.height).toBeGreaterThan(drawnTop(under))
+        expect(y + DRONE_HALF.height).toBeLessThanOrEqual(lot.maxHeight)
       }
       expect(seen.size).toBeGreaterThan(20)
     }
@@ -76,31 +100,24 @@ describe('rising steam', () => {
       expect(puff.lift).toBeLessThan(1)
     }
   })
-
-  it.each([
-    ['Neo Edo Steam', edoSteamStacks],
-    ['Brass Workshop', brassSteamStacks]
-  ])('%s keeps every puff under its lot limit', (_name, stacksOf) => {
-    const stacks = stacksOf(lots, floor)
-    expect(stacks.length).toBeGreaterThan(0)
-    expect(stacks.length).toBeLessThanOrEqual(8)
-    const root = groupOf(stacks.length * 3)
-    for (const time of TIMES) {
-      moveSteam(root, stacks, time)
-      root.children.forEach((puff, index) => {
-        const stack = stacks[Math.floor(index / 3)]
-        expect(puff.position.y + puff.scale.y / 2).toBeLessThanOrEqual(stack.y + stack.rise + 1e-6)
-        expect(puff.position.y).toBeGreaterThanOrEqual(stack.y)
-      })
-    }
-  })
 })
 
 describe('tower gears', () => {
-  it('turn in place on the towers that have them', () => {
-    const gears = brassGears(lots, floor)
-    expect(gears.length).toBeGreaterThan(0)
-    expect(gears.length).toBeLessThanOrEqual(16)
+  it('sit on the faces of a clock tower drawn, and on nothing else', () => {
+    const gears = brassGears([clockTower, ...drawnTown('brass-workshop', floor)])
+    expect(gears).toHaveLength(2)
+    const { lot } = clockTower
+    for (const gear of gears) {
+      const [x, y, z] = gear.at
+      expect(Math.abs(x - lot.x)).toBeLessThan(lot.width / 2)
+      expect(Math.abs(z - lot.z)).toBeLessThan(lot.depth / 2)
+      expect(y).toBeGreaterThan(GROUND_Y)
+      expect(y + gear.radius).toBeLessThan(drawnTop(clockTower))
+    }
+  })
+
+  it('turn in place', () => {
+    const gears = brassGears([clockTower])
     const root = groupOf(gears.length)
     turnGears(root, 1)
     const before = placesOf(root)
@@ -114,9 +131,9 @@ describe('tower gears', () => {
 })
 
 describe.each([
-  ['Neo Edo Steam', EdoAmbient],
-  ['Brass Workshop', BrassAmbient]
-])('%s ambient part', (_name, Ambient) => {
+  ['Neo Edo Steam', EdoAmbient, drawnTown('neo-edo-steam', floor)],
+  ['Brass Workshop', BrassAmbient, [clockTower]]
+])('%s ambient part', (_name, Ambient, placed) => {
   // Expands the part and its children so every useFrame in it registers.
   function mount(isReducedMotion: boolean): Group {
     const root = groupOf(60)
@@ -128,7 +145,12 @@ describe.each([
       if (typeof type === 'function') return expand((type as (p: object) => ReactNode)(props))
       expand(props.children)
     }
-    const props: AmbientProps = { floor, lots, isReducedMotion }
+    const props: AmbientProps = {
+      floor,
+      lots: placed.map((each) => each.lot),
+      placed,
+      isReducedMotion
+    }
     expand(createElement(Ambient, props))
     return root
   }
@@ -139,9 +161,9 @@ describe.each([
     return invalidate
   }
 
-  it('moves two kinds of thing each frame and never asks for another frame', () => {
+  it('moves its things each frame and never asks for another frame', () => {
     const root = mount(false)
-    expect(frame.callbacks.length).toBeGreaterThanOrEqual(2)
+    expect(frame.callbacks.length).toBeGreaterThanOrEqual(1)
     const invalidate = run(1)
     const before = placesOf(root)
     run(2.3)
@@ -155,5 +177,11 @@ describe.each([
     run(1)
     run(2.3)
     expect(placesOf(root)).toEqual(before)
+  })
+
+  it('draws no steam of its own: the town draws it once', () => {
+    frame.callbacks.length = 0
+    mount(false)
+    expect(frame.callbacks.length).toBe(1)
   })
 })

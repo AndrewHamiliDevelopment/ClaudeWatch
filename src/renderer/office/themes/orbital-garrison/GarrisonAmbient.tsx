@@ -64,9 +64,9 @@ export function Shuttle({
   )
 }
 
-// A dish turning on every radar tower, and a shuttle flying circuits over the runway.
-export function GarrisonAmbient({ floor, lots, isReducedMotion }: AmbientProps) {
-  const mounts = useMemo(() => radarMounts(lots, floor), [lots, floor])
+// A dish turning on every radar tower drawn, and a shuttle flying circuits over the runway.
+export function GarrisonAmbient({ floor, placed = [], isReducedMotion }: AmbientProps) {
+  const mounts = useMemo(() => radarMounts(placed), [placed])
   return (
     <>
       {mounts.map((mount) => (

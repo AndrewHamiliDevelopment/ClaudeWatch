@@ -13,8 +13,10 @@ import { CIRCUIT_ALTITUDE_M, circuitPose, radarMounts } from './ambient'
 import { DISH_REACH_M } from './buildings'
 import { RadarDish, Shuttle } from './GarrisonAmbient'
 import { orbitalGarrison } from './index'
-import { buildLot } from './lots'
 import { FLOORS, officeGap } from './yard.test-utils'
+import { drawnTown } from '../../town/drawn-town.test-utils'
+import { drawnTop, topOf } from '../../town/town-ambient'
+import { LIVE_FLOORS } from '../floors.test-utils'
 
 type Frame = (state: { clock: { elapsedTime: number }; invalidate: () => void }) => void
 const frames: Frame[] = []
@@ -118,17 +120,24 @@ describe('the Orbital Garrison draw budget', () => {
 })
 
 describe('what moves around the garrison', () => {
-  it('mounts a dish on every radar tower it draws, up to eight', () => {
-    for (const floor of FLOORS) {
-      const lots = surroundingLots(floor)
-      const mounts = radarMounts(lots, floor)
-      const towers = lots.filter((lot) => buildLot(lot, 0).designId === 'radar-tower')
-      expect(mounts.length).toBe(Math.min(8, towers.length))
+  it('mounts a dish on the pedestal of every radar tower the town draws', () => {
+    for (const [, floor] of LIVE_FLOORS) {
+      const placed = drawnTown(orbitalGarrison.id, floor)
+      const towers = placed.filter((each) => each.design === 'radar-tower')
+      const mounts = radarMounts(placed)
+      expect(mounts.length).toBe(towers.length)
       expect(mounts.length).toBeGreaterThan(0)
-      for (const mount of mounts) {
-        const lot = lots.find((each) => each.x === mount.x && each.z === mount.z)
-        expect(mount.y + DISH_REACH_M * mount.scale).toBeLessThanOrEqual(lot?.maxHeight ?? 0)
-      }
+      towers.forEach((tower, index) => {
+        const mount = mounts[index]
+        // The drum the dish turns on is the tower's highest round part.
+        const [top] = tower.parts
+          .filter((part) => part.shape === 'cylinder')
+          .map((part) => topOf(tower, part))
+          .sort((a, b) => b.y - a.y)
+        expect([mount.x, mount.y, mount.z]).toEqual([top.x, top.y, top.z])
+        expect(mount.y).toBe(drawnTop(tower))
+        expect(mount.y + DISH_REACH_M * mount.scale).toBeLessThanOrEqual(tower.lot.maxHeight)
+      })
     }
   })
 
