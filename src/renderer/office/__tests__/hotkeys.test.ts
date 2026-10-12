@@ -68,4 +68,17 @@ describe('commandForKey while walking', () => {
     expect(commandForKey(key('Home'), true)).toEqual({ type: 'walls', mode: 'up' })
     expect(commandForKey(key('Enter'), true)).toEqual({ type: 'fly-to-selected' })
   })
+
+  it('has no walk key while the player is switched off', () => {
+    expect(commandForKey(key('g'), false, false)).toBeNull()
+    expect(commandForKey(key('g'), false, true)).toEqual({ type: 'toggle-walk' })
+  })
+})
+
+describe('commandForKey for the settings', () => {
+  it('opens the settings with the comma key, walking or not', () => {
+    expect(commandForKey(key(','))).toEqual({ type: 'toggle-settings' })
+    expect(commandForKey(key(','), true)).toEqual({ type: 'toggle-settings' })
+    expect(commandForKey(key(',', { isTargetEditable: true }))).toBeNull()
+  })
 })

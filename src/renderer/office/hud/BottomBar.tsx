@@ -7,12 +7,13 @@ import {
   ZoomOut,
   type LucideIcon
 } from 'lucide-react'
-import { useId, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { Plate } from '../../components/deck/Plate'
 import type { ZoomDirection } from '../logic/camera-bands'
-import { WALK_KEYS } from '../logic/hotkeys'
+import { SETTINGS_KEY, WALK_KEYS } from '../logic/hotkeys'
 import type { WallsMode } from '../logic/room-layout'
 import { BAR_BUTTON_CLASS, KBD_CLASS } from './hud-styles'
+import { OfficeSettingsPanel } from './OfficeSettings'
 
 interface BottomBarProps {
   floorThemeLabel: string
@@ -25,6 +26,11 @@ interface BottomBarProps {
   // The owner is moving their own character through the office.
   isWalking: boolean
   onToggleWalk: () => void
+  // False while the owner's character is switched off: no Walk button, no walking hint.
+  hasPlayer: boolean
+  // Held above the bar so the settings key opens the panel too.
+  isSettingsOpen: boolean
+  onToggleSettings: () => void
   onWallsMode: (mode: WallsMode) => void
   onToggleList: () => void
   onToggleMetrics: () => void
@@ -97,9 +103,31 @@ export function BottomBar(props: BottomBarProps) {
     setIsThemesOpen(false)
     themesButtonRef.current?.focus()
   }
+  const { isSettingsOpen, onToggleSettings } = props
+  const settingsButtonRef = useRef<HTMLButtonElement>(null)
+  const settingsId = useId()
+  // One panel stands above the bar at a time; the settings are the later arrival.
+  const isShowingThemes = isThemesOpen && !isSettingsOpen
+  const wasSettingsOpenRef = useRef(isSettingsOpen)
+  useEffect(() => {
+    const hasClosed = wasSettingsOpenRef.current && !isSettingsOpen
+    wasSettingsOpenRef.current = isSettingsOpen
+    // The panel took focus with it when it closed, unless another control was clicked.
+    const isFocusLost = !document.activeElement || document.activeElement === document.body
+    if (hasClosed && isFocusLost) settingsButtonRef.current?.focus()
+  }, [isSettingsOpen])
+  const toggleThemes = (): void => {
+    if (isSettingsOpen) onToggleSettings()
+    setIsThemesOpen(!isShowingThemes)
+  }
+  const toggleSettings = (): void => {
+    setIsThemesOpen(false)
+    onToggleSettings()
+  }
   return (
     <div className="relative">
-      {isThemesOpen && props.renderThemes(themesId, closeThemes)}
+      {isShowingThemes && props.renderThemes(themesId, closeThemes)}
+      {isSettingsOpen && <OfficeSettingsPanel id={settingsId} onClose={onToggleSettings} />}
       <Plate faceClassName="flex flex-wrap items-center gap-1 p-1.5">
         <div role="group" aria-label="Walls" className="flex gap-1">
           {WALL_OPTIONS.map((option) => (
@@ -153,13 +181,15 @@ export function BottomBar(props: BottomBarProps) {
           />
         </div>
         <Divider />
-        <ToggleButton
-          label="Walk"
-          shortcut={WALK_KEYS.toggle}
-          isPressed={props.isWalking && isShowing3D}
-          isDisabled={!isShowing3D}
-          onClick={props.onToggleWalk}
-        />
+        {props.hasPlayer && (
+          <ToggleButton
+            label="Walk"
+            shortcut={WALK_KEYS.toggle}
+            isPressed={props.isWalking && isShowing3D}
+            isDisabled={!isShowing3D}
+            onClick={props.onToggleWalk}
+          />
+        )}
         <ToggleButton
           label="List view"
           shortcut="L"
@@ -171,9 +201,9 @@ export function BottomBar(props: BottomBarProps) {
         <button
           type="button"
           ref={themesButtonRef}
-          aria-expanded={isThemesOpen}
-          aria-controls={isThemesOpen ? themesId : undefined}
-          onClick={() => setIsThemesOpen((isOpen) => !isOpen)}
+          aria-expanded={isShowingThemes}
+          aria-controls={isShowingThemes ? themesId : undefined}
+          onClick={toggleThemes}
           className={BAR_BUTTON_CLASS}
         >
           Floor theme: {props.floorThemeLabel}
@@ -185,7 +215,20 @@ export function BottomBar(props: BottomBarProps) {
           isDisabled={!isShowing3D}
           onClick={props.onToggleMetrics}
         />
-        {props.isWalking && isShowing3D && (
+        {/* Never disabled: the switches are also how a struggling machine gets its 3D view back. */}
+        <button
+          type="button"
+          ref={settingsButtonRef}
+          aria-expanded={isSettingsOpen}
+          aria-controls={isSettingsOpen ? settingsId : undefined}
+          aria-keyshortcuts={SETTINGS_KEY}
+          onClick={toggleSettings}
+          className={BAR_BUTTON_CLASS}
+        >
+          Settings
+          <kbd className={KBD_CLASS}>{SETTINGS_KEY}</kbd>
+        </button>
+        {props.hasPlayer && props.isWalking && isShowing3D && (
           <p className="basis-full px-1 pb-0.5 text-xs text-text-secondary">
             Arrow keys or W A S D to walk, click to go there, {WALK_KEYS.talk} to talk to the agent
             beside you.

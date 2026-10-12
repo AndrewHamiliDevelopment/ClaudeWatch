@@ -23,6 +23,8 @@ function wayTo(paths: PathCache, from: Point, to: Point): Point[] {
   return path.length ? path : [from, to].map(({ x, z }) => ({ x, z }))
 }
 
+const NO_LOUNGES: ReadonlyMap<string, LoungeLayout> = new Map()
+
 export class World {
   private readonly now: () => number
   private sessions = new Map<string, SessionRef>()
@@ -34,9 +36,12 @@ export class World {
   private sequence = -1
   private helloRevision = 0
   private ready = false
+  private hasLoungeTrips: boolean
 
-  constructor(options: { now: () => number; saved?: LayoutMap }) {
+  // `loungeTrips: false` keeps finished agents at their desks.
+  constructor(options: { now: () => number; saved?: LayoutMap; loungeTrips?: boolean }) {
     this.now = options.now
+    this.hasLoungeTrips = options.loungeTrips ?? true
     this.map = options.saved
       ? structuredClone(options.saved)
       : { version: 1, floors: [], reservations: {} }
@@ -161,7 +166,9 @@ export class World {
   private seatLounges(): void {
     const paths = this.paths
     if (!paths) return
-    for (const [key, seat] of loungeSeats([...this.agents.values()], this.lounges)) {
+    // With trips off no seat is on offer, so nobody sets out and every sitter walks back.
+    const lounges = this.hasLoungeTrips ? this.lounges : NO_LOUNGES
+    for (const [key, seat] of loungeSeats([...this.agents.values()], lounges)) {
       const agent = this.agents.get(key)
       if (!agent) continue
       const isAway = agent.view.place === 'lounge'
@@ -177,6 +184,11 @@ export class World {
       if (isAway && desk)
         this.agents.set(key, returnToDesk(agent, desk.heading, wayTo(paths, agent.view, desk)))
     }
+  }
+
+  // Takes effect at the next step: agents in the lounge walk back, or waiting ones set out.
+  setLoungeTrips(hasLoungeTrips: boolean): void {
+    this.hasLoungeTrips = hasLoungeTrips
   }
 
   step(dtMs: number): AgentView[] {

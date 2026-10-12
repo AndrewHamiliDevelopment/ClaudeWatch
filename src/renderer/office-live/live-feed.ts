@@ -10,6 +10,7 @@ import type {
   PermissionDecision,
   ProviderId
 } from '../../shared/office/types'
+import { officeSettings, type OfficeSettingsStore } from '../office/logic/office-settings'
 import type { FloorGeometry, OfficeFeed, OfficeFrame } from '../office/scene-model'
 import { toFloorGeometry } from './layout-geometry'
 
@@ -57,14 +58,26 @@ function saveLayout(storage: LayoutStorage | null, serialised: string): void {
 // Runs the office sim in the renderer on top of the bridge feed and emits a frame when it changes.
 export function createLiveFeed(
   source: FeedSource,
-  options: { storage: LayoutStorage | null; now?: () => number }
+  options: {
+    storage: LayoutStorage | null
+    now?: () => number
+    // The owner's switches; the sim reads only the lounge trips.
+    settings?: Pick<OfficeSettingsStore, 'get' | 'subscribe'>
+  }
 ): OfficeFeed {
   const now = options.now ?? Date.now
+  const settings = options.settings ?? officeSettings
   const listeners = new Set<(frame: OfficeFrame) => void>()
   let stop: (() => void) | null = null
 
   const start = (): (() => void) => {
-    const world = new World({ now, saved: loadLayout(options.storage) })
+    const world = new World({
+      now,
+      saved: loadLayout(options.storage),
+      loungeTrips: settings.get().loungeTrips
+    })
+    // A running office follows the switch: the next step walks agents back, or lets them go.
+    const offSettings = settings.subscribe(() => world.setLoungeTrips(settings.get().loungeTrips))
     let snapshot: OfficeSnapshot | null = null
     let floors: FloorGeometry[] = []
     let floorsKey = ''
@@ -116,6 +129,7 @@ export function createLiveFeed(
     return () => {
       clearInterval(timer)
       offFeed()
+      offSettings()
     }
   }
 

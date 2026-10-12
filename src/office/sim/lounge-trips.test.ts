@@ -215,3 +215,45 @@ it('leaves through the gate from the lounge when its session ends there', () => 
     ).toBe(false)
   expect(sim.step(0).map((a) => a.agentKey)).toEqual(['b'])
 })
+
+function openWithoutTrips(sessions: SessionRef[]): World {
+  const sim = new World({ now: () => 0, loungeTrips: false })
+  sim.apply({ type: 'hello', v: 1, snapshot: { rev: 0, generatedAtMs: 0, sessions, sources: [] } })
+  return sim
+}
+
+it('keeps a finished agent at its desk when lounge trips are off', () => {
+  const sim = openWithoutTrips([done('a')])
+  for (const views of run(sim, DELAY_S * 3)) {
+    expect(views[0].place).toBeUndefined()
+    expect(at(views[0])).toEqual(at(deskOf(sim, 'a')))
+  }
+})
+
+it('walks an agent back from the lounge when lounge trips are turned off', () => {
+  const sim = open([done('a')])
+  run(sim, SETTLE_S)
+  expect(view(sim, 'a')).toMatchObject({ ...at(seat(sim, 0)), place: 'lounge' })
+
+  sim.setLoungeTrips(false)
+  // It gets up at the next tick and walks: no jump to its desk.
+  let last = at(view(sim, 'a'))
+  for (const views of run(sim, SETTLE_S)) {
+    expect(views[0].place).toBeUndefined()
+    const now = at(views[0])
+    expect(Math.hypot(now.x - last.x, now.z - last.z)).toBeLessThanOrEqual(0.1401)
+    last = now
+  }
+  expect(view(sim, 'a')).toMatchObject({
+    ...at(deskOf(sim, 'a')),
+    heading: deskOf(sim, 'a').heading
+  })
+})
+
+it('sends a finished agent to the lounge again once lounge trips are back on', () => {
+  const sim = openWithoutTrips([done('a')])
+  run(sim, DELAY_S * 2)
+  sim.setLoungeTrips(true)
+  run(sim, SETTLE_S)
+  expect(view(sim, 'a')).toMatchObject({ ...at(seat(sim, 0)), place: 'lounge' })
+})

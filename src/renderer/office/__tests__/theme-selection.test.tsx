@@ -41,7 +41,11 @@ it('cycles from T without dispatching a reducer action or intercepting editable 
   const dispatch = vi.fn()
   const cycle = vi.fn()
   renderHook(() =>
-    useOfficeHotkeys(dispatch, false, { onCycleTheme: cycle, onFocusTerminal: vi.fn() })
+    useOfficeHotkeys(dispatch, false, {
+      onCycleTheme: cycle,
+      onFocusTerminal: vi.fn(),
+      onToggleSettings: vi.fn()
+    })
   )
   fireEvent.keyDown(window, { key: 'T' })
   expect(cycle).toHaveBeenCalledTimes(1)
