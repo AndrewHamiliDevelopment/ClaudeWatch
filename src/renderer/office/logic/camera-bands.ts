@@ -1,3 +1,5 @@
+import type { ZoneGeometry } from '../scene-model'
+
 export type ZoomBand = 'desk' | 'floor' | 'building'
 export type ZoomDirection = 'in' | 'out'
 
@@ -140,7 +142,8 @@ export function groundCover(
   }
 }
 
-// Desk zoom follows the room an agent sits in, not the agent itself (it moves while walking).
+// Desk zoom follows the place an agent sits (its room, or its company's lounge while it rests
+// there), not the agent itself: that moves while walking.
 export interface FollowAnchor {
   agentKey: string
   roomX: number
@@ -155,6 +158,25 @@ export type FollowStep =
 interface FollowedAgent {
   agentKey: string
   roomId: string
+  place?: 'lounge'
+}
+
+type Spot = Pick<ZoneGeometry, 'x' | 'z'>
+const NO_LOUNGES: ReadonlyMap<string, Spot> = new Map()
+
+// Every office room's company lounge, keyed by the room: a project's leaves share the rooms' ids.
+export function loungesByRoom(zones: readonly ZoneGeometry[]): Map<string, Spot> {
+  const lounges = new Map<string, Spot>()
+  for (const company of zones) {
+    const { lounge } = company
+    if (!lounge) continue
+    const visit = (zone: ZoneGeometry): void => {
+      lounges.set(zone.id, lounge)
+      zone.children.forEach(visit)
+    }
+    company.children.forEach(visit)
+  }
+  return lounges
 }
 
 interface RoomCentre {
@@ -167,21 +189,24 @@ const ROOM_MOVED_EPSILON_M = 0.01
 
 export function followAnchor(
   agent: FollowedAgent,
-  rooms: readonly RoomCentre[]
+  rooms: readonly RoomCentre[],
+  lounges: ReadonlyMap<string, Spot> = NO_LOUNGES
 ): FollowAnchor | null {
-  const room = rooms.find((candidate) => candidate.id === agent.roomId)
-  return room ? { agentKey: agent.agentKey, roomX: room.x, roomZ: room.z } : null
+  const lounge = agent.place === 'lounge' ? lounges.get(agent.roomId) : undefined
+  const spot = lounge ?? rooms.find((candidate) => candidate.id === agent.roomId)
+  return spot ? { agentKey: agent.agentKey, roomX: spot.x, roomZ: spot.z } : null
 }
 
 // 'shift' carries a delta, so a pan the owner made inside the office is kept, only moved along.
 export function followStep(
   anchor: FollowAnchor,
   agents: readonly FollowedAgent[],
-  rooms: readonly RoomCentre[]
+  rooms: readonly RoomCentre[],
+  lounges: ReadonlyMap<string, Spot> = NO_LOUNGES
 ): FollowStep {
   const agent = agents.find((candidate) => candidate.agentKey === anchor.agentKey)
   if (!agent) return { kind: 'lost' }
-  const next = followAnchor(agent, rooms)
+  const next = followAnchor(agent, rooms, lounges)
   if (!next) return { kind: 'stay' }
   const dx = next.roomX - anchor.roomX
   const dz = next.roomZ - anchor.roomZ

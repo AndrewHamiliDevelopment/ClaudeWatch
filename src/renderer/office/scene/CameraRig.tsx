@@ -10,6 +10,7 @@ import {
   followAnchor,
   followStep,
   ISO_POLAR,
+  loungesByRoom,
   snapAzimuth,
   type FollowAnchor,
   type ZoomBand
@@ -155,14 +156,20 @@ export function CameraRig(props: CameraRigProps) {
     latestRef.current.onBandChange(band)
   })
 
-  // At desk zoom, keep the followed agent's office in view when the floor re-packs. Only a room
-  // that actually moved shifts the target, so the owner's own pan is never interrupted.
+  // At desk zoom, keep the followed agent's office in view when the floor re-packs, and go with it
+  // to its lounge. Only a place that actually moved shifts the target, so the owner's own pan is
+  // never interrupted.
   const { floor: followedFloor, agents: followedAgents } = props
   useEffect(() => {
     const controls = controlsRef.current
     const anchor = followRef.current
     if (!controls || !anchor || bandRef.current !== 'desk') return
-    const step = followStep(anchor, followedAgents, followedFloor.rooms)
+    const step = followStep(
+      anchor,
+      followedAgents,
+      followedFloor.rooms,
+      loungesByRoom(followedFloor.zones)
+    )
     if (step.kind === 'stay') return
     if (step.kind === 'lost') {
       followRef.current = null
@@ -212,7 +219,7 @@ export function CameraRig(props: CameraRigProps) {
         if (!agent) return
         rig.takeOver()
         gesturesRef.current?.cancel()
-        followRef.current = followAnchor(agent, floor.rooms)
+        followRef.current = followAnchor(agent, floor.rooms, loungesByRoom(floor.zones))
         hasMovedSinceFlyRef.current = false
         void controls.moveTo(agent.x, LOOK_HEIGHT, agent.z, isAnimated)
         void controls.zoomTo(BAND_ZOOM.desk, isAnimated)

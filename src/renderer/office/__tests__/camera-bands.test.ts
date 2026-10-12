@@ -6,8 +6,10 @@ import {
   followAnchor,
   followStep,
   ISO_POLAR,
+  loungesByRoom,
   snapAzimuth
 } from '../logic/camera-bands'
+import { makeZone } from './fixtures'
 
 const DEG = Math.PI / 180
 
@@ -102,6 +104,49 @@ describe('desk follow', () => {
   it('anchors on the centre of the room the agent sits in, not on the agent', () => {
     expect(followAnchor(agents[0], rooms)).toEqual(anchor)
     expect(followAnchor({ agentKey: 'a', roomId: 'gone' }, rooms)).toBeNull()
+  })
+
+  it('goes with the agent to its company lounge, and back to its room when it returns', () => {
+    const lounges = new Map([['r1', { x: 30, z: 9 }]])
+    const lounging = [{ agentKey: 'a', roomId: 'r1', place: 'lounge' as const }]
+    expect(followStep(anchor, lounging, rooms, lounges)).toEqual({
+      kind: 'shift',
+      dx: 20,
+      dz: 5,
+      anchor: { agentKey: 'a', roomX: 30, roomZ: 9 }
+    })
+    const inLounge = { agentKey: 'a', roomX: 30, roomZ: 9 }
+    expect(followStep(inLounge, lounging, rooms, lounges)).toEqual({ kind: 'stay' })
+    expect(followStep(inLounge, agents, rooms, lounges)).toMatchObject({ dx: -20, dz: -5 })
+  })
+
+  it("finds every office room's company lounge", () => {
+    const lounge = {
+      id: 'c1:lounge',
+      x: 30,
+      z: 9,
+      width: 6,
+      depth: 5,
+      door: { x: 30, z: 6 },
+      seats: []
+    }
+    const zones = [
+      makeZone({
+        id: 'c1',
+        kind: 'company',
+        lounge,
+        children: [
+          makeZone({
+            id: 'p1',
+            kind: 'project',
+            children: [makeZone({ id: 'r1', kind: 'office' })]
+          })
+        ]
+      }),
+      makeZone({ id: 'c2', kind: 'company', children: [makeZone({ id: 'p2', kind: 'project' })] })
+    ]
+    expect(loungesByRoom(zones).get('r1')).toMatchObject({ x: 30, z: 9 })
+    expect(loungesByRoom(zones).has('p2')).toBe(false)
   })
 
   it('stays put while the room has not moved', () => {
