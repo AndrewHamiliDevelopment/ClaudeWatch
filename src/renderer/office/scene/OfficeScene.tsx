@@ -20,6 +20,7 @@ import { RobotCrew } from './Robot'
 import { BatchedScene } from './BatchedScene'
 import { SurroundingsView, WorldView } from './WorldView'
 import { ZonePickers } from './ZonePickers'
+import { CitizenLayer } from '../citizens/CitizenLayer'
 import { districtLots } from '../player/district-lots'
 import { PlayerLayer } from '../player/PlayerLayer'
 import { Streets } from '../player/Streets'
@@ -173,6 +174,14 @@ function OfficeScene(props: OfficeSceneProps) {
           onFly={props.onFlyToZone}
           onMiss={() => props.onSelectAgent(null)}
           onWalk={walkTo}
+        />
+        <CitizenLayer
+          floor={floor}
+          solids={solids}
+          floorTheme={theme}
+          zoneGroups={zoneGroups}
+          player={player}
+          isReducedMotion={isReducedMotion}
         />
         {player && (
           <PlayerLayer
