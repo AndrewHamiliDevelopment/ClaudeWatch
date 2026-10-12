@@ -1,14 +1,16 @@
-import { gapBetween, overlaps, type Rect, type Span } from '../themes/lot-math'
+import { overlaps, type Rect, type Span } from '../themes/lot-math'
 import {
   OPPOSITE_PAIRS,
   RUN_END_CLEAR_M,
+  centredSlots,
+  isClearOfPlate,
   onSide,
   runsOf,
   spanAlong,
   type Ground,
   type Side
 } from './belt-frame'
-import { gardenPiece, levelled, roomOver, type GreenPlot } from './garden-pieces'
+import { levelled, sidePiece, type GreenPlot } from './garden-pieces'
 import { ROAD_WIDTH_M } from './town-grid'
 
 // Full-size trees on the campus side of the lawn, 6 m apart and half a pitch off the walk row's
@@ -31,15 +33,6 @@ function cornerKeepOuts({ claim }: Ground): Rect[] {
   const side = CORNER_KEEP_OUT_M * 2
   return [claim.minX, claim.maxX].flatMap((x) =>
     [claim.minZ, claim.maxZ].map((z) => ({ x, z, width: side, depth: side }))
-  )
-}
-
-function isClear(rect: Rect, ground: Ground, plateClear: number): boolean {
-  const { plate } = ground.site
-  return (
-    !overlaps(rect, plate) &&
-    !overlaps(rect, ground.street) &&
-    gapBetween(rect, plate) >= plateClear
   )
 }
 
@@ -94,11 +87,13 @@ function hedgesOn(
       along: segment.max - segment.min,
       across: HEDGE_ACROSS_M
     })
-    return gardenPiece(`garden:${side}:hedge:${name}:${runIndex}:${index}`, 'hedge', rect, {
-      facing: side,
-      zoneId: ground.zoneIdOf(side),
-      maxHeight: roomOver(rect, ground.site, ground.promenades)
-    })
+    return sidePiece(
+      ground,
+      side,
+      `garden:${side}:hedge:${name}:${runIndex}:${index}`,
+      'hedge',
+      rect
+    )
   })
 }
 
@@ -111,28 +106,17 @@ function treesOn(
   blockers: readonly Rect[]
 ): GreenPlot[] {
   const middle = (run.min + run.max) / 2
-  const reach = (run.max - run.min) / 2 - RUN_END_CLEAR_M - AVENUE_TREE_M.along / 2
-  const last = Math.floor(reach / AVENUE_PITCH_M)
   const line = onSide(ground.claim, side, middle, depth, {
     along: run.max - run.min,
     across: AVENUE_TREE_M.across
   })
   const blocked = blockedSpans(side, run, line, blockers)
-  return Array.from({ length: Math.max(0, last * 2 + 1) }, (_, index) => index - last).flatMap(
-    (slot) => {
-      const along = middle + slot * AVENUE_PITCH_M
-      const rect = onSide(ground.claim, side, along, depth, AVENUE_TREE_M)
-      if (!isFree(spanAlong(side, rect), blocked)) return []
-      const id = `garden:${side}:innerTree:${runIndex}:${slot}`
-      return [
-        gardenPiece(id, 'innerTree', rect, {
-          facing: side,
-          zoneId: ground.zoneIdOf(side),
-          maxHeight: roomOver(rect, ground.site, ground.promenades)
-        })
-      ]
-    }
-  )
+  return centredSlots(run, AVENUE_TREE_M.along, AVENUE_PITCH_M).flatMap((slot) => {
+    const rect = onSide(ground.claim, side, middle + slot * AVENUE_PITCH_M, depth, AVENUE_TREE_M)
+    if (!isFree(spanAlong(side, rect), blocked)) return []
+    const id = `garden:${side}:innerTree:${runIndex}:${slot}`
+    return [sidePiece(ground, side, id, 'innerTree', rect)]
+  })
 }
 
 // Does a whole line at `depth` across every run of a side stand clear?
@@ -140,7 +124,7 @@ function lineFits(ground: Ground, side: Side, depth: number, across: number, cle
   return runsOf(side, ground.claim).every((run) => {
     const along = run.max - run.min
     const line = onSide(ground.claim, side, (run.min + run.max) / 2, depth, { along, across })
-    return isClear(line, ground, clear)
+    return isClearOfPlate(line, ground, clear)
   })
 }
 

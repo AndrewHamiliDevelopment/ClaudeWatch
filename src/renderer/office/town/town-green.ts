@@ -1,6 +1,6 @@
 import { boundsOfZone } from '../logic/zone-framing'
 import type { FloorGeometry } from '../scene-model'
-import { gapBetween, overlaps, type Rect, type Span } from '../themes/lot-math'
+import { overlaps, type Rect, type Span } from '../themes/lot-math'
 import { MIN_LOT_HEIGHT_M, surveySite } from '../themes/surroundings'
 import {
   ROW_ACROSS_M,
@@ -8,6 +8,7 @@ import {
   gardenPiece,
   levelled,
   roomOver,
+  sidePiece,
   type GreenPlot
 } from './garden-pieces'
 import type { GardenRole } from './town-dress'
@@ -16,15 +17,17 @@ import {
   OPPOSITE_PAIRS,
   RUN_END_CLEAR_M,
   SIDES,
+  centredSlots,
   isAlongX,
+  isClearOfPlate,
   onSide,
   runsOf,
   type Ground,
   type Side
 } from './belt-frame'
-import { MIN_BELT_M, ROAD_WIDTH_M } from './town-grid'
+import { MIN_BELT_M } from './town-grid'
 import { nearestCompany, type TownPlan } from './town-plan'
-import { plazaPieces } from './town-plaza'
+import { campusStreet, plazaPieces } from './town-plaza'
 
 export type { GreenPlot } from './garden-pieces'
 
@@ -45,38 +48,22 @@ function roleAt(slot: number): GardenRole {
   return (away / 2) % 2 === 1 ? 'lamp' : 'seat'
 }
 
-function rowOf(
-  ground: Ground,
-  side: Side,
-  run: Span,
-  runIndex: number,
-  slotM: number
-): GreenPlot[] {
+function rowOf(ground: Ground, side: Side, run: Span, runIndex: number): GreenPlot[] {
   const middle = (run.min + run.max) / 2
-  const reach = (run.max - run.min) / 2 - RUN_END_CLEAR_M - ROW_ALONG_M / 2
-  const last = Math.floor(reach / slotM)
-  return Array.from({ length: Math.max(0, last * 2 + 1) }, (_, index) => {
-    const slot = index - last
+  return centredSlots(run, ROW_ALONG_M, SLOT_M).map((slot) => {
     const role = roleAt(slot)
-    const rect = onSide(ground.claim, side, middle + slot * slotM, ROW_DEPTH_M, {
+    const rect = onSide(ground.claim, side, middle + slot * SLOT_M, ROW_DEPTH_M, {
       along: ROW_ALONG_M,
       across: ROW_ACROSS_M
     })
-    return gardenPiece(`garden:${side}:${role}:${runIndex}:${slot}`, role, rect, {
-      facing: side,
-      zoneId: ground.zoneIdOf(side),
-      maxHeight: roomOver(rect, ground.site, ground.promenades)
-    })
+    return sidePiece(ground, side, `garden:${side}:${role}:${runIndex}:${slot}`, role, rect)
   })
 }
 
 // Clear of the plate and the campus street, and tall enough for a design to stand.
-function hasRoom(piece: GreenPlot, { site, street }: Ground): boolean {
+function hasRoom(piece: GreenPlot, ground: Ground): boolean {
   return (
-    !overlaps(piece, site.plate) &&
-    !overlaps(piece, street) &&
-    gapBetween(piece, site.plate) >= PLATE_CLEAR_M &&
-    piece.maxHeight >= MIN_LOT_HEIGHT_M.building
+    isClearOfPlate(piece, ground, PLATE_CLEAR_M) && piece.maxHeight >= MIN_LOT_HEIGHT_M.building
   )
 }
 
@@ -103,11 +90,7 @@ function featuresOf(ground: Ground, corners: readonly Rect[]): GreenPlot[] {
   const featureOf = (side: Side, run: Span, runIndex: number): GreenPlot | null => {
     if (run.max - run.min < FEATURE_M.along + RUN_END_CLEAR_M * 2) return null
     const rect = onSide(ground.claim, side, (run.min + run.max) / 2, depth, FEATURE_M)
-    const piece = gardenPiece(`garden:${side}:feature:${runIndex}`, 'feature', rect, {
-      facing: side,
-      zoneId: ground.zoneIdOf(side),
-      maxHeight: roomOver(rect, ground.site, ground.promenades)
-    })
+    const piece = sidePiece(ground, side, `garden:${side}:feature:${runIndex}`, 'feature', rect)
     const isClear = hasRoom(piece, ground) && !corners.some((corner) => overlaps(piece, corner))
     return isClear ? piece : null
   }
@@ -133,12 +116,12 @@ export function campusGreen(floor: FloorGeometry, plan: TownPlan): GreenPlot[] {
   const ground: Ground = {
     claim,
     site,
-    street: { ...plan.claim, z: 0, depth: ROAD_WIDTH_M.avenue },
+    street: campusStreet(plan.claim),
     promenades: plan.promenades,
     zoneIdOf: (side) => nearestCompany(middleOf(side), site.companies)?.id ?? null
   }
   const rows = SIDES.flatMap((side) =>
-    runsOf(side, claim).flatMap((run, runIndex) => rowOf(ground, side, run, runIndex, SLOT_M))
+    runsOf(side, claim).flatMap((run, runIndex) => rowOf(ground, side, run, runIndex))
   )
   // Features keep off the corners' places whether or not the corners have room.
   const corners = cornersOf(ground)

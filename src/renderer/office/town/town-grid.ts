@@ -1,12 +1,10 @@
 import type { QualityLevel } from '../logic/quality'
 import type { Rect } from '../themes/lot-math'
 
-// Three nested lattices, all pinned at the gate (the floor's origin), so nothing on them moves.
+// Two nested lattices, both pinned at the gate (the floor's origin), so nothing on them moves.
 export const LOT_PITCH_M = 12
 // A block is 2 x 2 lots; collectors run on these lines.
 export const BLOCK_PITCH_M = 24
-// Park plots inside the claim.
-export const GREEN_PITCH_M = 6
 
 export const ROAD_WIDTH_M = { avenue: 12, boulevard: 10, collector: 6, lane: 2 } as const
 export const SIDEWALK_M = { avenue: 1.5, boulevard: 1.5, collector: 1, lane: 0 } as const

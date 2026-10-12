@@ -25,7 +25,7 @@ export const KEEP_RIGHT_M: Record<Traveller, Record<RoadClass, number>> = {
   }
 }
 // The middle of the boulevard's inner sidewalk, from its centre line: the promenade.
-export const INNER_SIDEWALK_M = ROAD_WIDTH_M.boulevard / 2 - SIDEWALK_M.boulevard / 2
+const INNER_SIDEWALK_M = ROAD_WIDTH_M.boulevard / 2 - SIDEWALK_M.boulevard / 2
 
 // Where a traveller is beside a leg's centre line: to the right of the way it is going, and for
 // a citizen on the boulevard, over on the sidewalk next to the campus.
