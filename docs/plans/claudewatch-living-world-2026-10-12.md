@@ -12,6 +12,8 @@ Validated: `npx vitest run src/office/sim/zz-repro-sprawl.test.ts` (a throwaway 
 | The world is cut off at the edges                            | The camera's far plane is fixed at 200 m while the floor above is 138 × 186 m, and the ground ends at the floor's edge                                                                                          | `src/renderer/office/scene/OfficeScene.tsx:99`, `src/renderer/office/themes/ZoneArchitecture.tsx:146`                                                                                               |
 | One skyline for every company                                | The world layer is drawn once per floor from the floor's default theme                                                                                                                                          | `src/renderer/office/themes/types.ts` (`world`), `src/renderer/office/scene/WorldView.tsx:19`                                                                                                       |
 | Changing the theme changes one office and nothing says which | The bar's theme button and the T key change only the zone that was last flown to; the "All offices" row has no theme control; each row's control is a 16 px two-colour square whose name is only in its tooltip | `src/renderer/office/hooks.ts:53-58`, `src/renderer/office/hud/OfficesPanel.tsx:62`, `src/renderer/office/hud/OfficeRow.tsx:75-92`                                                                  |
+| The Office window cannot be dragged                          | The window hides its title bar and the Office page marks no area as draggable                                                                                                                                   | `src/main/office-setup.ts:35`, `src/renderer/office/OfficeApp.tsx`                                                                                                                                  |
+| Open Office does nothing when the window already exists      | The controller only calls `focus()`, which does not restore a minimized or hidden window or bring the app forward                                                                                               | `src/main/office-window.ts:36`                                                                                                                                                                      |
 
 ## Tickets
 
@@ -22,18 +24,20 @@ Validated: `npx vitest run src/office/sim/zz-repro-sprawl.test.ts` (a throwaway 
 | none — needs filing (LW-3) | Planned; follow-up commits on draft PR #3 | https://github.com/theangeloumali/ClaudeWatch/pull/3 | "You also need to add layers or more random models to fill the world as much as possible. I want to also have buildings displayed And we need to make sure that each of the models should reflect the theme that we have for each"                                                          |
 | none — needs filing (LW-4) | Planned; follow-up commits on draft PR #3 | https://github.com/theangeloumali/ClaudeWatch/pull/3 | "I think we need to also make this livelier. We can draft a plan for us to make the world livelier and interesting Not just watching the agents. I think those cases and also agents that are already done, we can put them on an entertainment zone"                                       |
 | none — needs filing (LW-5) | Planned; follow-up commits on draft PR #3 | https://github.com/theangeloumali/ClaudeWatch/pull/3 | "Also when applying the team or changing the team, it only applies to a single office and I don't have a way to know. How can I apply different offices to each of the different companies or different offices so it doesn't apply to all and doesn't apply to any besides the first one?" |
+| none — needs filing (LW-6) | Done; follow-up commits on draft PR #3    | https://github.com/theangeloumali/ClaudeWatch/pull/3 | "I detected another issue: the window for the office can't be dragged and when I try to open the office from the main ClaudeWatch, it doesn't open it or doesn't focus on it"                                                                                                               |
 
-Per-item tier: LW-1 T2 (fix, sim logic, risk 1) · LW-2 T1 (fix, risk 1) · LW-3 T3 (five themes, risk 1) · LW-4 T2 (sim + scene, risk 1) · LW-5 T2 (HUD, risk 1). Session profile T3, `BUDGET: T3 active=5 total=12`. One review at the end (Maya, risk 1).
+Per-item tier: LW-1 T2 (fix, sim logic, risk 1) · LW-2 T1 (fix, risk 1) · LW-3 T3 (five themes, risk 1) · LW-4 T2 (sim + scene, risk 1) · LW-5 T2 (HUD, risk 1) · LW-6 T1 (fix, main process and one component, risk 1). Session profile T3, `BUDGET: T3 active=5 total=12`. One review at the end (Maya, risk 1).
 
 ## Ledger
 
-- [ ] Phase 1 — Compact floor: offices sized to who is there, companies packed tight, the floor grows and shrinks with the work
+- [x] Phase 1 — Compact floor: offices sized to who is there, companies packed tight, the floor grows and shrinks with the work
 - [x] Phase 2 — Nothing is cut off: camera planes from the scene's size, ground to the horizon
 - [x] Phase 3 — Surroundings engine: themed building lots and props around every company, drawn by that company's theme
-- [ ] Phase 4 — Lounge: each company has an entertainment zone; an agent whose turn is done walks there and walks back when work resumes
+- [x] Phase 4 — Lounge: each company has an entertainment zone; an agent whose turn is done walks there and walks back when work resumes
 - [ ] Phase 5 — Five themes filled in: buildings, props, lounge and ambient life for Neo Edo Steam, Brass Workshop, Violet Court, Orbital Garrison, Quiet Grove
 - [x] Phase 6 — Themes you can see and set: one place that names every office's theme and sets it for everything, one company or one project
-- [ ] Phase 7 — Close: gates, review, cleanup, install, the two screenshots re-taken, demo re-recorded, pushed to PR #3
+- [x] Phase 7 — The Office window can be dragged, and Open Office brings it to the front
+- [ ] Phase 8 — Close: gates, review, cleanup, install, the two screenshots re-taken, demo re-recorded, pushed to PR #3
 
 ## How it fits
 
@@ -131,7 +135,16 @@ Per-item tier: LW-1 T2 (fix, sim logic, risk 1) · LW-2 T1 (fix, risk 1) · LW-3
 - Verify: `npx vitest run src/renderer/office && npm run typecheck && npx eslint src/renderer/office`
 - 1.5h with Claude | 6h without.
 
-**Phase 7 — Close.** Owner: primary, with Maya reviewing.
+**Phase 7 — The Office window can be dragged, and Open Office brings it to the front (LW-6).** Owner: primary.
+
+- Files: `src/main/office-window.ts`, `src/main/office-window.test.ts`, `src/main/office-setup.ts`, `src/main/index.ts`, `src/renderer/office/OfficeApp.tsx`, `src/renderer/office/main.tsx`, `src/renderer/office/__tests__/theme-office-app.test.tsx`.
+- Validated: `npx vitest run src/main/office-window.test.ts` with the new cases failed 3 of 9 before the change (a second open neither restored nor showed the window, and the app was never brought forward).
+- Open Office restores a minimized window, shows a hidden one, focuses it and brings the app in front of other apps. At login the window still opens without taking the keyboard.
+- The app's window has a 36 px strip across the top to drag it by, and the panels start below it and below the window's own buttons. A browser tab has neither.
+- Verify: `npx vitest run src/main/office-window.test.ts src/renderer/office/__tests__ && npm run typecheck`
+- 0.5h with Claude | 2h without.
+
+**Phase 8 — Close.** Owner: primary, with Maya reviewing.
 
 - prettier, typecheck, eslint, the whole test suite, `npm run build`, `npm run build:office-web`, the seeded preview in a browser with 0 console errors.
 - One review of the whole diff, cleanup pass, reuse audit, dead-code scan, fixes in session.
@@ -173,7 +186,7 @@ Follow-up commits are pushed to `origin feature/prerelease-batch` (draft PR #3).
 
 ## Estimate
 
-Total **14h with Claude | 57h without** (about 4x): Phase 1 2|8, Phase 2 1|3, Phase 3 2|8, Phase 4 1.5|6, Phase 5 4|20, Phase 6 1.5|6, Phase 7 2|6. Phases 1, 2+3 and 6 run together; Phases 4 and 5 run together after them; Phase 7 is last.
+Total **14.5h with Claude | 59h without** (about 4x): Phase 1 2|8, Phase 2 1|3, Phase 3 2|8, Phase 4 1.5|6, Phase 5 4|20, Phase 6 1.5|6, Phase 7 0.5|2, Phase 8 2|6. Phases 1, 2+3 and 6 run together; Phases 4 and 5 run together after them; Phase 8 is last.
 
 ## Deviations
 
