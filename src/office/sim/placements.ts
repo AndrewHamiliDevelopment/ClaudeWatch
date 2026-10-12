@@ -49,7 +49,13 @@ export function placements(
     )
     const taken = team && (takenSeats.get(team.id) ?? new Set<string>())
     if (team && taken) takenSeats.set(team.id, taken)
-    const guests = session.subagents
+    // Teammates stay for the whole job and subagents come and go, so teammates sit at the desks
+    // beside their lead and subagents in the team area: a subagent leaving moves nobody who stays.
+    const guests = [...session.subagents]
+      .sort(
+        (a, b) =>
+          Number(b.kind === 'teammate') - Number(a.kind === 'teammate') || a.id.localeCompare(b.id)
+      )
       .map((subagent) => ({
         ...session,
         key: agentKey(session.key, subagent.id),
@@ -58,7 +64,6 @@ export function placements(
         activity: subagent.activity,
         attention: 'none' as const
       }))
-      .sort((a, b) => a.key.localeCompare(b.key))
     const seatOf = (guest: SessionRef, room: RoomLayout): string | undefined =>
       held.get(guest.key)?.roomId === room.id ? held.get(guest.key)!.slotId : undefined
     const freeDesks = new Set(GUEST_DESKS)
@@ -68,9 +73,18 @@ export function placements(
       if (desk && freeDesks.delete(desk)) seated.push({ session: guest, room: main, slotId: desk })
       else waiting.push(guest)
     }
-    // New arrivals take a free guest desk first, so team-area sitters move only when they must.
-    waiting.sort((a, b) => Number(held.has(a.key)) - Number(held.has(b.key)))
+    // A guest whose team seat still stands keeps it: a desk freeing up is no reason to get up.
+    const homeless: SessionRef[] = []
     for (const guest of waiting) {
+      const seat = team && taken ? seatOf(guest, team) : undefined
+      if (team && taken && seat && !taken.has(seat) && team.slots.some((s) => s.id === seat)) {
+        taken.add(seat)
+        seated.push({ session: guest, room: team, slotId: seat })
+      } else homeless.push(guest)
+    }
+    // New arrivals and guests whose seat went take the free guest desks, then the team seats.
+    homeless.sort((a, b) => Number(held.has(b.key)) - Number(held.has(a.key)))
+    for (const guest of homeless) {
       const [desk] = freeDesks
       if (desk) {
         freeDesks.delete(desk)
@@ -78,12 +92,7 @@ export function placements(
         continue
       }
       // The map gives a team seat to every guest past the desks, so a guest here has a team.
-      if (!team || !taken) continue
-      const seat = seatOf(guest, team)
-      if (seat && !taken.has(seat) && team.slots.some((s) => s.id === seat)) {
-        taken.add(seat)
-        seated.push({ session: guest, room: team, slotId: seat })
-      } else unseated.push({ session: guest, team })
+      if (team) unseated.push({ session: guest, team })
     }
   }
   for (const { session, team } of unseated) {

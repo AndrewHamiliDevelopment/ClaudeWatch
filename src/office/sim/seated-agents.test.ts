@@ -70,3 +70,55 @@ it('lets an agent that is still walking in finish its walk to where its desk now
   }
   expect(last).toEqual(at(deskOf(sim, 'a')))
 })
+
+// A lead's crew as the feed sends it: two teammates for good, subagents coming and going.
+const crewAt = (tick: number): SessionRef => {
+  const teammates = [0, 1].map((index) => ({
+    id: `team-${index}`,
+    type: 'lena',
+    name: `mate-${index}`,
+    kind: 'teammate' as const,
+    activity: 'thinking' as const
+  }))
+  const count = [2, 1, 1, 0][Math.floor(tick / 3) % 4]
+  const subagents = Array.from({ length: count }, (_, index) => ({
+    id: `sub-${index}`,
+    type: 'Explore',
+    activity: 'thinking' as const
+  }))
+  return { ...session('lead'), activity: 'thinking', subagents: [...teammates, ...subagents] }
+}
+
+it('moves no teammate when a subagent leaves, though the team area loses a seat', () => {
+  const sim = open([crewAt(0)])
+  run(sim, SETTLE_S)
+  const seats = () =>
+    new Map(sim.step(0).map((agent) => [agent.agentKey, `${agent.roomId}/${agent.slotId}`]))
+  const before = seats()
+  // Two subagents become one: the team area loses one of its two seats.
+  patch(sim, [crewAt(3)])
+  const after = seats()
+  const moved = ['lead#team-0', 'lead#team-1'].filter((key) => before.get(key) !== after.get(key))
+  expect(moved).toHaveLength(0)
+  expect(after.get('lead#team-0')).toContain('desk_guest')
+})
+
+it('lets a crew whose subagents come and go every few seconds sit still between changes', () => {
+  const sim = open([crewAt(0)])
+  run(sim, SETTLE_S)
+  let moves = 0
+  let last = new Map(sim.step(0).map((agent) => [agent.agentKey, at(agent)]))
+  for (let tick = 1; tick <= 24; tick++) {
+    patch(sim, [crewAt(tick)])
+    for (const frame of run(sim, 2)) {
+      for (const agent of frame)
+        if (agent.agentKey.includes('team') && last.has(agent.agentKey)) {
+          const was = last.get(agent.agentKey)!
+          if (was.x !== agent.x || was.z !== agent.z) moves++
+        }
+      last = new Map(frame.map((agent) => [agent.agentKey, at(agent)]))
+    }
+  }
+  // 48 s of feed: a teammate walks only when the team area loses its seat, at most twice a cycle.
+  expect(moves).toBeLessThan(120)
+})

@@ -169,17 +169,21 @@ it('seats teammates like subagents, under their own names, and keeps their seats
   expect(Object.keys(before).sort()).toEqual(['Explore', 'kai', 'lena', 'ravi'])
   expect(new Set(Object.values(before)).size).toBe(4)
 
-  // A teammate leaves the team area; nobody else is moved, at a desk or in the team area.
+  // Teammates take the desks beside their lead first: they stay, while subagents come and go.
+  expect(before.kai).toContain('desk_guest')
+  expect(before.lena).toContain('desk_guest')
+
+  // The subagent leaves the team area; nobody else is moved, at a desk or in the team area.
   sim.apply({
     type: 'patch',
     v: 1,
     seq: 1,
-    upserts: [{ ...lead, subagents: [worker, mate('kai'), mate('lena')] }],
+    upserts: [{ ...lead, subagents: ['kai', 'lena', 'ravi'].map(mate) }],
     removed: []
   })
   const after = seats()
-  for (const name of ['Explore', 'kai', 'lena']) expect(after[name]).toBe(before[name])
-  expect(before.lena).toContain('team_seat')
+  for (const name of ['kai', 'lena', 'ravi']) expect(after[name]).toBe(before[name])
+  expect(before.ravi).toContain('team_seat')
 })
 
 const seatOf = (sim: World, agent: { roomId: string; slotId: string }) => {
