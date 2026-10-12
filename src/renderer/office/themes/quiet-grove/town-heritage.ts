@@ -1,22 +1,8 @@
 import type { ZoneDesign, ZonePlot } from '../../town/town-dress'
-import type { TownDistrict } from '../../town/town-zones'
+import { heritageDesigns, type Restyle } from '../heritage'
 import { box, sphere, type PartSpec } from '../parts'
 import { GROVE_BUILDINGS } from './grove-buildings'
 import { GROVE } from './palette'
-
-// How one of the grove's own buildings joins the zoned town.
-interface Restyle {
-  name?: string
-  zones: readonly TownDistrict[]
-  // Its roof or its canopy: those parts take the zone's accent instead.
-  isRoof?: (part: PartSpec) => boolean
-  // What the town adds to it, the accent among it.
-  extra?: (plot: ZonePlot) => PartSpec[]
-  height?: ZoneDesign['height']
-  // The share of the plot it is built on, where its edges would overhang a small one.
-  share?: number
-  isLandmark?: true
-}
 
 const isMoss = (part: PartSpec): boolean => part.color === GROVE.moss
 // The grove's roofs are slabs laid to a pitch; nothing else in its buildings is a turned box.
@@ -63,16 +49,4 @@ const RESTYLES: Record<string, Restyle | undefined> = {
   'great-tree': { zones: ['park'], isRoof: isMoss, height: { min: 4.4, max: 24 } }
 }
 
-// The buildings the grove already had, tagged by zone and roofed in their zone's colour.
-export const GROVE_HERITAGE: readonly ZoneDesign[] = GROVE_BUILDINGS.flatMap((design) => {
-  const restyle = RESTYLES[design.name]
-  if (!restyle) return []
-  const { isRoof, extra, share = 1, ...tags } = restyle
-  const build = (plot: ZonePlot): PartSpec[] => [
-    ...design
-      .build({ ...plot, width: plot.width * share, depth: plot.depth * share })
-      .map((part) => (isRoof?.(part) ? { ...part, color: plot.accent } : part)),
-    ...(extra?.(plot) ?? [])
-  ]
-  return [{ ...design, ...tags, build }]
-})
+export const GROVE_HERITAGE: readonly ZoneDesign[] = heritageDesigns(GROVE_BUILDINGS, RESTYLES)

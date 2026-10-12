@@ -3,7 +3,7 @@ import type { VehicleDesign } from '../../town/town-dress'
 import { COURT } from './palette'
 import { moved, wheel } from './town-vehicle-parts'
 
-const SIDES = [-1, 1] as const
+import { SIDES } from '../parts'
 
 // What rides the court's roads. Each faces +z and stands on y = 0, a metre to the metre.
 export const COURT_VEHICLES: readonly VehicleDesign[] = [

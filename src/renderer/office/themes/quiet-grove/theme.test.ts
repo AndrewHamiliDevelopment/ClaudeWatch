@@ -1,9 +1,18 @@
 import { expect, it } from 'vitest'
 import { CARD_STATUS_COLOR, STATE_COLOR } from '../../office-palette'
 import { getTheme, listThemes } from '../registry'
-import { GROVE, GROVE_GROUNDS } from './palette'
+import { GROVE } from './palette'
 import { QUIET_GROVE_ID } from './roster'
 import { quietGrove } from './index'
+
+// Every surface a white name card or status ring can float over.
+const GROVE_GROUNDS: readonly string[] = [
+  GROVE.pine,
+  GROVE.moss,
+  GROVE.bark,
+  GROVE.deck,
+  GROVE.soil
+]
 
 function luminance(hex: string): number {
   const [red, green, blue] = [1, 3, 5].map((start) => {

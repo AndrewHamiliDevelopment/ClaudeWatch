@@ -1,6 +1,7 @@
 import { citizenFigures } from '../../citizens/figures'
-import type { TownDress, ZoneProp } from '../../town/town-dress'
+import type { TownDress } from '../../town/town-dress'
 import type { TownDistrict } from '../../town/town-zones'
+import { zonedProps } from '../heritage'
 import { GROVE_LOT_KIT } from './grove-lots'
 import { GROVE } from './palette'
 import { QUIET_GROVE_ID } from './roster'
@@ -22,11 +23,6 @@ const PROP_ZONES: Record<string, readonly TownDistrict[] | undefined> = {
   'moss-bed': ['residential', 'market']
 }
 
-const GROVE_ZONE_PROPS: readonly ZoneProp[] = GROVE_LOT_KIT.props.map((prop) => ({
-  ...prop,
-  zones: PROP_ZONES[prop.name] ?? []
-}))
-
 // A village in a clearing. Roofs and pads are the grove's own colours, one pair to a zone:
 // stone for the moot, clay for trade, pond for the green, straw for homes, bark for the yards.
 export const GROVE_TOWN: TownDress = {
@@ -36,7 +32,7 @@ export const GROVE_TOWN: TownDress = {
     ...GROVE_LEISURE_DESIGNS,
     ...GROVE_QUARTER_DESIGNS
   ],
-  props: GROVE_ZONE_PROPS,
+  props: zonedProps(GROVE_LOT_KIT.props, PROP_ZONES),
   looks: {
     civic: { accent: GROVE.stone, ground: '#6B6E66' },
     market: { accent: GROVE.clay, ground: '#7A5A44' },

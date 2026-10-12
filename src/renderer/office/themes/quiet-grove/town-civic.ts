@@ -1,7 +1,7 @@
 import type { ZoneDesign, ZonePlot } from '../../town/town-dress'
-import { box, cylinder, lit, SIDES, sphere, turned, type PartSpec } from '../parts'
+import { box, CORNERS, cylinder, lit, SIDES, sphere, turned, type PartSpec } from '../parts'
 import { GROVE } from './palette'
-import { CORNERS, cornerMoss, gable, ring } from './town-parts'
+import { cornerMoss, gable, ring } from './town-parts'
 
 // The meeting hall: a long timber hall with its doors to the street, under a great tree.
 function meetingHall({ width, depth, height, accent }: ZonePlot): PartSpec[] {

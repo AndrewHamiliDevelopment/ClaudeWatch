@@ -1,25 +1,15 @@
-import { box, lit, SIDES, turned, type PartSpec, cone, cylinder, sphere } from '../parts'
+import { box, CORNERS, lit, SIDES, turned, type PartSpec, cone, cylinder, sphere } from '../parts'
+import type { Vector } from '../primitives'
 import type { BuildingDesign, Plot } from '../lot-kit'
 import { GROVE } from './palette'
 import { ON_ITS_SIDE } from './spirit-features'
+import { gable } from './town-parts'
 
-const CORNERS = SIDES.flatMap((x) => SIDES.map((z) => ({ x, z })))
 const ROOF_PITCH = 0.5
-const ROOF_THICKNESS = 0.14
 
-// Two slabs meeting at a ridge that tops out at `top`, each `run` metres from eave to ridge.
-function pitchedRoof(top: number, length: number, run: number, color: string): PartSpec[] {
-  const rise = (ROOF_THICKNESS / 2) * Math.cos(ROOF_PITCH) + (run / 2) * Math.sin(ROOF_PITCH)
-  return SIDES.map((side) =>
-    turned(
-      box(
-        [0, top - rise, side * (run / 2) * Math.cos(ROOF_PITCH)],
-        [length, ROOF_THICKNESS, run],
-        color
-      ),
-      [side * ROOF_PITCH, 0, 0]
-    )
-  )
+// A gable at the grove's old fixed pitch: each slab is `run` metres from eave to ridge.
+function pitchedRoof(ridge: Vector, length: number, run: number, color: string): PartSpec[] {
+  return gable(ridge, length, run * Math.cos(ROOF_PITCH), run * Math.sin(ROOF_PITCH), color)
 }
 
 // A trunk under three stacked cones, `tall` metres to its tip.
@@ -77,7 +67,7 @@ function cabin({ width, depth, height }: Plot): PartSpec[] {
   return [
     box([0, 0.1, 0], [width, 0.2, depth], GROVE.bark),
     box([0, 0.2 + wall / 2, 0], [width * 0.7, wall, depth * 0.6], GROVE.timber),
-    ...pitchedRoof(height - 0.02, width * 0.8, depth * 0.42, GROVE.bark),
+    ...pitchedRoof([0, height - 0.02, 0], width * 0.8, depth * 0.42, GROVE.bark),
     cylinder([-width * 0.25, height / 2, -depth * 0.1], [0.4, height, 0.4], GROVE.bark),
     box([0, 0.65, front], [0.6, 0.9, 0.05], GROVE.bark),
     box([width * 0.2, 0.2 + wall * 0.6, front], [0.5, 0.4, 0.05], GROVE.pond),
@@ -103,7 +93,7 @@ function greenhouse({ width, depth, height }: Plot): PartSpec[] {
         sphere([spot * width, 0.62, side * depth * 0.16], [0.6, 0.5, 0.6], GROVE.moss)
       )
     ]),
-    ...pitchedRoof(height - 0.02, width * 0.86, depth * 0.44, GROVE.pond)
+    ...pitchedRoof([0, height - 0.02, 0], width * 0.86, depth * 0.44, GROVE.pond)
   ]
 }
 
@@ -116,9 +106,7 @@ function mill({ width, depth, height }: Plot): PartSpec[] {
   return [
     box([0, 0.1, 0], [width, 0.2, depth], GROVE.bark),
     box([-width * 0.08, 0.2 + body / 2, 0], [width * 0.46, body, depth * 0.5], GROVE.timber),
-    ...pitchedRoof(height - 0.02, width * 0.56, depth * 0.36, GROVE.bark).map(
-      (slab): PartSpec => ({ ...slab, at: [-width * 0.08, slab.at[1], slab.at[2]] })
-    ),
+    ...pitchedRoof([-width * 0.08, height - 0.02, 0], width * 0.56, depth * 0.36, GROVE.bark),
     box([wheelX, 0.24, 0], [0.7, 0.08, depth * 0.9], GROVE.pond),
     turned(cylinder([wheelX, axle, 0], [radius * 2, 0.3, radius * 2], GROVE.bark), ON_ITS_SIDE),
     box([wheelX + 0.18, axle, 0], [0.06, radius * 2.1, 0.2], GROVE.timber),

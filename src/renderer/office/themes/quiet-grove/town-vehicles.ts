@@ -3,7 +3,7 @@ import type { VehicleDesign } from '../../town/town-dress'
 import { laid, moved, wheel } from '../violet-court/town-vehicle-parts'
 import { GROVE } from './palette'
 
-const SIDES = [-1, 1] as const
+import { SIDES } from '../parts'
 
 // What rides the grove's tracks. Each faces +z and stands on y = 0, a metre to the metre.
 export const GROVE_VEHICLES: readonly VehicleDesign[] = [

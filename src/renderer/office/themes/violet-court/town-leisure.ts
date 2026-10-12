@@ -1,8 +1,7 @@
 import type { ZoneDesign, ZonePlot } from '../../town/town-dress'
-import { box, cone, cylinder, lit, SIDES, sphere, type PartSpec } from '../parts'
+import { box, CORNERS, cone, cylinder, lit, SIDES, sphere, type PartSpec } from '../parts'
 import { COURT } from './palette'
 
-const CORNERS = SIDES.flatMap((x) => SIDES.map((z) => ({ x, z })))
 const PORTICO = [-0.26, -0.09, 0.09, 0.26]
 
 // The opera hall: a lit hall behind a portico, a drum over it and a dome in the zone's colour.

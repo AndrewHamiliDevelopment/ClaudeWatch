@@ -20,15 +20,6 @@ export const GROVE = {
   beacon: '#FFA8D8'
 } as const
 
-// Every surface a white name card or status ring can float over.
-export const GROVE_GROUNDS: readonly string[] = [
-  GROVE.pine,
-  GROVE.moss,
-  GROVE.bark,
-  GROVE.deck,
-  GROVE.soil
-]
-
 export const GROVE_PALETTE: ThemePalette = {
   lacquer: GROVE.stone,
   ink: GROVE.soil,

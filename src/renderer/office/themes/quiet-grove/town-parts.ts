@@ -1,8 +1,6 @@
-import { box, SIDES, sphere, turned, type PartSpec } from '../parts'
+import { box, CORNERS, SIDES, sphere, turned, type PartSpec } from '../parts'
 import type { Vector } from '../primitives'
 import { GROVE } from './palette'
-
-export const CORNERS = SIDES.flatMap((x) => SIDES.map((z) => ({ x, z })))
 
 const ROOF_THICKNESS = 0.14
 
