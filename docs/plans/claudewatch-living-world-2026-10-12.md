@@ -25,8 +25,9 @@ Validated: `npx vitest run src/office/sim/zz-repro-sprawl.test.ts` (a throwaway 
 | none — needs filing (LW-4) | Planned; follow-up commits on draft PR #3 | https://github.com/theangeloumali/ClaudeWatch/pull/3 | "I think we need to also make this livelier. We can draft a plan for us to make the world livelier and interesting Not just watching the agents. I think those cases and also agents that are already done, we can put them on an entertainment zone"                                       |
 | none — needs filing (LW-5) | Planned; follow-up commits on draft PR #3 | https://github.com/theangeloumali/ClaudeWatch/pull/3 | "Also when applying the team or changing the team, it only applies to a single office and I don't have a way to know. How can I apply different offices to each of the different companies or different offices so it doesn't apply to all and doesn't apply to any besides the first one?" |
 | none — needs filing (LW-6) | Done; follow-up commits on draft PR #3    | https://github.com/theangeloumali/ClaudeWatch/pull/3 | "I detected another issue: the window for the office can't be dragged and when I try to open the office from the main ClaudeWatch, it doesn't open it or doesn't focus on it"                                                                                                               |
+| none — needs filing (LW-7) | Planned; follow-up commits on draft PR #3 | https://github.com/theangeloumali/ClaudeWatch/pull/3 | "Did you already include here the plan to make sure that this looks like a town? I can see the screen first and I need to have my player here so I can play with it and navigate to the office"                                                                                             |
 
-Per-item tier: LW-1 T2 (fix, sim logic, risk 1) · LW-2 T1 (fix, risk 1) · LW-3 T3 (five themes, risk 1) · LW-4 T2 (sim + scene, risk 1) · LW-5 T2 (HUD, risk 1) · LW-6 T1 (fix, main process and one component, risk 1). Session profile T3, `BUDGET: T3 active=5 total=12`. One review at the end (Maya, risk 1).
+Per-item tier: LW-1 T2 (fix, sim logic, risk 1) · LW-2 T1 (fix, risk 1) · LW-3 T3 (five themes, risk 1) · LW-4 T2 (sim + scene, risk 1) · LW-5 T2 (HUD, risk 1) · LW-6 T1 (fix, main process and one component, risk 1) · LW-7 T2 (new scene feature, risk 1). Session profile T3, `BUDGET: T3 active=5 total=12`. One review at the end (Maya, risk 1).
 
 ## Ledger
 
@@ -37,7 +38,8 @@ Per-item tier: LW-1 T2 (fix, sim logic, risk 1) · LW-2 T1 (fix, risk 1) · LW-3
 - [ ] Phase 5 — Five themes filled in: buildings, props, lounge and ambient life for Neo Edo Steam, Brass Workshop, Violet Court, Orbital Garrison, Quiet Grove
 - [x] Phase 6 — Themes you can see and set: one place that names every office's theme and sets it for everything, one company or one project
 - [x] Phase 7 — The Office window can be dragged, and Open Office brings it to the front
-- [ ] Phase 8 — Close: gates, review, cleanup, install, the two screenshots re-taken, demo re-recorded, pushed to PR #3
+- [ ] Phase 8 — A town you walk through: streets between the buildings, and a player the owner walks to any office
+- [ ] Phase 9 — Close: gates, review, cleanup, install, the two screenshots re-taken, demo re-recorded, pushed to PR #3
 
 ## How it fits
 
@@ -144,7 +146,20 @@ Per-item tier: LW-1 T2 (fix, sim logic, risk 1) · LW-2 T1 (fix, risk 1) · LW-3
 - Verify: `npx vitest run src/main/office-window.test.ts src/renderer/office/__tests__ && npm run typecheck`
 - 0.5h with Claude | 2h without.
 
-**Phase 8 — Close.** Owner: primary, with Maya reviewing.
+**Phase 8 — A town you walk through (LW-7).** Owner: H.
+
+- Files: new files under `src/renderer/office/player/`, new `src/renderer/office/logic/streets.ts`, `src/renderer/office/scene/OfficeScene.tsx`, `src/renderer/office/scene/CameraRig.tsx`, `src/renderer/office/scene/Horizon.tsx`, `src/renderer/office/logic/office-reducer.ts`, `src/renderer/office/logic/hotkeys.ts`, `src/renderer/office/use-office-effects.ts`, `src/renderer/office/hud/BottomBar.tsx`, `src/renderer/office/OfficeApp.tsx`.
+- Streets: the gaps between the building lots and an avenue from the gate are drawn as roads in the floor theme's colours, so the ring of buildings reads as a town with blocks. One draw.
+- A player: the owner's own character stands at the gate when the Office opens. A Walk switch in the bar (and a key) turns walking on: the arrow keys and W A S D move the player relative to the screen, a click on the ground or on an office walks it there by the shortest path, and the camera goes with it. With walking off, every key and click does what it does today.
+- The player walks the streets, the lanes and through doors, never through a wall, a desk or a building.
+- Navigating to an office: choosing a company or project in the Offices panel while walking sends the player to its door. Standing next to an agent shows a prompt, and one key selects it, which opens the inspector with Talk and Focus terminal.
+- The player wears the floor theme's colours and is plainly not an agent: it has its own shape and a ring under its feet.
+- It is local to the page: nothing about it goes to the bridge, and it works on the view-only page.
+- AC: with walking on, holding a key moves the player at a steady pace and the camera keeps it on screen; a click on an office two companies away walks it there through doors; no step ever lands inside a wall or a building lot; next to an agent the prompt appears and the key selects that agent; with walking off the existing hotkey and camera tests pass unchanged.
+- Verify: `npx vitest run src/renderer/office && npm run typecheck && npx eslint src/renderer/office`
+- 2.5h with Claude | 12h without.
+
+**Phase 9 — Close.** Owner: primary, with Maya reviewing.
 
 - prettier, typecheck, eslint, the whole test suite, `npm run build`, `npm run build:office-web`, the seeded preview in a browser with 0 console errors.
 - One review of the whole diff, cleanup pass, reuse audit, dead-code scan, fixes in session.
@@ -155,7 +170,7 @@ Per-item tier: LW-1 T2 (fix, sim logic, risk 1) · LW-2 T1 (fix, risk 1) · LW-3
 
 ## A livelier world: what is built now and what could follow
 
-Built in this plan: a themed lounge per company, agents that go there when their turn is done, buildings and props around every company in its own theme, and two ambient movers per theme.
+Built in this plan: a themed lounge per company, agents that go there when their turn is done, buildings and props around every company in its own theme, two ambient movers per theme, streets between the buildings, and a player the owner walks through the town to any office.
 
 Ideas for later, in the order I would build them. None is built here.
 
@@ -176,6 +191,8 @@ Ideas for later, in the order I would build them. None is built here.
 - ASSUMPTION: "agents that are already done" means an agent whose turn has ended and that is waiting for the next instruction — chose this because a session that has exited is no longer in the feed and leaves the floor.
 - ASSUMPTION: 20 s of idling before the walk to the lounge — chose this so an agent between two quick turns does not pace back and forth.
 - ASSUMPTION: buildings stay low near the offices and rise with distance — chose this because the owner's bar is that he can always see the agents working at their tables.
+- ASSUMPTION: "my player" is one character the owner moves himself, with a switch between walking and today's camera controls — chose this because the arrow keys, W and E already pan, cut the walls away and rotate the map, and a switch keeps all of those working.
+- ASSUMPTION: "looks like a town" means the buildings stand on streets with an avenue from the gate — chose this because the buildings are already there and roads are what turns a ring of buildings into blocks.
 - ASSUMPTION: the later ideas above are a list, not phases — chose this because he asked for a draft plan to make the world livelier, and building all eight would delay the fixes he reported.
 - ASSUMPTION: local-database question skipped — ClaudeWatch has no data layer.
 - ASSUMPTION: the builders work in their own worktrees and the mock-up offer is skipped — chose this because the five themes already set the look each part must match.
@@ -186,7 +203,7 @@ Follow-up commits are pushed to `origin feature/prerelease-batch` (draft PR #3).
 
 ## Estimate
 
-Total **14.5h with Claude | 59h without** (about 4x): Phase 1 2|8, Phase 2 1|3, Phase 3 2|8, Phase 4 1.5|6, Phase 5 4|20, Phase 6 1.5|6, Phase 7 0.5|2, Phase 8 2|6. Phases 1, 2+3 and 6 run together; Phases 4 and 5 run together after them; Phase 8 is last.
+Total **17h with Claude | 71h without** (about 4x): Phase 1 2|8, Phase 2 1|3, Phase 3 2|8, Phase 4 1.5|6, Phase 5 4|20, Phase 6 1.5|6, Phase 7 0.5|2, Phase 8 2.5|12, Phase 9 2|6. Phases 1, 2+3 and 6 run together; Phases 4 and 5 run together after them; Phase 9 is last.
 
 ## Deviations
 
