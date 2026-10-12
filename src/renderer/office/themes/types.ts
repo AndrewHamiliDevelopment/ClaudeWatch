@@ -9,6 +9,7 @@ import type {
   ZoneGeometry
 } from '../scene-model'
 import type { WallsMode } from '../logic/room-layout'
+import type { TownDress } from '../town/town-dress'
 import type { Lot } from './surroundings'
 
 export interface ThemePalette {
@@ -163,4 +164,6 @@ export interface OfficeTheme {
     Hangar: ComponentType<FloorProps>
     Tower: ComponentType<TowerProps>
   }
+  // The theme's share of the zoned town, as data. Absent until the theme has drawn it.
+  town?: TownDress
 }
