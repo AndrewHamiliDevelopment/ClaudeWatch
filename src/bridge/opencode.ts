@@ -19,6 +19,7 @@ import {
   isInsideAppBundle,
   keyOf,
   newestFirst,
+  placeholderId,
   type ProcessRow,
   readProcessTable,
   rememberedFolder
@@ -121,23 +122,25 @@ function readConversation(
   }
 }
 
-// Where each live process runs, and the placeholder key each was first shown under, by pid and
-// start time.
-const folders = new WeakMap<BridgeIo, Map<string, string>>()
-const placeholders = new WeakMap<BridgeIo, Map<string, string>>()
+interface Remembered {
+  // Where each live process runs, by pid and start time: asking costs an `lsof` run.
+  folders: Map<string, string>
+  // The placeholder key a process without a session was first shown under, by pid and start time.
+  placeholders: Map<string, string>
+}
+const remembered = new WeakMap<BridgeIo, Remembered>()
 
 // The OpenCode processes that are the owner's agents, each with the folder it runs in.
 async function locate(
   io: BridgeIo,
+  folders: Map<string, string>,
   processes: ReturnType<typeof opencodeProcesses>,
   health: SourceHealth
 ): Promise<AgentProcess[]> {
-  let known = folders.get(io)
-  if (!known) folders.set(io, (known = new Map()))
   const running: AgentProcess[] = []
   for (const process of processes) {
     try {
-      const cwd = await rememberedFolder(io, known, process)
+      const cwd = await rememberedFolder(io, folders, process)
       if (cwd && !isInsideAppBundle(cwd)) running.push({ ...process, cwd })
     } catch {
       // It may have exited since the table was read: the others are still shown.
@@ -145,7 +148,6 @@ async function locate(
       health.detail = 'OpenCode process read failed'
     }
   }
-  forgetExited(known, processes)
   return running
 }
 
@@ -164,10 +166,11 @@ export async function collectOpencode(
   const health: SourceHealth = { id: 'opencode', ok: true, detail: 'empty' }
   try {
     const processes = opencodeProcesses(await readProcesses())
-    let keys = placeholders.get(io)
-    if (!keys) placeholders.set(io, (keys = new Map()))
-    forgetExited(keys, processes)
-    const running = newestFirst(await locate(io, processes, health))
+    let memory = remembered.get(io)
+    if (!memory) remembered.set(io, (memory = { folders: new Map(), placeholders: new Map() }))
+    const { folders, placeholders } = memory
+    forgetExited(processes, folders, placeholders)
+    const running = newestFirst(await locate(io, folders, processes, health))
     if (!running.length) return { sessions: [], sources: [health] }
 
     const taken = new Set<string>()
@@ -188,7 +191,7 @@ export async function collectOpencode(
     for (const found of conversations) {
       if (!found) continue
       const project = await resolveProject(found.process.cwd, io, now)
-      const key = keyOf(keys, found.process, 'opencode', found.conversation?.session.id)
+      const key = keyOf(placeholders, found.process, 'opencode', found.conversation?.session.id)
       sessions.push(sessionOf(found.process, found.conversation, key, placementOf(project)))
     }
     if (health.ok) health.detail = 'live'
@@ -209,7 +212,7 @@ function sessionOf(
 ): SessionRef {
   const session = conversation?.session
   // A process that has not written a session yet is still an agent at its desk.
-  const id = session?.id ?? `pid-${process.pid}-${process.startedAtMs}`
+  const id = session?.id ?? placeholderId(process)
   return {
     key,
     provider: 'opencode',

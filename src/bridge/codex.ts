@@ -20,9 +20,11 @@ import {
   isInsideAppBundle,
   keyOf,
   newestFirst,
+  placeholderId,
   type ProcessRow,
   readProcessTable,
-  rememberedFolder
+  rememberedFolder,
+  type SessionOwner
 } from './process-table'
 
 // A Codex app-server: the host of desktop, IDE and plugin threads.
@@ -126,8 +128,6 @@ const HOSTED_FRESH_MS = 120_000
 // Codex never deletes a rollout, so a full walk grows with history: between full walks only
 // the ones written lately are looked at again. A new thread waits at most this long.
 const FULL_WALK_MS = 30_000
-// As long as a quiet thread with an open tool is held, so its next write is seen at once.
-const RECENT_MS = OPEN_TOOL_HOLD_MS
 
 interface Walk {
   atMs: number
@@ -161,7 +161,9 @@ async function currentRollouts(
   }
   const refreshed = await Promise.all(
     last.rollouts.map(async (rollout): Promise<Rollout | null> => {
-      if (now - rollout.mtimeMs >= RECENT_MS && !liveFolders.has(rollout.cwd)) return rollout
+      // Re-checked as long as a quiet thread with an open tool is held, so its next write is seen.
+      if (now - rollout.mtimeMs >= OPEN_TOOL_HOLD_MS && !liveFolders.has(rollout.cwd))
+        return rollout
       try {
         const { mtimeMs, size } = await io.stat(rollout.path)
         return { ...rollout, mtimeMs, size }
@@ -224,9 +226,9 @@ export async function collectCodex(
     const show = async (
       rollout: Rollout | undefined,
       cwd: string,
-      owner: { pid: number | null; startedAtMs: number }
+      owner: SessionOwner
     ): Promise<void> => {
-      const id = rollout?.id ?? `pid-${owner.pid}-${owner.startedAtMs}`
+      const id = rollout?.id ?? placeholderId(owner)
       let tail = rollout ? tails.get(rollout.path) : undefined
       // The walk over rollouts has just read each file's size and time: an unchanged tail is
       // not read or parsed again.
@@ -256,17 +258,8 @@ export async function collectCodex(
       if (usage) known.set(id, usage)
       live.add(id)
       const project = await resolveProject(cwd, io, now)
-      const key =
-        owner.pid === null
-          ? `codex:${id}`
-          : keyOf(
-              placeholders,
-              { pid: owner.pid, startedAtMs: owner.startedAtMs },
-              'codex',
-              rollout?.id
-            )
       const session: SessionRef = {
-        key,
+        key: keyOf(placeholders, owner, 'codex', rollout?.id),
         provider: 'codex',
         sessionId: id,
         pid: owner.pid,
@@ -324,8 +317,7 @@ export async function collectCodex(
       }
     }
     for (const id of known.keys()) if (!live.has(id)) known.delete(id)
-    forgetExited(folders, processes)
-    forgetExited(placeholders, processes)
+    forgetExited(processes, folders, placeholders)
     for (const [path, { session }] of tails) {
       if (liveTails.has(path)) continue
       tails.delete(path)
