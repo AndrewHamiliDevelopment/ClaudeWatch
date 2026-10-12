@@ -50,7 +50,7 @@ describe('failureMessage', () => {
       'No permission prompt is showing for this agent right now.'
     )
     expect(failureMessage('unsupported-provider')).toBe(
-      'Answering prompts from the office works for Claude agents. Focus the terminal for Codex.'
+      'Answering prompts from the office works for Claude agents. Focus the terminal for Codex and OpenCode.'
     )
     expect(failureMessage('invalid-input')).toBe('Type a message first (up to 4000 characters).')
     expect(failureMessage('unknown-session')).toBe('This agent has left the office.')

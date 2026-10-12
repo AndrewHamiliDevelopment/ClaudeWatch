@@ -67,7 +67,7 @@ const FAILURE_COPY: Record<InteractionFailure, string> = {
     "This agent's terminal is not at its input line, so a message could answer a prompt instead. Focus its terminal first.",
   'prompt-changed': 'The prompt changed since you reviewed it. Review it again.',
   'unsupported-provider':
-    'Answering prompts from the office works for Claude agents. Focus the terminal for Codex.',
+    'Answering prompts from the office works for Claude agents. Focus the terminal for Codex and OpenCode.',
   'invalid-input': 'Type a message first (up to 4000 characters).',
   'unknown-session': 'This agent has left the office.',
   'not-permitted': 'This page is view-only. Start it with --interactive to act on agents.'

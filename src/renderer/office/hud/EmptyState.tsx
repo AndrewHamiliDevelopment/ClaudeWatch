@@ -11,7 +11,7 @@ export function EmptyState({ isConnecting }: { isConnecting: boolean }) {
       <p className="text-body text-text-secondary">
         {isConnecting
           ? 'Reading the sessions on this Mac. This takes a moment the first time.'
-          : "Start a Claude Code or Codex session and it gets an office here, inside its project's office."}
+          : "Start a Claude Code, Codex or OpenCode session and it gets an office here, inside its project's office."}
       </p>
     </Plate>
   )
