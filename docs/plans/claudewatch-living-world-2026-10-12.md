@@ -26,8 +26,9 @@ Validated: `npx vitest run src/office/sim/zz-repro-sprawl.test.ts` (a throwaway 
 | none — needs filing (LW-5) | Planned; follow-up commits on draft PR #3 | https://github.com/theangeloumali/ClaudeWatch/pull/3 | "Also when applying the team or changing the team, it only applies to a single office and I don't have a way to know. How can I apply different offices to each of the different companies or different offices so it doesn't apply to all and doesn't apply to any besides the first one?" |
 | none — needs filing (LW-6) | Done; follow-up commits on draft PR #3    | https://github.com/theangeloumali/ClaudeWatch/pull/3 | "I detected another issue: the window for the office can't be dragged and when I try to open the office from the main ClaudeWatch, it doesn't open it or doesn't focus on it"                                                                                                               |
 | none — needs filing (LW-7) | Planned; follow-up commits on draft PR #3 | https://github.com/theangeloumali/ClaudeWatch/pull/3 | "Did you already include here the plan to make sure that this looks like a town? I can see the screen first and I need to have my player here so I can play with it and navigate to the office"                                                                                             |
+| none — needs filing (LW-8) | Planned; follow-up commits on draft PR #3 | https://github.com/theangeloumali/ClaudeWatch/pull/3 | "Additionally can we detect if Codex or Open Code is running? Can we detect those agents so it would also show on the ClaudeWatch office?"                                                                                                                                                  |
 
-Per-item tier: LW-1 T2 (fix, sim logic, risk 1) · LW-2 T1 (fix, risk 1) · LW-3 T3 (five themes, risk 1) · LW-4 T2 (sim + scene, risk 1) · LW-5 T2 (HUD, risk 1) · LW-6 T1 (fix, main process and one component, risk 1) · LW-7 T2 (new scene feature, risk 1). Session profile T3, `BUDGET: T3 active=5 total=12`. One review at the end (Maya, risk 1).
+Per-item tier: LW-1 T2 (fix, sim logic, risk 1) · LW-2 T1 (fix, risk 1) · LW-3 T3 (five themes, risk 1) · LW-4 T2 (sim + scene, risk 1) · LW-5 T2 (HUD, risk 1) · LW-6 T1 (fix, main process and one component, risk 1) · LW-7 T2 (new scene feature, risk 1) · LW-8 T2 (new provider in the bridge, risk 2: it reads another tool's local database). Session profile T3, `BUDGET: T3 active=5 total=12`. One review at the end (Maya, risk 1).
 
 ## Ledger
 
@@ -39,8 +40,9 @@ Per-item tier: LW-1 T2 (fix, sim logic, risk 1) · LW-2 T1 (fix, risk 1) · LW-3
 - [x] Phase 6 — Themes you can see and set: one place that names every office's theme and sets it for everything, one company or one project
 - [x] Phase 7 — The Office window can be dragged, and Open Office brings it to the front
 - [ ] Phase 8 — A town you walk through: streets between the buildings, and a player the owner walks to any office
-- [ ] Phase 9 — Ready for the owner: every test green, installed on this Mac, the two screenshots re-taken
-- [ ] Phase 10 — Close, after the owner approves the changes: gates, review, cleanup, install, the two screenshots re-taken, demo re-recorded, pushed to PR #3
+- [ ] Phase 9 — OpenCode agents in the Office, beside Claude and Codex
+- [ ] Phase 10 — Ready for the owner: every test green, installed on this Mac, the two screenshots re-taken
+- [ ] Phase 11 — Close, after the owner approves the changes: gates, review, cleanup, install, the two screenshots re-taken, demo re-recorded, pushed to PR #3
 
 ## How it fits
 
@@ -160,7 +162,19 @@ Per-item tier: LW-1 T2 (fix, sim logic, risk 1) · LW-2 T1 (fix, risk 1) · LW-3
 - Verify: `npx vitest run src/renderer/office && npm run typecheck && npx eslint src/renderer/office`
 - 2.5h with Claude | 12h without.
 
-**Phase 9 — Ready for the owner.** Owner: primary.
+**Phase 9 — OpenCode agents in the Office (LW-8).** Owner: I.
+
+- Where things stand: Codex is already detected and shown (processes, rollouts, tokens). OpenCode is not: `ProviderId` is `'claude' | 'codex'` (`src/shared/office/types.ts:4`). OpenCode 1.19.0 is installed on this Mac and keeps its sessions in a local database (`~/.local/share/opencode/opencode.db`: a `session` table with the folder, title, parent session, agent, model and token counts; `part` and `message` tables for activity).
+- Files: new `src/bridge/opencode.ts` and its tests, `src/bridge/io.ts`, `src/bridge/poller.ts`, `src/bridge/registry.ts`, `src/shared/office/types.ts`, the provider labels in `src/renderer/office/hud/`, one more provider skin in each theme's registration, `src/renderer/office/fixture/fixture-sessions.ts`.
+- A running OpenCode process appears as a session with provider `opencode`: its folder decides the company and project, its latest session there gives the name, the activity, the current tool and exact tokens, and its child sessions are its subagents.
+- The bridge opens the database read-only and reads named columns of the session, message and part tables only. It never opens `auth.json`, `mcp-auth.json`, or the account and credential tables. A missing, locked or changed database is a line in the source-health banner, never a crash. Queries are bounded: the database here holds about 123,000 sessions and 1.7 million parts.
+- Each theme gives OpenCode agents their own look, as it does for Claude and Codex.
+- Focus terminal works when the agent runs in an Orca pane. Talk and permission answers say they are not supported for this provider, as designed for anything the app cannot verify.
+- AC: with a fixture database and a fixture process table, the feed carries an OpenCode session with the right folder, name, activity, tokens and one subagent; a database with an unknown shape gives a health reason and no session; the IO boundary refuses the two auth files and any query naming the credential or account tables; every theme has a third skin; the Office's totals include OpenCode tokens.
+- Verify: `npx vitest run src/bridge src/renderer/office src/main && npm run typecheck && npx eslint src`
+- 2h with Claude | 10h without.
+
+**Phase 10 — Ready for the owner.** Owner: primary.
 
 - prettier, typecheck, eslint, the whole test suite, `npm run build`, `npm run build:office-web`, the seeded preview in a browser with 0 console errors.
 - Install on this Mac and re-take the owner's two screenshots on live sessions: one company close up and the whole floor at the widest zoom.
@@ -168,10 +182,10 @@ Per-item tier: LW-1 T2 (fix, sim logic, risk 1) · LW-2 T1 (fix, risk 1) · LW-3
 - Verify: every command above exits 0; the installed app's Office shows the compact floor inside its town.
 - 1h with Claude | 3h without.
 
-**Phase 10 — Close, after the owner approves the changes.** Owner: primary, with Maya reviewing.
+**Phase 11 — Close, after the owner approves the changes.** Owner: primary, with Maya reviewing.
 
 - The owner's instruction of 2026-10-12: "let's avoid doing the code review immediately. I'm going to ask you to do the code review once I approve all of the changes so we won't be wasting time."
-- One review of the whole diff, the cleanup pass, reuse audit, dead-code scan, fixes in session.
+- One review of the whole diff (with a security review of the OpenCode reader, which is risk 2), the cleanup pass, reuse audit, dead-code scan, fixes in session.
 - Reinstall, re-record the demo, update the batch ledger and the checklist, update PR #3's description, push.
 - Verify: every gate exits 0; `scope-check.sh` exits 0.
 - 2h with Claude | 6h without.
@@ -201,6 +215,8 @@ Ideas for later, in the order I would build them. None is built here.
 - ASSUMPTION: buildings stay low near the offices and rise with distance — chose this because the owner's bar is that he can always see the agents working at their tables.
 - ASSUMPTION: "my player" is one character the owner moves himself, with a switch between walking and today's camera controls — chose this because the arrow keys, W and E already pan, cut the walls away and rotate the map, and a switch keeps all of those working.
 - ASSUMPTION: "looks like a town" means the buildings stand on streets with an avenue from the gate — chose this because the buildings are already there and roads are what turns a ring of buildings into blocks.
+- ASSUMPTION: the question about Codex and OpenCode is a request to show OpenCode agents — chose to build it because Codex is already shown and OpenCode's sessions are readable on this Mac without any credential.
+- ASSUMPTION: OpenCode tokens count in the Office's totals but are not filed under a Claude or Codex account — chose this because the accounts ledger attributes by sign-in, and reading OpenCode's account tables is exactly what the bridge must not do.
 - ASSUMPTION: the later ideas above are a list, not phases — chose this because he asked for a draft plan to make the world livelier, and building all eight would delay the fixes he reported.
 - ASSUMPTION: local-database question skipped — ClaudeWatch has no data layer.
 - ASSUMPTION: the builders work in their own worktrees and the mock-up offer is skipped — chose this because the five themes already set the look each part must match.
@@ -211,7 +227,7 @@ Follow-up commits are pushed to `origin feature/prerelease-batch` (draft PR #3).
 
 ## Estimate
 
-Total **18h with Claude | 74h without** (about 4x): Phase 1 2|8, Phase 2 1|3, Phase 3 2|8, Phase 4 1.5|6, Phase 5 4|20, Phase 6 1.5|6, Phase 7 0.5|2, Phase 8 2.5|12, Phase 9 1|3, Phase 10 2|6. Phases 1, 2+3 and 6 run together; Phases 4 and 5 run together after them; Phase 9 ends with the install; Phase 10 waits for the owner's approval.
+Total **20h with Claude | 84h without** (about 4x): Phase 1 2|8, Phase 2 1|3, Phase 3 2|8, Phase 4 1.5|6, Phase 5 4|20, Phase 6 1.5|6, Phase 7 0.5|2, Phase 8 2.5|12, Phase 9 2|10, Phase 10 1|3, Phase 11 2|6. Phases 1, 2+3 and 6 run together; Phases 4 and 5 run together after them; Phase 10 ends with the install; Phase 11 waits for the owner's approval.
 
 ## Deviations
 
