@@ -1,6 +1,7 @@
 import { agentKey } from '../../shared/office/agent-key'
 import type { SessionRef } from '../../shared/office/types'
 import type { LayoutMap, RoomLayout, Slot } from './layout'
+import { GUEST_DESK_IDS, teamSeatsFor } from './rooms'
 
 export interface Placement {
   session: SessionRef
@@ -14,8 +15,6 @@ export interface Placement {
 
 // Where an agent already sits, so a finishing sibling never re-seats the ones still working.
 type HeldSeats = ReadonlyMap<string, { roomId: string; slotId: string }>
-
-const GUEST_DESKS = ['desk_guest_0', 'desk_guest_1']
 
 export function placements(
   sessions: SessionRef[],
@@ -68,7 +67,7 @@ export function placements(
       }))
     const seatOf = (guest: SessionRef, room: RoomLayout): string | undefined =>
       held.get(guest.key)?.roomId === room.id ? held.get(guest.key)!.slotId : undefined
-    const freeDesks = new Set(GUEST_DESKS)
+    const freeDesks = new Set<string>(GUEST_DESK_IDS)
     const waiting: SessionRef[] = []
     for (const guest of guests) {
       const desk = seatOf(guest, main)
@@ -77,17 +76,19 @@ export function placements(
     }
     // A guest whose team seat still stands keeps it, but only up to the session's share: the map
     // has one team seat per guest past the desks, so a seat held beyond it is a neighbour's.
-    let teamShare = Math.max(0, guests.length - GUEST_DESKS.length)
+    let teamShare = teamSeatsFor(guests.length)
     const keepers = new Set<string>()
-    // Subagents keep theirs before teammates, whose place is at the desks.
-    for (const guest of [...waiting].reverse()) {
-      const seat = team && taken ? seatOf(guest, team) : undefined
-      if (!teamShare || !team || !taken || !seat || taken.has(seat)) continue
-      if (!team.slots.some((s) => s.id === seat)) continue
-      taken.add(seat)
-      teamShare--
-      keepers.add(guest.key)
-      seated.push({ session: guest, room: team, slotId: seat })
+    if (team && taken) {
+      // Subagents keep theirs before teammates, whose place is at the desks.
+      for (const guest of [...waiting].reverse()) {
+        if (!teamShare) break
+        const seat = seatOf(guest, team)
+        if (!seat || taken.has(seat) || !team.slots.some((s) => s.id === seat)) continue
+        taken.add(seat)
+        teamShare--
+        keepers.add(guest.key)
+        seated.push({ session: guest, room: team, slotId: seat })
+      }
     }
     const homeless = waiting.filter((guest) => !keepers.has(guest.key))
     // New arrivals and guests whose seat went take the free guest desks, then the team seats.

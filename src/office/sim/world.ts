@@ -55,13 +55,18 @@ export class World {
     // Nothing is kept until every agent has a place, so a message that cannot be placed leaves
     // the world as it was and the next one still applies.
     let sessions: Map<string, SessionRef>
+    let helloRevision = this.helloRevision
+    let sequence: number
     if (message.type === 'hello') {
       sessions = new Map(message.snapshot.sessions.map((s) => [s.key, structuredClone(s)]))
+      // A patch's seq is the revision it produces, so anything at or below this one is stale.
+      helloRevision = sequence = message.snapshot.rev
     } else {
       if (!this.ready || message.seq <= this.sequence) return
       sessions = new Map(this.sessions)
       for (const key of message.removed) sessions.delete(key)
       for (const session of message.upserts) sessions.set(session.key, structuredClone(session))
+      sequence = message.seq
     }
     const oldMap = this.map
     const map = buildLayout([...sessions.values()], this.savedMap ?? this.map)
@@ -74,12 +79,10 @@ export class World {
     this.sessions = sessions
     this.map = map
     this.savedMap = undefined
-    if (message.type === 'hello') {
-      this.helloRevision = message.snapshot.rev
-      // A patch's seq is the revision it produces, so anything at or below this one is stale.
-      this.sequence = message.snapshot.rev
-      this.ready = true
-    } else this.sequence = message.seq
+    this.helloRevision = helloRevision
+    this.sequence = sequence
+    // A patch is applied only once ready, so only a hello changes this.
+    this.ready = true
     // Routes and lounges follow from the floor alone: while it stands as it was, the routes
     // already found are kept rather than searched for again.
     const floorJson = JSON.stringify(this.map.floors[0])

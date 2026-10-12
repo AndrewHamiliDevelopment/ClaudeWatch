@@ -1,6 +1,11 @@
 import { FURNITURE_SCALE } from '../../shared/office/figure-scale'
 import type { Point } from './path'
 
+// The two seats beside a lead's desk. Every guest past them takes a seat in the team area.
+export const GUEST_DESK_IDS = ['desk_guest_0', 'desk_guest_1'] as const
+export const teamSeatsFor = (subagentCount: number): number =>
+  Math.max(0, subagentCount - GUEST_DESK_IDS.length)
+
 export interface Slot extends Point {
   id: string
   heading: number
@@ -172,8 +177,9 @@ export function room(
     : [
         slot('desk_main', geometry.x, geometry.z + 0.3),
         // 1.25 m either side: the lead's wider figure clears both guest desks.
-        slot('desk_guest_0', geometry.x - 1.25, geometry.z - 0.95),
-        slot('desk_guest_1', geometry.x + 1.25, geometry.z - 0.95)
+        ...GUEST_DESK_IDS.map((id, side) =>
+          slot(id, geometry.x + (side ? 1.25 : -1.25), geometry.z - 0.95)
+        )
       ]
   return {
     ...geometry,
