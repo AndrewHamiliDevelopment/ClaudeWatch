@@ -1,7 +1,7 @@
 // Contract between the bridge (truth), the office sim and the office renderer.
 // Change it only together with every consumer; additions stay optional until all of them read it.
 
-export type ProviderId = 'claude' | 'codex'
+export type ProviderId = 'claude' | 'codex' | 'opencode'
 
 export type AgentActivity =
   | 'idle'

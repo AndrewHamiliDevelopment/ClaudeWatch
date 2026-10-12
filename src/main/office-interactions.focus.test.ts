@@ -102,7 +102,8 @@ describe('OfficeInteractions.focus', () => {
   it.each([
     ['claude', 'claude'],
     ['claude', 'claude-agent-teams'],
-    ['codex', 'codex']
+    ['codex', 'codex'],
+    ['opencode', 'opencode']
   ] as const)('focuses a %s session whose pane runs %s', async (provider, agent) => {
     snapshot.sessions = [session({ provider })]
     orca.handleFor.mockResolvedValueOnce(pane({ agent }))

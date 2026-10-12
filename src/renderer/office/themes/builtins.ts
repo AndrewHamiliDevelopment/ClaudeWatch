@@ -26,7 +26,8 @@ export const neoEdoSteam: OfficeTheme = {
     Model: SamuraiFrame,
     skins: {
       claude: { label: 'Ivory Crescent', body: EDO.paper, trim: EDO.gold, eye: EDO.glow },
-      codex: { label: 'Crimson Reed', body: EDO.lacquer, trim: '#C5CED2', eye: '#5FE3D3' }
+      codex: { label: 'Crimson Reed', body: EDO.lacquer, trim: '#C5CED2', eye: '#5FE3D3' },
+      opencode: { label: 'Verdigris Heron', body: EDO.copper, trim: EDO.ink, eye: EDO.blossom }
     }
   },
   kit: {
@@ -57,7 +58,8 @@ export const brassWorkshop: OfficeTheme = {
     Model: BrassFrame,
     skins: {
       claude: { ...ROBOT_PALETTE.claude, label: 'Brass Warden' },
-      codex: { ...ROBOT_PALETTE.codex, label: 'Copper Scout' }
+      codex: { ...ROBOT_PALETTE.codex, label: 'Copper Scout' },
+      opencode: { ...ROBOT_PALETTE.opencode, label: 'Enamel Tinker' }
     }
   },
   kit: {

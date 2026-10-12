@@ -188,6 +188,18 @@ describe('OfficeInteractions', () => {
       expect(await interactions.send('claude:s1', 'run the tests')).toEqual({ success: true })
     })
 
+    it('types nothing to an OpenCode agent, whose input line it cannot recognise', async () => {
+      snapshot.sessions = [session({ provider: 'opencode' })]
+      orca.handleFor.mockResolvedValue(pane({ agent: 'opencode' }))
+      orca.screen.mockResolvedValue(IDLE_SCREEN)
+      expect(await interactions.send('claude:s1', 'carry on')).toEqual({
+        success: false,
+        reason: 'unsupported-provider'
+      })
+      expect(orca.screen).not.toHaveBeenCalled()
+      expect(orca.sendPrompt).not.toHaveBeenCalled()
+    })
+
     describe('to a Codex agent', () => {
       beforeEach(() => {
         snapshot.sessions = [session({ provider: 'codex' })]
@@ -430,11 +442,13 @@ describe('OfficeInteractions', () => {
         success: false,
         reason: 'no-permission-prompt'
       })
-      snapshot.sessions = [session({ provider: 'codex', attention: 'permission' })]
-      expect(await interactions.respond('claude:s1', 'approve', 'f')).toEqual({
-        success: false,
-        reason: 'unsupported-provider'
-      })
+      for (const provider of ['codex', 'opencode'] as const) {
+        snapshot.sessions = [session({ provider, attention: 'permission' })]
+        expect(await interactions.respond('claude:s1', 'approve', 'f')).toEqual({
+          success: false,
+          reason: 'unsupported-provider'
+        })
+      }
       expect(orca.sendKey).not.toHaveBeenCalled()
     })
 
@@ -552,6 +566,15 @@ describe('OfficeInteractions', () => {
     it('opens a new Orca terminal running the chosen agent in the project folder', async () => {
       expect(await interactions.start('p_app', 'codex')).toEqual({ success: true })
       expect(orca.create).toHaveBeenCalledWith('/repo/app', 'codex', 'New Codex agent')
+    })
+
+    it('starts no OpenCode agent: only Claude and Codex can be started from the office', async () => {
+      expect(await interactions.start('p_app', 'opencode')).toEqual({
+        success: false,
+        reason: 'unsupported-provider'
+      })
+      expect(orca.create).not.toHaveBeenCalled()
+      expect(openTerminalRunning).not.toHaveBeenCalled()
     })
 
     it('starts in the project root even when the known session runs in a worktree or subfolder', async () => {

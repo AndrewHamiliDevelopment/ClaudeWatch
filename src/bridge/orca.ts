@@ -113,7 +113,7 @@ export class OrcaSource {
   }
 
   async enrich(session: SessionRef, now = Date.now()): Promise<SessionRef> {
-    if (session.provider !== 'claude' || session.pid === null) return session
+    if (session.provider === 'codex' || session.pid === null) return session
     const environment = await this.environment(session.pid, session.startedAtMs, now)
     const enriched: SessionRef = {
       ...session,

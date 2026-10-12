@@ -1,4 +1,5 @@
 import type { BridgeIo } from '../io'
+import { OpencodeDbError } from '../opencode-db'
 import type { RegistryEntry } from '../registry'
 import type { SessionRef } from '../../shared/office/types'
 
@@ -38,7 +39,10 @@ export function fixtureIo(files: Record<string, string | null> = {}): BridgeIo {
         size: Buffer.byteLength(files[path] ?? '')
       }
     },
-    exec: async () => ''
+    exec: async () => '',
+    readOpencode: async () => {
+      throw new OpencodeDbError('missing')
+    }
   }
 }
 export function registryEntry(): RegistryEntry {

@@ -5,7 +5,8 @@ import type { CardStatus } from './logic/name-cards'
 // The state colours mirror the Dispatch Deck tokens in tailwind.config.ts.
 export const PROVIDER_LABEL: Record<ProviderId, string> = {
   claude: 'Claude',
-  codex: 'Codex'
+  codex: 'Codex',
+  opencode: 'OpenCode'
 }
 
 export const STATE_COLOR = {
@@ -56,5 +57,6 @@ export interface RobotPalette {
 
 export const ROBOT_PALETTE: Record<ProviderId, RobotPalette> = {
   claude: { body: STEAM.brass, trim: STEAM.copper, eye: '#FFB347' },
-  codex: { body: '#4A4F57', trim: '#2FB3A6', eye: '#5FE3D3' }
+  codex: { body: '#4A4F57', trim: '#2FB3A6', eye: '#5FE3D3' },
+  opencode: { body: STEAM.cream, trim: STEAM.iron, eye: STEAM.crtScreen }
 }

@@ -20,7 +20,8 @@ export const violetCourt: OfficeTheme = {
     Model: CourtPilot,
     skins: {
       claude: { label: 'The Order', body: COURT.ink, trim: COURT.violet, eye: COURT.lumen },
-      codex: { label: 'Lance Corps', body: COURT.ivory, trim: COURT.gold, eye: COURT.lumen }
+      codex: { label: 'Lance Corps', body: COURT.ivory, trim: COURT.gold, eye: COURT.lumen },
+      opencode: { label: 'Herald Guild', body: COURT.crimson, trim: COURT.marble, eye: COURT.gold }
     }
   },
   kit: {
