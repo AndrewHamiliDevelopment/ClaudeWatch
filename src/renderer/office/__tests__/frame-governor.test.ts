@@ -29,6 +29,19 @@ describe('startFrameGovernor', () => {
       cancelFrame: () => {
         pending = null
       },
+      // A sleep ends in time for the first display frame at or after its time.
+      sleep: (callback, delayMs) => {
+        const dueMs = nowMs + delayMs
+        const waitOut = (timeMs: number): void => {
+          if (timeMs + intervalMs >= dueMs) callback()
+          else pending = waitOut
+        }
+        pending = waitOut
+        return 1
+      },
+      cancelSleep: () => {
+        pending = null
+      },
       now: () => nowMs
     }
     return {
@@ -68,12 +81,12 @@ describe('startFrameGovernor', () => {
     governor.stop()
   })
 
-  it('drops to 10 per second when blurred and stops when hidden', () => {
+  it('drops to 5 per second when blurred and idle, and stops when hidden', () => {
     const invalidate = vi.fn()
     const display = fakeDisplay({ isHidden: false, isFocused: false })
     const governor = startFrameGovernor(invalidate, display.env)
     display.run(1000)
-    expect(invalidate).toHaveBeenCalledTimes(10)
+    expect(invalidate).toHaveBeenCalledTimes(5)
 
     display.set({ isHidden: true, isFocused: false })
     invalidate.mockClear()

@@ -8,30 +8,66 @@ interface VisibilityEnv {
   onChange(callback: () => void): () => void
 }
 
-// The display's frame clock, injected so the governor can be driven by hand in tests.
+// The display's frame clock and a timer, injected so the governor can be driven by hand in tests.
 export interface FrameEnv extends VisibilityEnv {
   requestFrame(callback: (timeMs: number) => void): number
   cancelFrame(handle: number): void
+  sleep(callback: () => void, delayMs: number): number
+  cancelSleep(handle: number): void
   now(): number
 }
 
+// The rates of the detail level in use.
+export interface FramePace {
+  idleFps: number
+  walkFps: number
+}
+
+// `camera` is a camera that moves by itself (a fly-to, a re-framing); `input` is the owner's hand.
+export type BoostSource = 'input' | 'camera'
+
 export interface FrameGovernor {
-  // Input arrived or the camera moved: render every display frame for a short while.
-  boost(): void
+  // For a short while: input draws every display frame, a camera moving by itself 60 a second
+  // (and nothing extra while the page is out of focus).
+  boost(source?: BoostSource): void
+  // Whether input is holding the display's own rate.
   isBoosted(): boolean
+  // An agent or the owner's character is walking: hold the walking rate for a while.
+  keepMoving(): void
+  // The rate asked for now, leaving a boost aside: what a frame's lateness is judged against.
+  currentFps(): number
   stop(): void
 }
 
 const FOCUSED_FPS = 30
 const BLURRED_FPS = 10
+// Out of focus with every agent seated, only idle sway is on screen: measured, a frame costs
+// about 1% of a core across the app's processes, whatever is in it.
+const BLURRED_IDLE_FPS = 5
 const BOOST_HOLD_MS = 400
+// Longer than the gap between two position frames of a walk, and than a robot's ease to rest.
+const MOVING_HOLD_MS = 1500
 // Half a 120 Hz frame: a display frame this close to due counts as due, so 30 fps is exactly
 // every second frame at 60 Hz instead of drifting between two and three.
 const DUE_TOLERANCE_MS = 4
+// A camera that moves by itself re-frames for seconds at a time; at a 144 Hz display's own rate
+// that was the costliest thing the idle Office did.
+const CAMERA_FPS = 60
+// Waits longer than this are slept through, so the page is not woken on every display frame
+// (144 a second on a fast display) to find nothing due.
+const SLEEP_OVER_MS = 40
+// The sleep ends one 60 Hz frame early, so a late timer still catches the frame that is due.
+const SLEEP_MARGIN_MS = 16
 
-export function targetFps(visibility: PageVisibility): number {
+const DEFAULT_PACE: FramePace = { idleFps: FOCUSED_FPS, walkFps: FOCUSED_FPS }
+
+export function targetFps(
+  visibility: PageVisibility,
+  focusedFps = FOCUSED_FPS,
+  blurredFps = BLURRED_FPS
+): number {
   if (visibility.isHidden) return 0
-  return visibility.isFocused ? FOCUSED_FPS : BLURRED_FPS
+  return visibility.isFocused ? focusedFps : Math.min(blurredFps, focusedFps)
 }
 
 export function browserFrameEnv(): FrameEnv {
@@ -49,45 +85,80 @@ export function browserFrameEnv(): FrameEnv {
     },
     requestFrame: (callback) => requestAnimationFrame(callback),
     cancelFrame: (handle) => cancelAnimationFrame(handle),
+    sleep: (callback, delayMs) => window.setTimeout(callback, delayMs),
+    cancelSleep: (handle) => window.clearTimeout(handle),
     now: () => performance.now()
   }
 }
 
-// Drives a frameloop="demand" canvas from the display's own frames: the idle rate is counted on
-// them rather than on a timer (which drifts against vsync), and it sleeps entirely while hidden.
-export function startFrameGovernor(invalidate: () => void, env: FrameEnv): FrameGovernor {
-  let handle: number | null = null
+// Drives a frameloop="demand" canvas from the display's own frames: a frame is drawn on the
+// display frame it falls due on (a timer alone drifts against vsync), the wait before it is
+// slept through, and nothing runs while the page is hidden.
+export function startFrameGovernor(
+  invalidate: () => void,
+  env: FrameEnv,
+  pace: () => FramePace = () => DEFAULT_PACE
+): FrameGovernor {
+  let frameHandle: number | null = null
+  let sleepHandle: number | null = null
   let lastInvalidateMs = -Infinity
   let boostUntilMs = -Infinity
+  let cameraUntilMs = -Infinity
+  let movingUntilMs = -Infinity
+
+  const currentFps = (): number => {
+    const { idleFps, walkFps } = pace()
+    const isMoving = env.now() < movingUntilMs
+    return targetFps(
+      env.read(),
+      isMoving ? walkFps : idleFps,
+      isMoving ? BLURRED_FPS : BLURRED_IDLE_FPS
+    )
+  }
 
   const onDisplayFrame = (timeMs: number): void => {
-    handle = null
-    const fps = targetFps(env.read())
-    if (fps === 0) return
-    const isDue = timeMs - lastInvalidateMs >= 1000 / fps - DUE_TOLERANCE_MS
-    if (timeMs < boostUntilMs || isDue) {
+    frameHandle = null
+    const paceFps = currentFps()
+    if (paceFps === 0) return
+    const fps = timeMs < cameraUntilMs ? Math.max(paceFps, CAMERA_FPS) : paceFps
+    const isBoosted = timeMs < boostUntilMs
+    if (isBoosted || timeMs - lastInvalidateMs >= 1000 / fps - DUE_TOLERANCE_MS) {
       lastInvalidateMs = timeMs
       invalidate()
     }
-    handle = env.requestFrame(onDisplayFrame)
+    const waitMs = lastInvalidateMs + 1000 / fps - timeMs
+    if (isBoosted || waitMs <= SLEEP_OVER_MS) frameHandle = env.requestFrame(onDisplayFrame)
+    else sleepHandle = env.sleep(wake, waitMs - SLEEP_MARGIN_MS)
   }
 
-  const wake = (): void => {
-    if (handle === null && targetFps(env.read()) > 0) handle = env.requestFrame(onDisplayFrame)
+  // Also ends a sleep early: input, a walk or regained focus must not wait out an idle gap.
+  function wake(): void {
+    if (sleepHandle !== null) env.cancelSleep(sleepHandle)
+    sleepHandle = null
+    if (frameHandle === null && currentFps() > 0) frameHandle = env.requestFrame(onDisplayFrame)
   }
 
   const stopListening = env.onChange(wake)
   wake()
 
   return {
-    boost: () => {
-      boostUntilMs = env.now() + BOOST_HOLD_MS
+    boost: (source = 'input') => {
+      if (source === 'input') boostUntilMs = env.now() + BOOST_HOLD_MS
+      else if (env.read().isFocused) cameraUntilMs = env.now() + BOOST_HOLD_MS
+      wake()
     },
-    isBoosted: () => env.now() < boostUntilMs && targetFps(env.read()) > 0,
+    isBoosted: () => env.now() < boostUntilMs && currentFps() > 0,
+    keepMoving: () => {
+      movingUntilMs = env.now() + MOVING_HOLD_MS
+      wake()
+    },
+    currentFps,
     stop: () => {
       stopListening()
-      if (handle !== null) env.cancelFrame(handle)
-      handle = null
+      if (frameHandle !== null) env.cancelFrame(frameHandle)
+      if (sleepHandle !== null) env.cancelSleep(sleepHandle)
+      frameHandle = null
+      sleepHandle = null
     }
   }
 }

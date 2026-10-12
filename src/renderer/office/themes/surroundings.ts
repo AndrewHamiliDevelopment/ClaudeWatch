@@ -244,7 +244,7 @@ function propCandidates(anchor: Anchor, site: Site): Lot[] {
 }
 
 // Over the cap, the plate's own lots stay and the ring is thinned by seed, so no side empties.
-function capped(lots: readonly Lot[], limit: number, plate: Rect): Lot[] {
+export function capped(lots: readonly Lot[], limit: number, plate: Rect): Lot[] {
   if (lots.length <= limit) return [...lots]
   const rank = (lot: Lot): number => (contains(plate, lot) ? 0 : 1)
   const kept = new Set(

@@ -29,6 +29,14 @@ export const SHARED_BATCH = 'sharedBatch'
 
 const SHARED_KEY = 'shared:'
 
+// A batched root keeps its own world matrices: frozen when static, refreshed by updateMeshBatches
+// each frame otherwise. The renderer's pass over its thousands of parts would repeat that work.
+export function createBatchRoot(): Group {
+  const root = new Group()
+  root.updateMatrixWorld = () => undefined
+  return root
+}
+
 function colorOf(material: Material): Color | null {
   return 'color' in material && material.color instanceof Color ? material.color : null
 }
