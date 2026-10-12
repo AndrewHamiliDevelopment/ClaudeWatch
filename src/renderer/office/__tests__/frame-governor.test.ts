@@ -119,6 +119,21 @@ describe('startFrameGovernor', () => {
     governor.stop()
   })
 
+  it('holds a camera moving by itself to 60 a second or fewer on a 144 Hz display', () => {
+    const invalidate = vi.fn()
+    const display = fakeDisplay({ isHidden: false, isFocused: true }, 1000 / 144)
+    const governor = startFrameGovernor(invalidate, display.env)
+    display.run(100)
+    invalidate.mockClear()
+    for (let step = 0; step < 10; step++) {
+      governor.boost('camera')
+      display.run(100)
+    }
+    expect(invalidate.mock.calls.length).toBeLessThanOrEqual(60)
+    expect(invalidate.mock.calls.length).toBeGreaterThanOrEqual(45)
+    governor.stop()
+  })
+
   it('does not boost a hidden page', () => {
     const invalidate = vi.fn()
     const display = fakeDisplay({ isHidden: true, isFocused: false })
