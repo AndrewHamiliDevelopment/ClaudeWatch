@@ -39,7 +39,8 @@ Per-item tier: LW-1 T2 (fix, sim logic, risk 1) · LW-2 T1 (fix, risk 1) · LW-3
 - [x] Phase 6 — Themes you can see and set: one place that names every office's theme and sets it for everything, one company or one project
 - [x] Phase 7 — The Office window can be dragged, and Open Office brings it to the front
 - [ ] Phase 8 — A town you walk through: streets between the buildings, and a player the owner walks to any office
-- [ ] Phase 9 — Close: gates, review, cleanup, install, the two screenshots re-taken, demo re-recorded, pushed to PR #3
+- [ ] Phase 9 — Ready for the owner: every test green, installed on this Mac, the two screenshots re-taken
+- [ ] Phase 10 — Close, after the owner approves the changes: gates, review, cleanup, install, the two screenshots re-taken, demo re-recorded, pushed to PR #3
 
 ## How it fits
 
@@ -159,13 +160,20 @@ Per-item tier: LW-1 T2 (fix, sim logic, risk 1) · LW-2 T1 (fix, risk 1) · LW-3
 - Verify: `npx vitest run src/renderer/office && npm run typecheck && npx eslint src/renderer/office`
 - 2.5h with Claude | 12h without.
 
-**Phase 9 — Close.** Owner: primary, with Maya reviewing.
+**Phase 9 — Ready for the owner.** Owner: primary.
 
 - prettier, typecheck, eslint, the whole test suite, `npm run build`, `npm run build:office-web`, the seeded preview in a browser with 0 console errors.
-- One review of the whole diff, cleanup pass, reuse audit, dead-code scan, fixes in session.
-- Install on this Mac and re-take the owner's two screenshots on live sessions: the ClearSpent company and the whole floor at the widest zoom.
-- Re-record the demo, update the batch ledger and the checklist, update PR #3's description, push.
-- Verify: every command above exits 0; `scope-check.sh` exits 0; the installed app's Office shows the compact floor.
+- Install on this Mac and re-take the owner's two screenshots on live sessions: one company close up and the whole floor at the widest zoom.
+- Then stop. The owner looks at the build and says whether the changes are approved.
+- Verify: every command above exits 0; the installed app's Office shows the compact floor inside its town.
+- 1h with Claude | 3h without.
+
+**Phase 10 — Close, after the owner approves the changes.** Owner: primary, with Maya reviewing.
+
+- The owner's instruction of 2026-10-12: "let's avoid doing the code review immediately. I'm going to ask you to do the code review once I approve all of the changes so we won't be wasting time."
+- One review of the whole diff, the cleanup pass, reuse audit, dead-code scan, fixes in session.
+- Reinstall, re-record the demo, update the batch ledger and the checklist, update PR #3's description, push.
+- Verify: every gate exits 0; `scope-check.sh` exits 0.
 - 2h with Claude | 6h without.
 
 ## A livelier world: what is built now and what could follow
@@ -203,7 +211,7 @@ Follow-up commits are pushed to `origin feature/prerelease-batch` (draft PR #3).
 
 ## Estimate
 
-Total **17h with Claude | 71h without** (about 4x): Phase 1 2|8, Phase 2 1|3, Phase 3 2|8, Phase 4 1.5|6, Phase 5 4|20, Phase 6 1.5|6, Phase 7 0.5|2, Phase 8 2.5|12, Phase 9 2|6. Phases 1, 2+3 and 6 run together; Phases 4 and 5 run together after them; Phase 9 is last.
+Total **18h with Claude | 74h without** (about 4x): Phase 1 2|8, Phase 2 1|3, Phase 3 2|8, Phase 4 1.5|6, Phase 5 4|20, Phase 6 1.5|6, Phase 7 0.5|2, Phase 8 2.5|12, Phase 9 1|3, Phase 10 2|6. Phases 1, 2+3 and 6 run together; Phases 4 and 5 run together after them; Phase 9 ends with the install; Phase 10 waits for the owner's approval.
 
 ## Deviations
 
