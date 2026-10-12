@@ -4,7 +4,7 @@ import { LIVE_FLOORS } from '../themes/floors.test-utils'
 import type { Rect } from '../themes/lot-math'
 import { campusClaim, neededClaim } from './town-claim'
 import { BUILDING_CAP, CLAIM_SETBACK_M, FAR_RING_FROM_M, MIN_BELT_M } from './town-grid'
-import { townLots } from './town-lots'
+import { LANDMARK_ZONES, townLots } from './town-lots'
 import { roadPromenades, townRoads } from './town-roads'
 import { lotSites, parkPromenades } from './town-sites'
 import { TOWN_DISTRICTS, ZONE_HEIGHT_CAP_M, zoneHeightCap } from './town-zones'
@@ -41,33 +41,41 @@ describe.each(LIVE_FLOORS)('townLots: %s', (_name, floor) => {
     }
   })
 
-  it('holds every lot under the envelope, the promenades and its zone', () => {
-    const envelope = {
-      ...claim,
-      width: claim.width - MIN_BELT_M * 2,
-      depth: claim.depth - MIN_BELT_M * 2
-    }
+  const envelope = {
+    ...claim,
+    width: claim.width - MIN_BELT_M * 2,
+    depth: claim.depth - MIN_BELT_M * 2
+  }
+  const ordinary = lots.filter((lot) => !lot.isLandmark)
+
+  it('holds every lot under the envelope and its zone: no lot may hide a desk', () => {
     for (const lot of lots) {
       expect(lot.maxHeight).toBeLessThanOrEqual(24)
       expect(lot.maxHeight).toBeLessThanOrEqual(zoneHeightCap(lot.zone, lot.isFarRing))
       if (!lot.isFarRing) expect(lot.maxHeight).toBeLessThanOrEqual(ZONE_HEIGHT_CAP_M[lot.zone])
       expect(lot.maxHeight).toBeLessThanOrEqual(gap(lot, envelope) * HEIGHT_PER_METRE + 1e-9)
-      for (const walk of promenades) {
-        // Only a park's own lots stand in a promenade: they are measured against the others.
-        if (overlapping(lot, walk)) {
-          expect(lot.zone).toBe('park')
-          continue
-        }
-        expect(lot.maxHeight).toBeLessThanOrEqual(gap(lot, walk) * HEIGHT_PER_METRE + 1e-9)
-      }
       expect(lot.kind).toBe(lot.maxHeight >= 2 ? 'building' : 'prop')
       expect(lot.maxHeight).toBeGreaterThanOrEqual(0.4)
     }
   })
 
+  it('gives every lot but a landmark exactly the room the promenades leave it', () => {
+    for (const lot of ordinary) {
+      // Only a park's own lots stand in a promenade: they are measured against the others.
+      const others = promenades.filter((walk) => !overlapping(lot, walk))
+      if (others.length < promenades.length) expect(lot.zone).toBe('park')
+      const clear = Math.min(gap(lot, envelope), ...others.map((walk) => gap(lot, walk)))
+      expect(lot.maxHeight).toBeCloseTo(
+        Math.min(zoneHeightCap(lot.zone, lot.isFarRing), clear * HEIGHT_PER_METRE),
+        9
+      )
+    }
+  })
+
   it('keeps the first ring and the avenue low, so the promenades are seen', () => {
-    for (const lot of firstRing) expect(lot.maxHeight).toBeLessThanOrEqual(6.65 + 1e-9)
-    for (const lot of lots.filter((each) => each.frontage === 'avenue'))
+    for (const lot of ordinary.filter((each) => firstRing.includes(each)))
+      expect(lot.maxHeight).toBeLessThanOrEqual(6.65 + 1e-9)
+    for (const lot of ordinary.filter((each) => each.frontage === 'avenue'))
       expect(lot.maxHeight).toBeLessThanOrEqual(3.15 + 1e-9)
   })
 
@@ -92,20 +100,36 @@ describe.each(LIVE_FLOORS)('townLots: %s', (_name, floor) => {
     for (const lot of lots) expect(lot.isFarRing).toBe(!overlapping(lot, near))
   })
 
-  it('marks one landmark in every zone: a building with the most room its zone has', () => {
+  // What a landmark may reach: the offices and its zone bound it, a promenade does not.
+  const landmarkRoom = (lot: (typeof lots)[number]): number =>
+    Math.min(zoneHeightCap(lot.zone, lot.isFarRing), gap(lot, envelope) * HEIGHT_PER_METRE)
+
+  it('marks one landmark in civic, entertainment and workshop, and none elsewhere', () => {
     for (const zone of TOWN_DISTRICTS) {
-      const inZone = lots.filter((lot) => lot.zone === zone && lot.kind === 'building')
-      const landmarks = inZone.filter((lot) => lot.isLandmark)
-      expect(landmarks).toHaveLength(inZone.length > 0 ? 1 : 0)
-      const most = Math.max(...inZone.map((lot) => lot.maxHeight))
-      const tallest = inZone.filter((lot) => lot.maxHeight === most)
-      // The old town's lots come first, so its landmarks stay put while the campus grows.
-      const oldTown = tallest.filter((lot) => lot.x < edges(claim).west)
-      const candidates = oldTown.length > 0 ? oldTown : tallest
-      if (landmarks.length > 0)
-        expect(landmarks[0].seed).toBe(Math.min(...candidates.map((lot) => lot.seed)))
+      const landmarks = lots.filter((lot) => lot.zone === zone && lot.isLandmark)
+      expect(landmarks).toHaveLength(LANDMARK_ZONES.includes(zone) ? 1 : 0)
     }
     expect(lots.filter((lot) => lot.kind === 'prop' && lot.isLandmark)).toEqual([])
+  })
+
+  it('lets a landmark stand tall: at least 12 m, whatever walk it overlooks', () => {
+    for (const lot of lots.filter((each) => each.isLandmark)) {
+      expect(lot.maxHeight).toBeCloseTo(landmarkRoom(lot), 9)
+      expect(lot.maxHeight).toBeGreaterThanOrEqual(12)
+    }
+  })
+
+  it('stands the landmark where its zone has the most room, the old town first', () => {
+    for (const zone of LANDMARK_ZONES) {
+      const inZone = lots.filter((lot) => lot.zone === zone && lot.kind === 'building')
+      const most = Math.max(...inZone.map(landmarkRoom))
+      const roomiest = inZone.filter((lot) => landmarkRoom(lot) === most)
+      // The old town's lots come first, so its landmarks stay put while the campus grows.
+      const oldTown = roomiest.filter((lot) => lot.x < edges(claim).west)
+      const candidates = oldTown.length > 0 ? oldTown : roomiest
+      const [landmark] = inZone.filter((lot) => lot.isLandmark)
+      expect(landmark.seed).toBe(Math.min(...candidates.map((lot) => lot.seed)))
+    }
   })
 })
 

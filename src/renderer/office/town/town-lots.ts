@@ -4,7 +4,7 @@ import { contains, gapBetween, grow, type Rect } from '../themes/lot-math'
 import { HEIGHT_PER_METRE, MIN_LOT_HEIGHT_M, capped, type Lot } from '../themes/surroundings'
 import { BUILDING_CAP, FAR_RING_FROM_M, MIN_BELT_M } from './town-grid'
 import type { LotSite, Promenade } from './town-sites'
-import { TOWN_DISTRICTS, zoneHeightCap } from './town-zones'
+import { zoneHeightCap, type TownDistrict } from './town-zones'
 
 // A Lot (themes/surroundings.ts) with a place in the plan. `zoneId` is the owning company, which
 // the plan does not know: it is null here, and `lotOwners` names the owners.
@@ -13,18 +13,29 @@ export interface TownLot extends Lot, LotSite {
   isLandmark: boolean
 }
 
-// One to a zone. The old town comes first so that it never changes while the campus grows.
-function landmarkIds(lots: readonly TownLot[], oldTownEast: number): Set<string> {
+// The zones whose cap lets one building stand out: a theme draws a landmark for each.
+export const LANDMARK_ZONES: readonly TownDistrict[] = ['civic', 'entertainment', 'workshop']
+
+// One to a landmark zone, with the limit it gets. A landmark may hide a stretch of walk at one
+// rotation, never a desk: the offices and its zone bound it, a promenade does not.
+function landmarkLimits(
+  lots: readonly TownLot[],
+  envelope: Rect,
+  oldTownEast: number
+): Map<string, number> {
+  const roomOf = (lot: TownLot): number =>
+    Math.min(zoneHeightCap(lot.zone, lot.isFarRing), gapBetween(lot, envelope) * HEIGHT_PER_METRE)
+  // The old town comes first so that it never changes while the campus grows.
   const isNewTown = (lot: TownLot): number => Number(lot.x >= oldTownEast)
-  return new Set(
-    TOWN_DISTRICTS.flatMap((zone) => {
+  return new Map(
+    LANDMARK_ZONES.flatMap((zone) => {
       const buildings = lots.filter((lot) => lot.zone === zone && lot.kind === 'building')
-      const most = Math.max(...buildings.map((lot) => lot.maxHeight))
+      const most = Math.max(...buildings.map(roomOf))
       // The plan knows no theme, so the landmark takes the most room its zone has to give.
       const [landmark] = buildings
-        .filter((lot) => lot.maxHeight === most)
+        .filter((lot) => roomOf(lot) === most)
         .sort((a, b) => isNewTown(a) - isNewTown(b) || a.seed - b.seed)
-      return landmark ? [landmark.id] : []
+      return landmark ? [[landmark.id, most] as const] : []
     })
   )
 }
@@ -62,6 +73,9 @@ export function townLots(
     ).map((lot) => lot.id)
   )
   const lots = standing.filter((lot) => lot.kind === 'prop' || kept.has(lot.id))
-  const landmarks = landmarkIds(lots, oldTownEast)
-  return lots.map((lot) => (landmarks.has(lot.id) ? { ...lot, isLandmark: true } : lot))
+  const landmarks = landmarkLimits(lots, envelope, oldTownEast)
+  return lots.map((lot) => {
+    const limit = landmarks.get(lot.id)
+    return limit === undefined ? lot : { ...lot, maxHeight: limit, isLandmark: true }
+  })
 }
