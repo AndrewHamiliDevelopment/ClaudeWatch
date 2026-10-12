@@ -1,10 +1,8 @@
 import { findPath, type NavGrid, type Point } from '../../../office/sim/path'
 import { DESK_REACH, doorSide, SIDE_NORMAL, type DooredRect } from '../logic/room-layout'
 import type { FloorGeometry, ZoneGeometry } from '../scene-model'
-import { APRON_TOP_Y } from '../themes/town-apron'
-import { GROUND_Y, sceneExtent, WORLD_APRON, type Lot } from '../themes/surroundings'
-
-type Rect = Pick<Lot, 'x' | 'z' | 'width' | 'depth'>
+import { contains, type Rect } from '../themes/lot-math'
+import { GROUND_Y } from '../themes/surroundings'
 
 export interface WalkGround {
   // The sim's grid shape, so its pathfinder walks the player too.
@@ -27,10 +25,13 @@ function flatten(zones: readonly ZoneGeometry[]): ZoneGeometry[] {
   return zones.flatMap((zone) => [zone, ...flatten(zone.children)])
 }
 
-// Where the player may stand, over the whole scene: closed under lots, walls, desks and seats.
-// `lots` is everything that stands on the ground, the district's own buildings included.
-export function walkGround(floor: FloorGeometry, lots: readonly Lot[]): WalkGround {
-  const extent = sceneExtent(floor, lots)
+// Where the player may stand, over the whole of `extent`: closed under the town's lots and the
+// belt's plots (`solids`), walls, desks and seats, and open everywhere else, roads included.
+export function walkGround(
+  floor: FloorGeometry,
+  solids: readonly Rect[],
+  extent: Rect
+): WalkGround {
   const origin = {
     x: Math.floor((extent.x - extent.width / 2) / WALK_CELL_M) * WALK_CELL_M,
     z: Math.floor((extent.z - extent.depth / 2) / WALK_CELL_M) * WALK_CELL_M
@@ -65,7 +66,7 @@ export function walkGround(floor: FloorGeometry, lots: readonly Lot[]): WalkGrou
     }
   }
 
-  for (const lot of lots) closeRect(lot)
+  for (const solid of solids) closeRect(solid)
   for (const seat of floor.rooms.flatMap((room) => room.seats)) {
     const ahead = { x: Math.sin(seat.heading), z: Math.cos(seat.heading) }
     const half = DESK_M.width / 2
@@ -174,16 +175,7 @@ export function doorstep(zone: DooredRect): Point {
   return { x: zone.door.x + outward.x * DOORSTEP_M, z: zone.door.z + outward.z * DOORSTEP_M }
 }
 
-// What is underfoot: the slab on the plate, the district's paving round it, bare ground beyond.
+// What is underfoot: the slab on the plate, the town's ground everywhere else.
 export function groundHeight(floor: FloorGeometry, point: Point): number {
-  const centre = { x: floor.x, z: floor.z }
-  const east = Math.abs(point.x - centre.x) - floor.width / 2
-  const south = Math.abs(point.z - centre.z) - floor.depth / 2
-  if (east <= 0 && south <= 0) return 0
-  const isWest = point.x < centre.x
-  const isNorth = point.z < centre.z
-  const isOnApron =
-    east <= (isWest ? WORLD_APRON.west : WORLD_APRON.east) &&
-    south <= (isNorth ? WORLD_APRON.north : WORLD_APRON.south)
-  return isOnApron ? APRON_TOP_Y : GROUND_Y
+  return contains(floor, { ...point, width: 0, depth: 0 }) ? 0 : GROUND_Y
 }

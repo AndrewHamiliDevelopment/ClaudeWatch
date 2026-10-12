@@ -4,13 +4,55 @@ import type { ThemeZoneGroup } from '../logic/office-themes'
 import { plateLocalFloor } from '../logic/zone-framing'
 import type { FloorGeometry } from '../scene-model'
 import { towerStand } from '../themes/apron'
+import { LotFill } from '../themes/LotFill'
 import { thinnedLots } from '../themes/lot-thinning'
 import { getTheme } from '../themes/registry'
-import { officesOf, type Lot } from '../themes/surroundings'
+import { GROUND_Y, officesOf, type Lot } from '../themes/surroundings'
 import type { OfficeTheme, TowerFloor } from '../themes/types'
+import { dressLot } from '../town/town-dress'
+import type { TownPlan } from '../town/town-plan'
+import { dressOf, townLandmark } from '../town/TownView'
 import { BatchedScene } from './BatchedScene'
 
-// Merged like the floor: the skyline is the largest fixed cost in the draw budget.
+// The floor theme's landmark on the town's civic landmark lot: the tower in the building view,
+// and a civic building of the theme's own until then. Its own small batch, so a change of zoom
+// band never rebuilds the town.
+export function TowerView({
+  plan,
+  theme,
+  floors,
+  band
+}: {
+  plan: TownPlan
+  theme: OfficeTheme
+  floors: readonly TowerFloor[]
+  band: ZoomBand
+}) {
+  const { Tower } = theme.world
+  const hasTower = band === 'building'
+  const lot = townLandmark(plan)
+  const revision = JSON.stringify([theme.id, hasTower, lot?.id, lot?.maxHeight, floors])
+  return useMemo(
+    () =>
+      lot ? (
+        <BatchedScene revision={revision} isStatic>
+          {hasTower ? (
+            <group position={[lot.x, GROUND_Y, lot.z]}>
+              <Tower floors={floors} />
+            </group>
+          ) : (
+            <LotFill placed={[dressLot(lot, GROUND_Y, dressOf(theme))]} />
+          )}
+        </BatchedScene>
+      ) : null,
+    // `revision` stands for the lot, the storeys and whether the tower shows.
+    [revision, theme, Tower]
+  )
+}
+
+// The old engine's district, hangar and tower, and `SurroundingsView` below. The scene no longer
+// mounts either: the zoned town (town/TownView) took their place. Kept while the themes' own
+// tests still measure them.
 export function WorldView({
   floor,
   theme,

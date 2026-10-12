@@ -8,7 +8,8 @@ import { projectToScreen, screenAxes } from '../logic/zone-framing'
 import type { FloorGeometry } from '../scene-model'
 import { BEFORE_CONTROLS } from '../scene/use-camera-gestures'
 import { isStillClick, trackPress } from '../scene/ZonePickers'
-import { GROUND_Y, sceneExtent, type Lot } from '../themes/surroundings'
+import type { Rect } from '../themes/lot-math'
+import { GROUND_Y } from '../themes/surroundings'
 import type { ThemePalette } from '../themes/types'
 import { followStep } from './camera-follow'
 import { playerGeometry } from './figure'
@@ -21,8 +22,10 @@ interface PlayerLayerProps {
   player: Player
   isWalking: boolean
   floor: FloorGeometry
-  // Everything that stands on the ground: the ring's lots and the floor theme's district.
-  solids: readonly Lot[]
+  // Everything that stands on the ground: the town's lots and the plots of the belt.
+  solids: readonly Rect[]
+  // How far the player may be sent: the town's extent, or the floor's own without a town.
+  extent: Rect
   agents: readonly AgentView[]
   palette: ThemePalette
   isReducedMotion: boolean
@@ -49,7 +52,7 @@ function turnToward(from: number, to: number, share: number): number {
 // The owner's character, the ground it can be sent across, and the camera that goes with it.
 // It asks for a frame only while it moves; standing, it costs nothing but its one draw.
 export function PlayerLayer(props: PlayerLayerProps) {
-  const { player, isWalking, floor, solids, agents, palette } = props
+  const { player, isWalking, floor, solids, extent, agents, palette } = props
   const invalidate = useThree((state) => state.invalidate)
   const figureRef = useRef<Group>(null)
   const strideRef = useRef(0)
@@ -57,8 +60,7 @@ export function PlayerLayer(props: PlayerLayerProps) {
   // The camera is still sweeping to the player; ended by the owner's hand on the camera.
   const isFollowingRef = useRef(false)
   const target = useMemo(() => new Vector3(), [])
-  const ground = useMemo(() => walkGround(floor, solids), [floor, solids])
-  const extent = useMemo(() => sceneExtent(floor, solids), [floor, solids])
+  const ground = useMemo(() => walkGround(floor, solids, extent), [floor, solids, extent])
   const geometry = useMemo(() => playerGeometry(palette), [palette])
   useEffect(() => () => geometry.dispose(), [geometry])
   const [nearAgent, setNearAgent] = useState<AgentView | null>(null)

@@ -7,6 +7,7 @@ import { createPlayer } from '../player/walking'
 import { pinQuality } from '../quality-store'
 import { themeForTeam } from '../themes/registry'
 import { sceneExtent } from '../themes/surroundings'
+import { townOf } from '../town/use-town-plan'
 import OfficeScene from './OfficeScene'
 
 // Each layer is stood in for by a marker, so what the scene mounts can be read off the page.
@@ -30,15 +31,14 @@ vi.mock('./Robot', () => ({
     <i data-layer="agents" data-count={agents.length} />
   )
 }))
-vi.mock('./WorldView', () => ({
-  WorldView: () => <i data-layer="district" />,
-  SurroundingsView: ({
-    ambientShare,
-    lots
-  }: {
-    ambientShare: number
-    lots: readonly unknown[]
-  }) => <i data-layer="surroundings" data-ambient-share={ambientShare} data-lots={lots.length} />
+vi.mock('./WorldView', () => ({ TowerView: () => <i data-layer="tower" /> }))
+vi.mock('../town/TownGround', () => ({ TownGround: () => <i data-layer="roads" /> }))
+vi.mock('../town/TownView', async (original) => ({
+  ...(await original<typeof import('../town/TownView')>()),
+  TownView: ({ town }: { town: { plan: { lots: readonly unknown[] } } }) => (
+    <i data-layer="town" data-lots={town.plan.lots.length} />
+  ),
+  TownAmbient: ({ share }: { share: number }) => <i data-layer="ambient" data-share={share} />
 }))
 vi.mock('./ZonePickers', () => ({ ZonePickers: () => <i data-layer="pickers" /> }))
 vi.mock('./CardProjector', () => ({ CardProjector: () => <i data-layer="cards" /> }))
@@ -52,11 +52,14 @@ vi.mock('./RenderLoop', () => ({
   FrameGovernor: () => <i data-layer="governor" />,
   MetricsProbe: () => <i data-layer="metrics" />
 }))
-vi.mock('../player/Streets', () => ({ Streets: () => <i data-layer="streets" /> }))
-vi.mock('../player/PlayerLayer', () => ({ PlayerLayer: () => <i data-layer="player" /> }))
+vi.mock('../player/PlayerLayer', () => ({
+  PlayerLayer: ({ solids, extent }: { solids: readonly unknown[]; extent: object }) => (
+    <i data-layer="player" data-solids={solids.length} data-extent={JSON.stringify(extent)} />
+  )
+}))
 vi.mock('../citizens/CitizenLayer', () => ({
-  CitizenLayer: ({ player }: { player: unknown }) => (
-    <i data-layer="citizens" data-follows-player={Boolean(player)} />
+  CitizenLayer: ({ player, solids }: { player: unknown; solids: readonly unknown[] }) => (
+    <i data-layer="citizens" data-follows-player={Boolean(player)} data-solids={solids.length} />
   )
 }))
 
@@ -107,35 +110,53 @@ function mount(off: readonly OfficeSettingKey[] = []) {
   return { layer, layers }
 }
 
-const TOWN = ['streets', 'district', 'surroundings']
+const TOWN = ['roads', 'town', 'tower', 'ambient']
 const ALWAYS = ['ground', 'floor', 'agents', 'pickers', 'cards', 'camera', 'governor', 'metrics']
+const { plan, green } = townOf(floor, null, 'full')
 
 it('mounts the whole living world while every switch is on', () => {
   const { layer, layers } = mount()
   expect(layers().sort()).toEqual([...ALWAYS, ...TOWN, 'citizens', 'player'].sort())
-  expect(Number(layer('surroundings')?.dataset.ambientShare)).toBeGreaterThan(0)
-  expect(Number(layer('surroundings')?.dataset.lots)).toBeGreaterThan(0)
+  expect(Number(layer('ambient')?.dataset.share)).toBeGreaterThan(0)
+  expect(Number(layer('town')?.dataset.lots)).toBe(plan.lots.length)
 })
 
-it('takes the buildings, the district and the streets out when the town is off', () => {
+it('takes the buildings, the roads, the tower and the ambient life out when the town is off', () => {
   const { layer, layers } = mount(['town'])
   for (const name of TOWN) expect(layers()).not.toContain(name)
-  // Framed on the floor alone: no ring of lots is left to make room for.
+  // Framed on the floor alone, and walked on it alone: no town is left to make room for.
   expect(JSON.parse(layer('camera')?.dataset.scene ?? '{}')).toMatchObject(sceneExtent(floor, []))
+  expect(JSON.parse(layer('player')?.dataset.extent ?? '{}')).toEqual(sceneExtent(floor, []))
+  expect(layer('player')?.dataset.solids).toBe('0')
+  expect(layer('citizens')?.dataset.solids).toBe('0')
   expect(layers()).toEqual(expect.arrayContaining([...ALWAYS, 'citizens', 'player']))
 })
 
-it('frames the ring of lots while the town is on', () => {
+it('frames the whole town, to its last road, while the town is on', () => {
   const { layer } = mount()
-  const framed = JSON.parse(layer('camera')?.dataset.scene ?? '{}')
-  expect(framed.width).toBeGreaterThan(sceneExtent(floor, []).width)
+  expect(JSON.parse(layer('camera')?.dataset.scene ?? '{}')).toMatchObject(plan.extent)
+  expect(JSON.parse(layer('player')?.dataset.extent ?? '{}')).toEqual(plan.extent)
+})
+
+it('closes the town’s lots and the belt’s plots to the player and the citizens', () => {
+  const { layer } = mount()
+  const solidCount = String(plan.lots.length + green.length)
+  expect(layer('player')?.dataset.solids).toBe(solidCount)
+  expect(layer('citizens')?.dataset.solids).toBe(solidCount)
 })
 
 it('mounts no ambient mover when ambient motion is off, and keeps the buildings', () => {
-  const { layer } = mount(['ambient'])
-  // A share of 0 is the surroundings' own "mount nothing ambient".
-  expect(layer('surroundings')?.dataset.ambientShare).toBe('0')
-  expect(Number(layer('surroundings')?.dataset.lots)).toBeGreaterThan(0)
+  const { layer, layers } = mount(['ambient'])
+  expect(layers()).not.toContain('ambient')
+  expect(Number(layer('town')?.dataset.lots)).toBeGreaterThan(0)
+  expect(layers()).toEqual(expect.arrayContaining(['roads', 'town', 'tower']))
+})
+
+it('draws less of the town at a lighter detail level, by the plan’s own thinning', () => {
+  pinQuality('light')
+  const { layer } = mount()
+  expect(Number(layer('town')?.dataset.lots)).toBe(townOf(floor, null, 'light').plan.lots.length)
+  expect(Number(layer('town')?.dataset.lots)).toBeLessThan(plan.lots.length)
 })
 
 it('does not mount the citizens layer when citizens are off', () => {
