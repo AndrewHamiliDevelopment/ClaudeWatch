@@ -5,7 +5,7 @@ import { EDO } from '../themes/palettes'
 import { listThemes } from '../themes/registry'
 import { surroundingLots } from '../themes/surroundings'
 import { districtLots } from './district-lots'
-import { playerGeometry } from './figure'
+import { MARKER_Y, playerGeometry } from './figure'
 import { TalkPrompt } from './TalkPrompt'
 import { listenForWalkKeys } from './walk-keys'
 import { createPlayer, sendPlayer } from './walking'
@@ -120,6 +120,12 @@ describe('districtLots', () => {
 })
 
 describe('playerGeometry', () => {
+  it('hangs a pointer over the player so it is found among the buildings', () => {
+    const geometry = playerGeometry(EDO)
+    geometry.computeBoundingBox()
+    expect(geometry.boundingBox?.max.y).toBeCloseTo(MARKER_Y + 0.25)
+  })
+
   it('is one coloured mesh that stands on the ground, taller than an agent', () => {
     const geometry = playerGeometry(EDO)
     const positions = geometry.getAttribute('position')
@@ -127,8 +133,9 @@ describe('playerGeometry', () => {
     expect(geometry.getAttribute('normal').count).toBe(positions.count)
     geometry.computeBoundingBox()
     expect(geometry.boundingBox?.min.y).toBeGreaterThan(-1e-6)
+    // The figure itself is under 2 m; only the pointer over its head reaches higher.
     expect(geometry.boundingBox?.max.y).toBeGreaterThan(1.3)
-    expect(geometry.boundingBox?.max.y).toBeLessThan(2)
+    expect(geometry.boundingBox?.max.y).toBeLessThan(MARKER_Y + 0.3)
   })
 
   it('has a ring under its feet, wider than the figure', () => {

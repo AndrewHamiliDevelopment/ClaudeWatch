@@ -16,6 +16,8 @@ interface FigurePart {
 }
 
 const FLAT = -Math.PI / 2
+// Where the pointer over the player's head hangs: clear of the hat, which tops out at 1.6 m.
+export const MARKER_Y = 2.3
 
 // A traveller in a cloak and a wide hat, a lantern held out ahead (+z), on a ring of light.
 // No agent looks like this: they are machines at desks.
@@ -40,7 +42,12 @@ function figureParts(palette: ThemePalette): FigurePart[] {
       geometry: new BoxGeometry(0.05, 0.05, 0.34).translate(0.24, 0.78, 0.17),
       color: palette.wood
     },
-    { geometry: new SphereGeometry(0.09, 8, 6).translate(0.24, 0.7, 0.36), color: palette.glow }
+    { geometry: new SphereGeometry(0.09, 8, 6).translate(0.24, 0.7, 0.36), color: palette.glow },
+    // A pointer hanging over its head: among a town's worth of buildings it is found at a glance.
+    {
+      geometry: new ConeGeometry(0.26, 0.5, 4).rotateX(Math.PI).translate(0, MARKER_Y, 0),
+      color: palette.glow
+    }
   ]
 }
 
