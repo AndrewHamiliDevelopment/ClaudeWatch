@@ -1,6 +1,8 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { sessionTokens } from '../../deck/tokens'
 import { officeThemes } from '../logic/office-themes'
+import type { AgentView } from '../../../shared/office/types'
+import type { OfficeFrame } from '../scene-model'
 import { buildFixtureFrame, createFixtureFeed } from './fixture-feed'
 
 const frame = buildFixtureFrame(0, 1_000_000)
@@ -67,5 +69,62 @@ describe('createFixtureFeed', () => {
       success: false,
       target: 'app'
     })
+  })
+})
+
+describe('the seeded preview runs the office sim', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    vi.useFakeTimers()
+  })
+  afterEach(() => vi.useRealTimers())
+
+  // Each frame with the second it arrived at.
+  function watch(seconds: number): { atS: number; frame: OfficeFrame }[] {
+    const startedAtMs = Date.now()
+    const frames: { atS: number; frame: OfficeFrame }[] = []
+    const stop = createFixtureFeed().subscribe((frame) =>
+      frames.push({ atS: (Date.now() - startedAtMs) / 1000, frame })
+    )
+    vi.advanceTimersByTime(seconds * 1000)
+    stop()
+    return frames
+  }
+  const isOn = (agent: AgentView, seats: { x: number; z: number }[]): boolean =>
+    seats.some((seat) => seat.x === agent.x && seat.z === agent.z)
+
+  it('seats every agent at its desk on the first frame', () => {
+    const [{ frame: first }] = watch(0.1)
+    expect(first.connected).toBe(true)
+    expect(first.agents.length).toBeGreaterThan(first.sessions.length)
+    for (const agent of first.agents) {
+      const room = first.floors[0].rooms.find((candidate) => candidate.id === agent.roomId)
+      const desk = room?.seats.find((candidate) => candidate.slotId === agent.slotId)
+      expect(agent).toMatchObject({ x: desk?.x, z: desk?.z })
+      expect(agent.place).toBeUndefined()
+    }
+  })
+
+  it('shows a finished agent seated in its lounge inside a minute, and back at its desk later', () => {
+    const seated = (frame: OfficeFrame): AgentView | undefined =>
+      frame.agents.find(
+        (agent) =>
+          agent.place === 'lounge' &&
+          isOn(
+            agent,
+            frame.floors[0].zones.flatMap((company) => company.lounge?.seats ?? [])
+          )
+      )
+    const frames = watch(150)
+    const firstSeated = frames.findIndex(({ frame }) => seated(frame))
+    expect(frames[firstSeated]?.atS).toBeLessThan(60)
+
+    const lounger = seated(frames[firstSeated].frame)
+    const isBack = (frame: OfficeFrame): boolean => {
+      const agent = frame.agents.find((candidate) => candidate.agentKey === lounger?.agentKey)
+      const room = frame.floors[0].rooms.find((candidate) => candidate.id === agent?.roomId)
+      return agent !== undefined && agent.place === undefined && isOn(agent, room?.seats ?? [])
+    }
+    expect(frames.slice(firstSeated).some(({ frame }) => isBack(frame))).toBe(true)
   })
 })

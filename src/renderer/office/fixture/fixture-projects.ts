@@ -88,7 +88,15 @@ export const PROJECTS: readonly FixtureProject[] = [
         offset: 1,
         attentionScript: ['none', 'error', 'error', 'none']
       },
-      { name: 'widget sync', provider: 'codex', host: 'orca', period: 3, offset: 4 }
+      {
+        name: 'widget sync',
+        provider: 'codex',
+        host: 'orca',
+        // Done from 10 s to 100 s: time to walk to the lounge, sit a while and be called back.
+        period: 15,
+        offset: 10,
+        attentionScript: ['none', 'done', 'done', 'done', 'none']
+      }
     ]
   },
   {
@@ -122,9 +130,11 @@ export const PROJECTS: readonly FixtureProject[] = [
       {
         name: 'e2e suite',
         provider: 'codex',
-        period: 4,
-        offset: 5,
-        attentionScript: ['none', 'none', 'done']
+        // Already done when the preview opens: it goes to the lounge first, and works again
+        // from 90 s to 150 s.
+        period: 15,
+        offset: 0,
+        attentionScript: ['done', 'done', 'done', 'none', 'none']
       },
       {
         name: 'auth migration',

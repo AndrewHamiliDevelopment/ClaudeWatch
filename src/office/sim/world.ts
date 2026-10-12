@@ -1,15 +1,35 @@
 import type { AgentView, FeedMessage, SessionRef } from '../../shared/office/types'
 import { clamp } from '../../shared/range'
-import { createAgent, leaveAgent, tickAgent, updateAgent, type AgentRecord } from './behaviour'
-import { buildLayout, type LayoutMap } from './layout'
+import {
+  createAgent,
+  goToLounge,
+  leaveAgent,
+  returnToDesk,
+  setFinished,
+  tickAgent,
+  updateAgent,
+  type AgentRecord
+} from './behaviour'
+import { buildLayout, type LayoutMap, type LoungeLayout } from './layout'
+import { loungeSeats, loungesByRoom } from './lounge'
 import { PathCache } from './navigation'
+import type { Point } from './path'
 import { placements } from './placements'
+
+// A walker can stand outside a floor that shrank, where the grid has no way: it then walks
+// straight there, so it is never left behind and never jumps.
+function wayTo(paths: PathCache, from: Point, to: Point): Point[] {
+  const path = paths.get(from, to)
+  return path.length ? path : [from, to].map(({ x, z }) => ({ x, z }))
+}
 
 export class World {
   private readonly now: () => number
   private sessions = new Map<string, SessionRef>()
   private agents = new Map<string, AgentRecord>()
   private map: LayoutMap
+  private paths: PathCache | null = null
+  private lounges = new Map<string, LoungeLayout>()
   private accumulatedMs = 0
   private sequence = -1
   private helloRevision = 0
@@ -43,6 +63,8 @@ export class World {
     const oldMap = this.map
     this.map = buildLayout([...this.sessions.values()], this.map, this.now())
     const paths = new PathCache(this.map.floors[0])
+    this.paths = paths
+    this.lounges = loungesByRoom(this.map.floors[0])
     const oldPaths = oldMap.floors[0]?.zones ? new PathCache(oldMap.floors[0]) : paths
     const held = new Map(
       [...this.agents]
@@ -56,11 +78,36 @@ export class World {
       const floor = oldMap.floors.find((f) => f.id === agent.view.floorId)!
       const room = floor.rooms.find((r) => r.id === agent.view.roomId)!
       const door = room.slots.find((s) => s.id === 'door')!
-      this.agents.set(key, leaveAgent(agent, oldPaths.via(agent.view, door, floor.elevator)))
+      // From the lounge it walks straight out: its office door is not on the way.
+      const exit =
+        agent.view.place === 'lounge'
+          ? oldPaths.get(agent.view, floor.elevator)
+          : oldPaths.via(agent.view, door, floor.elevator)
+      this.agents.set(key, leaveAgent(agent, exit))
     }
     for (const placement of desired) {
-      const { session, room, slot, floorId, isSubagent } = placement
+      const { session, room, slot, floorId, isSubagent, isFinished } = placement
       const existing = this.agents.get(session.key)
+      if (existing?.view.place === 'lounge') {
+        const updated = setFinished(
+          updateAgent(existing, session.activity, session.attention),
+          isFinished
+        )
+        // The desk it will go back to is the one the map gives it now.
+        Object.assign(updated.view, {
+          floorId,
+          roomId: room.id,
+          slotId: slot.id,
+          label: session.name
+        })
+        this.agents.set(
+          session.key,
+          isFinished
+            ? updated
+            : returnToDesk(updated, slot.heading, wayTo(paths, updated.view, slot))
+        )
+        continue
+      }
       const oldSlot = oldMap.floors[0]?.rooms
         .find((r) => r.id === room.id)
         ?.slots.find((s) => s.id === slot.id)
@@ -74,7 +121,7 @@ export class World {
       ) {
         const updated = updateAgent(existing, session.activity, session.attention)
         updated.view.label = session.name
-        this.agents.set(session.key, updated)
+        this.agents.set(session.key, setFinished(updated, isFinished))
         continue
       }
       const elevator = this.map.floors.find((f) => f.id === floorId)!.elevator
@@ -90,11 +137,37 @@ export class World {
       // A robot already on the floor (seat moved, or it was walking out when its session came
       // back) walks from where it stands. Sessions already running when the office opens are
       // at their desks; only later arrivals walk in from the gate.
-      const route = existing ? paths.get(existing.view, slot) : []
+      const route = existing ? wayTo(paths, existing.view, slot) : []
       const entrance = message.type === 'hello' ? [] : paths.via(elevator, door, slot)
       const agent = createAgent(session, destination, route.length ? route : entrance)
       agent.view.isSubagent = isSubagent
-      this.agents.set(session.key, agent)
+      // A desk that moved does not restart its wait for the lounge.
+      agent.finishedForMs = existing?.finishedForMs ?? null
+      this.agents.set(session.key, setFinished(agent, isFinished))
+    }
+    this.seatLounges()
+  }
+
+  // Sends waiting agents to a free lounge seat, sitters to a seat the map moved, and sitters
+  // whose seat is gone back to their desks.
+  private seatLounges(): void {
+    const paths = this.paths
+    if (!paths) return
+    for (const [key, seat] of loungeSeats([...this.agents.values()], this.lounges)) {
+      const agent = this.agents.get(key)
+      if (!agent) continue
+      const isAway = agent.view.place === 'lounge'
+      if (seat) {
+        const target = agent.path.at(-1) ?? agent.view
+        if (isAway && target.x === seat.x && target.z === seat.z) continue
+        this.agents.set(key, goToLounge(agent, seat, wayTo(paths, agent.view, seat)))
+        continue
+      }
+      const desk = this.map.floors[0].rooms
+        .find((r) => r.id === agent.view.roomId)
+        ?.slots.find((s) => s.id === agent.view.slotId)
+      if (isAway && desk)
+        this.agents.set(key, returnToDesk(agent, desk.heading, wayTo(paths, agent.view, desk)))
     }
   }
 
@@ -106,6 +179,7 @@ export class World {
         if (next.removed) this.agents.delete(key)
         else this.agents.set(key, next)
       }
+      this.seatLounges()
       this.accumulatedMs -= 100
     }
     return [...this.agents.values()]
