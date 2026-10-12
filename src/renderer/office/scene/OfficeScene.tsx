@@ -12,13 +12,15 @@ import { SCENE_BACKGROUND } from '../office-palette'
 import type { FloorGeometry } from '../scene-model'
 import { CameraRig } from './CameraRig'
 import { FloorView } from './FloorView'
+import { Horizon } from './Horizon'
 import { CardProjector, type CardAnchors } from './CardProjector'
 import { NameCardLayer } from './NameCards'
 import { FrameGovernor, MetricsProbe } from './RenderLoop'
 import { RobotCrew } from './Robot'
 import { BatchedScene } from './BatchedScene'
-import { WorldView } from './WorldView'
+import { SurroundingsView, WorldView } from './WorldView'
 import { ZonePickers } from './ZonePickers'
+import { GROUND_Y, MAX_LOT_HEIGHT_M, sceneExtent, surroundingLots } from '../themes/surroundings'
 import type { OfficeTheme, TowerFloor } from '../themes/types'
 
 interface OfficeSceneProps {
@@ -49,6 +51,9 @@ const INITIAL_CAMERA_POSITION: [number, number, number] = [
   CAMERA_DISTANCE * Math.cos(ISO_POLAR),
   CAMERA_DISTANCE * Math.sin(ISO_POLAR) * Math.cos(ISO_START_AZIMUTH)
 ]
+
+// One storey of the district's tower, the tallest thing the floor theme draws.
+const TOWER_STOREY_M = 2.2
 
 // Other floors are storeys in the building overview; only the focused plate has agents.
 function OfficeScene(props: OfficeSceneProps) {
@@ -81,6 +86,16 @@ function OfficeScene(props: OfficeSceneProps) {
       ]),
     [theme.id, zoneGroups, floor, agents, selectedAgentKey, speakingAgentKey]
   )
+  const lots = useMemo(() => surroundingLots(floor), [floor])
+  const storeyCount = props.floors.length
+  const sceneBox = useMemo(
+    () => ({
+      ...sceneExtent(floor, lots),
+      minY: GROUND_Y,
+      maxY: MAX_LOT_HEIGHT_M + storeyCount * TOWER_STOREY_M
+    }),
+    [floor, lots, storeyCount]
+  )
   const liveSessionKeys = useMemo(
     () => new Set(props.sessions.map((session) => session.key)),
     [props.sessions]
@@ -102,6 +117,7 @@ function OfficeScene(props: OfficeSceneProps) {
         <color attach="background" args={[SCENE_BACKGROUND]} />
         <hemisphereLight args={['#FFF3DD', '#3A3A40', 2.2]} />
         <directionalLight position={[10, 20, 6]} intensity={1.8} />
+        <Horizon box={sceneBox} color={theme.palette.stone} />
         <BatchedScene revision={revision}>
           <FloorView
             floorTheme={theme}
@@ -122,6 +138,13 @@ function OfficeScene(props: OfficeSceneProps) {
           />
         </BatchedScene>
         <WorldView theme={props.theme} floor={props.floor} floors={props.floors} band={band} />
+        <SurroundingsView
+          floor={floor}
+          floorTheme={theme}
+          zoneGroups={zoneGroups}
+          lots={lots}
+          isReducedMotion={isReducedMotion}
+        />
         <ZonePickers
           floor={props.floor}
           onFly={props.onFlyToZone}
@@ -136,6 +159,7 @@ function OfficeScene(props: OfficeSceneProps) {
         />
         <CameraRig
           floorCount={props.floors.length}
+          scene={sceneBox}
           floor={props.floor}
           agents={props.agents}
           liveSessionKeys={liveSessionKeys}

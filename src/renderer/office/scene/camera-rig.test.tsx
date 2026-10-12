@@ -121,6 +121,7 @@ it('preserves desk zoom when the viewport or project count changes', () => {
   const props = {
     floor: makeFloor({ floorId: 'f1' }),
     floorCount: 1,
+    scene: { width: 44, depth: 43 },
     agents: [agent],
     liveSessionKeys: new Set<string>(),
     isReducedMotion: true,
@@ -170,6 +171,7 @@ function rigProps() {
   return {
     floor: cornerFloor,
     floorCount: 1,
+    scene: { width: 44, depth: 43 },
     agents: [],
     liveSessionKeys: new Set(['claude:a']),
     isReducedMotion: true,

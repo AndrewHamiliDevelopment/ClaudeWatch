@@ -38,6 +38,8 @@ const { ACTION } = CameraControlsImpl
 
 interface CameraRigProps {
   floorCount: number
+  // The extent of everything drawn; the widest zoom frames all of it.
+  scene: { width: number; depth: number }
   floor: FloorGeometry
   agents: readonly AgentView[]
   liveSessionKeys: ReadonlySet<string>
@@ -229,7 +231,7 @@ export function CameraRig(props: CameraRigProps) {
       makeDefault
       minPolarAngle={ISO_POLAR}
       maxPolarAngle={ISO_POLAR}
-      minZoom={buildingFraming(props.floor, props.floorCount, size).zoom * 0.8}
+      minZoom={buildingFraming(props.scene, props.floorCount, size).zoom * 0.8}
       maxZoom={BAND_ZOOM.desk * 1.2}
       smoothTime={0.3}
     />

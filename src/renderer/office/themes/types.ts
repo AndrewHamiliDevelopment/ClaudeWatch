@@ -3,6 +3,7 @@ import type { Group, Mesh } from 'three'
 import type { AgentView, ProviderId } from '../../../shared/office/types'
 import type { DeskSlot, FloorGeometry, RoomGeometry, ZoneGeometry } from '../scene-model'
 import type { WallsMode } from '../logic/room-layout'
+import type { Lot } from './surroundings'
 
 export interface ThemePalette {
   lacquer: string
@@ -71,6 +72,14 @@ export interface ZoneProps {
 export interface DeskProps extends RoomProps {
   slot: DeskSlot
 }
+// Only the lots this theme must draw: its companies' own, and the far ring for the floor's theme.
+export interface SurroundingsProps {
+  floor: FloorGeometry
+  lots: readonly Lot[]
+}
+export interface AmbientProps extends SurroundingsProps {
+  isReducedMotion: boolean
+}
 export interface TowerFloor {
   floorId: string
   label: string
@@ -102,6 +111,10 @@ interface ZoneKit {
   Desk: ComponentType<DeskProps>
   RoomDressing: ComponentType<RoomProps>
   RoomSign: ComponentType<RoomProps>
+  // Buildings and props on the lots around this theme's companies. Static: it is merged once.
+  Surroundings?: ComponentType<SurroundingsProps>
+  // A theme's moving things. Move them in useFrame and never invalidate: the scene paces frames.
+  Ambient?: ComponentType<AmbientProps>
 }
 
 // A character an agent plays, as the HUD names it.
