@@ -2,17 +2,18 @@ import { describe, expect, it } from 'vitest'
 import { ROSTER_NAMES_STORAGE_KEY } from '../roster-names'
 import { GARRISON_CAST } from './cast'
 import {
-  characterFor,
   dressingForBay,
   GARRISON_FRAMES,
   ORBITAL_GARRISON_ID,
   orbitalGarrisonRoster
 } from './roster'
 
-const lead = (provider: 'claude' | 'codex', bay: number) =>
-  characterFor({ provider, isSubagent: false }, bay)
-const squad = (provider: 'claude' | 'codex', bay: number) =>
-  characterFor({ provider, isSubagent: true }, bay)
+type Provider = 'claude' | 'codex' | 'opencode'
+const PROVIDERS = ['claude', 'codex', 'opencode'] as const
+const lead = (provider: Provider, bay: number) =>
+  GARRISON_CAST[orbitalGarrisonRoster.indexFor({ provider, isSubagent: false }, bay)]
+const squad = (provider: Provider, bay: number) =>
+  GARRISON_CAST[orbitalGarrisonRoster.indexFor({ provider, isSubagent: true }, bay)]
 
 describe('Orbital Garrison roster', () => {
   it('names at least eight distinct characters, each with a one-line role', () => {
@@ -29,18 +30,19 @@ describe('Orbital Garrison roster', () => {
     expect(new Set(all.map((entry) => entry.name)).size).toBe(all.length)
   })
 
-  it('gives the first five bays of one provider five different characters, then wraps', () => {
-    for (const provider of ['claude', 'codex'] as const) {
-      const ids = [0, 1, 2, 3, 4].map((bay) => lead(provider, bay).id)
-      expect(new Set(ids).size).toBe(5)
-      expect(lead(provider, 5).id).toBe(ids[0])
+  it('gives the first eight bays of one provider eight different characters, then wraps', () => {
+    for (const provider of PROVIDERS) {
+      const ids = [0, 1, 2, 3, 4, 5, 6, 7].map((bay) => lead(provider, bay).id)
+      expect(new Set(ids).size).toBe(8)
+      expect(lead(provider, 8).id).toBe(ids[0])
     }
   })
 
-  it('seats Claude sessions as the flight wing and Codex sessions as the deck crew', () => {
-    for (const bay of [0, 1, 2, 3, 4, 5, 6]) {
+  it('seats Claude as the flight wing, Codex as the deck crew and OpenCode as the signals', () => {
+    for (const bay of [0, 1, 2, 3, 4, 5, 6, 7, 8]) {
       expect(lead('claude', bay).section).toBe('wing')
       expect(lead('codex', bay).section).toBe('deck')
+      expect(lead('opencode', bay).section).toBe('signal')
     }
   })
 
@@ -48,8 +50,27 @@ describe('Orbital Garrison roster', () => {
     for (const bay of [0, 3, 7]) {
       expect(squad('claude', bay)).toMatchObject({ isSquad: true, section: 'wing' })
       expect(squad('codex', bay)).toMatchObject({ isSquad: true, section: 'deck' })
+      expect(squad('opencode', bay)).toMatchObject({ isSquad: true, section: 'signal' })
     }
     expect(squad('claude', 0)).toBe(squad('claude', 4))
+  })
+
+  // The owner's local renames are stored by index: a founder never moves.
+  it('keeps the founding cast at the indexes it shipped with', () => {
+    expect(GARRISON_CAST.slice(0, 12).map((character) => character.id)).toEqual([
+      'idris-calloway',
+      'noor-vasquez',
+      'bram-okafor',
+      'suvi-lindqvist',
+      'dara-whitlock',
+      'hollis-varga',
+      'pim-arkwright',
+      'odalys-ferro',
+      'tavi-renko',
+      'josune-abara',
+      'wing-cadet',
+      'deckhand'
+    ])
   })
 
   it('gives the lead office the bridge and parks a frame in every other bay', () => {

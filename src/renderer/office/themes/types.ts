@@ -52,7 +52,7 @@ export interface RobotRig {
 export interface RobotModelProps {
   agent: AgentView
   skin: RobotSkin
-  // The office bay of the agent's room: a stable pick from a theme's cast of characters.
+  // The office bay of the agent's room: with the agent's key, a stable pick from a theme's cast.
   rosterIndex: number
   rig: RobotRig
   isReducedMotion: boolean
@@ -135,11 +135,16 @@ export interface RosterEntry {
   role: string
 }
 
+// What casts an agent. Without a key (a caller that knows only the provider) the bay decides.
+export type RosterAgent = Pick<AgentView, 'provider' | 'isSubagent'> &
+  Partial<Pick<AgentView, 'agentKey'>>
+
 export interface ThemeRoster {
   // The cast, with any names the owner changed on this machine.
   entries(storage?: Pick<Storage, 'getItem'> | null): RosterEntry[]
-  // Which entry an agent plays: its provider and its office bay decide.
-  indexFor(agent: Pick<AgentView, 'provider' | 'isSubagent'>, bay: number): number
+  // Which entry an agent plays: its provider picks the faction, its own key and its office
+  // bay the character, so it keeps that character for as long as it lives.
+  indexFor(agent: RosterAgent, bay: number): number
 }
 
 export interface OfficeTheme {

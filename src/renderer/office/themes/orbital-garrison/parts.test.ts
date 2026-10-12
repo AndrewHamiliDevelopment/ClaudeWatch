@@ -44,13 +44,16 @@ describe('Orbital Garrison crew', () => {
     expect(new Set(shapes).size).toBe(GARRISON_CAST.length)
   })
 
-  it('dresses the flight wing and the deck crew in different suit colours', () => {
-    const suits = (section: 'wing' | 'deck') =>
+  it('dresses the wing, the deck and the signals each in one suit colour of their own', () => {
+    const suits = (section: 'wing' | 'deck' | 'signal') =>
       GARRISON_CAST.filter((character) => character.section === section).map(
         (character) => crewParts(character).body[0].color
       )
-    expect(new Set(suits('wing')).size).toBe(1)
-    for (const color of suits('wing')) expect(suits('deck')).not.toContain(color)
+    const colours = (['wing', 'deck', 'signal'] as const).map((section) => {
+      expect(new Set(suits(section)).size, section).toBe(1)
+      return suits(section)[0]
+    })
+    expect(new Set(colours).size).toBe(3)
   })
 })
 

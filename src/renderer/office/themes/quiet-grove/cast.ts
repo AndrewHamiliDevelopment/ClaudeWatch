@@ -1,44 +1,9 @@
-import type { RosterEntry } from '../types'
+import { GROVE_NEWCOMERS } from './cast-newcomers'
+import { HELPER, KEEPER, type GroveCharacter } from './kin'
 import { GROVE } from './palette'
 
-type Kin = 'keeper' | 'helper'
-export type SpiritFeature =
-  | 'straw-hat'
-  | 'leaf-crown'
-  | 'top-knot'
-  | 'pine-hood'
-  | 'bark-cap'
-  | 'reed-tuft'
-  | 'cap-shade'
-  | 'lily-pad'
-  | 'twin-leaves'
-  | 'pebble-crest'
-  | 'lantern-staff'
-  | 'log-pack'
-  | 'scroll'
-  | 'satchel'
-  | 'broom'
-  | 'pail'
-  | 'shovel'
-  | 'scarf-tail'
-  | 'back-lantern'
-
-export interface GroveCharacter extends RosterEntry {
-  kin: Kin
-  isSprout: boolean
-  // Robe for a keeper, hide for a helper, pot for a sprout.
-  body: string
-  trim: string
-  features: readonly SpiritFeature[]
-}
-
-const KEEPER = { kin: 'keeper', isSprout: false, body: GROVE.clay, trim: GROVE.paper } as const
-const HELPER = { kin: 'helper', isSprout: false, body: GROVE.stone, trim: GROVE.pond } as const
-
-// Original characters: Claude sessions are the tall, warm keepers of the clearing; Codex sessions
-// the small, cool helpers from the stream. Five leads per kin, then one sprout each; roster.ts
-// indexes into this order.
-export const GROVE_CAST: readonly GroveCharacter[] = [
+// The founding cast: five keepers, five helpers, then one sprout each.
+const FOUNDERS: readonly GroveCharacter[] = [
   {
     ...KEEPER,
     id: 'tansy-rushlight',
@@ -131,3 +96,6 @@ export const GROVE_CAST: readonly GroveCharacter[] = [
     features: []
   }
 ]
+
+// The order local renames are stored in: never reorder, only append.
+export const GROVE_CAST: readonly GroveCharacter[] = [...FOUNDERS, ...GROVE_NEWCOMERS]

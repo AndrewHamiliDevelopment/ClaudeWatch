@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { characterFor as garrisonCharacterFor } from './orbital-garrison/roster'
+import { GARRISON_CAST } from './orbital-garrison/cast'
+import { orbitalGarrisonRoster } from './orbital-garrison/roster'
 import { GROVE_CAST } from './quiet-grove/cast'
 import { quietGroveRoster } from './quiet-grove/roster'
 import {
@@ -72,10 +73,12 @@ describe('theme registry', () => {
 
 describe('theme characters', () => {
   const agents = [
-    { provider: 'claude', isSubagent: false },
-    { provider: 'codex', isSubagent: false },
-    { provider: 'claude', isSubagent: true },
-    { provider: 'codex', isSubagent: true }
+    { provider: 'claude', isSubagent: false, agentKey: 'claude:a' },
+    { provider: 'codex', isSubagent: false, agentKey: 'codex:b' },
+    { provider: 'opencode', isSubagent: false, agentKey: 'opencode:c' },
+    { provider: 'claude', isSubagent: true, agentKey: 'claude:a#1' },
+    { provider: 'codex', isSubagent: true },
+    { provider: 'opencode', isSubagent: true, agentKey: 'opencode:c#1' }
   ] as const
   const bays = [0, 1, 4, 5, 12]
 
@@ -86,7 +89,7 @@ describe('theme characters', () => {
           COURT_CAST[violetCourtRoster.indexFor(agent, bay)].id
         )
         expect(themeCharacter('orbital-garrison', agent, bay)?.id).toBe(
-          garrisonCharacterFor(agent, bay).id
+          GARRISON_CAST[orbitalGarrisonRoster.indexFor(agent, bay)].id
         )
         expect(themeCharacter('quiet-grove', agent, bay)?.id).toBe(
           GROVE_CAST[quietGroveRoster.indexFor(agent, bay)].id

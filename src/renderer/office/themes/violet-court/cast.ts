@@ -1,44 +1,9 @@
-import type { RosterEntry } from '../types'
+import { COURT_NEWCOMERS } from './cast-newcomers'
+import { CORPS, ORDER, type CourtCharacter } from './faction'
 import { COURT } from './palette'
 
-type Faction = 'order' | 'corps'
-export type PilotFeature =
-  | 'mask'
-  | 'high-collar'
-  | 'cloak'
-  | 'cape'
-  | 'blades'
-  | 'banner'
-  | 'pack'
-  | 'epaulettes'
-  | 'long-hair'
-  | 'ponytail'
-  | 'cap'
-  | 'helmet'
-  | 'goggles'
-  | 'tablet'
-
-export interface CourtCharacter extends RosterEntry {
-  faction: Faction
-  isSquad: boolean
-  jacket: string
-  trousers: string
-  trim: string
-  hair: string
-  features: readonly PilotFeature[]
-}
-
-const ORDER = { faction: 'order', isSquad: false, trousers: COURT.ink, trim: COURT.violet } as const
-const CORPS = {
-  faction: 'corps',
-  isSquad: false,
-  trousers: COURT.marble,
-  trim: COURT.gold
-} as const
-
-// Original characters: Claude sessions are the Order (dark), Codex sessions the Lance Corps (pale).
-// Five leads per faction, then one squad member each; roster.ts indexes into this order.
-export const COURT_CAST: readonly CourtCharacter[] = [
+// The founding cast: five of the Order, five of the Lance Corps, then one squad member each.
+const FOUNDERS: readonly CourtCharacter[] = [
   {
     ...ORDER,
     id: 'aurel-vane',
@@ -156,3 +121,6 @@ export const COURT_CAST: readonly CourtCharacter[] = [
     features: ['helmet']
   }
 ]
+
+// The order local renames are stored in: never reorder, only append.
+export const COURT_CAST: readonly CourtCharacter[] = [...FOUNDERS, ...COURT_NEWCOMERS]

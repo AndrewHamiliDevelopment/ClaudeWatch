@@ -1,7 +1,7 @@
 import type { Vector } from '../primitives'
-import type { CourtCharacter, PilotFeature } from './cast'
+import type { CourtCharacter, PilotFeature } from './faction'
 import { COURT } from './palette'
-import { box, turned, type PartSpec } from '../parts'
+import { box, cone, cylinder, lit, sphere, turned, type PartSpec } from '../parts'
 
 type PilotJoint = 'base' | 'legs' | 'body' | 'leftArm' | 'rightArm' | 'head' | 'gear'
 type PilotParts = Record<PilotJoint, PartSpec[]>
@@ -55,6 +55,74 @@ const FEATURE_PARTS: Record<PilotFeature, (who: CourtCharacter) => Partial<Pilot
   goggles: () => ({ head: [box([0, 0.14, 0.11], [0.25, 0.05, 0.04], COURT.gold)] }),
   tablet: () => ({
     leftArm: [{ ...box([0, -0.3, 0.07], [0.13, 0.17, 0.015], COURT.lumen), glow: true }]
+  }),
+  'wide-hat': ({ jacket, trim }) => ({
+    head: [
+      cylinder([0, 0.2, -0.02], [0.46, 0.025, 0.46], jacket),
+      cylinder([0, 0.26, -0.02], [0.25, 0.11, 0.25], jacket),
+      cylinder([0, 0.225, -0.02], [0.26, 0.03, 0.26], trim)
+    ]
+  }),
+  // Lilac on every faction: it has to stand out against a helmet in the wearer's own trim.
+  plume: () => ({
+    head: [turned(cone([0.09, 0.29, -0.06], [0.08, 0.2, 0.08], COURT.lumen), [0, 0, -0.3])]
+  }),
+  // Stops short of the face, so the eye band still shows.
+  hood: ({ jacket }) => ({
+    head: [
+      box([0, 0.09, -0.04], [0.32, 0.3, 0.26], jacket),
+      cone([0, 0.3, -0.07], [0.24, 0.14, 0.22], jacket)
+    ]
+  }),
+  beret: ({ trim }) => ({
+    head: [
+      sphere([0.04, 0.2, -0.01], [0.36, 0.1, 0.33], trim),
+      cylinder([0.04, 0.26, -0.01], [0.03, 0.04, 0.03], trim)
+    ]
+  }),
+  bun: ({ hair }) => ({ head: [sphere([0, 0.25, -0.07], [0.14, 0.14, 0.14], hair)] }),
+  horn: () => ({
+    body: [
+      turned(cylinder([0.06, 0.62, BACK], [0.045, 0.6, 0.045], COURT.gold), [0, 0, -0.7]),
+      turned(cylinder([0.27, 0.87, BACK], [0.15, 0.1, 0.15], COURT.gold), [0, 0, -0.7])
+    ]
+  }),
+  'scroll-case': () => ({
+    body: [
+      turned(cylinder([0, 0.58, BACK - 0.02], [0.1, 0.6, 0.1], COURT.marble), [0, 0, 1.2]),
+      turned(box([0, 0.52, 0.097], [0.04, 0.36, 0.015], COURT.gold), [0, 0, 0.75])
+    ]
+  }),
+  tabard: ({ trim }) => ({
+    body: [
+      box([0, 0.47, 0.107], [0.2, 0.34, 0.015], trim),
+      box([0, 0.3, -0.1], [0.34, 0.3, 0.03], trim),
+      turned(box([0, 0.5, 0.117], [0.07, 0.07, 0.01], COURT.gold), [0, 0, Math.PI / 4])
+    ]
+  }),
+  // Slung on the back and wider than the torso, so its rim frames the pilot from the front.
+  shield: () => ({
+    body: [
+      turned(cylinder([0, 0.52, -0.16], [0.52, 0.04, 0.52], COURT.marble), [Math.PI / 2, 0, 0])
+    ]
+  }),
+  lantern: () => ({
+    leftArm: [
+      lit(box([0, -0.42, 0.03], [0.09, 0.12, 0.09], COURT.lumen)),
+      box([0, -0.35, 0.03], [0.11, 0.02, 0.11], COURT.gold)
+    ]
+  }),
+  staff: () => ({
+    body: [
+      cylinder([-0.3, 0.6, BACK], [0.03, 1.2, 0.03], COURT.gold),
+      lit(turned(box([-0.3, 1.24, BACK], [0.1, 0.1, 0.03], COURT.lumen), [0, 0, Math.PI / 4]))
+    ]
+  }),
+  satchel: () => ({
+    body: [
+      box([0.19, 0.34, 0.02], [0.1, 0.16, 0.19], COURT.slate),
+      turned(box([0, 0.52, 0.097], [0.04, 0.4, 0.015], COURT.slate), [0, 0, 0.75])
+    ]
   })
 }
 

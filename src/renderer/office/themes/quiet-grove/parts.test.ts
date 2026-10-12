@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { makeGeometry } from '../geometry-audit.test-utils'
 import { UNIT_SHAPES, type UnitShape } from '../unit-parts'
 import type { PartSpec } from '../parts'
-import { GROVE_CAST, type GroveCharacter } from './cast'
+import { GROVE_CAST } from './cast'
+import type { GroveCharacter } from './kin'
 import { GROVE } from './palette'
 import { spiritBuild } from './spirit-parts'
 
@@ -55,12 +56,22 @@ describe('Quiet Grove figures', () => {
     expect(new Set(shapes).size).toBe(GROVE_CAST.length)
   })
 
-  it('keeps the keepers warm and the helpers cool, with no body colour in common', () => {
+  it('keeps keepers warm, helpers cool and wanderers green, with no body colour shared', () => {
     const bodies = (kin: GroveCharacter['kin']) =>
       GROVE_CAST.filter((character) => character.kin === kin && !character.isSprout).map(
         (character) => spiritBuild(character).joints.body[0].color
       )
     for (const color of bodies('keeper')) expect(bodies('helper')).not.toContain(color)
+    for (const color of bodies('wanderer')) {
+      expect(bodies('keeper')).not.toContain(color)
+      expect(bodies('helper')).not.toContain(color)
+    }
+  })
+
+  it('stands a wanderer above its own seedling', () => {
+    expect(Math.min(...heights('wanderer', false))).toBeGreaterThan(
+      Math.max(...heights('wanderer', true))
+    )
   })
 
   it('stands a keeper taller than a helper, and both taller than a sprout', () => {
