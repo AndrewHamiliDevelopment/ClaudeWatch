@@ -32,7 +32,7 @@ Per-item tier: LW-1 T2 (fix, sim logic, risk 1) · LW-2 T1 (fix, risk 1) · LW-3
 - [ ] Phase 3 — Surroundings engine: themed building lots and props around every company, drawn by that company's theme
 - [ ] Phase 4 — Lounge: each company has an entertainment zone; an agent whose turn is done walks there and walks back when work resumes
 - [ ] Phase 5 — Five themes filled in: buildings, props, lounge and ambient life for Neo Edo Steam, Brass Workshop, Violet Court, Orbital Garrison, Quiet Grove
-- [ ] Phase 6 — Themes you can see and set: one place that names every office's theme and sets it for everything, one company or one project
+- [x] Phase 6 — Themes you can see and set: one place that names every office's theme and sets it for everything, one company or one project
 - [ ] Phase 7 — Close: gates, review, cleanup, install, the two screenshots re-taken, demo re-recorded, pushed to PR #3
 
 ## How it fits
@@ -177,4 +177,5 @@ Total **14h with Claude | 57h without** (about 4x): Phase 1 2|8, Phase 2 1|3, Ph
 
 ## Deviations
 
-None yet.
+- Phase 6 also changed `src/renderer/office/hud/ThemesList.tsx` (new), `src/renderer/office/hud/themes-list.test.tsx` (new), `src/renderer/office/hud/hud-test-harness.tsx`, `src/renderer/office/hud/FocusNotice.tsx`, `src/renderer/office/logic/office-themes.test.ts`, `src/renderer/office/__tests__/bottom-bar.test.tsx`, `src/renderer/office/__tests__/theme-selection.test.tsx` and `src/renderer/office/__tests__/theme-office-app.test.tsx`: the three older tests asserted the bar's cycling button, which is gone.
+- Phase 6 left `src/renderer/office/logic/office-reducer.ts` alone: an office stays focused once flown to, and the themes list says what the T key will change.
