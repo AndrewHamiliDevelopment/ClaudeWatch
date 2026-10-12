@@ -57,9 +57,18 @@ vi.mock('../player/PlayerLayer', () => ({
     <i data-layer="player" data-solids={solids.length} data-extent={JSON.stringify(extent)} />
   )
 }))
-vi.mock('../citizens/CitizenLayer', () => ({
-  CitizenLayer: ({ player, solids }: { player: unknown; solids: readonly unknown[] }) => (
-    <i data-layer="citizens" data-follows-player={Boolean(player)} data-solids={solids.length} />
+vi.mock('../citizens/MoverLayer', () => ({
+  MoverLayer: (props: {
+    player: unknown
+    plan: { lots: readonly unknown[] }
+    hasVehicles: boolean
+  }) => (
+    <i
+      data-layer="citizens"
+      data-follows-player={Boolean(props.player)}
+      data-solids={props.plan.lots.length}
+      data-vehicles={props.hasVehicles}
+    />
   )
 }))
 
@@ -128,8 +137,9 @@ it('takes the buildings, the roads, the tower and the ambient life out when the 
   expect(JSON.parse(layer('camera')?.dataset.scene ?? '{}')).toMatchObject(sceneExtent(floor, []))
   expect(JSON.parse(layer('player')?.dataset.extent ?? '{}')).toEqual(sceneExtent(floor, []))
   expect(layer('player')?.dataset.solids).toBe('0')
-  expect(layer('citizens')?.dataset.solids).toBe('0')
-  expect(layers()).toEqual(expect.arrayContaining([...ALWAYS, 'citizens', 'player']))
+  // Citizens live in the town: with no town there are no homes and no streets, so none are out.
+  expect(layers()).not.toContain('citizens')
+  expect(layers()).toEqual(expect.arrayContaining([...ALWAYS, 'player']))
 })
 
 it('frames the whole town, to its last road, while the town is on', () => {
@@ -138,11 +148,11 @@ it('frames the whole town, to its last road, while the town is on', () => {
   expect(JSON.parse(layer('player')?.dataset.extent ?? '{}')).toEqual(plan.extent)
 })
 
-it('closes the town’s lots and the belt’s plots to the player and the citizens', () => {
+it('closes the town’s lots and the belt’s plots to the player, and hands the citizens the plan', () => {
   const { layer } = mount()
   const solidCount = String(plan.lots.length + green.length)
   expect(layer('player')?.dataset.solids).toBe(solidCount)
-  expect(layer('citizens')?.dataset.solids).toBe(solidCount)
+  expect(layer('citizens')?.dataset.solids).toBe(String(plan.lots.length))
 })
 
 it('mounts no ambient mover when ambient motion is off, and keeps the buildings', () => {

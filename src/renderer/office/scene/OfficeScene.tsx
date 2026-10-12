@@ -21,7 +21,7 @@ import { RobotCrew } from './Robot'
 import { BatchedScene } from './BatchedScene'
 import { TowerView } from './WorldView'
 import { ZonePickers } from './ZonePickers'
-import { CitizenLayer } from '../citizens/CitizenLayer'
+import { MoverLayer } from '../citizens/MoverLayer'
 import { PlayerLayer } from '../player/PlayerLayer'
 import { sendPlayer, type Player } from '../player/walking'
 import { useQualitySettings } from '../quality-store'
@@ -197,15 +197,18 @@ function OfficeScene(props: OfficeSceneProps) {
           onMiss={() => props.onSelectAgent(null)}
           onWalk={walkTo}
         />
-        {settings.citizens && (
-          <CitizenLayer
+        {settings.citizens && settings.town && (
+          <MoverLayer
             floor={floor}
-            solids={solids}
+            plan={town.plan}
+            owners={town.owners}
             floorTheme={theme}
             zoneGroups={zoneGroups}
             player={player}
             isReducedMotion={isReducedMotion}
-            share={quality.citizenShare}
+            // The layer reads the detail level itself: a share here would cut the count twice.
+            citizenShare={1}
+            hasVehicles={settings.vehicles}
           />
         )}
         {player && (

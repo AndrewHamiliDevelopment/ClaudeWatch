@@ -29,12 +29,14 @@ const FEATURES: readonly Feature[] = [
   {
     key: 'citizens',
     label: 'Citizens',
-    description: 'People walking the streets. Off removes them and the work of moving them.'
+    description:
+      'Townsfolk who live in the town and walk its streets; they need the town on. Off removes them and the work of moving them.'
   },
   {
     key: 'vehicles',
     label: 'Vehicles',
-    description: 'Traffic on the streets. Vehicles arrive with the zoned town; off keeps them out.'
+    description:
+      'A tram, a freight cart and a runabout in each theme’s form; they need the town and citizens on. Off keeps them out.'
   },
   {
     key: 'ambient',

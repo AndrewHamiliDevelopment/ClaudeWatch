@@ -46,7 +46,7 @@ it('says in a line what each feature is', () => {
     const description = within(dialog).getByText(name).nextElementSibling
     expect(description?.textContent?.length).toBeGreaterThan(20)
   }
-  expect(within(dialog).getByText(/arrive with the zoned town/)).toBeInTheDocument()
+  expect(within(dialog).getByText(/tram, a freight cart and a runabout/)).toBeInTheDocument()
 })
 
 it('switches a feature off at once and remembers it', () => {
