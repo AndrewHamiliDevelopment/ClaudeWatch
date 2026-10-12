@@ -100,15 +100,25 @@ export function loungeDepth(seats: number): number {
   return 3 + Math.ceil(seats / LOUNGE_SEATS_PER_ROW) * 2
 }
 
-export function lounge(companyId: string, left: number, top: number, seats: number): LoungeLayout {
+// `growsNorth` is for a company north of the street: its rows start at the street side, the
+// south edge, so a row added later leaves the earlier ones where they are.
+export function lounge(
+  companyId: string,
+  left: number,
+  top: number,
+  seats: number,
+  growsNorth: boolean
+): LoungeLayout {
+  const depth = loungeDepth(seats)
+  const rowZ = (row: number): number => (growsNorth ? top + depth - 3 - row * 2 : top + 2 + row * 2)
   return {
-    ...bounds(left, top, LOUNGE_WIDTH, loungeDepth(seats)),
+    ...bounds(left, top, LOUNGE_WIDTH, depth),
     id: `${companyId}:lounge`,
     // Seats face +z like desk seats, in rows of four.
     slots: Array.from({ length: seats }, (_, index) => ({
       id: `lounge_seat_${index}`,
       x: left + 1.125 + (index % LOUNGE_SEATS_PER_ROW) * 1.25,
-      z: top + 2 + Math.floor(index / LOUNGE_SEATS_PER_ROW) * 2,
+      z: rowZ(Math.floor(index / LOUNGE_SEATS_PER_ROW)),
       heading: 0
     }))
   }
@@ -120,22 +130,30 @@ export function room(
   sessionKey: string | null,
   label: string,
   worktree: string | null,
-  seats = 0,
-  seatsPerRow = 1
+  placement: { growsNorth: boolean; seats?: number; seatsPerRow?: number }
 ): RoomLayout {
+  const { growsNorth, seats = 0, seatsPerRow = 1 } = placement
   const left = project.x - project.width / 2
   const top = project.z - project.depth / 2
+  const bottom = top + project.depth
   const isTeam = sessionKey === null
   const rows = project.capacity / 4
   const team = teamSize(seats, seatsPerRow)
+  // North of the street a project stacks from its south edge: desk rows, then the team area
+  // past them. Either way a row or a seat added later leaves the earlier ones in place.
+  const deskRowsDepth = rows * DESK_ROW_PITCH
+  const teamTop = growsNorth ? bottom - 1 - deskRowsDepth - team.depth : top + 3 + deskRowsDepth
+  const deskRow = Math.floor(bay / 4) * DESK_ROW_PITCH
   const geometry = isTeam
-    ? bounds(left + 1, top + 3 + rows * DESK_ROW_PITCH, team.width, team.depth)
+    ? bounds(left + 1, teamTop, team.width, team.depth)
     : bounds(
         left + 1 + (bay % 4) * DESK_PITCH,
-        top + 3 + Math.floor(bay / 4) * DESK_ROW_PITCH,
+        growsNorth ? bottom - 5 - deskRow : top + 3 + deskRow,
         4,
         4
       )
+  const seatRowZ = (row: number): number =>
+    growsNorth ? teamTop + team.depth - 2 - row * SEAT_PITCH : teamTop + 2 + row * SEAT_PITCH
   // Seats face +z, toward the default camera; the scene draws each desk 0.62 m in front of
   // its seat, so every seat keeps that strip clear of walls and of the other seats.
   const slot = (id: string, x: number, z: number): Slot => ({ id, x, z, heading: 0 })
@@ -144,7 +162,7 @@ export function room(
         slot(
           `team_seat_${index}`,
           left + 3 + (index % seatsPerRow) * SEAT_PITCH,
-          geometry.door.z + 2 + Math.floor(index / seatsPerRow) * SEAT_PITCH
+          seatRowZ(Math.floor(index / seatsPerRow))
         )
       )
     : [

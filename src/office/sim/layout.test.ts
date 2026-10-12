@@ -175,6 +175,41 @@ describe("a floor shaped like the owner's: one company of four projects and two 
   })
 })
 
+it('keeps a company north of the street where it stands when one of its projects deepens', () => {
+  // The wide company takes the south side, so `north` stands across the street from it.
+  const south = sessionsOf([['wide', '1', 4]]).concat(sessionsOf([['wide', '2', 4]]))
+  const lead = { ...inCompany('north', '1', 'lead'), subagents: workers(3) }
+  const crew = [lead, ...sessionsOf([['north', '1', 3]]), inCompany('north', '2')]
+  const before = buildLayout([...south, ...crew], undefined, 0)
+  const company = before.floors[0].zones.find((zone) => zone.companyKey === 'c_north')!
+  expect(company.z).toBeLessThan(0)
+
+  const roomOf = (map: LayoutMap, key: string) =>
+    map.floors[0].rooms.find((room) => room.sessionKey === key)
+  const teamSeat = (map: LayoutMap) =>
+    map.floors[0].rooms
+      .find((room) => room.kind === 'team' && room.companyKey === 'c_north')!
+      .slots.find((slot) => slot.id === 'team_seat_0')
+  const expectHeldInPlace = (after: LayoutMap) => {
+    const deeper = after.floors[0].zones.find((zone) => zone.companyKey === 'c_north')!
+    expect(deeper.depth).toBeGreaterThan(company.depth)
+    // The street side stays put; the company grows away from it.
+    expect(deeper.z + deeper.depth / 2).toBe(company.z + company.depth / 2)
+    for (const live of crew) expect(roomOf(after, live.key)).toEqual(roomOf(before, live.key))
+    expect(deeper.lounge!.slots.slice(0, 4)).toEqual(company.lounge!.slots.slice(0, 4))
+    expectClearLanes(after)
+  }
+
+  // Nine more subagents: ten of them overflow, which takes a second row of team seats.
+  const busier = [{ ...lead, subagents: workers(12) }, ...crew.slice(1)]
+  const withTeamRow = buildLayout([...south, ...busier], before, 1)
+  expectHeldInPlace(withTeamRow)
+  expect(teamSeat(withTeamRow)).toEqual(teamSeat(before))
+
+  // A fifth session adds a desk row; as on the south side, only the team area moves past it.
+  expectHeldInPlace(buildLayout([...south, ...crew, inCompany('north', '1', 'fifth')], before, 1))
+})
+
 it('adds a desk column for each session up to four, then a second row', () => {
   const project = (count: number) => {
     const crew = Array.from({ length: count }, (_, seat) => session(`s${seat}`))

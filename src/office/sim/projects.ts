@@ -121,22 +121,42 @@ export function settleCompany(draft: CompanyDraft): RoomLayout[] {
   const left = zone.x - zone.width / 2
   const top = zone.z - zone.depth / 2
   zone.door = { x: left + 1.5, z: top }
+  // A company north of the street is held by its south edge, so its shelves are measured from
+  // there: when it deepens, what already stands in it stays where it is.
+  const growsNorth = zone.z < 0
+  const topOf = (corner: { z: number }, depth: number): number =>
+    top + (growsNorth ? zone.depth - corner.z - depth : corner.z)
   const loungeCorner = grounds.corners[zone.children.length]
-  zone.lounge = lounge(zone.id, left + loungeCorner.x, top + loungeCorner.z, loungeSeats)
+  zone.lounge = lounge(
+    zone.id,
+    left + loungeCorner.x,
+    topOf(loungeCorner, loungeDepth(loungeSeats)),
+    loungeSeats,
+    growsNorth
+  )
   for (const project of zone.children) {
     const corner = grounds.corners[project.index]
-    Object.assign(project, bounds(left + corner.x, top + corner.z, project.width, project.depth))
+    Object.assign(
+      project,
+      bounds(left + corner.x, topOf(corner, project.depth), project.width, project.depth)
+    )
   }
   zone.children.sort((a, b) => a.id.localeCompare(b.id))
   return zone.children.flatMap((project) => {
     const crew = members.filter((s) => s.projectKey === project.projectKey)
     const offices = crew.map((s) =>
-      room(project, reservations[s.key].bay, s.key, s.name, s.worktree)
+      room(project, reservations[s.key].bay, s.key, s.name, s.worktree, { growsNorth })
     )
     const seats = teamSeats(crew)
-    const { teamSeatsPerRow } = planProject(crew.length, seats)
+    const { teamSeatsPerRow: seatsPerRow } = planProject(crew.length, seats)
     const team = seats
-      ? [room(project, -1, null, `${project.label} team`, null, seats, teamSeatsPerRow)]
+      ? [
+          room(project, -1, null, `${project.label} team`, null, {
+            growsNorth,
+            seats,
+            seatsPerRow
+          })
+        ]
       : []
     const leaves = [...offices, ...team]
     project.children = leaves
