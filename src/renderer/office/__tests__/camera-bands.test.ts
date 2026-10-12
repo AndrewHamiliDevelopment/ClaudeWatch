@@ -81,7 +81,7 @@ it('fits the district, hangar and tall tower inside a small building viewport', 
   expect(framing.zoom * framing.projectedWidth).toBeLessThan(800)
   expect(framing.zoom * framing.projectedHeight).toBeLessThan(600)
   expect(framing.target[1]).toBeGreaterThan(0)
-  expect(framing.target[2]).toBeLessThan(0)
+  expect(framing.target[2]).toBe(0)
 })
 
 it('aims the building view at the scene where it lies, not at the gate', () => {

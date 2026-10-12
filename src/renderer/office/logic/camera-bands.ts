@@ -52,7 +52,8 @@ export function buildingFraming(
   const projectedWidth = (width + depth) / Math.SQRT2
   const projectedHeight = projectedWidth * Math.cos(ISO_POLAR) + height * Math.sin(ISO_POLAR)
   return {
-    target: [x, height / 2, z - 6] as [number, number, number],
+    // The scene's own centre: its extent already includes the deeper apron to the north.
+    target: [x, height / 2, z] as [number, number, number],
     projectedWidth,
     projectedHeight,
     zoom: Math.max(

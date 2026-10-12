@@ -118,10 +118,11 @@ export function settleCompany(draft: CompanyDraft): RoomLayout[] {
   const { zone, members, grounds, loungeSeats, reservations } = draft
   const left = zone.x - zone.width / 2
   const top = zone.z - zone.depth / 2
-  zone.door = { x: left + 1.5, z: top }
   // A company north of the street is held by its south edge, so its shelves are measured from
   // there: when it deepens, what already stands in it stays where it is.
   const growsNorth = zone.z < 0
+  // The gateway is on the street side, so nobody walks round the company to get in.
+  zone.door = { x: left + 1.5, z: growsNorth ? top + zone.depth : top }
   const topOf = (corner: { z: number }, depth: number): number =>
     top + (growsNorth ? zone.depth - corner.z - depth : corner.z)
   const loungeCorner = grounds.corners[zone.children.length]

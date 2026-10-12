@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildLayout, type LayoutMap } from './layout'
 import { session } from './fixtures'
-import { officeGrid } from './navigation'
+import { officeGrid, PathCache } from './navigation'
 import { findPath } from './path'
 import { placements } from './placements'
 
@@ -173,6 +173,23 @@ describe("a floor shaped like the owner's: one company of four projects and two 
     }
     expectClearLanes(grown)
   })
+})
+
+it('opens every company onto the street, whichever side of it the company stands on', () => {
+  const south = sessionsOf([['wide', '1', 4]]).concat(sessionsOf([['wide', '2', 4]]))
+  const layout = buildLayout([...south, inCompany('north', '1')], undefined, 0)
+  const [north, wide] = ['c_north', 'c_wide'].map(
+    (key) => layout.floors[0].zones.find((zone) => zone.companyKey === key)!
+  )
+  expect(north.z).toBeLessThan(0)
+  expect(wide.z).toBeGreaterThan(0)
+  // The street runs along z = 0: the gateway is on the edge nearest to it.
+  expect(north.door.z).toBe(north.z + north.depth / 2)
+  expect(wide.door.z).toBe(wide.z - wide.depth / 2)
+  const paths = new PathCache(layout.floors[0])
+  const seat = layout.floors[0].rooms.find((room) => room.companyKey === 'c_north')!.slots[1]
+  const walk = paths.via(layout.floors[0].elevator, north.door, seat)
+  expect(walk.length).toBeGreaterThan(0)
 })
 
 it('keeps a company north of the street where it stands when one of its projects deepens', () => {
