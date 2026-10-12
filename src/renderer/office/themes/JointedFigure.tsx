@@ -19,6 +19,7 @@ interface JointedFigureProps {
   ground?: ReactNode
   // Held in the right hand, so it swings with that arm.
   inRightHand?: ReactNode
+  sensor?: ReactNode
 }
 
 // A character built from unit parts and hung on the shared rig: a theme supplies the parts.
@@ -29,7 +30,8 @@ export function JointedFigure({
   eye,
   effects,
   ground,
-  inRightHand
+  inRightHand,
+  sensor
 }: JointedFigureProps) {
   return (
     <>
@@ -54,6 +56,7 @@ export function JointedFigure({
         </group>
         <group ref={rig.head} position={pivot.head}>
           <Parts parts={joints.head} />
+          {sensor}
           {/* Sized geometry, not a unit part: the rig resets this mesh's scale to blink. */}
           <mesh ref={rig.eye} position={eye.at}>
             <boxGeometry args={eye.size} />
