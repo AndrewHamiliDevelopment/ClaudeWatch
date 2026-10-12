@@ -8,6 +8,8 @@ export interface Placement {
   slot: Slot
   floorId: string
   isSubagent: boolean
+  // Its work is over for now, so it may go and sit in the lounge.
+  isFinished: boolean
 }
 
 // Where an agent already sits, so a finishing sibling never re-seats the ones still working.
@@ -34,7 +36,8 @@ export function placements(
       room: main,
       slot: main.slots.find((s) => s.id === 'desk_main')!,
       floorId: floor.id,
-      isSubagent: false
+      isSubagent: false,
+      isFinished: session.attention === 'done'
     })
     if (!session.subagents.length) continue
     const team = floor.rooms.find(
@@ -90,7 +93,10 @@ export function placements(
       room,
       slot: room.slots.find((s) => s.id === slotId)!,
       floorId: floor.id,
-      isSubagent: true
+      isSubagent: true,
+      // A guest has no attention of its own: only a teammate gone quiet for a minute reports
+      // idle, and a subagent is listed as thinking until it drops off the list.
+      isFinished: session.activity === 'idle'
     })
   }
   return result

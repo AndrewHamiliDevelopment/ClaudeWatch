@@ -223,6 +223,25 @@ it('keeps a team-area sitter in place when a new office is built over its old se
   const after = sim.step(0).find((a) => a.agentKey === 'a#s3')!
   expect({ x: after.x, z: after.z }).toEqual({ x: before.x, z: before.z })
 })
+it('walks to its desk from outside a floor that shrank, not from the gate', () => {
+  const sim = new World({ now: () => 0 })
+  const neighbours = Array.from({ length: 4 }, (_, index) => ({
+    ...session(`n${index}`, `p_n${index}`),
+    companyKey: `c_${index}`,
+    companyLabel: `Neighbour ${index}`
+  }))
+  sim.apply({
+    type: 'hello',
+    v: 1,
+    snapshot: { rev: 1, generatedAtMs: 0, sessions: [session('a'), ...neighbours], sources: [] }
+  })
+  const before = sim.step(0).find((a) => a.agentKey === 'a')!
+  const gone = neighbours.map((neighbour) => neighbour.key)
+  sim.apply({ type: 'patch', v: 1, seq: 2, upserts: [], removed: gone })
+  const after = sim.step(0).find((a) => a.agentKey === 'a')!
+  expect(Math.abs(before.x)).toBeGreaterThan(sim.layout().floors[0].width / 2)
+  expect({ x: after.x, z: after.z }).toEqual({ x: before.x, z: before.z })
+})
 it('brings a new arrival to rest exactly on its seat', () => {
   const sim = world()
   for (let i = 0; i < 2000; i++) sim.step(100)

@@ -4,6 +4,7 @@ import type {
   AgentView,
   SessionRef
 } from '../../shared/office/types'
+import type { Slot } from './layout'
 import type { Point } from './path'
 
 type AgentState = 'arriving' | 'working' | 'needs_you' | 'done' | 'leaving'
@@ -15,10 +16,16 @@ export interface AgentRecord {
   queued: AgentActivity | null
   slotHeading: number
   removed: boolean
+  // How long its work has been over; null while it works.
+  finishedForMs: number | null
+  loungeSeatId: string | null
 }
 type Destination = Pick<AgentView, 'floorId' | 'roomId' | 'slotId' | 'x' | 'z' | 'heading'>
 const urgent = (attention: AgentAttention) =>
   ['permission', 'question', 'error', 'limited'].includes(attention)
+
+// How long a finished agent stays at its desk before it walks to its company's lounge.
+export const LOUNGE_DELAY_MS = 20_000
 
 export function createAgent(
   session: SessionRef,
@@ -43,8 +50,46 @@ export function createAgent(
     dwellMs: 0,
     queued: null,
     slotHeading: destination.heading,
-    removed: false
+    removed: false,
+    finishedForMs: null,
+    loungeSeatId: null
   }
+}
+
+export function setFinished(agent: AgentRecord, isFinished: boolean): AgentRecord {
+  return { ...agent, finishedForMs: isFinished ? (agent.finishedForMs ?? 0) : null }
+}
+
+export function wantsLounge(agent: AgentRecord): boolean {
+  return (
+    agent.state !== 'leaving' &&
+    agent.view.place === undefined &&
+    agent.finishedForMs !== null &&
+    agent.finishedForMs >= LOUNGE_DELAY_MS
+  )
+}
+
+function walk(agent: AgentRecord, heading: number, path: Point[]): AgentRecord {
+  return { ...agent, state: 'arriving', slotHeading: heading, path: path.map((p) => ({ ...p })) }
+}
+
+// The view's room and slot stay those of its desk: only `place` says it is away.
+export function goToLounge(
+  agent: AgentRecord,
+  seat: Pick<Slot, 'id' | 'heading'>,
+  path: Point[]
+): AgentRecord {
+  const walking = walk(agent, seat.heading, path)
+  return { ...walking, view: { ...agent.view, place: 'lounge' }, loungeSeatId: seat.id }
+}
+
+function withoutPlace(agent: AgentRecord): AgentRecord {
+  const { place: _place, ...view } = agent.view
+  return { ...agent, view, loungeSeatId: null }
+}
+
+export function returnToDesk(agent: AgentRecord, heading: number, path: Point[]): AgentRecord {
+  return walk(withoutPlace(agent), heading, path)
 }
 
 export function updateAgent(
@@ -80,7 +125,12 @@ export function updateAgent(
 }
 
 export function leaveAgent(agent: AgentRecord, path: Point[]): AgentRecord {
-  return { ...agent, state: 'leaving', path: path.map((p) => ({ ...p })) }
+  return {
+    ...withoutPlace(agent),
+    state: 'leaving',
+    path: path.map((p) => ({ ...p })),
+    finishedForMs: null
+  }
 }
 
 export function tickAgent(agent: AgentRecord, dtMs: number): AgentRecord {
@@ -88,7 +138,8 @@ export function tickAgent(agent: AgentRecord, dtMs: number): AgentRecord {
     ...agent,
     view: { ...agent.view },
     path: agent.path.map((p) => ({ ...p })),
-    dwellMs: agent.dwellMs + dtMs
+    dwellMs: agent.dwellMs + dtMs,
+    finishedForMs: agent.finishedForMs === null ? null : agent.finishedForMs + dtMs
   }
   if (next.state === 'arriving' || next.state === 'leaving') {
     let distance = (dtMs / 1000) * 1.4
