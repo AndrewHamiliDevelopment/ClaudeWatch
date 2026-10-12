@@ -49,9 +49,9 @@ Per-item tier: LW-1 T2 (fix, sim logic, risk 1) · LW-2 T1 (fix, risk 1) · LW-3
 - [x] Phase 7 — The Office window can be dragged, and Open Office brings it to the front
 - [x] Phase 8 — A town you walk through: streets between the buildings, and a player the owner walks to any office
 - [x] Phase 9 — OpenCode agents in the Office, beside Claude and Codex
-- [ ] Phase 10 — Citizens roam the town, plainly not workers
-- [ ] Phase 11 — Every agent has its own look, in every theme
-- [ ] Phase 12 — Light on any computer: detail and frame rate fit the machine
+- [x] Phase 10 — Citizens roam the town, plainly not workers
+- [x] Phase 11 — Every agent has its own look, in every theme
+- [x] Phase 12 — Light on any computer: detail and frame rate fit the machine
 - [ ] Phase 13 — Ready for the owner: every test green, installed on this Mac, the two screenshots re-taken
 - [ ] Phase 14 — Close, after the owner approves the changes: gates, review, cleanup, install, the two screenshots re-taken, demo re-recorded, pushed to PR #3
 
@@ -285,6 +285,10 @@ Follow-up commits are pushed to `origin feature/prerelease-batch` (draft PR #3).
 Total **27h with Claude | 120h without** (about 4x): Phase 1 2|8, Phase 2 1|3, Phase 3 2|8, Phase 4 1.5|6, Phase 5 4|20, Phase 6 1.5|6, Phase 7 0.5|2, Phase 8 2.5|12, Phase 9 2|10, Phase 10 2|10, Phase 11 3|16, Phase 12 2|10, Phase 13 1|3, Phase 14 2|6. Phases 1, 2+3 and 6 run together; Phases 4 and 5 run together after them; Phases 10, 11 and 12 run together; Phase 13 ends with the install; Phase 14 waits for the owner's approval.
 
 ## Deviations
+
+- Phase 10: citizens were first built at 0.7 of an agent's height and kept to the streets behind the buildings, where the owner could not see them. They are now drawn at 1.3 (the size agents had), agents at 1.65, and citizens also walk the street through the campus and round the plate's edge (`src/renderer/office/citizens/routes.ts` `campusWalks`, `src/renderer/office/scene/Robot.tsx`, `src/renderer/office/scene/CardProjector.tsx`).
+- Phase 11: Codex built the looks for Neo Edo Steam and Brass Workshop (`src/renderer/office/themes/samurai-parts.ts`, `brass-parts.ts`, `steam-variant.ts`); its sandbox cannot write git's files, so the agent driving it ran every git command.
+- Phase 12 measured, on this Mac with 17 real sessions and the dashboard closed: window in front and nothing walking about 16% of one core against a target of 15% (missed by a point; it was 31 to 38% before), in the background about 3% against 6% (met). Full detail idles at 20 frames a second instead of 30, and a background window at 5. New files: `src/renderer/office/logic/quality.ts`, `src/renderer/office/quality-store.ts`, `src/renderer/office/themes/lot-thinning.ts`. The dashboard's working dot now pulses in steps (`tailwind.config.ts`), which the measurement showed cost about 5% of a core.
 
 - Phase 6 also changed `src/renderer/office/hud/ThemesList.tsx` (new), `src/renderer/office/hud/themes-list.test.tsx` (new), `src/renderer/office/hud/hud-test-harness.tsx`, `src/renderer/office/hud/FocusNotice.tsx`, `src/renderer/office/logic/office-themes.test.ts`, `src/renderer/office/__tests__/bottom-bar.test.tsx`, `src/renderer/office/__tests__/theme-selection.test.tsx` and `src/renderer/office/__tests__/theme-office-app.test.tsx`: the three older tests asserted the bar's cycling button, which is gone.
 - Phases 2 and 3 fit the planes in a new `src/renderer/office/scene/Horizon.tsx` (with `src/renderer/office/scene/horizon.test.tsx`) instead of `src/renderer/office/scene/CameraRig.tsx`, and added `src/renderer/office/scene/surroundings-view.test.tsx`, `src/renderer/office/__tests__/clip-planes.test.ts`, `src/renderer/office/__tests__/camera-bands.test.ts`, `src/renderer/office/themes/scene.test-utils.ts`, `src/renderer/office/logic/room-layout.ts` and `src/renderer/office/themes/layout.ts` (one shared definition each for the wall normals and the tower storey). `src/renderer/office/scene/FloorView.tsx` and `src/renderer/office/themes/types.ts` also carry the lounge part of the theme contract.
