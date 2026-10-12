@@ -182,7 +182,15 @@ it('seats teammates like subagents, under their own names, and keeps their seats
   expect(before.lena).toContain('team_seat')
 })
 
-it('walks to a moved seat from where the agent is, not from the gate', () => {
+const seatOf = (sim: World, agent: { roomId: string; slotId: string }) => {
+  const seat = sim
+    .layout()
+    .floors[0].rooms.find((r) => r.id === agent.roomId)!
+    .slots.find((s) => s.id === agent.slotId)!
+  return { x: seat.x, z: seat.z }
+}
+
+it('moves a seated team-area sitter with its seat when a desk row pushes the team area down', () => {
   const sim = new World({ now: () => 0 })
   const worker = (id: string) => ({ id, type: 'worker', activity: 'reading' as const })
   const main = { ...session('a'), subagents: ['0', '1', '2'].map(worker) }
@@ -202,9 +210,12 @@ it('walks to a moved seat from where the agent is, not from the gate', () => {
   expect(sim.layout().floors[0].rooms.find((r) => r.id === after.roomId)!.z).toBeGreaterThan(
     before.z
   )
-  expect({ x: after.x, z: after.z }).toEqual({ x: before.x, z: before.z })
+  expect(after.slotId).toBe('team_seat_0')
+  // Seated, so it goes with its seat: it is never left standing where the seat used to be.
+  expect({ x: after.x, z: after.z }).toEqual(seatOf(sim, after))
+  expect(after.z).toBeGreaterThan(before.z)
 })
-it('keeps a team-area sitter in place when a new office is built over its old seat', () => {
+it('never leaves a team-area sitter where a new office is built over its old seat', () => {
   const sim = new World({ now: () => 0 })
   const worker = (id: string) => ({ id: `s${id}`, type: 'worker', activity: 'reading' as const })
   const busy = { ...session('a'), subagents: ['0', '1', '2', '3'].map(worker) }
@@ -221,9 +232,10 @@ it('keeps a team-area sitter in place when a new office is built over its old se
   const before = sim.step(0).find((a) => a.agentKey === 'a#s3')!
   sim.apply({ type: 'patch', v: 1, seq: 2, upserts: [session('e')], removed: [] })
   const after = sim.step(0).find((a) => a.agentKey === 'a#s3')!
-  expect({ x: after.x, z: after.z }).toEqual({ x: before.x, z: before.z })
+  expect({ x: after.x, z: after.z }).toEqual(seatOf(sim, after))
+  expect({ x: after.x, z: after.z }).not.toEqual({ x: before.x, z: before.z })
 })
-it('walks to its desk from outside a floor that shrank, not from the gate', () => {
+it('keeps a seated agent at its desk when the floor shrinks and its company slides over', () => {
   const sim = new World({ now: () => 0 })
   const neighbours = Array.from({ length: 4 }, (_, index) => ({
     ...session(`n${index}`, `p_n${index}`),
@@ -240,7 +252,7 @@ it('walks to its desk from outside a floor that shrank, not from the gate', () =
   sim.apply({ type: 'patch', v: 1, seq: 2, upserts: [], removed: gone })
   const after = sim.step(0).find((a) => a.agentKey === 'a')!
   expect(Math.abs(before.x)).toBeGreaterThan(sim.layout().floors[0].width / 2)
-  expect({ x: after.x, z: after.z }).toEqual({ x: before.x, z: before.z })
+  expect({ x: after.x, z: after.z }).toEqual(seatOf(sim, after))
 })
 it('brings a new arrival to rest exactly on its seat', () => {
   const sim = world()

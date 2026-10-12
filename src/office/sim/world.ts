@@ -113,16 +113,24 @@ export class World {
         ?.slots.find((s) => s.id === slot.id)
       if (
         existing &&
+        oldSlot &&
         existing.state !== 'leaving' &&
         existing.view.roomId === room.id &&
-        existing.view.slotId === slot.id &&
-        oldSlot?.x === slot.x &&
-        oldSlot?.z === slot.z
+        existing.view.slotId === slot.id
       ) {
-        const updated = updateAgent(existing, session.activity, session.attention)
-        updated.view.label = session.name
-        this.agents.set(session.key, setFinished(updated, isFinished))
-        continue
+        const hasSeatMoved = oldSlot.x !== slot.x || oldSlot.z !== slot.z
+        const isSeated =
+          existing.path.length === 0 &&
+          existing.view.x === oldSlot.x &&
+          existing.view.z === oldSlot.z
+        if (!hasSeatMoved || isSeated) {
+          const updated = updateAgent(existing, session.activity, session.attention)
+          updated.view.label = session.name
+          // Its office slid along with a neighbour that grew: it goes with its desk, seated.
+          if (hasSeatMoved) Object.assign(updated.view, { x: slot.x, z: slot.z })
+          this.agents.set(session.key, setFinished(updated, isFinished))
+          continue
+        }
       }
       const elevator = this.map.floors.find((f) => f.id === floorId)!.elevator
       const door = room.slots.find((s) => s.id === 'door')!
@@ -134,8 +142,8 @@ export class World {
         z: slot.z,
         heading: slot.heading
       }
-      // A robot already on the floor (seat moved, or it was walking out when its session came
-      // back) walks from where it stands. Sessions already running when the office opens are
+      // A robot already on the floor (given another seat, on its way when its seat moved, or
+      // walking out when its session came back) walks from where it stands. Sessions already running when the office opens are
       // at their desks; only later arrivals walk in from the gate.
       const route = existing ? wayTo(paths, existing.view, slot) : []
       const entrance = message.type === 'hello' ? [] : paths.via(elevator, door, slot)
