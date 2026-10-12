@@ -1,9 +1,10 @@
 import { useSyncExternalStore } from 'react'
 import { isJsonObject } from '../../../shared/json-object'
 import { browserStorage } from '../../office-live/browser-storage'
+import { TOWN_SIZES, type TownSize } from '../town/town-grid'
 
 // Each feature of the living world the owner can switch off. Local to this page's origin.
-export interface OfficeSettings {
+export interface OfficeSwitches {
   town: boolean
   citizens: boolean
   vehicles: boolean
@@ -12,7 +13,11 @@ export interface OfficeSettings {
   player: boolean
 }
 
-export type OfficeSettingKey = keyof OfficeSettings
+export interface OfficeSettings extends OfficeSwitches {
+  townSize: TownSize
+}
+
+export type OfficeSettingKey = keyof OfficeSwitches
 
 export const DEFAULT_OFFICE_SETTINGS: OfficeSettings = {
   town: true,
@@ -20,7 +25,8 @@ export const DEFAULT_OFFICE_SETTINGS: OfficeSettings = {
   vehicles: true,
   ambient: true,
   loungeTrips: true,
-  player: true
+  player: true,
+  townSize: 'village'
 }
 
 export const OFFICE_SETTINGS_STORAGE_KEY = 'claudewatch.office.settings'
@@ -37,8 +43,10 @@ const SETTING_KEYS: readonly OfficeSettingKey[] = [
 const isSettingKey = (key: string): key is OfficeSettingKey =>
   SETTING_KEYS.some((known) => known === key)
 
+const isTownSize = (value: unknown): value is TownSize => TOWN_SIZES.some((size) => size === value)
+
 // Checked by the shape of the defaults: a key that is not one of them is dropped, and a value
-// that is not a boolean leaves that key on its default.
+// not of its default's kind (a boolean, or one of the sizes) leaves that key on its default.
 export function parseOfficeSettings(raw: string | null): OfficeSettings {
   if (raw === null) return DEFAULT_OFFICE_SETTINGS
   let stored: unknown
@@ -53,12 +61,14 @@ export function parseOfficeSettings(raw: string | null): OfficeSettings {
     const value = stored[key]
     if (typeof value === 'boolean') settings[key] = value
   }
+  if (isTownSize(stored.townSize)) settings.townSize = stored.townSize
   return settings
 }
 
 export interface OfficeSettingsStore {
   get(): OfficeSettings
   set(key: OfficeSettingKey, value: boolean): void
+  setTownSize(size: TownSize): void
   reset(): void
   subscribe(listener: () => void): () => void
 }
@@ -68,7 +78,7 @@ type SettingsStorage = Pick<Storage, 'getItem' | 'setItem'>
 type StorageEvents = Pick<EventTarget, 'addEventListener' | 'removeEventListener'>
 
 const isSame = (a: OfficeSettings, b: OfficeSettings): boolean =>
-  SETTING_KEYS.every((key) => a[key] === b[key])
+  a.townSize === b.townSize && SETTING_KEYS.every((key) => a[key] === b[key])
 
 export function createOfficeSettingsStore(
   storage: SettingsStorage | null,
@@ -117,6 +127,12 @@ export function createOfficeSettingsStore(
       const current = latest()
       if (current[key] === value) return adopt(current)
       commit({ ...current, [key]: value })
+    },
+    setTownSize: (size) => {
+      if (!isTownSize(size)) return
+      const current = latest()
+      if (current.townSize === size) return adopt(current)
+      commit({ ...current, townSize: size })
     },
     reset: () => commit(DEFAULT_OFFICE_SETTINGS),
     subscribe: (listener) => {

@@ -3,6 +3,7 @@ import type { QualityLevel } from '../logic/quality'
 import { draw } from '../themes/lot-math'
 import { citizenTrips } from './citizen-trips'
 import type { VehicleRole } from './town-dress'
+import type { TownSize } from './town-grid'
 import type { TownPlan } from './town-plan'
 import { vehicleTrips } from './vehicle-trips'
 
@@ -46,6 +47,14 @@ export const MOVER_COUNTS: Record<
   light: { citizens: 14, vehicles: 0, citizenKinds: 3, vehicleKinds: 0 }
 }
 
+// A smaller town sends out fewer of the same movers. Seven vehicles still reach the first
+// freight cart, so a village keeps a tram, a cart and a runabout.
+export const SIZE_MOVERS: Record<TownSize, { citizenShare: number; vehicleCap: number }> = {
+  village: { citizenShare: 0.5, vehicleCap: 7 },
+  town: { citizenShare: 0.75, vehicleCap: 9 },
+  city: { citizenShare: 1, vehicleCap: 12 }
+}
+
 // Where the town goes: the market most, then entertainment, a park, the gate plaza, civic.
 const DESTINATION_SHARE: Record<Destination, number> = {
   market: 0.3,
@@ -68,6 +77,10 @@ export function destinationOf(seed: number): Destination {
 // smaller level sends out the first of the same movers on the same routes.
 export function townTrips(town: TownInput): Trip[] {
   const { citizens, vehicles } = MOVER_COUNTS[town.detail]
-  const vehicleCount = town.hasVehicles === false ? 0 : vehicles
-  return [...citizenTrips(town, citizens), ...vehicleTrips(town, vehicleCount)]
+  const { citizenShare, vehicleCap } = SIZE_MOVERS[town.plan.size]
+  const vehicleCount = town.hasVehicles === false ? 0 : Math.min(vehicles, vehicleCap)
+  return [
+    ...citizenTrips(town, Math.round(citizens * citizenShare)),
+    ...vehicleTrips(town, vehicleCount)
+  ]
 }

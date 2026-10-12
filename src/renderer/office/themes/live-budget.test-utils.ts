@@ -12,6 +12,7 @@ import { BatchedScene } from '../scene/BatchedScene'
 import { TowerView } from '../scene/WorldView'
 import { groundBuffers, groundQuads } from '../town/town-ground'
 import { dressOf, TownAmbient, TownView } from '../town/TownView'
+import type { TownSize } from '../town/town-grid'
 import { townOf } from '../town/use-town-plan'
 import { getTheme, listThemes } from './registry'
 import { mergedDraws, type DrawCount } from './scene.test-utils'
@@ -32,6 +33,8 @@ export interface Composition {
   agents: readonly AgentView[]
   floorTheme: OfficeTheme
   themeIdFor: (zone: ThemedZone) => string
+  // Today's full town unless a size is named.
+  townSize?: TownSize
 }
 
 // Each BatchedScene under a layer merges on its own at runtime, so each is counted on its own.
@@ -54,7 +57,7 @@ function batchDraws(layer: ReactNode): DrawCount {
 }
 
 // An upper bound: every thought dot and steam puff at once, and the world at building zoom.
-export function measure({ floor, agents, floorTheme, themeIdFor }: Composition) {
+export function measure({ floor, agents, floorTheme, themeIdFor, townSize }: Composition) {
   const zoneGroups = groupZonesByTheme(floor, themeIdFor)
   // Each layer merges on its own, as its own BatchedScene does at runtime.
   const focused = mergedDraws([
@@ -77,7 +80,7 @@ export function measure({ floor, agents, floorTheme, themeIdFor }: Composition) 
     })
   ])
   // The town of a first start at full detail: the most there is to draw.
-  const town = townOf(floor, null, 'full')
+  const town = townOf(floor, null, 'full', townSize)
   const world = batchDraws(
     TowerView({
       plan: town.plan,
@@ -97,12 +100,17 @@ export function measure({ floor, agents, floorTheme, themeIdFor }: Composition) 
   // TownGround is one mesh by construction (town/town-view.test.tsx holds that).
   const ground = groundBuffers(groundQuads(town.plan, dressOf(floorTheme)))
   const shared = { town, floor, floorTheme, zoneGroups }
+  // What a size change costs the town's batch: its elements built and merged once.
+  const rebuildStart = performance.now()
   const buildings = batchDraws(TownView(shared))
+  const townRebuildMs = performance.now() - rebuildStart
   const ambient = batchDraws(TownAmbient({ ...shared, share: 1, isReducedMotion: true }))
   const townDraws = 1 + buildings.draws
   return {
     themeCount: zoneGroups.length,
     lotCount: town.plan.lots.length + town.green.length,
+    roadCount: town.plan.roads.length,
+    townRebuildMs,
     focusedDraws: focused.draws,
     worldDraws: world.draws,
     horizonDraws: horizon.draws,

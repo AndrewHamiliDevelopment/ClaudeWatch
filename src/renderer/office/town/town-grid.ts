@@ -23,6 +23,18 @@ export const RING_M: Record<QualityLevel, number> = { full: 48, balanced: 48, li
 export const OLD_TOWN_BLOCKS: Record<QualityLevel, number> = { full: 3, balanced: 3, light: 2 }
 export const BUILDING_CAP: Record<QualityLevel, number> = { full: 200, balanced: 140, light: 90 }
 
+// How far the town reaches, the owner's choice; the detail level thins within it.
+export const TOWN_SIZES = ['village', 'town', 'city'] as const
+export type TownSize = (typeof TOWN_SIZES)[number]
+
+// Village: the plaza, the market behind it and one block round the claim. City: the full town.
+// No cap of its own: a lower one thins the old town's market away round a large campus.
+export const TOWN_REACH: Record<TownSize, { ringM: number; oldTownBlocks: number }> = {
+  village: { ringM: 24, oldTownBlocks: 2 },
+  town: { ringM: 36, oldTownBlocks: 3 },
+  city: { ringM: 48, oldTownBlocks: 3 }
+}
+
 // The square of a lattice whose north-west corner is (column, row) times the pitch.
 export function cellRect(column: number, row: number, pitch: number): Rect {
   return { x: (column + 0.5) * pitch, z: (row + 0.5) * pitch, width: pitch, depth: pitch }

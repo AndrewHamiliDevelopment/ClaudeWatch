@@ -17,6 +17,13 @@ import {
   TRIANGLE_CEILING
 } from './live-budget.test-utils'
 import { getTheme, registerTheme } from './registry'
+import { campusClaim, neededClaim } from '../town/town-claim'
+import { TOWN_SIZES } from '../town/town-grid'
+import { planTown } from '../town/town-plan'
+import { townTrips } from '../town/town-trips'
+import { TOWN_DISTRICTS } from '../town/town-zones'
+import { townOn } from '../town/movers.test-utils'
+import { median } from '../town/town.test-utils'
 
 vi.mock('react', async (original) => ({
   ...(await original<typeof import('react')>()),
@@ -53,6 +60,38 @@ it.each([
   expect(result.lotCount).toBeGreaterThan(100)
   expect(result.draws).toBeLessThanOrEqual(DRAW_CEILING)
   expect(result.triangles).toBeLessThanOrEqual(TRIANGLE_CEILING)
+})
+
+it('draws less of everything as the town gets smaller, three themes and 60 agents', () => {
+  const composition = { ...agentsOn(10, 60), floorTheme: getTheme(THREE_THEMES[0]) }
+  const claim = campusClaim(neededClaim(composition.floor), null)
+  const rows = TOWN_SIZES.map((townSize) => {
+    const result = measure({ ...composition, themeIdFor: companyThemes(THREE_THEMES), townSize })
+    const trips = townTrips(townOn(composition.floor, 'full', townSize))
+    const planTimes = Array.from({ length: 15 }, () => {
+      const start = performance.now()
+      planTown(claim, 'full', townSize)
+      return performance.now() - start
+    })
+    const citizens = trips.filter((trip) => trip.kind === 'citizen').length
+    console.info(
+      `${townSize}: ${result.lotCount} lots, ${result.roadCount} roads, ${citizens} citizens, ${trips.length - citizens} vehicles, ${result.draws} draws, ${result.triangles} triangles, plan ${median(planTimes).toFixed(2)} ms, rebuild ${result.townRebuildMs.toFixed(2)} ms`
+    )
+    expect(result.draws).toBeLessThanOrEqual(DRAW_CEILING)
+    // Round a ten-company campus a village still has its market and a cart to serve it.
+    const plan = townOn(composition.floor, 'full', townSize).plan
+    expect(new Set(plan.lots.map((lot) => lot.zone)).size).toBe(TOWN_DISTRICTS.length)
+    expect(trips.some((trip) => trip.kind === 'freight')).toBe(true)
+    return result
+  })
+  // Round ten companies a town and a city both reach the detail level's building cap.
+  const [village, town, city] = rows
+  expect(village.lotCount).toBeLessThan(town.lotCount)
+  expect(town.lotCount).toBeLessThanOrEqual(city.lotCount)
+  expect(village.roadCount).toBeLessThan(town.roadCount)
+  expect(town.roadCount).toBeLessThan(city.roadCount)
+  expect(village.triangles).toBeLessThan(city.triangles)
+  expect(village.draws).toBeLessThanOrEqual(city.draws)
 })
 
 // A stand-in for a theme that shares no part with another: Brass's cost, merged only with itself.

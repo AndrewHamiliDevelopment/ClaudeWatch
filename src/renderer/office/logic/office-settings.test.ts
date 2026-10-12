@@ -21,18 +21,20 @@ const ALL_OFF = {
   vehicles: false,
   ambient: false,
   loungeTrips: false,
-  player: false
+  player: false,
+  townSize: 'village'
 }
 
 describe('parseOfficeSettings', () => {
-  it('starts with every feature on', () => {
+  it('starts with every feature on, and the town a village', () => {
     expect(DEFAULT_OFFICE_SETTINGS).toEqual({
       town: true,
       citizens: true,
       vehicles: true,
       ambient: true,
       loungeTrips: true,
-      player: true
+      player: true,
+      townSize: 'village'
     })
     expect(parseOfficeSettings(null)).toEqual(DEFAULT_OFFICE_SETTINGS)
   })
@@ -55,6 +57,20 @@ describe('parseOfficeSettings', () => {
       player: false
     })
   })
+
+  it('reads a stored town size', () => {
+    expect(parseOfficeSettings(JSON.stringify({ townSize: 'city' })).townSize).toBe('city')
+  })
+
+  it.each([['metropolis'], [true], [3], [null], ['Village']])(
+    'keeps the town a village for a stored size of %j',
+    (townSize) => {
+      expect(parseOfficeSettings(JSON.stringify({ townSize, player: false }))).toEqual({
+        ...DEFAULT_OFFICE_SETTINGS,
+        player: false
+      })
+    }
+  )
 
   it.each(['', 'not json', '[]', 'null', '7', '"town"', '[false]'])(
     'gives the defaults for %j',
@@ -157,6 +173,22 @@ describe('createOfficeSettingsStore', () => {
     expect(store.get()).toEqual(DEFAULT_OFFICE_SETTINGS)
     store.set('town', false)
     expect(store.get().town).toBe(false)
+  })
+
+  it('saves a town size and ignores one that is not a size', () => {
+    const storage = memoryStorage()
+    const store = createOfficeSettingsStore(storage)
+    const listener = vi.fn()
+    store.subscribe(listener)
+    store.setTownSize('town')
+    expect(store.get().townSize).toBe('town')
+    expect(saved(storage)).toEqual({ ...DEFAULT_OFFICE_SETTINGS, townSize: 'town' })
+    Reflect.apply(store.setTownSize, store, ['metropolis'])
+    store.setTownSize('town')
+    expect(store.get().townSize).toBe('town')
+    expect(listener).toHaveBeenCalledOnce()
+    store.reset()
+    expect(store.get().townSize).toBe('village')
   })
 
   it('runs without storage', () => {

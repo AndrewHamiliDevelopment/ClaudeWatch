@@ -121,7 +121,8 @@ function mount(off: readonly OfficeSettingKey[] = []) {
 
 const TOWN = ['roads', 'town', 'tower', 'ambient']
 const ALWAYS = ['ground', 'floor', 'agents', 'pickers', 'cards', 'camera', 'governor', 'metrics']
-const { plan, green } = townOf(floor, null, 'full')
+// The town of a first start: a village, the default size.
+const { plan, green } = townOf(floor, null, 'full', 'village')
 
 it('mounts the whole living world while every switch is on', () => {
   const { layer, layers } = mount()
@@ -148,6 +149,15 @@ it('frames the whole town, to its last road, while the town is on', () => {
   expect(JSON.parse(layer('player')?.dataset.extent ?? '{}')).toEqual(plan.extent)
 })
 
+it('frames and walks the larger town once the owner picks a city', () => {
+  officeSettings.setTownSize('city')
+  const { layer } = mount()
+  const city = townOf(floor, null, 'full', 'city').plan
+  expect(JSON.parse(layer('camera')?.dataset.scene ?? '{}')).toMatchObject(city.extent)
+  expect(JSON.parse(layer('player')?.dataset.extent ?? '{}')).toEqual(city.extent)
+  expect(city.extent.width).toBeGreaterThan(plan.extent.width)
+})
+
 it('closes the town’s lots and the belt’s plots to the player, and hands the citizens the plan', () => {
   const { layer } = mount()
   const solidCount = String(plan.lots.length + green.length)
@@ -163,10 +173,14 @@ it('mounts no ambient mover when ambient motion is off, and keeps the buildings'
 })
 
 it('draws less of the town at a lighter detail level, by the plan’s own thinning', () => {
+  officeSettings.setTownSize('city')
   pinQuality('light')
   const { layer } = mount()
-  expect(Number(layer('town')?.dataset.lots)).toBe(townOf(floor, null, 'light').plan.lots.length)
-  expect(Number(layer('town')?.dataset.lots)).toBeLessThan(plan.lots.length)
+  const full = townOf(floor, null, 'full', 'city').plan
+  expect(Number(layer('town')?.dataset.lots)).toBe(
+    townOf(floor, null, 'light', 'city').plan.lots.length
+  )
+  expect(Number(layer('town')?.dataset.lots)).toBeLessThan(full.lots.length)
 })
 
 it('does not mount the citizens layer when citizens are off', () => {

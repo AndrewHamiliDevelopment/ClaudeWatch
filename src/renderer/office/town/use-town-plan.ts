@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { isJsonObject } from '../../../shared/json-object'
 import { readStored, writeStored } from '../../office-live/browser-storage'
+import { useOfficeSettings } from '../logic/office-settings'
 import { levelInUse, type QualityLevel } from '../logic/quality'
 import { boundsOfZone } from '../logic/zone-framing'
 import { useQualityChoice } from '../quality-store'
 import type { FloorGeometry } from '../scene-model'
 import type { Rect } from '../themes/lot-math'
 import { campusClaim, heldClaim, neededClaim } from './town-claim'
+import type { TownSize } from './town-grid'
 import { campusGreen, type GreenPlot } from './town-green'
 import { lotOwners, townBlocks, type TownPlan } from './town-plan'
 
@@ -21,8 +23,13 @@ export interface Town {
 }
 
 // The whole town for a floor. `held` is the claim of the floor before, or null on a first start.
-export function townOf(floor: FloorGeometry, held: Rect | null, level: QualityLevel): Town {
-  const plan = townBlocks(campusClaim(neededClaim(floor), held), level)
+export function townOf(
+  floor: FloorGeometry,
+  held: Rect | null,
+  level: QualityLevel,
+  size: TownSize = 'city'
+): Town {
+  const plan = townBlocks(campusClaim(neededClaim(floor), held), level, size)
   return { plan, owners: lotOwners(plan, floor.zones), green: campusGreen(floor, plan) }
 }
 
@@ -55,6 +62,7 @@ function claimKey(claim: Rect): string {
 export function useTownPlan(floor: FloorGeometry): Town {
   const { pin, chosen } = useQualityChoice()
   const level = levelInUse(pin, chosen)
+  const { townSize } = useOfficeSettings()
   // undefined until storage has been read, which happens once.
   const heldRef = useRef<Rect | null | undefined>(undefined)
   const savedRef = useRef<string | null>(null)
@@ -63,10 +71,10 @@ export function useTownPlan(floor: FloorGeometry): Town {
       heldRef.current = storedClaim(floor)
       savedRef.current = heldRef.current && claimKey(heldRef.current)
     }
-    const next = townOf(floor, heldRef.current, level)
+    const next = townOf(floor, heldRef.current, level, townSize)
     heldRef.current = next.plan.claim
     return next
-  }, [floor, level])
+  }, [floor, level, townSize])
   const key = claimKey(town.plan.claim)
   useEffect(() => {
     if (key === savedRef.current) return
