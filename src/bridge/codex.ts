@@ -126,7 +126,8 @@ const HOSTED_FRESH_MS = 120_000
 // Codex never deletes a rollout, so a full walk grows with history: between full walks only
 // the ones written lately are looked at again. A new thread waits at most this long.
 const FULL_WALK_MS = 30_000
-const RECENT_MS = 10 * 60_000
+// As long as a quiet thread with an open tool is held, so its next write is seen at once.
+const RECENT_MS = OPEN_TOOL_HOLD_MS
 
 interface Walk {
   atMs: number
