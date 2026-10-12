@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { citizenGeometry } from '../../citizens/figure-parts'
 import { campusClaim, neededClaim } from '../../town/town-claim'
 import { dressLot, type DressableLot, type TownDress } from '../../town/town-dress'
+import { placeGardenPiece } from '../../town/garden-pieces'
 import { campusGreen } from '../../town/town-green'
 import { townBlocks } from '../../town/town-plan'
 import { TOWN_DISTRICTS, type TownDistrict } from '../../town/town-zones'
@@ -152,11 +153,13 @@ export function describeTownDress(theme: OfficeTheme, dress: TownDress): void {
 
     describe.each(LIVE_FLOORS)('on the town of %s', (_name, floor) => {
       const plan = townBlocks(campusClaim(neededClaim(floor), null), 'full')
-      const lots: readonly DressableLot[] = [...plan.lots, ...campusGreen(floor, plan)]
+      const lots: readonly DressableLot[] = plan.lots
+      const garden = campusGreen(floor, plan)
 
-      it('dresses every lot, inside its footprint and under its height limit', () => {
+      it('dresses every lot and garden piece, inside its footprint and under its height limit', () => {
         expect(lots.length).toBeGreaterThan(100)
         for (const lot of lots) expectInsideLot(dressLot(lot, 0, dress))
+        for (const piece of garden) expectInsideLot(placeGardenPiece(piece, 0, dress))
       })
 
       it('never squashes a building under the height it looks right at', () => {

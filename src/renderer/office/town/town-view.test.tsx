@@ -103,8 +103,11 @@ describe('TownView', () => {
     const designByRole = new Map<string, string>()
     placedBelt.forEach(({ lot, design }, index) => {
       const themeId = lot.zoneId === firstCompany.id ? south.id : north.id
-      expect(design.startsWith(`${themeId}:`), `${lot.id} wears ${design}`).toBe(true)
-      const key = `${themeId}:${town.green[index].role}`
+      const { role } = town.green[index]
+      // The edging is one shared box, coloured by the theme rather than named by it.
+      if (role !== 'hedge')
+        expect(design.startsWith(`${themeId}:`), `${lot.id} wears ${design}`).toBe(true)
+      const key = `${themeId}:${role}`
       expect(designByRole.get(key) ?? design, lot.id).toBe(design)
       designByRole.set(key, design)
     })

@@ -70,6 +70,7 @@ export const BRASS_TOWN: TownDress = {
     seat: 'iron bench',
     feature: 'iron-fenced fountain square',
     corner: 'bandstand green',
-    plazaPair: 'guild pennant'
+    plazaPair: 'guild pennant',
+    innerTree: 'garden tree'
   }
 }
