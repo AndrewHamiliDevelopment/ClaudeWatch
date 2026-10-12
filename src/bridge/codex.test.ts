@@ -75,7 +75,7 @@ it.each([
     parseCodexActivity(
       `invalid\n${JSON.stringify({ type: 'event_msg', timestamp: '2026-10-11T01:00:00Z', payload: { type, text: 'SECRET_TEXT' } })}`
     )
-  ).toEqual({ activity, attention, updatedAtMs: Date.parse('2026-10-11T01:00:00Z') })
+  ).toMatchObject({ activity, attention, updatedAtMs: Date.parse('2026-10-11T01:00:00Z') })
 })
 it('matches cwd using only rollout headers then tails the newest match', async () => {
   const meta = (id: string, cwd: string) =>
@@ -279,14 +279,18 @@ it.each([
 it('handles current Codex response_item tool and reasoning records without retaining inputs', () => {
   const tool = JSON.stringify({
     type: 'response_item',
-    payload: { type: 'custom_tool_call', input: 'SECRET_INPUT' }
+    payload: { type: 'custom_tool_call', call_id: 'call-a', input: 'SECRET_INPUT' }
   })
   const reasoning = JSON.stringify({
     type: 'response_item',
     payload: { type: 'reasoning', summary: 'SECRET_PROMPT' }
   })
   expect(parseCodexActivity(tool).activity).toBe('running')
-  expect(parseCodexActivity(`${tool}\n${reasoning}`).activity).toBe('thinking')
+  const output = JSON.stringify({
+    type: 'response_item',
+    payload: { type: 'custom_tool_call_output', call_id: 'call-a' }
+  })
+  expect(parseCodexActivity(`${tool}\n${output}\n${reasoning}`).activity).toBe('thinking')
   expect(JSON.stringify(parseCodexActivity(tool))).not.toContain('SECRET_INPUT')
 })
 
@@ -308,3 +312,183 @@ it.each(['/company/repo', '/company/repo/.claude/.worktree/task'])(
     })
   }
 )
+
+function activityRecords(payloads: Record<string, unknown>[]): string {
+  return payloads
+    .map((payload) =>
+      JSON.stringify({
+        type: 'response_item',
+        timestamp: '2026-10-12T01:00:00Z',
+        payload
+      })
+    )
+    .join('\n')
+}
+
+it('clears activity when a turn is aborted', () => {
+  expect(
+    parseCodexActivity(activityRecords([{ type: 'reasoning' }, { type: 'turn_aborted' }]))
+  ).toMatchObject({ activity: 'idle', attention: 'none' })
+})
+
+it.each([
+  ['function_call', 'function_call_output'],
+  ['custom_tool_call', 'custom_tool_call_output'],
+  ['local_shell_call', 'local_shell_call_output']
+])('closes %s by call id and resumes thinking', (callType, outputType) => {
+  expect(
+    parseCodexActivity(
+      activityRecords([
+        { type: callType, call_id: 'call-a', name: 'exec_command' },
+        { type: outputType, call_id: 'call-a' }
+      ])
+    )
+  ).toMatchObject({ activity: 'thinking', currentTool: null })
+})
+
+it.each([
+  ['apply_patch', 'editing', 'edit'],
+  ['exec_command', 'running', 'run'],
+  ['web_search', 'searching', 'web']
+])('categorizes the open Codex tool %s', (name, activity, category) => {
+  expect(
+    parseCodexActivity(activityRecords([{ type: 'function_call', call_id: 'call-a', name }]))
+  ).toMatchObject({ activity, currentTool: { name, category } })
+})
+
+it('keeps parallel calls open until each corresponding output arrives', () => {
+  expect(
+    parseCodexActivity(
+      activityRecords([
+        { type: 'function_call', call_id: 'call-a', name: 'exec_command' },
+        { type: 'custom_tool_call', call_id: 'call-b', name: 'apply_patch' },
+        { type: 'function_call_output', call_id: 'call-a' },
+        { type: 'message', role: 'assistant' }
+      ])
+    )
+  ).toMatchObject({ activity: 'editing', currentTool: { category: 'edit' } })
+})
+
+it('recognizes recent assistant output without treating user text as activity', () => {
+  expect(
+    parseCodexActivity(
+      activityRecords([
+        { type: 'message', role: 'assistant' },
+        { type: 'message', role: 'user' }
+      ])
+    )
+  ).toMatchObject({ activity: 'thinking' })
+})
+
+it('does not count exec servers, MCP servers or sandbox workers as sessions', () => {
+  const started = 'Sat Oct 10 15:29:12 2026'
+  expect(
+    codexProcesses(
+      parseProcessTable(
+        [
+          `42 ${started} /bin/codex exec-server`,
+          `43 ${started} /bin/codex mcp-server`,
+          `44 ${started} /bin/codex sandbox macos true`
+        ].join('\n')
+      )
+    )
+  ).toEqual([])
+})
+
+it('passes the open tool category through collection and removes departed processes', async () => {
+  const meta = JSON.stringify({ type: 'session_meta', payload: { id: 'a', cwd: '/repo' } })
+  const io = fixtureIo({
+    '/codex/sessions/rollout-a.jsonl': `${meta}\n${activityRecords([
+      { type: 'custom_tool_call', call_id: 'call-a', name: 'apply_patch' }
+    ])}`,
+    '/repo/.git': null
+  })
+  let isRunning = true
+  io.exec = async (file) =>
+    file.endsWith('ps') ? (isRunning ? '42 Sat Oct 10 15:29:12 2026 codex' : '') : 'p42\nn/repo\n'
+  expect((await collectCodex('/codex', io)).sessions).toMatchObject([
+    { activity: 'editing', currentTool: { name: 'apply_patch', category: 'edit' } }
+  ])
+  isRunning = false
+  expect((await collectCodex('/codex', io)).sessions).toEqual([])
+})
+
+it('keeps exec sessions whose prompt mentions helper command names', () => {
+  const started = 'Sat Oct 10 15:29:12 2026'
+  expect(
+    codexProcesses(
+      parseProcessTable(`42 ${started} /bin/codex exec sandbox app-server exec-server`)
+    )
+  ).toHaveLength(1)
+})
+
+it('ages quiet assistant output to idle on cached tails while retaining open tools', async () => {
+  const meta = JSON.stringify({ type: 'session_meta', payload: { id: 'a', cwd: '/repo' } })
+  const files: Record<string, string | null> = {
+    '/codex/sessions/rollout-a.jsonl': `${meta}\n${activityRecords([
+      { type: 'message', role: 'assistant' }
+    ])}`,
+    '/repo/.git': null
+  }
+  const io = fixtureIo(files)
+  io.exec = async (file) =>
+    file.endsWith('ps') ? '42 Sat Oct 10 15:29:12 2026 codex' : 'p42\nn/repo\n'
+  const atMs = Date.parse('2026-10-12T01:00:00Z')
+  expect(
+    (await collectCodex('/codex', io, undefined, false, atMs + 1000)).sessions[0].activity
+  ).toBe('thinking')
+  expect(
+    (await collectCodex('/codex', io, undefined, false, atMs + 60000)).sessions[0].activity
+  ).toBe('idle')
+  files['/codex/sessions/rollout-a.jsonl'] = `${meta}\n${activityRecords([
+    { type: 'function_call', call_id: 'call-a', name: 'exec_command' }
+  ])}`
+  expect(
+    (await collectCodex('/codex', io, undefined, false, atMs + 60000)).sessions[0].activity
+  ).toBe('running')
+})
+
+it('shows threads an app-server hosts (desktop app, IDE, plugins) while their rollout is fresh', async () => {
+  const meta = (id: string, cwd: string) =>
+    JSON.stringify({ type: 'session_meta', payload: { id, cwd } })
+  const openShell = activityRecords([{ type: 'local_shell_call', call_id: 'c1' }])
+  const io = fixtureIo({
+    '/codex/sessions/rollout-live.jsonl': `${meta('live', '/repo')}\n${openShell}`,
+    '/codex/sessions/rollout-quiet.jsonl': meta('quiet', '/repo'),
+    '/repo/.git': null
+  })
+  const stat = io.stat
+  const now = 1_000_000
+  io.stat = async (path) =>
+    path.includes('rollout-live')
+      ? { directory: false, mtimeMs: now - 10_000, size: 200 }
+      : path.includes('rollout-quiet')
+        ? { directory: false, mtimeMs: now - 600_000, size: 100 }
+        : stat(path)
+  io.exec = vi.fn(async (file: string) =>
+    file.endsWith('ps')
+      ? '43 Sat Oct 10 15:29:12 2026 /Applications/Codex.app/codex app-server'
+      : ''
+  )
+  const batch = await collectCodex('/codex', io, undefined, false, now)
+  expect(batch.sessions).toHaveLength(1)
+  expect(batch.sessions[0]).toMatchObject({
+    key: 'codex:live',
+    provider: 'codex',
+    pid: null,
+    activity: 'running',
+    projectLabel: 'repo'
+  })
+})
+
+it('shows no hosted thread when no app-server is running', async () => {
+  const io = fixtureIo({
+    '/codex/sessions/rollout-live.jsonl': JSON.stringify({
+      type: 'session_meta',
+      payload: { id: 'live', cwd: '/repo' }
+    }),
+    '/repo/.git': null
+  })
+  io.exec = vi.fn(async () => '')
+  expect((await collectCodex('/codex', io, undefined, false, 1500)).sessions).toEqual([])
+})
