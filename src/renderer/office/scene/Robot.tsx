@@ -1,6 +1,7 @@
 import { useFrame, type ThreeEvent } from '@react-three/fiber'
 import { useLayoutEffect, useMemo, useRef } from 'react'
 import type { Group } from 'three'
+import { AGENT_SCALE, SUBAGENT_SCALE } from '../../../shared/office/figure-scale'
 import type { AgentView } from '../../../shared/office/types'
 import { approach, approachAngle, moodFor, robotPose } from '../logic/character-pose'
 import type { ThemeZoneGroup } from '../logic/office-themes'
@@ -10,10 +11,6 @@ import type { OfficeTheme } from '../themes/types'
 import { SHARED_BATCH } from './mesh-batches'
 import { blobShadowTexture } from './textures'
 
-// Sized up from the 1 m desk scale: agents are the largest figures in the town, so they are
-// found first. Townsfolk are drawn at 1.3, the size agents used to be.
-const ROBOT_SCALE = 1.65
-const SUBAGENT_SCALE = 1.2
 const MOVE_RATE = 5
 const TURN_RATE = 6
 const MOVING_EPSILON = 0.05
@@ -95,7 +92,7 @@ export function Robot({
   }
 
   return (
-    <group ref={rootRef} scale={agent.isSubagent ? SUBAGENT_SCALE : ROBOT_SCALE}>
+    <group ref={rootRef} scale={agent.isSubagent ? SUBAGENT_SCALE : AGENT_SCALE}>
       <mesh
         position={[0, 0.012, 0]}
         rotation={[-Math.PI / 2, 0, 0]}

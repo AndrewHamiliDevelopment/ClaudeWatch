@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { FURNITURE_SCALE } from '../../shared/office/figure-scale'
 import { buildLayout, type LayoutMap } from './layout'
 import { session } from './fixtures'
 import { officeGrid, PathCache } from './navigation'
@@ -34,10 +35,12 @@ const liveBays = (layout: LayoutMap) =>
     .filter((room) => room.kind === 'office')
     .map((room) => room.bay)
     .sort((a, b) => a - b)
+// A lounge's lengths are fractional, so a lane beside one is 3 m to the last few digits.
+const LANE_M = 3 - 1e-9
 function expectClearLanes(layout: LayoutMap): void {
   const floor = layout.floors[0]
   for (const [first, second] of pairs(floor.zones))
-    expect(lane(first, second)).toBeGreaterThanOrEqual(3)
+    expect(lane(first, second)).toBeGreaterThanOrEqual(LANE_M)
   for (const company of floor.zones) {
     // The plate has its own centre and leaves the 3 m margin around every company.
     expect(
@@ -46,7 +49,7 @@ function expectClearLanes(layout: LayoutMap): void {
     const grounds = [...company.children, company.lounge!]
     for (const zone of grounds) expect(isInside(zone, company)).toBe(true)
     for (const [first, second] of pairs(grounds))
-      expect(lane(first, second)).toBeGreaterThanOrEqual(3)
+      expect(lane(first, second)).toBeGreaterThanOrEqual(LANE_M)
     for (const project of company.children)
       for (const leaf of project.children) expect(isInside(leaf, project)).toBe(true)
   }
@@ -63,15 +66,17 @@ const workers = (count: number) =>
     type: 'worker',
     activity: 'reading' as const
   }))
-// A session's bay and where its office sits, measured from its company's top-left corner.
+// A session's bay and where its office sits, measured from the corner its company is held by:
+// its west wall and its street side.
 function placeInCompany(layout: LayoutMap, sessionKey: string) {
   const floor = layout.floors[0]
   const room = floor.rooms.find((candidate) => candidate.sessionKey === sessionKey)!
   const company = floor.zones.find((zone) => zone.companyKey === room.companyKey)!
+  const street = company.z - Math.sign(company.z) * (company.depth / 2)
   return {
     bay: room.bay,
     x: room.x - (company.x - company.width / 2),
-    z: room.z - (company.z - company.depth / 2)
+    z: Math.abs(room.z - street)
   }
 }
 
@@ -119,20 +124,22 @@ describe("a floor shaped like the owner's: one company of four projects and two 
     const floor = built().floors[0]
     const [alpha, beta, zkidz] = floor.zones
     expect([alpha, beta, zkidz].map((company) => Math.sign(company.z))).toEqual([-1, -1, 1])
-    expect([floor.width, floor.depth]).toEqual([71, 31])
+    expect([floor.width, floor.depth]).toEqual([73, 32])
   })
-  it('keeps the plate within 71 x 31 m with at least half of it company grounds', () => {
+  // The limit was 71 x 31 m before the lounge grew for the larger agents. Its plot, on the
+  // half metre, is 2 m wider (8 from 6) and, for eight seats, 1 m deeper than the offices.
+  it('keeps the plate within 73 x 32 m with at least half of it company grounds', () => {
     const floor = built().floors[0]
     const grounds = floor.zones.reduce((total, company) => total + area(company), 0)
-    expect(floor).toMatchObject({ width: 71, depth: 31, x: 34, z: 0 })
+    expect(floor).toMatchObject({ width: 73, depth: 32, x: 35, z: 0.5 })
     expect(grounds / area(floor)).toBeGreaterThanOrEqual(0.5)
   })
   it("makes a lone company's plate its grounds, the street and the margins", () => {
     const alone = sessionsOf(OWNER.filter(([company]) => company === 'zkidz'))
     const floor = buildLayout(alone, undefined, 0).floors[0]
-    expect(sizes(floor.zones)).toEqual([[65, 11]])
-    // The gate's 3 m, 65 m of grounds, 3 m of margin; the 3 m street, 11 m of grounds, 3 m.
-    expect(floor).toMatchObject({ width: 71, depth: 17, x: 34, z: 7 })
+    expect(sizes(floor.zones)).toEqual([[67, 12]])
+    // The gate's 3 m, 67 m of grounds, 3 m of margin; the 3 m street, 12 m of grounds, 3 m.
+    expect(floor).toMatchObject({ width: 73, depth: 18, x: 35, z: 7.5 })
     expect(floor.elevator).toMatchObject({ x: 0, z: 0 })
     expect(isInside({ ...floor.elevator, width: 3, depth: 3 }, floor)).toBe(true)
     // The lift stands 3 m short of the company's own gateway.
@@ -646,6 +653,65 @@ describe('a seeded floor of three companies, eight projects and twelve sessions'
         expect(isInside({ ...seat, width: 0.6, depth: 0.6 }, lounge)).toBe(true)
         expect(findPath(grid, floor.elevator, seat).length).toBeGreaterThan(0)
       }
+    }
+  })
+
+  it('multiplies every length of the lounge by the factor agents grew by', () => {
+    const S = FURNITURE_SCALE
+    const times = (metres: number) => expect.closeTo(metres * S, 9)
+    const [eight, four] = floorOf(buildLayout(seeded(), undefined, 0)).lounges
+    // 7.62 x 6.35 m for four seats and 7.62 x 8.88 m for eight; they were 6 x 5 and 6 x 7.
+    expect([four.width, four.depth]).toEqual([times(6), times(5)])
+    expect([eight.width, eight.depth]).toEqual([times(6), times(7)])
+    const west = eight.x - eight.width / 2
+    const north = eight.z - eight.depth / 2
+    expect(eight.slots.slice(0, 4).map((seat) => seat.x - west)).toEqual(
+      [1.125, 2.375, 3.625, 4.875].map(times)
+    )
+    // Company a is south of the street: 2 m behind the first row, 2 m a row, 3 m in front.
+    expect(eight.slots[0].z - north).toEqual(times(2))
+    expect(eight.slots[4].z - eight.slots[0].z).toEqual(times(2))
+    expect(north + eight.depth - eight.slots[4].z).toEqual(times(3))
+  })
+
+  it('moves nothing on the floor but what the larger lounge pushes', () => {
+    // Measured before the lounge grew: each company's size, its projects' corners from its west
+    // wall and its street side, and where every lead sits.
+    const BEFORE = [
+      { size: [46, 11], corners: [1.5, 15.5, 29.5], leads: [6, 11, 20, 25, 34], z: 8.3 },
+      { size: [41, 11], corners: [1.5, 15.5, 24.5], leads: [6, 11, 20, 29], z: -5.7 },
+      { size: [32, 11], corners: [1.5, 15.5], leads: [50, 55, 64], z: -5.7 }
+    ]
+    const { floor, companies } = floorOf(buildLayout(seeded(), undefined, 0))
+    // A lounge's plot is its size taken up to the half metre, so the grounds stay on the grid.
+    const plot = (metres: number) => Math.ceil(metres * 2) / 2
+    for (const [index, company] of companies.entries()) {
+      const before = BEFORE[index]
+      const west = company.x - company.width / 2
+      expect(company.children.map((project) => project.x - project.width / 2 - west)).toEqual(
+        before.corners
+      )
+      for (const project of company.children) {
+        const streetSide = project.z - Math.sign(company.z) * (project.depth / 2)
+        expect(Math.abs(streetSide - Math.sign(company.z) * 1.5)).toBe(1.5)
+      }
+      // The grounds gain what the lounge's plot gained: 2 m of width (8 from 6), and depth only
+      // where the lounge is now deeper than every office.
+      const lounge = company.lounge!
+      const deepest = Math.max(plot(lounge.depth), ...company.children.map((p) => p.depth))
+      expect(company.width).toBe(before.size[0] + plot(lounge.width) - 6)
+      expect(company.depth).toBe(deepest + 3)
+      expect([company.width - before.size[0], company.depth - before.size[1]]).toEqual(
+        index === 0 ? [2, 1] : [2, 0]
+      )
+      const leads = floor.rooms
+        .filter((room) => room.companyKey === company.companyKey && room.kind === 'office')
+        .map((room) => room.slots.find((slot) => slot.id === 'desk_main')!)
+      // Company c stands after b in its row: b's wider lounge moves it 2 m along, on the grid.
+      const pushed = company.companyKey === 'c_c' ? 2 : 0
+      expect(leads.map((seat) => [seat.x, seat.z])).toEqual(
+        before.leads.map((x) => [x + pushed, before.z])
+      )
     }
   })
 })
