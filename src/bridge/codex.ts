@@ -2,15 +2,17 @@ import { basename } from 'node:path'
 import type {
   AgentActivity,
   AgentAttention,
+  CurrentTool,
   SessionRef,
   SessionUsage,
   SourceHealth
 } from '../shared/office/types'
 import { type CodexTotal, codexTotalOf } from '../shared/accounts'
-import { type BridgeIo, isMissing, jsonObject, object } from './io'
+import { type BridgeIo, isLabel, isMissing, jsonObject, object } from './io'
 import { placementOf, resolveProject } from './project-root'
 import { findRollouts } from './codex-rollouts'
 import { parseCodexUsage } from './codex-usage'
+import { toolActivity, toolCategory } from './tool-category'
 import {
   isInsideAppBundle,
   type ProcessRow,
@@ -20,35 +22,76 @@ import {
 
 export function codexProcesses(rows: ProcessRow[]): { pid: number; startedAtMs: number }[] {
   return rows
-    .filter(
-      ({ argv }) =>
-        basename(argv[0]) === 'codex' &&
-        !argv.slice(1).some((arg) => /^(app-server|helper)/.test(arg))
-    )
+    .filter(({ argv }) => {
+      if (basename(argv[0]) !== 'codex') return false
+      const sessionCommand = argv.findIndex((arg) => /^(exec|e|resume|fork)$/.test(arg))
+      // An exec prompt may mention a helper; only command arguments precede it.
+      const commandArgs = argv.slice(1, sessionCommand < 0 ? undefined : sessionCommand)
+      return !commandArgs.some((arg) =>
+        /^(app-server|exec-server|mcp-server|sandbox|helper)(?:$|-)/.test(arg)
+      )
+    })
     .map(({ pid, startedAtMs }) => ({ pid, startedAtMs }))
 }
+
 export function parseCodexActivity(tail: string): {
   activity: AgentActivity
   attention: AgentAttention
   updatedAtMs: number
+  currentTool: CurrentTool | null
 } {
   let activity: AgentActivity = 'idle'
   let attention: AgentAttention = 'none'
   let updatedAtMs = 0
+  const openCalls = new Map<string, CurrentTool>()
   for (const line of tail.split('\n')) {
     const record = jsonObject(line)
-    // Current CLI rollouts place tool/reasoning events in response_item records.
     if (record?.type !== 'event_msg' && record?.type !== 'response_item') continue
-    const type = object(record.payload)?.type
-    if (type === 'function_call' || type === 'custom_tool_call') activity = 'running'
-    else if (type === 'reasoning') activity = 'thinking'
-    else if (type === 'task_complete') activity = 'idle'
-    else continue
+    const payload = object(record.payload)
+    const type = payload?.type
+    const callId = payload?.call_id ?? payload?.id
+    if (type === 'function_call' || type === 'custom_tool_call' || type === 'local_shell_call') {
+      const name = isLabel(payload?.name)
+        ? payload.name
+        : type === 'local_shell_call'
+          ? 'exec_command'
+          : 'unknown'
+      openCalls.set(typeof callId === 'string' ? callId : 'unknown', {
+        name,
+        category: toolCategory(name)
+      })
+      activity = 'running'
+    } else if (
+      type === 'function_call_output' ||
+      type === 'custom_tool_call_output' ||
+      type === 'local_shell_call_output'
+    ) {
+      // Outputs close their own call, not another tool still running in parallel.
+      openCalls.delete(typeof callId === 'string' ? callId : 'unknown')
+      activity = 'thinking'
+    } else if (
+      type === 'reasoning' ||
+      type === 'agent_reasoning' ||
+      type === 'agent_message' ||
+      (type === 'message' && payload?.role === 'assistant') ||
+      type === 'task_started'
+    )
+      activity = 'thinking'
+    else if (type === 'task_complete' || type === 'turn_aborted') {
+      openCalls.clear()
+      activity = 'idle'
+    } else continue
     attention = type === 'task_complete' ? 'done' : 'none'
     const timestamp = typeof record.timestamp === 'string' ? Date.parse(record.timestamp) : 0
     updatedAtMs = Number.isFinite(timestamp) ? timestamp : 0
   }
-  return { activity, attention, updatedAtMs }
+  const currentTool = [...openCalls.values()].at(-1) ?? null
+  return {
+    activity: currentTool ? toolActivity(currentTool.category) : activity,
+    attention,
+    updatedAtMs,
+    currentTool
+  }
 }
 
 interface Remembered {
@@ -71,6 +114,7 @@ interface Remembered {
   >
 }
 const remembered = new WeakMap<BridgeIo, Remembered>()
+const NEXT_STEP_MS = 60_000
 
 export interface CodexBatch {
   sessions: SessionRef[]
@@ -133,8 +177,16 @@ export async function collectCodex(
           : {
               activity: 'idle' as const,
               attention: 'none' as const,
-              updatedAtMs: process.startedAtMs
+              updatedAtMs: process.startedAtMs,
+              currentTool: null
             }
+        // Cached assistant output must age out even when no new bytes arrive.
+        const activity =
+          state.activity === 'thinking' &&
+          state.updatedAtMs > 0 &&
+          now - state.updatedAtMs >= NEXT_STEP_MS
+            ? 'idle'
+            : state.activity
         const usage = tail?.usage ?? known.get(id) ?? null
         if (usage) known.set(id, usage)
         live.add(id)
@@ -150,7 +202,7 @@ export async function collectCodex(
           host: 'terminal',
           orcaPaneKey: null,
           ...state,
-          currentTool: null,
+          activity,
           subagents: [],
           startedAtMs: process.startedAtMs,
           usage,
