@@ -3,12 +3,20 @@ import '../themes/builtins'
 import { EDO } from '../themes/palettes'
 import { listThemes } from '../themes/registry'
 import { fallbackDress } from './fallback-dress'
-import { gardenPiece, placeGardenPiece, type GreenPlot } from './garden-pieces'
+import { GARDEN_TREE, gardenPiece, placeGardenPiece, type GreenPlot } from './garden-pieces'
 import type { GardenRole } from './town-dress'
 import { dressOf } from './TownView'
 
-const ROLES: readonly GardenRole[] = ['tree', 'lamp', 'seat', 'feature', 'corner', 'plazaPair']
-const BUILT: readonly GardenRole[] = ['feature', 'corner']
+const ROLES: readonly GardenRole[] = [
+  'tree',
+  'lamp',
+  'seat',
+  'feature',
+  'corner',
+  'plazaPair',
+  'innerTree'
+]
+const BUILT: readonly GardenRole[] = ['feature', 'corner', 'innerTree']
 
 function plotFor(role: GardenRole): GreenPlot {
   const size = BUILT.includes(role) ? 5 : 1.6
@@ -34,10 +42,9 @@ describe.each(listThemes().map((theme) => [theme.id, theme] as const))(
       for (const role of ROLES) {
         const name = dress.garden?.[role]
         const pool = BUILT.includes(role) ? dress.designs : dress.props
-        expect(
-          pool.map((piece) => piece.name),
-          `${role}: ${name}`
-        ).toContain(name)
+        // A theme with no tree design of its own plants the shared one, in its own colours.
+        const shared = role === 'innerTree' ? [GARDEN_TREE] : []
+        expect([...pool.map((piece) => piece.name), ...shared], `${role}: ${name}`).toContain(name)
       }
     })
 
@@ -53,6 +60,31 @@ describe.each(listThemes().map((theme) => [theme.id, theme] as const))(
     })
   }
 )
+
+describe('the garden pieces drawn', () => {
+  const dress = dressOf(listThemes()[0])
+
+  it('draws a walk-row piece at its full size when the height rule allows it', () => {
+    const placed = placeGardenPiece({ ...plotFor('tree'), maxHeight: 10 }, 0, dress)
+    expect(placed.scale).toBe(1)
+  })
+
+  it('edges the lawn with one stretched box in the park colour', () => {
+    const hedge = gardenPiece(
+      'garden:north:hedge:outer:0:0',
+      'hedge',
+      { x: 0, z: 0, width: 20, depth: 0.4 },
+      {
+        facing: 'north',
+        zoneId: null,
+        maxHeight: 0.6
+      }
+    )
+    const { parts } = placeGardenPiece(hedge, 0, dress)
+    expect(parts).toHaveLength(1)
+    expect(parts[0]).toMatchObject({ color: dress.looks.park.accent })
+  })
+})
 
 describe('a dress with no garden of its own', () => {
   const dress = fallbackDress(EDO)

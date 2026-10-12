@@ -50,6 +50,7 @@ export const EDO_TOWN: TownDress = {
     seat: 'cedar bench',
     feature: 'pond with a bridge',
     corner: 'stand of pines',
-    plazaPair: 'blossom sapling'
+    plazaPair: 'blossom sapling',
+    innerTree: 'garden tree'
   }
 }

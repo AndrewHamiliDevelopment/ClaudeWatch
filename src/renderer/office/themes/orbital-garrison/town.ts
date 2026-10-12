@@ -19,6 +19,7 @@ export const GARRISON_TOWN: TownDress = {
     seat: 'bench-pair',
     feature: 'parade-lawn',
     corner: 'hydroponic-bed',
-    plazaPair: 'antenna-mast'
+    plazaPair: 'antenna-mast',
+    innerTree: 'garden tree'
   }
 }

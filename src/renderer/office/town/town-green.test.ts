@@ -5,6 +5,7 @@ import type { GreenPlot } from './garden-pieces'
 import { campusClaim, neededClaim } from './town-claim'
 import { campusGreen } from './town-green'
 import { townBlocks } from './town-plan'
+import { MAP_ROTATIONS, isHidden } from './sightline.test-utils'
 import { edges, overlapping, roadStrip, widened } from './town.test-utils'
 
 // Written out again: the belt starts inside the 10 m boulevard and is sure of 3 m more.
@@ -22,6 +23,8 @@ function everyZone(zones: readonly ZoneGeometry[]): ZoneGeometry[] {
 
 const sideOf = (piece: GreenPlot): Side => piece.id.split(':')[1] as Side
 const isAlongX = (side: Side): boolean => side === 'north' || side === 'south'
+const hedgeLength = (hedge: GreenPlot): number =>
+  isAlongX(sideOf(hedge)) ? hedge.width : hedge.depth
 
 describe.each(LIVE_FLOORS)('campusGreen: %s', (_name, floor) => {
   const plan = townBlocks(campusClaim(neededClaim(floor), null), 'full')
@@ -118,11 +121,90 @@ describe.each(LIVE_FLOORS)('campusGreen: %s', (_name, floor) => {
 
   it('makes every piece of a row the same size and height', () => {
     for (const side of SIDES)
-      for (const role of ['tree', 'lamp', 'seat']) {
+      for (const role of ['tree', 'lamp', 'seat', 'innerTree']) {
         const row = rows.filter((piece) => sideOf(piece) === side && piece.role === role)
         if (row.length === 0) continue
         expect(new Set(row.map((p) => `${p.width}x${p.depth}x${p.maxHeight}`)).size).toBe(1)
       }
+  })
+
+  // How far a piece stands in from its side's claim edge.
+  const depthOf = (piece: GreenPlot): number =>
+    ({
+      north: piece.z - claim.north,
+      south: claim.south - piece.z,
+      west: piece.x - claim.west,
+      east: claim.east - piece.x
+    })[sideOf(piece)]
+
+  it('plants an inner avenue of full-size trees behind the walk row, offset half a pitch', () => {
+    for (const side of SIDES) {
+      const inner = belt.filter((piece) => sideOf(piece) === side && piece.role === 'innerTree')
+      if (isAlongX(side)) expect(inner.length, side).toBeGreaterThanOrEqual(4)
+      const outer = belt.filter((piece) => sideOf(piece) === side && piece.role === 'tree')
+      for (const tree of inner) {
+        expect(depthOf(tree)).toBeGreaterThan(depthOf(outer[0]) + 1)
+        expect(tree.maxHeight).toBeGreaterThanOrEqual(2 * outer[0].maxHeight)
+        expect(
+          outer.some((each) => Math.abs(Math.abs(along(each) - along(tree)) - 3) < NEAR),
+          `${tree.id} sits half a pitch from the walk row`
+        ).toBe(true)
+      }
+      expect(new Set(inner.map(depthOf)).size).toBeLessThan(2)
+    }
+  })
+
+  it('pitches the inner avenue at 6 m, with gaps only where a feature or corner stands', () => {
+    for (const side of SIDES)
+      for (const run of runsOf(side)) {
+        const trees = run.pieces
+          .filter((piece) => piece.role === 'innerTree')
+          .map(along)
+          .sort((a, b) => a - b)
+        for (let index = 1; index < trees.length; index++) {
+          const steps = (trees[index] - trees[index - 1]) / 6
+          expect(steps).toBeCloseTo(Math.round(steps), 2)
+        }
+      }
+  })
+
+  it('edges both long sides of the lawn with continuous hedge segments', () => {
+    for (const side of ['north', 'south'] as const) {
+      const hedges = belt.filter((piece) => sideOf(piece) === side && piece.role === 'hedge')
+      const lines = Map.groupBy(hedges, (hedge) => depthOf(hedge).toFixed(2))
+      expect(lines.size, side).toBe(2)
+      const [outerLine, innerLine] = [...lines.keys()].map(Number).sort((a, b) => a - b)
+      const outer = belt.filter((piece) => sideOf(piece) === side && piece.role === 'tree')
+      const inner = belt.filter((piece) => sideOf(piece) === side && piece.role === 'innerTree')
+      expect(outerLine).toBeLessThan(depthOf(outer[0]))
+      expect(innerLine).toBeGreaterThan(depthOf(inner[0]))
+      // Separate segments only across a real gap: two that touch would be one.
+      for (const segments of lines.values()) {
+        const spans = segments
+          .map((hedge) => [
+            along(hedge) - hedgeLength(hedge) / 2,
+            along(hedge) + hedgeLength(hedge) / 2
+          ])
+          .sort((a, b) => a[0] - b[0])
+        for (let index = 1; index < spans.length; index++)
+          expect(spans[index][0] - spans[index - 1][1]).toBeGreaterThan(1)
+      }
+    }
+  })
+
+  it('hides no part of the promenade round the campus at any map rotation', () => {
+    const boxes = belt.map((piece) => ({ ...piece, height: piece.maxHeight }))
+    const ring = plan.promenades.filter((walk) => overlapping(walk, plan.claim))
+    let hidden = 0
+    let samples = 0
+    for (const walk of ring)
+      for (let x = walk.x - walk.width / 2; x <= walk.x + walk.width / 2; x += 1)
+        for (let z = walk.z - walk.depth / 2; z <= walk.z + walk.depth / 2; z += 1)
+          for (const azimuth of MAP_ROTATIONS) {
+            samples++
+            if (isHidden({ x, z }, boxes, azimuth)) hidden++
+          }
+    expect(hidden / samples).toBeLessThanOrEqual(0.01)
   })
 
   it('puts a matching piece at all four corners', () => {
@@ -183,9 +265,11 @@ describe.each(LIVE_FLOORS)('campusGreen: %s', (_name, floor) => {
     const grownPlan = townBlocks(campusClaim(neededClaim(grown), plan.claim), 'full')
     expect(grownPlan.claim).toEqual(plan.claim)
     const after = campusGreen(grown, grownPlan)
-    const deep = (piece: GreenPlot): boolean => piece.role === 'feature' || piece.role === 'corner'
+    // Only what stands behind the walk row answers to the plate.
+    const deep = (piece: GreenPlot): boolean =>
+      ['feature', 'corner', 'innerTree'].includes(piece.role) || piece.id.includes(':hedge:inner:')
     expect(after.filter((piece) => !deep(piece))).toEqual(pieces.filter((p) => !deep(p)))
-    // A feature or corner the plate now reaches goes, with its twin; none moves.
-    for (const piece of after.filter(deep)) expect(pieces).toContainEqual(piece)
+    for (const piece of after.filter((each) => each.role === 'feature' || each.role === 'corner'))
+      expect(pieces).toContainEqual(piece)
   })
 })

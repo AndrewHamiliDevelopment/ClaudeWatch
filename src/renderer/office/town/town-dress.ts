@@ -35,8 +35,9 @@ export interface VehicleDesign extends CitizenFigure {
   role: VehicleRole
 }
 
-// The pieces of the campus garden and the gate plaza: `feature` and `corner` name designs.
-export type GardenRole = 'tree' | 'lamp' | 'seat' | 'feature' | 'corner' | 'plazaPair'
+// The pieces of the campus garden and the gate plaza: `feature`, `corner` and `innerTree`
+// name designs.
+export type GardenRole = 'tree' | 'lamp' | 'seat' | 'feature' | 'corner' | 'plazaPair' | 'innerTree'
 
 // A theme's whole town, as data: one shared view draws every theme from it.
 export interface TownDress {

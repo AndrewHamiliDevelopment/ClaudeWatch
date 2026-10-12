@@ -55,6 +55,7 @@ export const GROVE_TOWN: TownDress = {
     seat: 'plank-bench',
     feature: 'pond',
     corner: 'pine-stand',
-    plazaPair: 'boulders'
+    plazaPair: 'boulders',
+    innerTree: 'garden tree'
   }
 }

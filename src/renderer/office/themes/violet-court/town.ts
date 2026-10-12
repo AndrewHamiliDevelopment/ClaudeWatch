@@ -54,6 +54,7 @@ export const COURT_TOWN: TownDress = {
     seat: 'bench',
     feature: 'parterre',
     corner: 'cloister-lawn',
-    plazaPair: 'statue'
+    plazaPair: 'statue',
+    innerTree: 'garden tree'
   }
 }
