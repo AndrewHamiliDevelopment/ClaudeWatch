@@ -8,14 +8,13 @@ import type { FloorGeometry } from '../scene-model'
 // change, the way the live feed's World does; without it every tick re-packs the floor.
 export function fixtureLayout(
   sessions: readonly SessionRef[],
-  saved?: LayoutMap,
-  nowMs = 0
+  saved?: LayoutMap
 ): {
   floors: FloorGeometry[]
   agents: AgentView[]
   layout: LayoutMap
 } {
-  const layout = buildLayout([...sessions], saved, nowMs)
+  const layout = buildLayout([...sessions], saved)
   const agents = placements([...sessions], layout).map(
     ({ session, room, slot, floorId, isSubagent }): AgentView => ({
       agentKey: session.key,
@@ -35,13 +34,8 @@ export function fixtureLayout(
   return { floors: toFloorGeometry(layout, [...sessions]), agents, layout }
 }
 
-export function layoutFloor(options: {
-  floorId: string
-  label: string
-  plate: number
-  sessions: readonly SessionRef[]
-}): FloorGeometry {
-  return fixtureLayout(options.sessions).floors[0]
+export function layoutFloor({ sessions }: { sessions: readonly SessionRef[] }): FloorGeometry {
+  return fixtureLayout(sessions).floors[0]
 }
 
 export function agentsForFloor(floor: FloorGeometry, sessions: readonly SessionRef[]): AgentView[] {

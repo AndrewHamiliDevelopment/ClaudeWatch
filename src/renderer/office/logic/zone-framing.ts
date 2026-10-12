@@ -1,4 +1,5 @@
-import type { FloorGeometry, ZoneGeometry } from '../scene-model'
+import { clamp } from '../../../shared/range'
+import type { FloorGeometry, RoomGeometry, ZoneGeometry } from '../scene-model'
 import { BAND_ZOOM, ISO_POLAR } from './camera-bands'
 
 export interface Bounds {
@@ -57,6 +58,53 @@ export function cardSafeArea(viewport: Viewport): {
   }
 }
 
+type Shift = { x: number; z: number }
+
+const moved = <Point extends Shift>(point: Point, by: Shift): Point => ({
+  ...point,
+  x: point.x - by.x,
+  z: point.z - by.z
+})
+
+function movedRoom(room: RoomGeometry, by: Shift): RoomGeometry {
+  return {
+    ...moved(room, by),
+    door: moved(room.door, by),
+    seats: room.seats.map((seat) => moved(seat, by))
+  }
+}
+
+function movedZone(zone: ZoneGeometry, by: Shift): ZoneGeometry {
+  const { lounge } = zone
+  return {
+    ...moved(zone, by),
+    door: zone.door && moved(zone.door, by),
+    children: zone.children.map((child) => movedZone(child, by)),
+    ...(lounge && {
+      lounge: {
+        ...moved(lounge, by),
+        door: moved(lounge.door, by),
+        seats: lounge.seats.map((seat) => moved(seat, by))
+      }
+    })
+  }
+}
+
+// The floor as a theme's slab and lift see it. They draw around their own origin, so
+// they are drawn in a group at the plate centre and given this copy, measured from there.
+export function plateLocalFloor(floor: FloorGeometry): FloorGeometry {
+  const centre = { x: floor.x, z: floor.z }
+  return {
+    ...floor,
+    x: 0,
+    z: 0,
+    corridor: { ...floor.corridor, z: floor.corridor.z - centre.z },
+    elevator: moved(floor.elevator, centre),
+    rooms: floor.rooms.map((room) => movedRoom(room, centre)),
+    zones: floor.zones.map((zone) => movedZone(zone, centre))
+  }
+}
+
 export function boundsOfZone(zone: Pick<ZoneGeometry, 'x' | 'z' | 'width' | 'depth'>): Bounds {
   return {
     minX: zone.x - zone.width / 2,
@@ -108,7 +156,7 @@ export function occupiedBounds(floor: FloorGeometry, liveSessionKeys: ReadonlySe
     (room) => room.sessionKey && liveSessionKeys.has(room.sessionKey)
   )
   if (rooms.length > 0) return padBounds(union(rooms.map(boundsOfZone)), OCCUPIED_PADDING_M)
-  return boundsOfZone({ x: 0, z: 0, width: floor.width, depth: floor.depth })
+  return boundsOfZone(floor)
 }
 
 // Orthographic isometric projection into "screen metres": x to the right, y up the screen.
@@ -119,6 +167,15 @@ function toScreenMetres(point: { x: number; y: number; z: number }, azimuth: num
     x: point.x * cos - point.z * sin,
     y: point.y * SIN_POLAR - (point.x * sin + point.z * cos) * COS_POLAR
   }
+}
+
+type Axis = [number, number, number]
+
+// World directions of screen-right and screen-up: the inverse of toScreenMetres.
+export function screenAxes(azimuth: number): { right: Axis; up: Axis } {
+  const sin = Math.sin(azimuth)
+  const cos = Math.cos(azimuth)
+  return { right: [cos, 0, -sin], up: [-sin * COS_POLAR, SIN_POLAR, -cos * COS_POLAR] }
 }
 
 export function projectToScreen(
@@ -163,7 +220,7 @@ export function frameBounds(
     safeWidth / Math.max(maxX - minX, 0.01),
     safeHeight / Math.max(maxY - minY, 0.01)
   )
-  const zoom = Math.max(MIN_FRAME_ZOOM, Math.min(options.maxZoom ?? BAND_ZOOM.desk, fit))
+  const zoom = clamp(fit, [MIN_FRAME_ZOOM, options.maxZoom ?? BAND_ZOOM.desk])
 
   // Screen-metre position the target must have so the bounds' centre sits mid safe-area.
   const targetX = (minX + maxX) / 2 - (insets.left + safeWidth / 2 - viewport.width / 2) / zoom

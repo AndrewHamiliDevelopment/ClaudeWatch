@@ -5,9 +5,10 @@ import type {
   PermissionDecision,
   SessionRef
 } from '../../../shared/office/types'
+import { BUTTON_INK_CLASS, BUTTON_INK_QUIET_CLASS } from '../../components/deck/deck-styles'
+import { Seal, SLIP_CLASS } from '../../components/deck/WorkOrderSlip'
 import { cn } from '../../lib/utils'
 import { failureMessage } from '../logic/interactions'
-import { FOCUS_RING_CLASS, HUD_BUTTON_CLASS } from './hud-styles'
 import { ScreenExcerpt } from './ScreenExcerpt'
 import { useRequest } from './use-request'
 
@@ -78,15 +79,15 @@ export function PermissionPanel({ session, peek, respond, onClose }: PermissionP
             : ''
 
   return (
-    <section
-      aria-labelledby={headingId}
-      className="flex flex-col gap-2 rounded-md border border-border-strong p-2"
-    >
-      <h3 id={headingId} className="text-heading text-text-primary">
-        Permission request
-      </h3>
+    <section aria-labelledby={headingId} className={cn(SLIP_CLASS, 'flex flex-col gap-2 p-2.5')}>
+      <div className="flex items-center gap-2">
+        <Seal attention="permission" />
+        <h3 id={headingId} className="pt-[3px] font-plate text-title">
+          Permission request
+        </h3>
+      </div>
       {screenResult?.success && <ScreenExcerpt lines={screenResult.lines} />}
-      <p aria-live="polite" className="text-caption text-text-secondary">
+      <p aria-live="polite" className="text-xs text-ink-soft">
         {statusText}
       </p>
       <div className="flex flex-wrap gap-2">
@@ -94,11 +95,7 @@ export function PermissionPanel({ session, peek, respond, onClose }: PermissionP
           type="button"
           disabled={!canDecide}
           onClick={() => decide('approve')}
-          className={cn(
-            HUD_BUTTON_CLASS,
-            FOCUS_RING_CLASS,
-            'bg-accent-hover font-medium text-white hover:bg-accent-hover/90'
-          )}
+          className={BUTTON_INK_CLASS}
         >
           Approve
         </button>
@@ -106,7 +103,7 @@ export function PermissionPanel({ session, peek, respond, onClose }: PermissionP
           type="button"
           disabled={!canDecide}
           onClick={() => decide('deny')}
-          className={cn(HUD_BUTTON_CLASS, FOCUS_RING_CLASS, 'bg-surface-hover')}
+          className={BUTTON_INK_QUIET_CLASS}
         >
           Deny
         </button>
@@ -114,12 +111,12 @@ export function PermissionPanel({ session, peek, respond, onClose }: PermissionP
           <button
             type="button"
             onClick={() => void loadScreen(() => peek(session.key))}
-            className={cn(HUD_BUTTON_CLASS, FOCUS_RING_CLASS)}
+            className={BUTTON_INK_QUIET_CLASS}
           >
             Try again
           </button>
         )}
-        <button type="button" onClick={onClose} className={cn(HUD_BUTTON_CLASS, FOCUS_RING_CLASS)}>
+        <button type="button" onClick={onClose} className={BUTTON_INK_QUIET_CLASS}>
           Close review
         </button>
       </div>

@@ -119,6 +119,17 @@ describe('reducer and diff', () => {
       'none'
     )
   })
+  it('marks done a session whose last write looks a moment ahead of the tick', () => {
+    const prev = reduce(emptySnapshot(), {
+      now: 1000,
+      sessions: [{ ...session('a'), activity: 'thinking' }],
+      sources: []
+    })
+    const idle = { ...session('a'), updatedAtMs: 2050 }
+    expect(reduce(prev, { now: 2000, sessions: [idle], sources: [] }).sessions[0].attention).toBe(
+      'done'
+    )
+  })
 })
 
 it('keeps last-tool errors when an older parallel tool remains open', () => {
@@ -170,4 +181,24 @@ it('clears failed-tool attention when Claude becomes idle', () => {
     projectLabel: 'repo',
     companyLabel: 'company'
   })
+})
+
+it('shows a busy lead with live subagents and no open tool as delegating, not thinking', () => {
+  // Subagents started in the background answer their Agent call at once: the lead then waits.
+  const crew = [{ id: 'a1', type: 'ravi', activity: 'editing' as const }]
+  const busy = { ...registryEntry(), status: 'busy' as const }
+  expect(
+    sessionFromRegistry(busy, { tool: null, error: false }, crew, '/repo', null).activity
+  ).toBe('delegating')
+  expect(sessionFromRegistry(busy, { tool: null, error: false }, [], '/repo', null).activity).toBe(
+    'thinking'
+  )
+})
+
+it('strips control and bidi override characters from a Claude session name and its folder', () => {
+  const named = { ...registryEntry(), name: 'fix\u202E the\u0007 bug\u2069' }
+  const tool = { tool: null, error: false }
+  expect(sessionFromRegistry(named, tool, [], '/repo', null).name).toBe('fix the bug')
+  const unnamed = { ...registryEntry(), name: '', cwd: '/x/ap\u2066p\u0000' }
+  expect(sessionFromRegistry(unnamed, tool, [], '/repo', null).name).toBe('app')
 })

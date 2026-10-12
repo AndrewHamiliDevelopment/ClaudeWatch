@@ -1,21 +1,26 @@
 import { useFrame, type ThreeEvent } from '@react-three/fiber'
-import { useLayoutEffect, useMemo, useRef } from 'react'
+import { useLayoutEffect, useMemo, useRef, type ReactElement } from 'react'
 import type { Group } from 'three'
+import { AGENT_SCALE, SUBAGENT_SCALE } from '../../../shared/office/figure-scale'
 import type { AgentView } from '../../../shared/office/types'
 import { approach, approachAngle, moodFor, robotPose } from '../logic/character-pose'
+import type { ThemeZoneGroup } from '../logic/office-themes'
+import { getTheme } from '../themes/registry'
 import { applyThemePose, useRobotRig } from '../themes/rig'
 import type { OfficeTheme } from '../themes/types'
+import { SHARED_BATCH } from './mesh-batches'
 import { blobShadowTexture } from './textures'
 
-// Sized up from the 1 m desk scale so robots read at the floor zoom band.
-const ROBOT_SCALE = 1.3
-const SUBAGENT_SCALE = 0.9
 const MOVE_RATE = 5
 const TURN_RATE = 6
 const MOVING_EPSILON = 0.05
+// Merged shadows sort as one object, so they are drawn before every other see-through part.
+const SHADOW_BATCH = { [SHARED_BATCH]: 'agent-shadow' }
+const SHADOW_RENDER_ORDER = -1
 
 interface RobotProps {
   theme: OfficeTheme
+  rosterIndex: number
   agent: AgentView
   isSelected: boolean
   isSpeaking: boolean
@@ -33,6 +38,7 @@ function phaseFor(key: string): number {
 export function Robot({
   agent,
   theme,
+  rosterIndex,
   isSelected,
   isSpeaking,
   isReducedMotion,
@@ -86,8 +92,13 @@ export function Robot({
   }
 
   return (
-    <group ref={rootRef} scale={agent.isSubagent ? SUBAGENT_SCALE : ROBOT_SCALE}>
-      <mesh position={[0, 0.012, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+    <group ref={rootRef} scale={agent.isSubagent ? SUBAGENT_SCALE : AGENT_SCALE}>
+      <mesh
+        position={[0, 0.012, 0]}
+        rotation={[-Math.PI / 2, 0, 0]}
+        userData={SHADOW_BATCH}
+        renderOrder={SHADOW_RENDER_ORDER}
+      >
         <planeGeometry args={[0.9, 0.9]} />
         <meshBasicMaterial map={blobShadowTexture()} transparent depthWrite={false} />
       </mesh>
@@ -100,6 +111,7 @@ export function Robot({
       <Model
         agent={agent}
         skin={theme.robot.skins[agent.provider]}
+        rosterIndex={rosterIndex}
         rig={rig}
         isReducedMotion={isReducedMotion}
       />
@@ -129,4 +141,83 @@ export function Robot({
       </mesh>
     </group>
   )
+}
+
+interface RobotCrewProps extends Pick<RobotProps, 'isReducedMotion' | 'onSelect' | 'onFly'> {
+  agents: readonly AgentView[]
+  zoneGroups: readonly ThemeZoneGroup[]
+  floorTheme: OfficeTheme
+  selectedAgentKey: string | null
+  speakingAgentKey: string | null
+}
+
+// Shallow value equality: a sim step hands over fresh agent objects whose fields mostly match.
+function isShallowEqual(prev: object, next: object): boolean {
+  const prevEntries = new Map(Object.entries(prev))
+  const nextEntries = Object.entries(next)
+  return (
+    prevEntries.size === nextEntries.length &&
+    nextEntries.every(
+      ([key, value]) => prevEntries.has(key) && Object.is(prevEntries.get(key), value)
+    )
+  )
+}
+
+function isSameRobot(prev: RobotProps, next: RobotProps): boolean {
+  return (
+    isShallowEqual({ ...prev, agent: null }, { ...next, agent: null }) &&
+    isShallowEqual(prev.agent, next.agent)
+  )
+}
+
+interface DrawnRobot {
+  props: RobotProps
+  element: ReactElement
+}
+
+// A robot wears the theme of its own room, and keeps it while it walks through other zones.
+// An unchanged robot gets its previous element back, so React skips it on every sim step.
+export function RobotCrew({
+  agents,
+  zoneGroups,
+  floorTheme,
+  selectedAgentKey,
+  speakingAgentKey,
+  ...robotProps
+}: RobotCrewProps) {
+  const drawn = useRef<Map<string, DrawnRobot>>(null)
+  const homes = useMemo(
+    () =>
+      new Map(
+        zoneGroups.flatMap((zoneGroup) =>
+          zoneGroup.rooms.map(
+            (room) =>
+              [room.id, { theme: getTheme(zoneGroup.themeId), rosterIndex: room.bay ?? 0 }] as const
+          )
+        )
+      ),
+    [zoneGroups]
+  )
+  const previous = drawn.current
+  const next = new Map<string, DrawnRobot>()
+  const elements = agents.map((agent) => {
+    const home = homes.get(agent.roomId)
+    const props: RobotProps = {
+      ...robotProps,
+      agent,
+      theme: home?.theme ?? floorTheme,
+      rosterIndex: home?.rosterIndex ?? 0,
+      isSelected: agent.agentKey === selectedAgentKey,
+      isSpeaking: agent.agentKey === speakingAgentKey
+    }
+    const kept = previous?.get(agent.agentKey)
+    const robot =
+      kept && isSameRobot(kept.props, props)
+        ? kept
+        : { props, element: <Robot key={agent.agentKey} {...props} /> }
+    next.set(agent.agentKey, robot)
+    return robot.element
+  })
+  drawn.current = next
+  return <>{elements}</>
 }

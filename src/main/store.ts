@@ -10,6 +10,7 @@ interface StoreSchema {
   popoverPinned: boolean
   popoverPosition: { x: number; y: number } | null
   officeWindowBounds: Bounds | null
+  cpuIdleDefaultMigrated: boolean
 }
 
 export class SettingsStore {
@@ -23,9 +24,24 @@ export class SettingsStore {
         history: [],
         popoverPinned: false,
         popoverPosition: null,
-        officeWindowBounds: null
+        officeWindowBounds: null,
+        cpuIdleDefaultMigrated: false
       }
     })
+    this.migrateCpuIdleDefault()
+  }
+
+  // Once per install: 1.0 was the old default. Afterwards 1.0 is the owner's own choice.
+  private migrateCpuIdleDefault(): void {
+    if (this.store.get('cpuIdleDefaultMigrated', false)) return
+    const settings = this.getSettings()
+    if (settings.cpuIdleThreshold === 1.0) {
+      this.store.set('settings', {
+        ...settings,
+        cpuIdleThreshold: DEFAULT_SETTINGS.cpuIdleThreshold
+      })
+    }
+    this.store.set('cpuIdleDefaultMigrated', true)
   }
 
   getSettings(): AppSettings {
@@ -33,17 +49,11 @@ export class SettingsStore {
     // Defaults fill whatever an older version never saved, or a damaged or hand-edited file
     // holds in the wrong type.
     const known = conformSettings(saved)
-    const stored: AppSettings = {
+    return {
       ...DEFAULT_SETTINGS,
       ...known,
       notifications: { ...DEFAULT_SETTINGS.notifications, ...known.notifications }
     }
-    // Migrate cpuIdleThreshold from old default (1.0) to new default (3.0)
-    if (stored.cpuIdleThreshold === 1.0) {
-      stored.cpuIdleThreshold = DEFAULT_SETTINGS.cpuIdleThreshold
-      this.store.set('settings', stored)
-    }
-    return stored
   }
 
   setSettings(partial: Partial<AppSettings>): AppSettings {
@@ -54,6 +64,8 @@ export class SettingsStore {
       notifications: { ...current.notifications, ...partial.notifications }
     }
     this.store.set('settings', merged)
+    // A lowered limit applies to what is already stored, not only from the next session's exit.
+    if (partial.maxHistoryEntries !== undefined) this.keepNewest(this.getHistory())
     return merged
   }
 
@@ -62,11 +74,12 @@ export class SettingsStore {
   }
 
   addHistoryEntry(entry: SessionHistoryEntry): void {
-    const history = this.getHistory()
-    history.push(entry)
+    this.keepNewest([...this.getHistory(), entry])
+  }
+
+  private keepNewest(history: SessionHistoryEntry[]): void {
     const max = this.getSettings().maxHistoryEntries
-    const trimmed = history.length > max ? history.slice(-max) : history
-    this.store.set('history', trimmed)
+    this.store.set('history', history.slice(Math.max(0, history.length - max)))
   }
 
   clearHistory(): void {

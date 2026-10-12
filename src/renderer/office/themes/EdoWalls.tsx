@@ -9,13 +9,13 @@ import { EDO } from './palettes'
 import { shojiParts } from './shoji-layout'
 import type { WallsProps } from './types'
 
-export function EdoWalls({ floor, mode, isReducedMotion }: WallsProps) {
+export function EdoWalls({ rooms, mode, isReducedMotion }: WallsProps) {
   const panels = useRef<InstancedMesh>(null)
   const lattice = useRef<InstancedMesh>(null)
   const pipes = useRef<InstancedMesh>(null)
   const gauges = useRef<InstancedMesh>(null)
   const wallHeights = useRef(createWallHeights()).current
-  const segments = useMemo(() => floorWallSegments(floor.rooms), [floor.rooms])
+  const segments = useMemo(() => floorWallSegments(rooms), [rooms])
   const latticeCount = segments.reduce((count, s) => count + Math.ceil(s.length / 0.5) + 4, 0)
   useFrame(({ camera }, delta) => {
     if (!panels.current || !lattice.current || !pipes.current || !gauges.current) return

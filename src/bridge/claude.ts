@@ -1,8 +1,10 @@
-import { basename, dirname } from 'node:path'
 import type { SessionRef, SubagentRef } from '../shared/office/types'
-import { projectKey } from '../shared/office/project-key'
+import { displayName, folderName } from './io'
+import { placementOf } from './project-root'
 import type { RegistryEntry } from './registry'
 import type { TranscriptState } from './transcript-tail'
+
+const NO_TOOL: TranscriptState = { tool: null, error: false }
 import { toolActivity } from './tool-category'
 
 export function sessionFromRegistry(
@@ -18,14 +20,9 @@ export function sessionFromRegistry(
     provider: 'claude',
     sessionId: entry.sessionId,
     pid: entry.pid,
-    name: entry.name || basename(entry.cwd),
+    name: displayName(entry.name) || folderName(entry.cwd),
     cwd: entry.cwd,
-    projectKey: projectKey(root),
-    projectLabel: basename(root),
-    projectRoot: root,
-    companyKey: projectKey(dirname(root)),
-    companyLabel: basename(dirname(root)),
-    worktree,
+    ...placementOf({ root, worktree }),
     host: 'terminal',
     orcaPaneKey: null,
     activity:
@@ -34,7 +31,10 @@ export function sessionFromRegistry(
         : transcript.tool
           ? toolActivity(transcript.tool.category)
           : entry.status === 'busy'
-            ? 'thinking'
+            ? // Background subagents answer their Agent call at once: the lead is waiting on them.
+              subagents.length > 0
+              ? 'delegating'
+              : 'thinking'
             : entry.status === 'shell'
               ? 'running'
               : 'idle',
@@ -48,6 +48,34 @@ export function sessionFromRegistry(
     currentTool: transcript.tool,
     subagents,
     startedAtMs: Date.parse(`${entry.procStart} UTC`) || 0,
-    updatedAtMs: entry.updatedAtMs
+    updatedAtMs: entry.updatedAtMs,
+    usage: null
   }
+}
+
+// A teammate shown as a session of its own (its lead has exited): placed by its own folder,
+// proven by its own process, named by its own name.
+export function sessionFromTeammate(
+  teammate: SubagentRef & { cwd: string; pid: number },
+  root: string,
+  worktree: string | null
+): SessionRef {
+  const startedAtMs = teammate.startedAtMs ?? 0
+  const placed = sessionFromRegistry(
+    {
+      pid: teammate.pid,
+      sessionId: teammate.id,
+      cwd: teammate.cwd,
+      name: teammate.name ?? teammate.type,
+      status: 'busy',
+      waitingFor: '',
+      procStart: '',
+      updatedAtMs: startedAtMs
+    },
+    NO_TOOL,
+    [],
+    root,
+    worktree
+  )
+  return { ...placed, activity: teammate.activity, startedAtMs }
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { Group, Mesh, MeshStandardMaterial } from 'three'
+import { Group, Mesh } from 'three'
 import { robotPose } from '../logic/character-pose'
 import { applyThemePose } from './rig'
 import type { RobotRig } from './types'
@@ -17,8 +17,7 @@ function rigFixture(): RobotRig {
     sensor: group(),
     eye: { current: new Mesh() },
     thought: group(),
-    puffs: [0, 1, 2].map(() => ({ current: new Mesh() })),
-    puffMaterials: [0, 1, 2].map(() => ({ current: new MeshStandardMaterial() }))
+    puffs: [0, 1, 2].map(() => ({ current: new Mesh() }))
   }
 }
 
@@ -35,6 +34,7 @@ describe('theme rig pose adapter', () => {
     })
     expect(rig.body.current?.position.y).toBe(pose.bob)
     expect(rig.body.current?.rotation.z).toBe(pose.sway)
+    expect(rig.body.current?.rotation.x).toBe(0)
     expect(rig.head.current?.rotation.x).toBe(pose.headPitch)
     expect(rig.leftArm.current?.rotation.x).toBe(pose.leftArm)
     expect(rig.rightArm.current?.rotation.x).toBe(pose.rightArm)
@@ -42,7 +42,8 @@ describe('theme rig pose adapter', () => {
     expect(rig.gear.current?.rotation.z).toBeCloseTo(pose.gearSpeed * 0.1)
     expect(rig.eye.current?.scale.y).toBe(pose.eyeOpen)
     expect(rig.puffs[0].current?.visible).toBe(true)
-    expect(rig.puffMaterials[0].current?.opacity).toBeLessThan(1)
+    expect(rig.puffs[0].current?.position.y).toBeGreaterThan(1.12)
+    expect(rig.puffs[0].current?.scale.x).toBeGreaterThan(0)
   })
   it('holds posture under reduced motion and hides steam outside work', () => {
     const rig = rigFixture()
@@ -56,5 +57,20 @@ describe('theme rig pose adapter', () => {
     expect(rig.thought.current?.visible).toBe(true)
     expect(rig.puffs.every((ref) => !ref.current?.visible)).toBe(true)
     expect(rig.gear.current?.rotation.z).toBe(0)
+  })
+  it('seats a lounging agent: body low and leaning back, no steam and no thought bubble', () => {
+    const rig = rigFixture()
+    const pose = robotPose('lounging', 0.5, 0)
+    applyThemePose(rig, pose, {
+      mood: 'lounging',
+      time: 0.5,
+      phase: 0,
+      delta: 0.1,
+      isReducedMotion: false
+    })
+    expect(rig.body.current?.position.y).toBe(pose.bob)
+    expect(rig.body.current?.rotation.x).toBe(pose.lean)
+    expect(rig.thought.current?.visible).toBe(false)
+    expect(rig.puffs.every((ref) => !ref.current?.visible)).toBe(true)
   })
 })

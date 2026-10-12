@@ -53,35 +53,12 @@ describe('scroll layout contract', () => {
       installUpdate: vi.fn()
     })
 
-    mockUseInstances.mockReturnValue({
-      instances: [],
-      stats: {
-        total: 0,
-        active: 0,
-        idle: 0,
-        stale: 0,
-        exited: 0,
-        recentlyCompleted: 0
-      },
-      filter: 'all',
-      setFilter: vi.fn(),
-      searchQuery: '',
-      setSearchQuery: vi.fn(),
-      filteredInstances: [],
-      groupedInstances: {
-        recentlyCompleted: [],
-        inProgress: [],
-        waiting: [],
-        stale: []
-      }
-    })
+    mockUseInstances.mockReturnValue([])
 
     mockUseUsage.mockReturnValue({
       usage: null,
       loading: false,
-      refresh: vi.fn(),
-      showModelBreakdown: false,
-      setShowModelBreakdown: vi.fn()
+      refresh: vi.fn()
     })
 
     mockUsePromoStatus.mockReturnValue({
@@ -109,9 +86,8 @@ describe('scroll layout contract', () => {
     expect(scrollRegion.className).toContain('min-h-0')
     expect(scrollRegion.className).toContain('overflow-y-auto')
     expect(scrollRegion.className).toContain('no-drag')
-    expect(within(scrollRegion).getByText('Instances')).toBeInTheDocument()
-    expect(within(scrollRegion).getByLabelText('Search instances')).toBeInTheDocument()
-    expect(within(scrollRegion).getByText('No instances found')).toBeInTheDocument()
+    expect(within(scrollRegion).getByText('No agents running')).toBeInTheDocument()
+    expect(screen.getByRole('searchbox', { name: 'Find an agent' })).toBeInTheDocument()
   })
 
   it('makes only the header draggable', () => {
@@ -126,7 +102,7 @@ describe('scroll layout contract', () => {
     expect(screen.getByRole('main').className).toContain('no-drag')
     expect(screen.getByTestId('dashboard-scroll-region')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByLabelText('Settings'))
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
 
     expect(screen.getByTestId('settings-scroll-region')).toBeInTheDocument()
   })

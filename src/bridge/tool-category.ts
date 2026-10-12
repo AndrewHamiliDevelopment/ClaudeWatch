@@ -16,7 +16,26 @@ const categories: Record<string, ToolCategory> = {
   WebSearch: 'web',
   WebFetch: 'web',
   Task: 'agent',
-  Agent: 'agent'
+  Agent: 'agent',
+  // OpenCode names its tools in lower case.
+  read: 'read',
+  grep: 'read',
+  glob: 'read',
+  list: 'read',
+  lsp: 'read',
+  edit: 'edit',
+  write: 'edit',
+  multiedit: 'edit',
+  patch: 'edit',
+  apply_patch: 'edit',
+  bash: 'run',
+  exec: 'run',
+  exec_command: 'run',
+  web_search: 'web',
+  webfetch: 'web',
+  websearch: 'web',
+  codesearch: 'web',
+  task: 'agent'
 }
 export function toolCategory(name: string): ToolCategory {
   return Object.hasOwn(categories, name) ? categories[name] : 'other'

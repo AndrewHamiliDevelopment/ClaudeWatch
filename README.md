@@ -160,22 +160,22 @@ This starts `electron-vite dev` which:
 
 ### Available Scripts
 
-| Script                  | Command                                       | Description                               |
-| ----------------------- | --------------------------------------------- | ----------------------------------------- |
-| `pnpm dev`              | `electron-vite dev`                           | Development mode with HMR                 |
-| `pnpm build`            | `electron-vite build`                         | Build all processes for production        |
-| `pnpm preview`          | `electron-vite preview`                       | Preview production build locally          |
-| `pnpm test`             | `vitest run`                                  | Run all tests once                        |
-| `pnpm test:watch`       | `vitest`                                      | Run tests in watch mode                   |
-| `pnpm typecheck`        | `tsc --noEmit`                                | TypeScript type checking                  |
-| `pnpm lint`             | `eslint . --ext .ts,.tsx`                     | Lint all TypeScript files                 |
-| `pnpm format`           | `prettier --write "src/**/*"`                 | Format all source files                   |
-| `pnpm build:mac`        | Build + electron-builder --mac                | Create macOS DMG                          |
-| `pnpm build:win`        | Build + electron-builder --win                | Create Windows installer                  |
-| `pnpm build:linux`      | Build + electron-builder --linux              | Create Linux AppImage                     |
-| `npm run release:patch` | `npm version patch && git push --follow-tags` | Bump patch version and trigger CI release |
-| `npm run release:minor` | `npm version minor && git push --follow-tags` | Bump minor version and trigger CI release |
-| `npm run release:major` | `npm version major && git push --follow-tags` | Bump major version and trigger CI release |
+| Script                  | Command                                      | Description                                                   |
+| ----------------------- | -------------------------------------------- | ------------------------------------------------------------- |
+| `pnpm dev`              | `electron-vite dev`                          | Development mode with HMR                                     |
+| `pnpm build`            | `electron-vite build`                        | Build all processes for production                            |
+| `pnpm preview`          | `electron-vite preview`                      | Preview production build locally                              |
+| `pnpm test`             | `vitest run`                                 | Run all tests once                                            |
+| `pnpm test:watch`       | `vitest`                                     | Run tests in watch mode                                       |
+| `pnpm typecheck`        | `tsc --noEmit`                               | TypeScript type checking                                      |
+| `pnpm lint`             | `eslint . --ext .ts,.tsx`                    | Lint all TypeScript files                                     |
+| `pnpm format`           | `prettier --write "src/**/*"`                | Format all source files                                       |
+| `pnpm build:mac`        | Build + electron-builder --mac               | Create macOS DMG                                              |
+| `pnpm build:win`        | Build + electron-builder --win               | Create Windows installer                                      |
+| `pnpm build:linux`      | Build + electron-builder --linux             | Create Linux AppImage                                         |
+| `npm run release:patch` | `npm version patch && npm run publish:local` | Bump the patch version, build, sign and publish from this Mac |
+| `npm run release:minor` | `npm version minor && npm run publish:local` | Bump the minor version, build, sign and publish from this Mac |
+| `npm run release:major` | `npm version major && npm run publish:local` | Bump the major version, build, sign and publish from this Mac |
 
 ### Verify Everything Works
 
@@ -812,66 +812,36 @@ pnpm build:mac   # or build:win or build:linux
 
 ### Creating a Release
 
-ClaudeWatch uses GitHub Actions to automatically build and publish releases when a version tag is pushed.
-
-#### Quick Release
+Releases are cut from the maintainer's Mac. There is no CI pipeline.
 
 ```bash
-# Bump version, create git tag, push — triggers CI build + GitHub Release
 npm run release:patch   # 1.0.0 → 1.0.1
 npm run release:minor   # 1.0.0 → 1.1.0
 npm run release:major   # 1.0.0 → 2.0.0
 ```
 
-This runs `npm version <type>` which:
+Each one runs `npm version <type>` (which writes `release-notes.md` from the commits since the last tag, bumps `package.json`, and creates the version commit and tag) and then `npm run publish:local`: build, build the widget, and `electron-builder --mac` for arm64 and x64.
 
-1. Updates `version` in `package.json`
-2. Creates a git commit with message `v1.0.1`
-3. Creates a git tag `v1.0.1`
-4. Pushes the commit and tag to the remote
+What the machine needs:
 
-#### CI/CD Pipeline (`.github/workflows/release.yml`)
+| Need                                                                             | Why                                                                 | Without it                                                                                                                                                        |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A "Developer ID Application" certificate of the app's team in the login keychain | Signing. Installed copies only accept an update signed by that team | Do not release: existing installs refuse the update                                                                                                               |
+| `GH_TOKEN` (or `GITHUB_TOKEN`) with `repo` scope in the environment              | Publishing the artifacts and `latest-mac.yml` to GitHub Releases    | The build still runs and leaves the artifacts in `dist/`, unpublished                                                                                             |
+| `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`                       | Notarisation                                                        | electron-builder logs "skipped macOS notarization" and continues; a fresh download then shows the Gatekeeper warning on first open. Auto-updates are not affected |
 
-When a `v*` tag is pushed, two jobs run in parallel:
+After publishing, push the version commit and tag: `git push --follow-tags`.
 
-| Job         | Runner           | Output                           |
-| ----------- | ---------------- | -------------------------------- |
-| `build-mac` | `macos-latest`   | Universal DMG + `latest-mac.yml` |
-| `build-win` | `windows-latest` | NSIS installer + `latest.yml`    |
+#### A local build without the release certificate
 
-Both jobs publish artifacts directly to the GitHub Release using `--publish always`.
-
-**Authentication:** Uses the automatic `GITHUB_TOKEN` — no additional secrets needed.
-
-**Widget build:** The macOS job runs `npm run build:widget` (requires Xcode/Swift) with `continue-on-error: true` so the release still succeeds if the widget build fails.
-
-#### Manual Release
-
-If you need to build and publish manually:
+For a copy that runs on your own Mac only (it cannot auto-update to a Developer ID release):
 
 ```bash
-# 1. Bump version
-npm version patch
-
-# 2. Build
-npm run build
-
-# 3. Package and publish to GitHub Releases
-GH_TOKEN=<your-token> npx electron-builder --mac --publish always
-GH_TOKEN=<your-token> npx electron-builder --win --publish always
+npm run build && npm run build:widget
+npx electron-builder --mac dir --arm64 --publish never \
+  -c.mac.notarize=false -c.mac.type=development \
+  -c.mac.identity="<an Apple Development certificate of the app's team>"
 ```
-
-#### Code Signing
-
-Currently, builds are **unsigned**. This means:
-
-- **macOS:** Gatekeeper shows a warning on first launch ("unidentified developer"). Users bypass via right-click → Open.
-- **Windows:** SmartScreen may warn on first run.
-
-Auto-update still works without code signing. To add signing later, set these GitHub Actions secrets:
-
-- `CSC_LINK` — Base64-encoded `.p12` certificate
-- `CSC_KEY_PASSWORD` — Certificate password
 
 #### How Users Get Updates
 
@@ -948,9 +918,6 @@ ClaudeWatch/
 │           ├── useSettings.test.ts  # Hook tests
 │           └── useUpdater.test.ts   # Auto-update hook tests
 │
-├── .github/
-│   └── workflows/
-│       └── release.yml             # CI/CD: build + publish on tag push
 ├── electron.vite.config.ts         # Vite config (main/preload/renderer)
 ├── electron-builder.yml            # Build/packaging config
 ├── tailwind.config.ts              # Tailwind theme + design tokens
@@ -1085,7 +1052,7 @@ Ensure Visual Studio Build Tools 2019+ are installed with the "Desktop developme
 - [x] Settings persistence
 - [x] Multi-terminal detection and opening (Warp, iTerm2, Terminal.app, Kitty, WezTerm, Ghostty, VS Code, Cursor)
 - [x] Session type detection (CLI, VS Code, subagent)
-- [x] Auto-updater integration (electron-updater + GitHub Releases CI/CD)
+- [x] Auto-updater integration (electron-updater + GitHub Releases)
 - [x] macOS Widgets (WidgetKit) — Small/Medium/Large widgets with live stats, usage costs, and instance list
 
 ### Planned

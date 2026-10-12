@@ -15,8 +15,14 @@ const sessions = [
 
 describe('headquarters geometry', () => {
   it('nests company > project > office/team and flattens precisely the leaves', () => {
-    const layout = buildLayout(sessions, undefined, 0)
-    const floors = toFloorGeometry(layout, sessions)
+    const worker = (id: string) => ({ id, type: 'worker', activity: 'reading' as const })
+    // Three subagents: two sit at their lead's guest desks, the third needs a team area.
+    const crowded = [
+      { ...sessions[0], subagents: ['0', '1', '2'].map(worker) },
+      ...sessions.slice(1)
+    ]
+    const layout = buildLayout(crowded, undefined)
+    const floors = toFloorGeometry(layout, crowded)
     expect(floors).toHaveLength(1)
     const floor = floors[0]
     expect(floor.floorId).toBe('hq')
@@ -25,7 +31,8 @@ describe('headquarters geometry', () => {
       expect(company.kind).toBe('company')
       for (const project of company.children) {
         expect(project.kind).toBe('project')
-        expect(project.children.some((z) => z.kind === 'team')).toBe(true)
+        // Only a project with subagents has a team area.
+        expect(project.children.some((z) => z.kind === 'team')).toBe(project.projectKey === 'p_a')
         for (const leaf of project.children) {
           expect(floor.rooms.find((r) => r.id === leaf.id)).toMatchObject({
             x: leaf.x,
@@ -37,16 +44,55 @@ describe('headquarters geometry', () => {
         }
       }
     }
-    expect(floor.rooms).toHaveLength(5)
+    expect(floor.rooms.map((room) => room.kind)).toEqual(['office', 'office', 'office', 'team'])
   })
-  it('uses the same origin-centred metre frame for zones, leaves, entrance and agents', () => {
-    const layout = buildLayout(sessions, undefined, 0)
+  it('carries each office bay from the sim and gives a team room none', () => {
+    const layout = buildLayout(sessions, undefined)
+    const rooms = toFloorGeometry(layout, sessions)[0].rooms
+    for (const room of rooms) {
+      const simRoom = layout.floors[0].rooms.find((candidate) => candidate.id === room.id)
+      expect(room.bay).toBe(room.kind === 'office' ? simRoom?.bay : undefined)
+    }
+    expect(rooms.filter((room) => room.kind === 'office').map((room) => room.bay)).toContain(1)
+  })
+  it('carries each company lounge on its zone, with the seats the sim made and no desk room', () => {
+    const layout = buildLayout(sessions, undefined)
     const floor = toFloorGeometry(layout, sessions)[0]
-    expect(floor.corridor.width).toBeGreaterThanOrEqual(3)
+    for (const [index, company] of floor.zones.entries()) {
+      const lounge = layout.floors[0].zones[index].lounge!
+      expect(company.lounge).toEqual({
+        id: `${company.id}:lounge`,
+        x: lounge.x,
+        z: lounge.z,
+        width: lounge.width,
+        depth: lounge.depth,
+        door: lounge.door,
+        seats: lounge.slots.map((slot) => ({
+          slotId: slot.id,
+          x: slot.x,
+          z: slot.z,
+          heading: slot.heading
+        }))
+      })
+      expect(company.lounge!.seats.map((seat) => seat.slotId)).toEqual(
+        ['0', '1', '2', '3'].map((seat) => `lounge_seat_${seat}`)
+      )
+      for (const project of company.children) expect(project.lounge).toBeUndefined()
+    }
+    expect(floor.rooms.map((room) => room.kind)).toEqual(['office', 'office', 'office'])
+  })
+  it('uses the same gate-anchored metre frame for the plate, zones, leaves and agents', () => {
+    const layout = buildLayout(sessions, undefined)
+    const floor = toFloorGeometry(layout, sessions)[0]
+    expect(floor.corridor).toEqual({ z: 0, width: 3 })
     expect(floor.elevator).toEqual({ x: 0, z: 0 })
+    // The plate carries its own centre from the sim; the gate is not in the middle of it.
+    const plate = { x: layout.floors[0].x, z: layout.floors[0].z }
+    expect({ x: floor.x, z: floor.z }).toEqual(plate)
+    expect(plate.x).not.toBe(0)
     for (const zone of floor.zones) {
-      expect(Math.abs(zone.x) + zone.width / 2).toBeLessThanOrEqual(floor.width / 2)
-      expect(Math.abs(zone.z) + zone.depth / 2).toBeLessThanOrEqual(floor.depth / 2)
+      expect(Math.abs(zone.x - plate.x) + zone.width / 2).toBeLessThanOrEqual(floor.width / 2)
+      expect(Math.abs(zone.z - plate.z) + zone.depth / 2).toBeLessThanOrEqual(floor.depth / 2)
     }
     for (const placement of placements(sessions, layout)) {
       const agent: AgentView = {
@@ -85,7 +131,7 @@ it('seats every agent behind its own desk, inside the room and facing the defaul
     { ...session('a'), subagents: ['0', '1', '2', '3', '4'].map(worker) },
     session('b')
   ]
-  const layout = buildLayout(crowded, undefined, 0)
+  const layout = buildLayout(crowded, undefined)
   const floor = toFloorGeometry(layout, crowded)[0]
 
   for (const { room, slot } of placements(crowded, layout)) {

@@ -50,4 +50,19 @@ describe('Settings: open the Office on start', () => {
       'true'
     )
   })
+
+  it('watches accounts by default, says what that reads, and turns off with one click', () => {
+    mockUseSettings.mockReturnValue({ settings: DEFAULT_SETTINGS, updateSettings, loading: false })
+    render(<Settings />)
+
+    const toggle = screen.getByRole('switch', { name: 'Watch accounts' })
+    expect(toggle).toHaveAttribute('aria-checked', 'true')
+    expect(
+      screen.getByText(
+        'Reads account names, plans and email addresses, kept on this Mac, to count tokens per account. Never credentials. Turning it off keeps what was counted.'
+      )
+    ).toBeInTheDocument()
+    fireEvent.click(toggle)
+    expect(updateSettings).toHaveBeenCalledWith({ watchAccounts: false })
+  })
 })

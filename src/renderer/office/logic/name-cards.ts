@@ -1,6 +1,7 @@
+import { needsHuman } from '../../../shared/office/attention'
 import type { AgentActivity, AgentView } from '../../../shared/office/types'
 import type { OfficeFrame } from '../scene-model'
-import { agentCountLabel, needsHuman, needsYouLabel, sessionForAgent } from './floor-model'
+import { agentCountLabel, needsYouLabel, sessionForAgent } from './floor-model'
 import { DESK_REACH } from './room-layout'
 import { GEM_SPECS } from './status-gem'
 
@@ -101,12 +102,14 @@ export function buildNameCards(
           ...meta
         }
       }
+      // A card floats over the desk in front of its agent; in the lounge there is no desk.
+      const reach = agent.place === 'lounge' ? 0 : DESK_REACH
       return {
         agentKey: agent.agentKey,
         kind: 'card',
         sessionKey: session?.key ?? null,
-        x: agent.x + Math.sin(agent.heading) * DESK_REACH,
-        z: agent.z + Math.cos(agent.heading) * DESK_REACH,
+        x: agent.x + Math.sin(agent.heading) * reach,
+        z: agent.z + Math.cos(agent.heading) * reach,
         title: session?.name ?? agent.label,
         detail: detailFor(agent, session?.currentTool?.name),
         status: statusFor(agent),
@@ -136,7 +139,7 @@ export function buildProjectStacks(frame: OfficeFrame, floorId: string): Project
     .flatMap((zone) => {
       const members = zone.projectKey ? membersByProject.get(zone.projectKey) : undefined
       if (!zone.projectKey || !members) return []
-      const waiting = members.filter(needsHuman).length
+      const waiting = members.filter((member) => needsHuman(member.attention)).length
       const parts = [zone.label, agentCountLabel(members.length)]
       if (waiting > 0) parts.push(needsYouLabel(waiting))
       return [

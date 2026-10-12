@@ -1,21 +1,15 @@
-import { useState, useEffect } from 'react'
-import {
-  Bell,
-  Moon,
-  Sun,
-  Monitor,
-  Power,
-  Download,
-  RefreshCw,
-  CheckCircle,
-  AlertTriangle,
-  ExternalLink,
-  X
-} from 'lucide-react'
-import { cn } from '../lib/utils'
 import { useSettings } from '../hooks/useSettings'
-import { useUpdater } from '../hooks/useUpdater'
-import type { UpdateStatus } from '../lib/types'
+import { SEGMENT_CLASS } from './deck/deck-styles'
+import { SETTING_RANGES } from '../../shared/settings-ranges'
+import {
+  NumberSetting,
+  RangeSetting,
+  SettingRow,
+  SettingsSection,
+  ToggleSwitch
+} from './settings/controls'
+import { NotificationSettings } from './settings/NotificationSettings'
+import { UpdatesSection } from './settings/UpdatesSection'
 
 const pollingOptions = [
   { value: 1000, label: '1s' },
@@ -24,119 +18,30 @@ const pollingOptions = [
   { value: 10000, label: '10s' }
 ]
 
-const themeOptions: { value: 'dark' | 'light' | 'system'; label: string; icon: typeof Moon }[] = [
-  { value: 'dark', label: 'Dark', icon: Moon },
-  { value: 'light', label: 'Light', icon: Sun },
-  { value: 'system', label: 'System', icon: Monitor }
-]
-
-function ToggleSwitch({
-  checked,
-  onChange,
-  label
-}: {
-  checked: boolean
-  onChange: (val: boolean) => void
-  label: string
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      onClick={() => onChange(!checked)}
-      className={cn(
-        'relative h-6 w-11 rounded-full transition-colors',
-        checked ? 'bg-accent' : 'bg-border'
-      )}
-    >
-      <span
-        className={cn(
-          'absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white transition-transform',
-          checked && 'translate-x-5'
-        )}
-        aria-hidden="true"
-      />
-    </button>
-  )
-}
-
-function SettingRow({
-  label,
-  description,
-  children
-}: {
-  label: string
-  description?: string
-  children: React.ReactNode
-}) {
-  return (
-    <div className="flex items-center justify-between gap-4 py-3">
-      <div className="min-w-0">
-        <p className="text-sm font-medium text-text-primary">{label}</p>
-        {description && <p className="mt-0.5 text-xs text-text-secondary">{description}</p>}
-      </div>
-      <div className="shrink-0">{children}</div>
-    </div>
-  )
-}
-
-function NotificationPermissionBanner() {
-  const [supported, setSupported] = useState<boolean | null>(null)
-
-  useEffect(() => {
-    if (!window.api?.checkNotificationPermission) return
-    window.api
-      .checkNotificationPermission()
-      .then((result) => setSupported(result.supported))
-      .catch(() => setSupported(null))
-  }, [])
-
-  if (supported === null || supported) return null
-
-  return (
-    <div className="mb-3 flex items-start gap-2 rounded-md border border-yellow-500/30 bg-yellow-500/10 p-2.5">
-      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-yellow-500" aria-hidden="true" />
-      <p className="text-xs text-yellow-200">
-        Notifications are not available. Open{' '}
-        <span className="font-medium">System Settings → Notifications → ClaudeWatch</span> and
-        enable &quot;Allow Notifications&quot;.
-      </p>
-    </div>
-  )
-}
+const TOKENS_PER_MILLION = 1_000_000
 
 export function Settings() {
   const { settings, updateSettings, loading } = useSettings()
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <p className="text-sm text-text-secondary">Loading settings...</p>
-      </div>
+      <p className="py-10 text-center text-body text-text-secondary" role="status">
+        Loading settings…
+      </p>
     )
   }
 
   return (
     <div className="no-drag flex h-full min-h-0 flex-col overflow-hidden p-4">
       <div
-        className="no-drag flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto"
+        className="no-drag flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-1"
         data-testid="settings-scroll-region"
       >
-        <h2 className="text-sm font-semibold text-text-primary">Settings</h2>
+        <h1 className="pt-1 font-plate text-count">Settings</h1>
 
-        {/* Polling interval */}
-        <section className="card p-4" aria-labelledby="polling-heading">
-          <h3
-            id="polling-heading"
-            className="mb-3 text-xs font-semibold uppercase tracking-wider text-text-secondary"
-          >
-            Monitoring
-          </h3>
-
+        <SettingsSection title="Monitoring">
           <SettingRow
-            label="Polling Interval"
+            label="Polling interval"
             description="How often to check for Claude processes"
           >
             <div className="flex gap-1" role="radiogroup" aria-label="Polling interval">
@@ -147,12 +52,7 @@ export function Settings() {
                   role="radio"
                   aria-checked={settings.pollingIntervalMs === value}
                   onClick={() => updateSettings({ pollingIntervalMs: value })}
-                  className={cn(
-                    'rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
-                    settings.pollingIntervalMs === value
-                      ? 'bg-accent/15 text-accent'
-                      : 'text-text-secondary hover:bg-surface-hover'
-                  )}
+                  className={SEGMENT_CLASS}
                 >
                   {label}
                 </button>
@@ -161,518 +61,113 @@ export function Settings() {
           </SettingRow>
 
           <SettingRow
-            label="CPU Idle Threshold"
-            description={`Below ${settings.cpuIdleThreshold.toFixed(1)}% CPU is considered idle`}
+            label="CPU idle threshold"
+            description={`Below ${settings.cpuIdleThreshold.toFixed(1)}% CPU an agent counts as idle`}
           >
-            <div className="flex items-center gap-2">
-              <input
-                type="range"
-                min={0.5}
-                max={5}
-                step={0.5}
-                value={settings.cpuIdleThreshold}
-                onChange={(e) => updateSettings({ cpuIdleThreshold: parseFloat(e.target.value) })}
-                className="h-1.5 w-24 appearance-none rounded-full bg-border accent-accent"
-                aria-label="CPU idle threshold"
-              />
-              <span className="w-10 text-right text-xs tabular-nums text-text-secondary">
-                {settings.cpuIdleThreshold.toFixed(1)}%
-              </span>
-            </div>
-          </SettingRow>
-
-          <SettingRow
-            label="Stale Threshold"
-            description={`Idle instances are marked stale after ${settings.staleThresholdMinutes} min and excluded from counts`}
-          >
-            <div className="flex items-center gap-2">
-              <input
-                type="range"
-                min={5}
-                max={120}
-                step={5}
-                value={settings.staleThresholdMinutes}
-                onChange={(e) =>
-                  updateSettings({ staleThresholdMinutes: parseInt(e.target.value, 10) })
-                }
-                className="h-1.5 w-24 appearance-none rounded-full bg-border accent-accent"
-                aria-label="Stale threshold in minutes"
-              />
-              <span className="w-12 text-right text-xs tabular-nums text-text-secondary">
-                {settings.staleThresholdMinutes}m
-              </span>
-            </div>
-          </SettingRow>
-        </section>
-
-        {/* Notifications */}
-        <section className="card p-4" aria-labelledby="notif-heading">
-          <h3
-            id="notif-heading"
-            className="mb-3 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-text-secondary"
-          >
-            <Bell className="h-3.5 w-3.5" aria-hidden="true" />
-            Notifications
-          </h3>
-
-          <NotificationPermissionBanner />
-
-          <SettingRow
-            label="System Settings"
-            description="Configure banners, alerts, and sounds in macOS"
-          >
-            <button
-              type="button"
-              onClick={() => window.api?.openNotificationSettings()}
-              className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium text-text-secondary hover:bg-surface-hover transition-colors"
-              aria-label="Open macOS Notification Settings"
-            >
-              <ExternalLink className="h-3 w-3" aria-hidden="true" />
-              Open Notification Settings
-            </button>
-          </SettingRow>
-
-          <TestNotificationRow />
-
-          <SettingRow
-            label="On Task Complete"
-            description="Notify when a task finishes (active → idle)"
-          >
-            <ToggleSwitch
-              checked={settings.notifications.onTaskComplete}
-              onChange={(val) =>
-                updateSettings({
-                  notifications: { ...settings.notifications, onTaskComplete: val }
-                })
-              }
-              label="Notify on task complete"
-            />
-          </SettingRow>
-
-          <SettingRow label="On Idle" description="Notify when an instance becomes idle">
-            <ToggleSwitch
-              checked={settings.notifications.onIdle}
-              onChange={(val) =>
-                updateSettings({
-                  notifications: { ...settings.notifications, onIdle: val }
-                })
-              }
-              label="Notify on idle"
-            />
-          </SettingRow>
-
-          <SettingRow label="On Exited" description="Notify when an instance exits">
-            <ToggleSwitch
-              checked={settings.notifications.onExited}
-              onChange={(val) =>
-                updateSettings({
-                  notifications: { ...settings.notifications, onExited: val }
-                })
-              }
-              label="Notify on exited"
-            />
-          </SettingRow>
-
-          <SettingRow label="On Error" description="Notify when an error is detected">
-            <ToggleSwitch
-              checked={settings.notifications.onError}
-              onChange={(val) =>
-                updateSettings({
-                  notifications: { ...settings.notifications, onError: val }
-                })
-              }
-              label="Notify on error"
-            />
-          </SettingRow>
-
-          <SettingRow label="Ping Sound" description="Play a chime sound on task complete">
-            <ToggleSwitch
-              checked={settings.notifications.pingSound}
-              onChange={(val) =>
-                updateSettings({
-                  notifications: { ...settings.notifications, pingSound: val }
-                })
-              }
-              label="Ping sound"
-            />
-          </SettingRow>
-
-          <SettingRow label="Sound" description="Play notification sounds">
-            <ToggleSwitch
-              checked={settings.notifications.sound}
-              onChange={(val) =>
-                updateSettings({
-                  notifications: { ...settings.notifications, sound: val }
-                })
-              }
-              label="Notification sound"
-            />
-          </SettingRow>
-
-          <SettingRow label="Do Not Disturb" description="Suppress all notifications">
-            <ToggleSwitch
-              checked={settings.notifications.doNotDisturb}
-              onChange={(val) =>
-                updateSettings({
-                  notifications: {
-                    ...settings.notifications,
-                    doNotDisturb: val
-                  }
-                })
-              }
-              label="Do not disturb"
+            <RangeSetting
+              label="CPU idle threshold"
+              min={0.5}
+              max={5}
+              step={0.5}
+              value={settings.cpuIdleThreshold}
+              formatValue={(percent) => `${percent.toFixed(1)}%`}
+              onCommit={(cpuIdleThreshold) => updateSettings({ cpuIdleThreshold })}
             />
           </SettingRow>
 
           <SettingRow
-            label="Notification Cooldown"
-            description={`Suppress duplicate notifications within ${settings.notifications.cooldownSeconds}s`}
+            label="Stale threshold"
+            description={`An agent idle for ${settings.staleThresholdMinutes} min is marked stale and left out of counts`}
           >
-            <div className="flex items-center gap-2">
-              <input
-                type="range"
-                min={10}
-                max={120}
-                step={5}
-                value={settings.notifications.cooldownSeconds}
-                onChange={(e) =>
-                  updateSettings({
-                    notifications: {
-                      ...settings.notifications,
-                      cooldownSeconds: parseInt(e.target.value, 10)
-                    }
-                  })
-                }
-                className="h-1.5 w-24 appearance-none rounded-full bg-border accent-accent"
-                aria-label="Notification cooldown in seconds"
-              />
-              <span className="w-10 text-right text-xs tabular-nums text-text-secondary">
-                {settings.notifications.cooldownSeconds}s
-              </span>
-            </div>
+            <RangeSetting
+              label="Stale threshold in minutes"
+              min={SETTING_RANGES.staleThresholdMinutes[0]}
+              max={SETTING_RANGES.staleThresholdMinutes[1]}
+              step={5}
+              value={settings.staleThresholdMinutes}
+              formatValue={(minutes) => `${minutes}m`}
+              onCommit={(staleThresholdMinutes) => updateSettings({ staleThresholdMinutes })}
+            />
           </SettingRow>
-
-          <MutedProjectsSection
-            mutedProjects={settings.notifications.mutedProjects ?? []}
-            onUnmute={(path) =>
-              window.api?.unmuteProject(path).then(() => {
-                updateSettings({
-                  notifications: {
-                    ...settings.notifications,
-                    mutedProjects: (settings.notifications.mutedProjects ?? []).filter(
-                      (p) => p !== path
-                    )
-                  }
-                })
-              })
-            }
-          />
-        </section>
-
-        {/* Usage */}
-        <section className="card p-4" aria-labelledby="usage-heading">
-          <h3
-            id="usage-heading"
-            className="mb-3 text-xs font-semibold uppercase tracking-wider text-text-secondary"
-          >
-            Usage Limits
-          </h3>
 
           <SettingRow
-            label="Weekly Token Target"
-            description={`Track usage against ${(settings.weeklyTokenTarget / 1_000_000).toFixed(1)}M tokens/week`}
+            label="Watch accounts"
+            description="Reads account names, plans and email addresses, kept on this Mac, to count tokens per account. Never credentials. Turning it off keeps what was counted."
           >
-            <div className="flex items-center gap-2">
-              <input
-                type="number"
-                min={100000}
-                max={100000000}
-                step={500000}
-                value={settings.weeklyTokenTarget}
-                onChange={(e) => {
-                  const val = parseInt(e.target.value, 10)
-                  if (!isNaN(val)) updateSettings({ weeklyTokenTarget: val })
-                }}
-                className="h-8 w-24 rounded-md border border-border bg-surface-raised px-2 text-right text-xs tabular-nums text-text-primary focus:border-accent/50 focus:outline-none focus:ring-1 focus:ring-accent-ring"
-                aria-label="Weekly token target"
-              />
-              <span className="text-xs text-text-secondary">tokens</span>
-            </div>
+            <ToggleSwitch
+              checked={settings.watchAccounts}
+              onChange={(watchAccounts) => updateSettings({ watchAccounts })}
+              label="Watch accounts"
+            />
           </SettingRow>
-        </section>
+        </SettingsSection>
 
-        {/* Appearance */}
-        <section className="card p-4" aria-labelledby="appearance-heading">
-          <h3
-            id="appearance-heading"
-            className="mb-3 text-xs font-semibold uppercase tracking-wider text-text-secondary"
+        <NotificationSettings
+          notifications={settings.notifications}
+          onChange={(notifications) => updateSettings({ notifications })}
+        />
+
+        <SettingsSection title="Usage limits">
+          <SettingRow
+            label="Weekly token target"
+            description={`Track usage against ${(settings.weeklyTokenTarget / TOKENS_PER_MILLION).toFixed(1)}M tokens a week`}
           >
-            Appearance
-          </h3>
-
-          <SettingRow label="Theme">
-            <div className="flex gap-1" role="radiogroup" aria-label="Theme selection">
-              {themeOptions.map(({ value, label, icon: Icon }) => (
-                <button
-                  key={value}
-                  type="button"
-                  role="radio"
-                  aria-checked={settings.theme === value}
-                  onClick={() => updateSettings({ theme: value })}
-                  className={cn(
-                    'inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
-                    settings.theme === value
-                      ? 'bg-accent/15 text-accent'
-                      : 'text-text-secondary hover:bg-surface-hover'
-                  )}
-                >
-                  <Icon className="h-3 w-3" aria-hidden="true" />
-                  {label}
-                </button>
-              ))}
-            </div>
+            <NumberSetting
+              label="Weekly token target"
+              name="weekly-token-target"
+              range={SETTING_RANGES.weeklyTokenTarget}
+              step={500000}
+              unit="tokens"
+              value={settings.weeklyTokenTarget}
+              onCommit={(weeklyTokenTarget) => updateSettings({ weeklyTokenTarget })}
+            />
           </SettingRow>
-        </section>
+        </SettingsSection>
 
-        {/* System */}
-        <section className="card p-4" aria-labelledby="system-heading">
-          <h3
-            id="system-heading"
-            className="mb-3 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-text-secondary"
+        <SettingsSection title="Appearance">
+          {/* The stored theme can still say light or system; every value draws the dark deck. */}
+          <SettingRow
+            label="Theme"
+            description="The deck has one theme. A light theme is not available yet."
           >
-            <Power className="h-3.5 w-3.5" aria-hidden="true" />
-            System
-          </h3>
+            <span className="text-body text-text-secondary">Dark</span>
+          </SettingRow>
+        </SettingsSection>
 
-          <SettingRow label="Launch at Login" description="Start ClaudeWatch when you log in">
+        <SettingsSection title="System">
+          <SettingRow label="Launch at login" description="Start ClaudeWatch when you log in">
             <ToggleSwitch
               checked={settings.launchAtLogin}
-              onChange={(val) => updateSettings({ launchAtLogin: val })}
+              onChange={(launchAtLogin) => updateSettings({ launchAtLogin })}
               label="Launch at login"
             />
           </SettingRow>
 
           <SettingRow
-            label="Open the Office on Start"
+            label="Open the Office on start"
             description="Show the agent office as soon as ClaudeWatch starts"
           >
             <ToggleSwitch
               checked={settings.openOfficeOnLaunch}
-              onChange={(val) => updateSettings({ openOfficeOnLaunch: val })}
+              onChange={(openOfficeOnLaunch) => updateSettings({ openOfficeOnLaunch })}
               label="Open the Office on start"
             />
           </SettingRow>
 
           <SettingRow
-            label="Minimize to Tray"
-            description="Hide window to tray instead of minimizing to dock"
+            label="Minimize to tray"
+            description="Hide the window to the tray instead of the dock"
           >
             <ToggleSwitch
               checked={settings.minimizeToTray}
-              onChange={(val) => updateSettings({ minimizeToTray: val })}
+              onChange={(minimizeToTray) => updateSettings({ minimizeToTray })}
               label="Minimize to tray"
             />
           </SettingRow>
-        </section>
+        </SettingsSection>
 
-        {/* Updates */}
         <UpdatesSection />
       </div>
     </div>
-  )
-}
-
-function TestNotificationRow() {
-  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(
-    null
-  )
-
-  const handleSendTest = async () => {
-    if (!window.api?.sendTestNotification) return
-    const result = await window.api.sendTestNotification()
-    if (result.sent) {
-      setFeedback({ type: 'success', message: 'Sent!' })
-      setTimeout(() => setFeedback(null), 3000)
-    } else {
-      setFeedback({ type: 'error', message: result.reason ?? 'Failed to send' })
-      setTimeout(() => setFeedback(null), 5000)
-    }
-  }
-
-  return (
-    <SettingRow label="Test Notification" description="Verify notifications appear on your system">
-      <div className="flex items-center gap-2">
-        {feedback && (
-          <span
-            className={cn(
-              'text-xs',
-              feedback.type === 'success' ? 'text-green-400' : 'text-red-400'
-            )}
-          >
-            {feedback.message}
-          </span>
-        )}
-        <button
-          type="button"
-          onClick={handleSendTest}
-          className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium text-text-secondary hover:bg-surface-hover transition-colors"
-          aria-label="Send test notification"
-        >
-          <Bell className="h-3 w-3" aria-hidden="true" />
-          Send Test
-        </button>
-      </div>
-    </SettingRow>
-  )
-}
-
-function MutedProjectsSection({
-  mutedProjects,
-  onUnmute
-}: {
-  mutedProjects: string[]
-  onUnmute: (path: string) => void
-}) {
-  if (mutedProjects.length === 0) {
-    return (
-      <div className="mt-3 border-t border-border pt-3">
-        <p className="text-xs text-text-tertiary">No projects muted</p>
-      </div>
-    )
-  }
-
-  return (
-    <div className="mt-3 border-t border-border pt-3">
-      <p className="mb-2 text-xs font-medium text-text-secondary">Muted Projects</p>
-      <div className="space-y-1">
-        {mutedProjects.map((path) => (
-          <div key={path} className="flex items-center justify-between gap-2 py-1">
-            <span className="min-w-0 truncate font-mono text-xs text-text-secondary">{path}</span>
-            <button
-              type="button"
-              onClick={() => onUnmute(path)}
-              className="shrink-0 rounded-md p-1 text-text-tertiary hover:bg-surface-hover hover:text-text-secondary transition-colors"
-              aria-label={`Unmute ${path}`}
-            >
-              <X className="h-3.5 w-3.5" aria-hidden="true" />
-            </button>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-function statusLabel(status: UpdateStatus): string {
-  switch (status) {
-    case 'idle':
-      return 'Up to date'
-    case 'checking':
-      return 'Checking for updates...'
-    case 'available':
-      return 'Update available'
-    case 'not-available':
-      return 'You\u2019re on the latest version'
-    case 'downloading':
-      return 'Downloading update...'
-    case 'downloaded':
-      return 'Update ready to install'
-    case 'error':
-      return 'Update check failed'
-  }
-}
-
-function UpdatesSection() {
-  const { status, updateInfo, progress, error, checkForUpdates, downloadUpdate, installUpdate } =
-    useUpdater()
-
-  return (
-    <section className="card p-4" aria-labelledby="updates-heading">
-      <h3
-        id="updates-heading"
-        className="mb-3 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-text-secondary"
-      >
-        <Download className="h-3.5 w-3.5" aria-hidden="true" />
-        Updates
-      </h3>
-
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="min-w-0">
-            <p className="text-sm font-medium text-text-primary">
-              {statusLabel(status)}
-              {updateInfo && status === 'available' && (
-                <span className="ml-1.5 text-xs text-accent">v{updateInfo.version}</span>
-              )}
-            </p>
-            {error && <p className="mt-0.5 text-xs text-red-400">{error}</p>}
-          </div>
-
-          <div className="shrink-0">
-            {(status === 'idle' || status === 'not-available' || status === 'error') && (
-              <button
-                type="button"
-                onClick={checkForUpdates}
-                className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium text-text-secondary hover:bg-surface-hover transition-colors"
-                aria-label="Check for updates"
-              >
-                <RefreshCw className="h-3 w-3" aria-hidden="true" />
-                Check
-              </button>
-            )}
-
-            {status === 'checking' && (
-              <RefreshCw
-                className="h-3.5 w-3.5 animate-spin text-text-secondary"
-                aria-hidden="true"
-              />
-            )}
-
-            {status === 'available' && (
-              <button
-                type="button"
-                onClick={downloadUpdate}
-                className="inline-flex items-center gap-1.5 rounded-md bg-accent/15 px-2.5 py-1 text-xs font-medium text-accent hover:bg-accent/25 transition-colors"
-                aria-label="Download update"
-              >
-                <Download className="h-3 w-3" aria-hidden="true" />
-                Download
-              </button>
-            )}
-
-            {status === 'downloaded' && (
-              <button
-                type="button"
-                onClick={installUpdate}
-                className="inline-flex items-center gap-1.5 rounded-md bg-accent/15 px-2.5 py-1 text-xs font-medium text-accent hover:bg-accent/25 transition-colors"
-                aria-label="Install update and restart"
-              >
-                <CheckCircle className="h-3 w-3" aria-hidden="true" />
-                Install & Restart
-              </button>
-            )}
-          </div>
-        </div>
-
-        {status === 'downloading' && progress && (
-          <div className="space-y-1">
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-border">
-              <div
-                className="h-full rounded-full bg-accent transition-all duration-300"
-                style={{ width: `${Math.min(100, Math.round(progress.percent))}%` }}
-                role="progressbar"
-                aria-valuenow={Math.round(progress.percent)}
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-label="Download progress"
-              />
-            </div>
-            <p className="text-right text-[10px] tabular-nums text-text-secondary">
-              {Math.round(progress.percent)}%
-            </p>
-          </div>
-        )}
-      </div>
-    </section>
   )
 }

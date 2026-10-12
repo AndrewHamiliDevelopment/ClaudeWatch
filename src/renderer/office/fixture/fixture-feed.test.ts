@@ -1,0 +1,130 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { sessionTokens } from '../../deck/tokens'
+import { officeThemes } from '../logic/office-themes'
+import type { AgentView } from '../../../shared/office/types'
+import type { OfficeFrame } from '../scene-model'
+import { buildFixtureFrame, createFixtureFeed } from './fixture-feed'
+
+const frame = buildFixtureFrame(0, 1_000_000)
+
+describe('seeded preview sessions', () => {
+  it('carries usage in the hundreds of millions for most sessions', () => {
+    const totals = frame.sessions.flatMap((session) => sessionTokens(session.usage) ?? [])
+    expect(totals.length).toBeGreaterThan(frame.sessions.length / 2)
+    for (const total of totals) {
+      expect(total).toBeGreaterThanOrEqual(50_000_000)
+      expect(total).toBeLessThan(2_000_000_000)
+    }
+  })
+
+  it('leaves one session uncounted, the way a first scan arrives', () => {
+    expect(frame.sessions.some((session) => session.usage === null)).toBe(true)
+  })
+
+  it('knows the window size only for Codex', () => {
+    for (const session of frame.sessions) {
+      if (!session.usage) continue
+      expect(session.usage.contextLimit !== null).toBe(session.provider === 'codex')
+    }
+  })
+
+  it('keeps usage growing from one tick to the next', () => {
+    const later = buildFixtureFrame(5, 1_010_000)
+    const before = sessionTokens(frame.sessions[1].usage) ?? 0
+    expect(sessionTokens(later.sessions[1].usage)).toBeGreaterThan(before)
+  })
+
+  it('has a lead with two named teammates, each with a pane and tokens of its own', () => {
+    const lead = frame.sessions.find(
+      (session) => session.subagents.filter((member) => member.kind === 'teammate').length === 2
+    )
+    expect(lead).toBeDefined()
+    const teammates = lead?.subagents.filter((member) => member.kind === 'teammate') ?? []
+    for (const teammate of teammates) {
+      expect(teammate.name).toBeTruthy()
+      expect(teammate.orcaPaneKey).toBeTruthy()
+      expect(teammate.tokens).toBeTruthy()
+      expect(frame.agents.some((agent) => agent.agentKey === `${lead?.key}#${teammate.id}`)).toBe(
+        true
+      )
+    }
+  })
+})
+
+describe('createFixtureFeed', () => {
+  beforeEach(() => localStorage.clear())
+
+  it('puts two companies on different themes so the picker has something to show', () => {
+    createFixtureFeed()
+    const [first, second] = frame.floors[0].zones
+    const themeOf = (companyKey: string | null): string =>
+      officeThemes.getAssignments().companies[companyKey ?? ''] ?? 'default'
+    expect(themeOf(first.companyKey)).not.toBe(themeOf(second.companyKey))
+  })
+
+  it('answers a focus request so the preview can show where it landed', async () => {
+    const feed = createFixtureFeed()
+    await expect(feed.focus?.('claude:claudewatch-0')).resolves.toMatchObject({ target: 'pane' })
+    await expect(feed.focus?.('codex:claudewatch-1')).resolves.toMatchObject({
+      success: false,
+      target: 'app'
+    })
+  })
+})
+
+describe('the seeded preview runs the office sim', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    vi.useFakeTimers()
+  })
+  afterEach(() => vi.useRealTimers())
+
+  // Each frame with the second it arrived at.
+  function watch(seconds: number): { atS: number; frame: OfficeFrame }[] {
+    const startedAtMs = Date.now()
+    const frames: { atS: number; frame: OfficeFrame }[] = []
+    const stop = createFixtureFeed().subscribe((frame) =>
+      frames.push({ atS: (Date.now() - startedAtMs) / 1000, frame })
+    )
+    vi.advanceTimersByTime(seconds * 1000)
+    stop()
+    return frames
+  }
+  const isOn = (agent: AgentView, seats: { x: number; z: number }[]): boolean =>
+    seats.some((seat) => seat.x === agent.x && seat.z === agent.z)
+
+  it('seats every agent at its desk on the first frame', () => {
+    const [{ frame: first }] = watch(0.1)
+    expect(first.connected).toBe(true)
+    expect(first.agents.length).toBeGreaterThan(first.sessions.length)
+    for (const agent of first.agents) {
+      const room = first.floors[0].rooms.find((candidate) => candidate.id === agent.roomId)
+      const desk = room?.seats.find((candidate) => candidate.slotId === agent.slotId)
+      expect(agent).toMatchObject({ x: desk?.x, z: desk?.z })
+      expect(agent.place).toBeUndefined()
+    }
+  })
+
+  it('shows a finished agent seated in its lounge inside a minute, and back at its desk later', () => {
+    const seated = (frame: OfficeFrame): AgentView | undefined =>
+      frame.agents.find(
+        (agent) =>
+          agent.place === 'lounge' &&
+          isOn(
+            agent,
+            frame.floors[0].zones.flatMap((company) => company.lounge?.seats ?? [])
+          )
+      )
+    const frames = watch(150)
+    const firstSeated = frames.findIndex(({ frame }) => seated(frame))
+    expect(frames[firstSeated]?.atS).toBeLessThan(60)
+
+    const lounger = seated(frames[firstSeated].frame)
+    const isBack = (frame: OfficeFrame): boolean => {
+      const agent = frame.agents.find((candidate) => candidate.agentKey === lounger?.agentKey)
+      const room = frame.floors[0].rooms.find((candidate) => candidate.id === agent?.roomId)
+      return agent !== undefined && agent.place === undefined && isOn(agent, room?.seats ?? [])
+    }
+    expect(frames.slice(firstSeated).some(({ frame }) => isBack(frame))).toBe(true)
+  })
+})

@@ -1,5 +1,5 @@
 import type { FeedMessage, OfficeSnapshot } from '../shared/office/types'
-import type { AppSettings, TerminalType } from '../renderer/lib/types'
+import type { AppSettings } from '../renderer/lib/types'
 
 export function opensOfficeOnStart(
   settings: Pick<AppSettings, 'openOfficeOnLaunch'>,
@@ -11,45 +11,49 @@ export function opensOfficeOnStart(
 export interface OfficeWindowLike {
   webContents: { send(channel: string, message: FeedMessage): void }
   focus(): void
+  show(): void
+  restore(): void
+  isMinimized(): boolean
   isDestroyed(): boolean
   on(event: 'closed', listener: () => void): unknown
 }
 
 interface OfficeWindowDeps {
   host: {
-    start(): void
-    stop(): void
     snapshot(): OfficeSnapshot | null
     onMessage(listener: (message: FeedMessage) => void): () => void
   }
   createWindow: () => OfficeWindowLike
-  openTerminal: (path: string, terminalType?: TerminalType) => Promise<{ success: boolean }>
-  resolveTerminalType: (pid: number) => Promise<TerminalType | undefined>
-  activateOrca: () => Promise<{ success: boolean }>
+  // Brings the app in front of other apps: a tray app's window otherwise opens behind them.
+  activate: () => void
 }
 
-// The bridge runs only while the Office window exists, so a closed office costs nothing.
+// The window only listens to the bridge. The app runs it, because the dashboard reads the
+// same data with the Office closed.
 export class OfficeWindowController {
   private window: OfficeWindowLike | null = null
   private unsubscribe: (() => void) | null = null
 
   constructor(private readonly deps: OfficeWindowDeps) {}
 
-  open(): void {
+  open({ isAtStartup = false } = {}): void {
+    // At start-up the window appears without taking the keyboard from the app in use.
+    if (!isAtStartup) this.deps.activate()
     if (this.window && !this.window.isDestroyed()) {
+      // focus() alone leaves a minimized or hidden window where it is.
+      if (this.window.isMinimized()) this.window.restore()
+      this.window.show()
       this.window.focus()
       return
     }
     const window = this.deps.createWindow()
     this.window = window
-    this.deps.host.start()
     this.unsubscribe = this.deps.host.onMessage((message) => this.send(message))
     window.on('closed', () => {
       if (this.window !== window) return
       this.unsubscribe?.()
       this.unsubscribe = null
       this.window = null
-      this.deps.host.stop()
     })
   }
 
@@ -57,14 +61,6 @@ export class OfficeWindowController {
   ready(): void {
     const snapshot = this.deps.host.snapshot()
     if (snapshot) this.send({ type: 'hello', v: 1, snapshot })
-  }
-
-  async jump(sessionKey: string): Promise<{ success: boolean }> {
-    const session = this.deps.host.snapshot()?.sessions.find((s) => s.key === sessionKey)
-    if (!session) return { success: false }
-    if (session.host === 'orca') return this.deps.activateOrca()
-    const terminalType = session.pid ? await this.deps.resolveTerminalType(session.pid) : undefined
-    return this.deps.openTerminal(session.cwd, terminalType)
   }
 
   private send(message: FeedMessage): void {

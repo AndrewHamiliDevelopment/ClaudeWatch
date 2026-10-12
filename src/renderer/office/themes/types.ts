@@ -1,8 +1,17 @@
 import type { ComponentType, RefObject } from 'react'
-import type { Group, Mesh, MeshStandardMaterial } from 'three'
+import type { Group, Mesh } from 'three'
 import type { AgentView, ProviderId } from '../../../shared/office/types'
-import type { DeskSlot, FloorGeometry, RoomGeometry, ZoneGeometry } from '../scene-model'
+import type {
+  DeskSlot,
+  FloorGeometry,
+  LoungeGeometry,
+  RoomGeometry,
+  ZoneGeometry
+} from '../scene-model'
 import type { WallsMode } from '../logic/room-layout'
+import type { TownDress } from '../town/town-dress'
+import type { PlacedLot } from './lot-kit'
+import type { Lot } from './surroundings'
 
 export interface ThemePalette {
   lacquer: string
@@ -20,7 +29,7 @@ export interface ThemePalette {
 }
 
 // dead-code-allowed: plug-in contract type that each team's theme implements 2027-01-31
-export interface RobotSkin {
+interface RobotSkin {
   label: string
   body: string
   trim: string
@@ -39,13 +48,14 @@ export interface RobotRig {
   eye: RefObject<Mesh | null>
   thought: RefObject<Group | null>
   puffs: readonly RefObject<Mesh | null>[]
-  puffMaterials: readonly RefObject<MeshStandardMaterial | null>[]
 }
 
 // Root translation, scale, hit capsule and selection remain owned by Robot's controller.
 export interface RobotModelProps {
   agent: AgentView
   skin: RobotSkin
+  // The office bay of the agent's room: with the agent's key, a stable pick from a theme's cast.
+  rosterIndex: number
   rig: RobotRig
   isReducedMotion: boolean
 }
@@ -53,7 +63,11 @@ export interface RobotModelProps {
 export interface FloorProps {
   floor: FloorGeometry
 }
-export interface WallsProps extends FloorProps {
+// The rooms one theme owns on a floor that may mix themes.
+export interface RoomsProps {
+  rooms: readonly RoomGeometry[]
+}
+export interface WallsProps extends RoomsProps {
   mode: WallsMode
   isReducedMotion: boolean
 }
@@ -65,6 +79,16 @@ export interface ZoneProps {
 }
 export interface DeskProps extends RoomProps {
   slot: DeskSlot
+}
+export interface LoungeProps {
+  lounge: LoungeGeometry
+}
+export interface AmbientProps {
+  floor: FloorGeometry
+  lots: readonly Lot[]
+  isReducedMotion: boolean
+  // What the zoned town drew on `lots`: movers keep to the buildings actually there.
+  placed?: readonly PlacedLot[]
 }
 export interface TowerFloor {
   floorId: string
@@ -78,27 +102,64 @@ export interface TowerProps {
   floors: readonly TowerFloor[]
 }
 
+// Drawn once per floor, by the floor's default theme.
+// dead-code-allowed: plug-in contract type each theme's floor kit implements 2027-01-31
+interface FloorKit {
+  Slab: ComponentType<FloorProps>
+  Elevator: ComponentType<FloorProps>
+}
+
+// Drawn per zone, by the theme that zone resolves to; several can share one floor.
+// dead-code-allowed: plug-in contract type each theme's zone kit implements 2027-01-31
+interface ZoneKit {
+  // Offices within offices: a company's fenced grounds and a project's walled office.
+  CompanyZone: ComponentType<ZoneProps>
+  ProjectOffice: ComponentType<ZoneProps>
+  RoomFloors: ComponentType<RoomsProps>
+  Walls: ComponentType<WallsProps>
+  Doorway: ComponentType<RoomProps>
+  Desk: ComponentType<DeskProps>
+  RoomDressing: ComponentType<RoomProps>
+  RoomSign: ComponentType<RoomProps>
+  // A company's place to rest: agents whose turn is done sit at `lounge.seats`.
+  Lounge?: ComponentType<LoungeProps>
+  // A theme's moving things. Move them in useFrame and never invalidate: the scene paces frames.
+  Ambient?: ComponentType<AmbientProps>
+}
+
+// A character an agent plays, as the HUD names it.
+export interface RosterEntry {
+  id: string
+  name: string
+  role: string
+}
+
+// What casts an agent. Without a key (a caller that knows only the provider) the bay decides.
+export type RosterAgent = Pick<AgentView, 'provider' | 'isSubagent'> &
+  Partial<Pick<AgentView, 'agentKey'>>
+
+export interface ThemeRoster {
+  // The cast, with any names the owner changed on this machine.
+  entries(storage?: Pick<Storage, 'getItem'> | null): RosterEntry[]
+  // Which entry an agent plays: its provider picks the faction, its own key and its office
+  // bay the character, so it keeps that character for as long as it lives.
+  indexFor(agent: RosterAgent, bay: number): number
+}
+
 export interface OfficeTheme {
   id: string
   label: string
   description: string
   palette: ThemePalette
+  // Absent in a theme without a cast: its agents play no named character.
+  roster?: ThemeRoster
+  // Zone-scoped, like the zone kit: a robot wears the theme of its own room.
   robot: { Model: ComponentType<RobotModelProps>; skins: Record<ProviderId, RobotSkin> }
-  kit: {
-    Floor: ComponentType<FloorProps>
-    Walls: ComponentType<WallsProps>
-    Doorway: ComponentType<RoomProps>
-    Desk: ComponentType<DeskProps>
-    RoomDressing: ComponentType<RoomProps>
-    Elevator: ComponentType<FloorProps>
-    RoomSign: ComponentType<RoomProps>
-    // Offices within offices: a company's fenced grounds and a project's walled office.
-    CompanyZone: ComponentType<ZoneProps>
-    ProjectOffice: ComponentType<ZoneProps>
-  }
+  kit: { floor: FloorKit; zone: ZoneKit }
+  // Floor-scoped: one horizon, from the floor's default theme.
   world: {
-    District: ComponentType<FloorProps>
-    Hangar: ComponentType<FloorProps>
     Tower: ComponentType<TowerProps>
   }
+  // The theme's share of the zoned town, as data. Absent until the theme has drawn it.
+  town?: TownDress
 }

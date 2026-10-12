@@ -18,3 +18,10 @@ export function projectKey(projectRoot: string): string {
   const normalised = projectRoot.length > 1 ? projectRoot.replace(/\/+$/, '') : projectRoot
   return `p_${fnv1a64(normalised)}`
 }
+
+// An agent's worktree lives inside its project; the project is the folder above `.claude`.
+const WORKTREE_FOLDER = /[\\/]\.claude[\\/](?:\.worktree|worktrees)[\\/].*$/
+
+export function projectRootOf(path: string): string {
+  return path.replace(WORKTREE_FOLDER, '')
+}

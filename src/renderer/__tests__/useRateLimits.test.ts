@@ -59,9 +59,11 @@ describe('useRateLimits', () => {
   })
 
   it('starts with loading=true and null rateLimits', () => {
-    const { result } = renderHook(() => useRateLimits())
+    const { result, unmount } = renderHook(() => useRateLimits())
     expect(result.current.loading).toBe(true)
     expect(result.current.rateLimits).toBeNull()
+    // Leaves before the pending read resolves into a finished test.
+    unmount()
   })
 
   it('fetches initial rate limits data', async () => {

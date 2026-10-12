@@ -6,8 +6,9 @@ import { cullCards, type CullCandidate } from '../logic/card-culling'
 import type { NameCard, ProjectStack } from '../logic/name-cards'
 import { cardSafeArea } from '../logic/zone-framing'
 
-const CARD_HEIGHT = 1.95
-const PILL_HEIGHT = 1.15
+// Over an agent's head (scene/Robot.tsx draws agents 1.65 m tall).
+export const CARD_HEIGHT = 2.45
+const PILL_HEIGHT = 1.55
 const DOT_HEIGHT = 1.7
 const STACK_HEIGHT = 2.6
 export const OFFSCREEN = 'translate(-9999px, -9999px)'
@@ -112,6 +113,9 @@ export function CardProjector({
     last.stacks = stacks
     last.band = band
     last.selectedAgentKey = selectedAgentKey
+    // camera-controls moves the camera after three last built its matrix, and the renderer only
+    // rebuilds it after this callback: without this the cards trail the canvas while it turns.
+    camera.updateMatrixWorld()
 
     if (band === 'desk') {
       for (const card of cards) {

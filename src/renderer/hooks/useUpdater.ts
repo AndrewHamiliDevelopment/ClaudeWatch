@@ -25,15 +25,15 @@ export function useUpdater(): UseUpdaterReturn {
 
       switch (payload.status) {
         case 'available':
-          setUpdateInfo(payload.data as UpdateInfo)
+          setUpdateInfo(payload.data)
           setError(null)
           break
         case 'downloading':
-          setProgress(payload.data as UpdateProgress)
+          setProgress(payload.data)
           setError(null)
           break
         case 'error':
-          setError(payload.data as string)
+          setError(payload.data)
           break
         case 'checking':
         case 'not-available':

@@ -12,12 +12,18 @@ import { AutoUpdaterManager } from './auto-updater'
 import { UsageStatsReader } from './usage-stats'
 import { PromoChecker } from './promo-checker'
 import { RateLimitReader } from './rate-limit-reader'
-import { setupIpcHandlers, forwardUpdatesToRenderer } from './ipc-handlers'
+import {
+  forwardAccountsToDashboard,
+  forwardUpdatesToRenderer,
+  setupIpcHandlers
+} from './ipc-handlers'
 import { createWidgetStatsWriter } from './widget-stats-writer'
 import { SoundPlayer } from './sound-player'
 import { setupWidgetSync } from './widget-sync'
 import { setupOffice } from './office-setup'
+import { paceBridgeByWindows } from './bridge-pace'
 import { opensOfficeOnStart } from './office-window'
+import { createAccountLedger } from './accounts'
 
 // Prevent "write EIO" crashes when stdout/stderr pipe is broken
 // (e.g., launching terminal closed, or running packaged without a TTY)
@@ -112,15 +118,28 @@ app.whenReady().then(() => {
 
   // Initialize terminal resolver and process monitor
   const terminalResolver = new TerminalResolver()
-  const monitor = new ProcessMonitor({ terminalResolver })
+  const monitor = new ProcessMonitor({
+    terminalResolver,
+    cpuIdleThreshold: settings.cpuIdleThreshold
+  })
   tracker = new SessionTracker(monitor, {
     maxHistoryEntries: settings.maxHistoryEntries,
     staleThresholdMinutes: settings.staleThresholdMinutes,
     cooldownSeconds: settings.notifications.cooldownSeconds
   })
 
+  const accounts = createAccountLedger({
+    isWatching: settings.watchAccounts,
+    home: app.getPath('home'),
+    userData: app.getPath('userData')
+  })
+  const office = setupOffice(terminalResolver, store, tracker, accounts)
+  // Before any window exists, so each one is watched from its creation.
+  paceBridgeByWindows(app, () => BrowserWindow.getAllWindows(), office.setPollInterval)
+  const focusSession = (pid: number): void => void office.focusSession(pid)
+
   // Initialize notifications and sound player
-  const notifications = new NotificationManager(() => store.getSettings())
+  const notifications = new NotificationManager(() => store.getSettings(), focusSession)
   const soundPlayer = new SoundPlayer()
 
   // Create window (hidden by default)
@@ -132,12 +151,11 @@ app.whenReady().then(() => {
     () => trayManager?.getPopoverWindow() ?? null
   ])
 
-  const office = setupOffice(terminalResolver, store)
-
   // Create tray with popover support
   trayManager = new TrayManager({
     onOpenDashboard: showDashboard,
     onOpenOffice: office.open,
+    onFocusSession: focusSession,
     onQuit: () => {
       app.isQuitting = true
       app.quit()
@@ -167,8 +185,13 @@ app.whenReady().then(() => {
     rateLimitReader,
     notifications,
     onOpenDashboard: showDashboard,
-    getTrayManager: () => trayManager
+    onOpenOffice: office.open,
+    focusSession: office.focusSession,
+    getOfficeSnapshot: office.snapshot,
+    getTrayManager: () => trayManager,
+    accounts
   })
+  forwardAccountsToDashboard(accounts, () => mainWindow)
 
   // Forward tracker updates to renderer windows (main + popover) and tray
   forwardUpdatesToRenderer(
@@ -242,13 +265,19 @@ app.whenReady().then(() => {
   updater.startAutoCheck()
 
   // Last, and contained: a failing Office must not cost the tray, where it can be switched off.
-  if (opensOfficeOnStart(settings, process.argv)) {
-    try {
-      office.open()
-    } catch (error) {
-      console.error('Office failed to open at start:', error)
-    }
+  // The bridge starts with the app: the dashboard shows its data with the Office closed.
+  try {
+    // Before the bridge: the ledger must know who is signed in when the first counts arrive.
+    accounts.start()
+    office.start()
+    if (opensOfficeOnStart(settings, process.argv)) office.open({ isAtStartup: true })
+  } catch (error) {
+    console.error('Office failed to start:', error)
   }
+  app.on('before-quit', () => {
+    office.stop()
+    accounts.stop()
+  })
 })
 
 // Clean up tray before quitting to prevent "Object has been destroyed" errors

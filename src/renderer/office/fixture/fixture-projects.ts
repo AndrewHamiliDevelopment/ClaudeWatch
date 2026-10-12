@@ -16,6 +16,10 @@ export interface FixtureSession {
   offset: number
   attentionScript?: readonly AgentAttention[]
   subagentScript?: readonly number[]
+  // Agent-team members: each has a name, a process and a pane of its own.
+  teammates?: readonly { name: string; type: string }[]
+  // Arrives with `usage: null`, the way a session does before its transcript is read.
+  isUncounted?: boolean
 }
 
 export interface FixtureProject {
@@ -63,7 +67,11 @@ export const PROJECTS: readonly FixtureProject[] = [
         host: 'orca',
         period: 3,
         offset: 0,
-        subagentScript: [4, 3, 1, 0]
+        subagentScript: [2, 1, 1, 0],
+        teammates: [
+          { name: 'lena-office-hud', type: 'lena' },
+          { name: 'ravi-bridge-usage', type: 'ravi' }
+        ]
       },
       { name: 'bridge reducer', provider: 'codex', period: 4, offset: 2 },
       {
@@ -80,7 +88,15 @@ export const PROJECTS: readonly FixtureProject[] = [
         offset: 1,
         attentionScript: ['none', 'error', 'error', 'none']
       },
-      { name: 'widget sync', provider: 'codex', host: 'orca', period: 3, offset: 4 }
+      {
+        name: 'widget sync',
+        provider: 'codex',
+        host: 'orca',
+        // Done from 10 s to 100 s: time to walk to the lounge, sit a while and be called back.
+        period: 15,
+        offset: 10,
+        attentionScript: ['none', 'done', 'done', 'done', 'none']
+      }
     ]
   },
   {
@@ -102,7 +118,7 @@ export const PROJECTS: readonly FixtureProject[] = [
         offset: 3,
         subagentScript: [1, 1, 2, 0]
       },
-      { name: 'map clustering', provider: 'codex', period: 2, offset: 0 },
+      { name: 'map clustering', provider: 'codex', period: 2, offset: 0, isUncounted: true },
       {
         name: 'agent dashboard',
         provider: 'claude',
@@ -114,9 +130,11 @@ export const PROJECTS: readonly FixtureProject[] = [
       {
         name: 'e2e suite',
         provider: 'codex',
-        period: 4,
-        offset: 5,
-        attentionScript: ['none', 'none', 'done']
+        // Already done when the preview opens: it goes to the lounge first, and works again
+        // from 90 s to 150 s.
+        period: 15,
+        offset: 0,
+        attentionScript: ['done', 'done', 'done', 'none', 'none']
       },
       {
         name: 'auth migration',
@@ -140,7 +158,8 @@ export const PROJECTS: readonly FixtureProject[] = [
         period: 4,
         offset: 1,
         attentionScript: ['question', 'none', 'none']
-      }
+      },
+      { name: 'release notes', provider: 'opencode', period: 4, offset: 3 }
     ]
   }
 ]

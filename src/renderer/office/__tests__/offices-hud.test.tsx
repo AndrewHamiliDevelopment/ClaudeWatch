@@ -14,7 +14,7 @@ function harness() {
       push = listener
       return () => undefined
     },
-    jump: vi.fn(),
+    focus: vi.fn().mockResolvedValue({ success: true }),
     send: vi.fn(async (): Promise<InteractionResult> => ({ success: true })),
     respond: vi.fn(async (): Promise<InteractionResult> => ({ success: true })),
     peek: vi.fn(async () => ({ success: true, lines: [] })),
@@ -159,14 +159,14 @@ describe('List view and attention rail', () => {
     const table = screen.getByRole('table', { name: /agents by company and project/i })
     expect(within(table).getByRole('rowheader', { name: /ZKidz/ })).toBeInTheDocument()
     expect(within(table).getByRole('rowheader', { name: /ClaudeWatch/ })).toBeInTheDocument()
-    expect(within(table).getByRole('button', { name: /Explore/ })).toBeInTheDocument()
+    expect(within(table).getByRole('button', { name: /^Explore/ })).toBeInTheDocument()
   })
 
-  it('shows Project · Company on queue rows', () => {
+  it('names the project and company on queue rows', () => {
     const { push } = harness()
     push(companyFrame)
     const queue = screen.getByRole('region', { name: 'Needs you' })
-    expect(within(queue).getByText(/PropApp · ZKidz/)).toBeInTheDocument()
+    expect(within(queue).getByText(/PropApp, ZKidz/)).toBeInTheDocument()
   })
 })
 

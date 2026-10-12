@@ -1,10 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  buildFixtureFrame,
-  createFixtureFeed,
-  FIXTURE_TICK_MS,
-  type FixtureMemory
-} from '../fixture/fixture-feed'
+import { buildFixtureFrame, createFixtureFeed, FIXTURE_TICK_MS } from '../fixture/fixture-feed'
 import { fixtureLayout } from '../fixture/fixture-layout'
 import type { OfficeFrame } from '../scene-model'
 
@@ -74,23 +69,13 @@ describe('fixture layout memory', () => {
     floors[0].rooms.find((room) => room.sessionKey === sessionKey)
 
   it('keeps the remaining offices in place when a session leaves, given the saved layout', () => {
-    const before = fixtureLayout(sessions, undefined, 1_000_000)
-    const after = fixtureLayout(remaining, before.layout, 1_002_000)
+    const before = fixtureLayout(sessions)
+    const after = fixtureLayout(remaining, before.layout)
     for (const session of remaining) {
       const was = roomOf(before.floors, session.key)
       const now = roomOf(after.floors, session.key)
       expect([session.name, now?.x, now?.z]).toEqual([session.name, was?.x, was?.z])
     }
-  })
-
-  it('carries the layout from one preview tick to the next', () => {
-    const memory: FixtureMemory = {}
-    buildFixtureFrame(0, 1_000_000, memory)
-    const first = memory.layout
-    expect(first).toBeDefined()
-    buildFixtureFrame(1, 1_002_000, memory)
-    expect(memory.layout).toBeDefined()
-    expect(memory.layout).not.toBe(first)
   })
 })
 
@@ -98,15 +83,18 @@ describe('createFixtureFeed', () => {
   beforeEach(() => vi.useFakeTimers())
   afterEach(() => vi.useRealTimers())
 
-  it('emits a frame at once and keeps ticking until unsubscribed', () => {
+  it('emits a frame on the first sim tick and keeps ticking until unsubscribed', () => {
     const feed = createFixtureFeed({ tickMs: 1000 })
     const listener = vi.fn()
     const unsubscribe = feed.subscribe(listener)
+    vi.advanceTimersByTime(100)
     expect(listener).toHaveBeenCalledTimes(1)
+    // Each scripted tick brings a new frame; walking agents add more in between.
     vi.advanceTimersByTime(3000)
-    expect(listener).toHaveBeenCalledTimes(4)
+    const emitted = listener.mock.calls.length
+    expect(emitted).toBeGreaterThanOrEqual(4)
     unsubscribe()
     vi.advanceTimersByTime(3000)
-    expect(listener).toHaveBeenCalledTimes(4)
+    expect(listener).toHaveBeenCalledTimes(emitted)
   })
 })

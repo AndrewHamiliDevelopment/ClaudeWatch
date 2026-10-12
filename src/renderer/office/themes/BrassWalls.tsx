@@ -1,24 +1,18 @@
 import { useFrame } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
 import { CylinderGeometry, type InstancedMesh } from 'three'
-import { floorWallSegments, WALL_HEIGHT_FULL, type WallsMode } from '../logic/room-layout'
+import { floorWallSegments, WALL_HEIGHT_FULL } from '../logic/room-layout'
 import { createWallHeights } from '../logic/wall-heights'
 import { STEAM } from '../office-palette'
-import type { RoomGeometry } from '../scene-model'
 import { writeInstances, type InstancePlacement } from '../scene/instancing'
 import { Matte } from '../scene/InstancedParts'
+import type { WallsProps } from './types'
 
 const WALL_THICKNESS = 0.16
 const PIPE_RADIUS = 0.07
 
-interface WallsProps {
-  rooms: readonly RoomGeometry[]
-  mode: WallsMode
-  isReducedMotion: boolean
-}
-
 // Low cream walls capped with a copper pipe; the camera position decides which cut away.
-export function Walls({ rooms, mode, isReducedMotion }: WallsProps) {
+export function BrassWalls({ rooms, mode, isReducedMotion }: WallsProps) {
   const wallRef = useRef<InstancedMesh>(null)
   const pipeRef = useRef<InstancedMesh>(null)
   const segments = useMemo(() => floorWallSegments(rooms), [rooms])

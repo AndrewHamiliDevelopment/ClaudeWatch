@@ -1,0 +1,137 @@
+import type { Point } from '../../../office/sim/path'
+import { clamp } from '../../../shared/range'
+import { apart } from './town-graph'
+import type { TownPlan } from './town-plan'
+import type { RoadClass } from './town-roads'
+
+export type Traveller = 'citizen' | 'vehicle'
+
+// One straight stretch of a road's centre line.
+export interface Leg {
+  from: Point
+  to: Point
+  class: RoadClass
+}
+
+interface Way {
+  from: number
+  to: number
+  class: RoadClass
+  costPerMetre: number
+}
+
+// The plan's road graph as one kind of traveller may use it.
+export interface RoadNet {
+  plan: TownPlan
+  ways: Way[]
+  // The ways that meet at each node.
+  waysAt: number[][]
+}
+
+// What a metre costs a citizen: cheap where it is seen, so that is where the town gathers.
+const WALK_COST: Record<RoadClass, number> = { avenue: 1, boulevard: 1, lane: 2, collector: 2.5 }
+const PARK_COST = 1
+
+// A vehicle never uses a footpath lane, and every road is the same to it.
+export function roadNet(plan: TownPlan, traveller: Traveller): RoadNet {
+  const { nodes, edges } = plan.graph
+  const parks = plan.blocks.filter((block) => block.zone === 'park')
+  const isInPark = (point: Point): boolean =>
+    parks.some(
+      (park) =>
+        Math.abs(point.x - park.x) < park.width / 2 && Math.abs(point.z - park.z) < park.depth / 2
+    )
+  const ways = edges
+    .filter((edge) => traveller === 'citizen' || edge.class !== 'lane')
+    .map((edge): Way => {
+      const middle = {
+        x: (nodes[edge.from].x + nodes[edge.to].x) / 2,
+        z: (nodes[edge.from].z + nodes[edge.to].z) / 2
+      }
+      const walkCost = isInPark(middle) ? PARK_COST : WALK_COST[edge.class]
+      return {
+        from: edge.from,
+        to: edge.to,
+        class: edge.class,
+        costPerMetre: traveller === 'citizen' ? walkCost : 1
+      }
+    })
+  const waysAt: number[][] = nodes.map(() => [])
+  ways.forEach((way, index) => {
+    waysAt[way.from].push(index)
+    waysAt[way.to].push(index)
+  })
+  return { plan, ways, waysAt }
+}
+
+// The nearest point of the net to a place off it: where a door meets its road.
+function attach(net: RoadNet, point: Point): { way: number; at: Point } {
+  const { nodes } = net.plan.graph
+  let best = { way: -1, at: point, gap: Infinity }
+  net.ways.forEach((way, index) => {
+    const [a, b] = [nodes[way.from], nodes[way.to]]
+    const at = {
+      x: clamp(point.x, [Math.min(a.x, b.x), Math.max(a.x, b.x)]),
+      z: clamp(point.z, [Math.min(a.z, b.z), Math.max(a.z, b.z)])
+    }
+    const gap = Math.hypot(point.x - at.x, point.z - at.z)
+    if (gap < best.gap) best = { way: index, at, gap }
+  })
+  return best
+}
+
+// The cheapest way along the roads between two places beside them, as centre-line legs.
+export function roadPath(net: RoadNet, from: Point, to: Point): Leg[] | null {
+  const { nodes } = net.plan.graph
+  const start = attach(net, from)
+  const end = attach(net, to)
+  if (start.way < 0 || end.way < 0) return null
+  const [first, last] = [net.ways[start.way], net.ways[end.way]]
+
+  const cost = nodes.map(() => Infinity)
+  // The way each node was reached by; -1 for the two ends of the first way.
+  const reachedBy = nodes.map(() => -1)
+  const isSettled = nodes.map(() => false)
+  for (const node of [first.from, first.to])
+    cost[node] = apart(start.at, nodes[node]) * first.costPerMetre
+  for (;;) {
+    let nearest = -1
+    for (let node = 0; node < nodes.length; node++)
+      if (!isSettled[node] && cost[node] < (nearest < 0 ? Infinity : cost[nearest])) nearest = node
+    if (nearest < 0) break
+    isSettled[nearest] = true
+    for (const index of net.waysAt[nearest]) {
+      const way = net.ways[index]
+      const other = way.from === nearest ? way.to : way.from
+      const through = cost[nearest] + apart(nodes[nearest], nodes[other]) * way.costPerMetre
+      if (through < cost[other]) {
+        cost[other] = through
+        reachedBy[other] = index
+      }
+    }
+  }
+
+  const costVia = (node: number): number =>
+    cost[node] + apart(nodes[node], end.at) * last.costPerMetre
+  const direct = start.way === end.way ? apart(start.at, end.at) * first.costPerMetre : Infinity
+  const arrival = costVia(last.from) <= costVia(last.to) ? last.from : last.to
+  const legs: Leg[] = []
+  if (direct <= costVia(arrival)) legs.push({ from: start.at, to: end.at, class: first.class })
+  else {
+    if (!Number.isFinite(costVia(arrival))) return null
+    legs.push({ from: nodes[arrival], to: end.at, class: last.class })
+    let node = arrival
+    while (reachedBy[node] >= 0) {
+      const way = net.ways[reachedBy[node]]
+      const before = way.from === node ? way.to : way.from
+      legs.unshift({ from: nodes[before], to: nodes[node], class: way.class })
+      node = before
+    }
+    legs.unshift({ from: start.at, to: nodes[node], class: first.class })
+  }
+  return legs.filter((leg) => apart(leg.from, leg.to) > 0)
+}
+
+export function reversed(legs: readonly Leg[]): Leg[] {
+  return legs.map((leg) => ({ from: leg.to, to: leg.from, class: leg.class })).reverse()
+}

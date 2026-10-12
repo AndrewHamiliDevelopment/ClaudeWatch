@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { OfficeInteractions } from './office-interactions'
-import type { OfficeSnapshot, SessionRef } from '../shared/office/types'
+import type { OfficeSnapshot, SessionRef, SubagentRef } from '../shared/office/types'
 import type { PaneTerminal } from './orca-terminals'
 
 const session = (overrides: Partial<SessionRef> = {}): SessionRef => ({
@@ -42,6 +42,10 @@ const PROMPT_SCREEN = [
   '❯ 1. Yes',
   '  2. No'
 ]
+const RULE = '─'.repeat(40)
+// An agent between turns, as Claude Code draws it: its input line between two rules.
+const IDLE_SCREEN = ['⏺ Done. The tests pass.', '', RULE, '❯', RULE, '  ⏵⏵ accept edits on']
+const CODEX_IDLE_SCREEN = ['• Done.', '', '› Ask Codex to do anything', '  ? for shortcuts']
 
 describe('OfficeInteractions', () => {
   let snapshot: OfficeSnapshot
@@ -50,7 +54,8 @@ describe('OfficeInteractions', () => {
     sendPrompt: vi.fn(),
     sendKey: vi.fn(),
     screen: vi.fn(),
-    create: vi.fn()
+    create: vi.fn(),
+    focus: vi.fn()
   }
   const openTerminalRunning = vi.fn()
   const processStart = vi.fn()
@@ -67,11 +72,179 @@ describe('OfficeInteractions', () => {
       snapshot: () => snapshot,
       orca,
       openTerminalRunning,
-      processStart
+      processStart,
+      raiseOrca: vi.fn(),
+      openFolder: vi.fn()
     })
   })
 
   describe('send', () => {
+    beforeEach(() => {
+      orca.screen.mockResolvedValue(IDLE_SCREEN)
+    })
+
+    it('types nothing while a permission prompt is on screen', async () => {
+      orca.screen.mockResolvedValue(PROMPT_SCREEN)
+      expect(await interactions.send('claude:s1', 'no, wait')).toEqual({
+        success: false,
+        reason: 'prompt-on-screen'
+      })
+      expect(orca.sendPrompt).not.toHaveBeenCalled()
+    })
+
+    it.each([
+      ['Claude Code’s, on its second option', ['Ready to code?', '  1. Yes', '❯ 2. Keep planning']],
+      [
+        'boxed',
+        ['│ Trust this folder?        │', '│ ❯ 1. Yes, proceed         │', '│   2. No, exit │']
+      ],
+      ['Codex’s', ['Allow command?', '› 1. Yes, proceed (y)', '  2. No (esc)']]
+    ])('types nothing while a numbered-choice dialog (%s) is on screen', async (_kind, screen) => {
+      orca.screen.mockResolvedValue(screen)
+      expect(await interactions.send('claude:s1', 'looks good 2 me')).toEqual({
+        success: false,
+        reason: 'prompt-on-screen'
+      })
+      expect(orca.sendPrompt).not.toHaveBeenCalled()
+    })
+
+    it('reads the screen of the pane it is about to type into, after proving it', async () => {
+      await interactions.send('claude:s1', 'run the tests')
+      expect(orca.screen).toHaveBeenCalledWith('term_a')
+      expect(orca.screen.mock.invocationCallOrder[0]).toBeLessThan(
+        orca.sendPrompt.mock.invocationCallOrder[0]
+      )
+    })
+
+    it.each(['permission', 'question'] as const)(
+      'refuses without touching Orca while the session waits on a dialog (%s)',
+      async (attention) => {
+        snapshot.sessions = [session({ attention })]
+        expect(await interactions.send('claude:s1', 'no, wait')).toEqual({
+          success: false,
+          reason: 'prompt-on-screen'
+        })
+        expect(orca.handleFor).not.toHaveBeenCalled()
+        expect(orca.screen).not.toHaveBeenCalled()
+        expect(orca.sendPrompt).not.toHaveBeenCalled()
+      }
+    )
+
+    it.each(['none', 'done', 'error', 'limited'] as const)(
+      'still talks to a session whose attention is %s when no dialog is on screen',
+      async (attention) => {
+        snapshot.sessions = [session({ attention })]
+        expect(await interactions.send('claude:s1', 'carry on')).toEqual({ success: true })
+      }
+    )
+
+    it('does not take a typed message that begins with a number for a dialog', async () => {
+      orca.screen.mockResolvedValue([
+        '❯ 1. fix the build first',
+        '  2. then the lint',
+        ...IDLE_SCREEN
+      ])
+      expect(await interactions.send('claude:s1', 'thanks')).toEqual({ success: true })
+    })
+
+    it('talks to an agent that ended its turn by asking, in prose, whether to proceed', async () => {
+      orca.screen.mockResolvedValue(['⏺ Do you want to proceed with it?', ...IDLE_SCREEN.slice(1)])
+      expect(await interactions.send('claude:s1', 'yes, go on')).toEqual({ success: true })
+    })
+
+    it.each([
+      [
+        'a picker with a pointer and no numbers',
+        [' Resume a session?', ' ❯ fix the build', '   add the tests']
+      ],
+      ['a dialog with one numbered row', [' Update installed', ' ❯ 1. Continue']],
+      ['an input line that is not between two rules', ['⏺ Done.', '', '❯ ', '  ? for shortcuts']],
+      [
+        'a dialog under an input line left on screen',
+        [...IDLE_SCREEN, ' Do it?', ' ❯ Yes', '   No']
+      ],
+      [
+        'an input line far above the bottom',
+        [...IDLE_SCREEN, ...Array.from({ length: 30 }, () => '  output')]
+      ],
+      ['nothing at all', []]
+    ])('types nothing when the screen shows %s', async (_kind, screen) => {
+      orca.screen.mockResolvedValue(screen)
+      expect(await interactions.send('claude:s1', 'carry on')).toEqual({
+        success: false,
+        reason: 'prompt-on-screen'
+      })
+      expect(orca.sendPrompt).not.toHaveBeenCalled()
+    })
+
+    it('talks to a Claude agent whose input line holds a draft', async () => {
+      orca.screen.mockResolvedValue([
+        '⏺ Done.',
+        RULE,
+        '❯\u00a0and then',
+        RULE,
+        '  ⏵⏵ accept edits on'
+      ])
+      expect(await interactions.send('claude:s1', 'run the tests')).toEqual({ success: true })
+    })
+
+    it('types nothing to an OpenCode agent, whose input line it cannot recognise', async () => {
+      snapshot.sessions = [session({ provider: 'opencode' })]
+      orca.handleFor.mockResolvedValue(pane({ agent: 'opencode' }))
+      orca.screen.mockResolvedValue(IDLE_SCREEN)
+      expect(await interactions.send('claude:s1', 'carry on')).toEqual({
+        success: false,
+        reason: 'unsupported-provider'
+      })
+      expect(orca.screen).not.toHaveBeenCalled()
+      expect(orca.sendPrompt).not.toHaveBeenCalled()
+    })
+
+    describe('to a Codex agent', () => {
+      beforeEach(() => {
+        snapshot.sessions = [session({ provider: 'codex' })]
+        orca.handleFor.mockResolvedValue(pane({ agent: 'codex' }))
+      })
+
+      it('types when its composer and the shortcuts hint under it are at the bottom', async () => {
+        orca.screen.mockResolvedValue(CODEX_IDLE_SCREEN)
+        expect(await interactions.send('claude:s1', 'carry on')).toEqual({ success: true })
+        orca.screen.mockResolvedValue([
+          '• Done.',
+          '› Ask Codex to do anything',
+          '  gpt · ~/repo · main',
+          '  ? for shortcuts'
+        ])
+        expect(await interactions.send('claude:s1', 'carry on')).toEqual({ success: true })
+      })
+
+      it.each([
+        ['an approval', ['Allow command?', '› 1. Yes, proceed (y)', '  2. No (esc)']],
+        [
+          'a picker with no numbers',
+          ['Resume?', '› fix the build', '  add the tests', '  enter to confirm']
+        ],
+        ['Claude Code’s input line, which is not its own', IDLE_SCREEN],
+        ['its composer far above the bottom', [...CODEX_IDLE_SCREEN, '  a', '  b', '  c', '  d']]
+      ])('types nothing when the screen shows %s', async (_kind, screen) => {
+        orca.screen.mockResolvedValue(screen)
+        expect(await interactions.send('claude:s1', 'carry on')).toEqual({
+          success: false,
+          reason: 'prompt-on-screen'
+        })
+        expect(orca.sendPrompt).not.toHaveBeenCalled()
+      })
+    })
+
+    it('types nothing when the screen cannot be read', async () => {
+      orca.screen.mockRejectedValue(new Error('read failed'))
+      expect(await interactions.send('claude:s1', 'hi')).toEqual({
+        success: false,
+        reason: 'orca-unavailable'
+      })
+      expect(orca.sendPrompt).not.toHaveBeenCalled()
+    })
+
     it('types the message into the agent’s Orca terminal', async () => {
       expect(await interactions.send('claude:s1', 'run the tests')).toEqual({ success: true })
       expect(orca.sendPrompt).toHaveBeenCalledWith('term_a', 'run the tests')
@@ -269,11 +442,13 @@ describe('OfficeInteractions', () => {
         success: false,
         reason: 'no-permission-prompt'
       })
-      snapshot.sessions = [session({ provider: 'codex', attention: 'permission' })]
-      expect(await interactions.respond('claude:s1', 'approve', 'f')).toEqual({
-        success: false,
-        reason: 'unsupported-provider'
-      })
+      for (const provider of ['codex', 'opencode'] as const) {
+        snapshot.sessions = [session({ provider, attention: 'permission' })]
+        expect(await interactions.respond('claude:s1', 'approve', 'f')).toEqual({
+          success: false,
+          reason: 'unsupported-provider'
+        })
+      }
       expect(orca.sendKey).not.toHaveBeenCalled()
     })
 
@@ -312,10 +487,94 @@ describe('OfficeInteractions', () => {
     })
   })
 
+  describe('a teammate, which has its own process and pane', () => {
+    const teammate: SubagentRef = {
+      id: 'ravi@session-s1',
+      type: 'ravi',
+      activity: 'thinking',
+      kind: 'teammate',
+      name: 'ravi',
+      pid: 5,
+      startedAtMs: 50,
+      orcaPaneKey: 'tab2:leaf2'
+    }
+    const teammateKey = 'claude:s1#ravi@session-s1'
+
+    beforeEach(() => {
+      snapshot.sessions = [session({ subagents: [teammate] })]
+      processStart.mockImplementation(async (pid: number) => (pid === 5 ? 50 : 1))
+      orca.handleFor.mockImplementation(async (paneKey: string) =>
+        paneKey === 'tab2:leaf2'
+          ? pane({ handle: 'term_mate', agent: 'claude-agent-teams' })
+          : pane()
+      )
+    })
+
+    it('types a message into the teammate’s pane, not the lead’s', async () => {
+      orca.screen.mockResolvedValue(IDLE_SCREEN)
+      expect(await interactions.send(teammateKey, 'status?')).toEqual({ success: true })
+      expect(orca.sendPrompt).toHaveBeenCalledWith('term_mate', 'status?')
+    })
+
+    it('types nothing while a prompt is on the teammate’s own screen', async () => {
+      orca.screen.mockImplementation(async (handle: string) =>
+        handle === 'term_mate' ? PROMPT_SCREEN : IDLE_SCREEN
+      )
+      expect(await interactions.send(teammateKey, 'no, wait')).toEqual({
+        success: false,
+        reason: 'prompt-on-screen'
+      })
+      expect(orca.sendPrompt).not.toHaveBeenCalled()
+    })
+
+    it('talks to a teammate while its lead waits on a dialog of its own', async () => {
+      snapshot.sessions = [session({ attention: 'permission', subagents: [teammate] })]
+      orca.screen.mockResolvedValue(IDLE_SCREEN)
+      expect(await interactions.send(teammateKey, 'status?')).toEqual({ success: true })
+    })
+
+    it('peeks at the teammate’s own screen', async () => {
+      orca.screen.mockResolvedValue(['mate line'])
+      expect((await interactions.peek(teammateKey)).lines).toEqual(['mate line'])
+      expect(orca.screen).toHaveBeenCalledWith('term_mate')
+    })
+
+    it('types nothing when the teammate’s process is no longer the one reported', async () => {
+      processStart.mockResolvedValue(999)
+      expect(await interactions.send(teammateKey, 'status?')).toEqual({
+        success: false,
+        reason: 'unknown-session'
+      })
+      expect(orca.sendPrompt).not.toHaveBeenCalled()
+    })
+
+    it('never types into the lead’s terminal for an agent that runs inside the lead', async () => {
+      snapshot.sessions = [
+        session({ subagents: [{ id: 'a1', type: 'Explore', activity: 'reading' }] })
+      ]
+      expect(await interactions.send('claude:s1#a1', 'status?')).toEqual({
+        success: false,
+        reason: 'unknown-session'
+      })
+      expect(await interactions.peek('claude:s1#a1')).toMatchObject({ success: false })
+      expect(orca.sendPrompt).not.toHaveBeenCalled()
+      expect(orca.screen).not.toHaveBeenCalled()
+    })
+  })
+
   describe('start', () => {
     it('opens a new Orca terminal running the chosen agent in the project folder', async () => {
       expect(await interactions.start('p_app', 'codex')).toEqual({ success: true })
       expect(orca.create).toHaveBeenCalledWith('/repo/app', 'codex', 'New Codex agent')
+    })
+
+    it('starts no OpenCode agent: only Claude and Codex can be started from the office', async () => {
+      expect(await interactions.start('p_app', 'opencode')).toEqual({
+        success: false,
+        reason: 'unsupported-provider'
+      })
+      expect(orca.create).not.toHaveBeenCalled()
+      expect(openTerminalRunning).not.toHaveBeenCalled()
     })
 
     it('starts in the project root even when the known session runs in a worktree or subfolder', async () => {

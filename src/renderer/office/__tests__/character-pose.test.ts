@@ -11,6 +11,13 @@ describe('moodFor', () => {
     expect(moodFor({ activity: 'delegating', attention: 'none' }, false)).toBe('thinking')
     expect(moodFor({ activity: 'idle', attention: 'done' }, false)).toBe('idle')
   })
+
+  it('lounges only when the agent has arrived at its lounge seat', () => {
+    const resting = { activity: 'idle', attention: 'done', place: 'lounge' } as const
+    expect(moodFor(resting, false)).toBe('lounging')
+    expect(moodFor(resting, true)).toBe('walking')
+    expect(moodFor({ ...resting, attention: 'question' }, false)).toBe('needs-you')
+  })
 })
 
 describe('robotPose', () => {
@@ -25,6 +32,20 @@ describe('robotPose', () => {
     const thinking = robotPose('thinking', 0.3, 0).gearSpeed
     expect(thinking).toBeGreaterThan(0)
     expect(thinking).toBeLessThan(robotPose('working', 0.3, 0).gearSpeed)
+  })
+
+  it('keeps a thinking or reading agent visibly at work: hands on the desk, and moving', () => {
+    for (const mood of ['thinking', 'reading'] as const) {
+      const poses = [0, 0.2, 0.4, 0.9, 1.3].map((time) => robotPose(mood, time, 0))
+      // Hands forward on the desk, like a working agent, never hanging at its sides.
+      for (const pose of poses) {
+        expect(pose.leftArm).toBeLessThan(-0.5)
+        expect(pose.rightArm).toBeLessThan(-0.5)
+      }
+      expect(new Set(poses.map((pose) => pose.rightArm.toFixed(3))).size).toBeGreaterThan(2)
+      // Reduced motion: the same working posture, held still.
+      expect(robotPose(mood, 1.3, 0, { isReducedMotion: true }).leftArm).toBeLessThan(-0.5)
+    }
   })
 
   it('raises an arm to wave when it needs you', () => {
@@ -48,6 +69,44 @@ describe('robotPose', () => {
     expect(robotPose('working', 0.37, 0, { isReducedMotion: true }).leftArm).toBe(
       robotPose('working', 0.91, 0, { isReducedMotion: true }).leftArm
     )
+  })
+})
+
+describe('lounging pose', () => {
+  it('sits low and leans back, moving slowly and with no gear', () => {
+    const poses = Array.from({ length: 200 }, (_, index) => robotPose('lounging', index * 0.05, 0))
+    for (const pose of poses) {
+      expect(pose.bob).toBeLessThan(-0.05)
+      expect(pose.lean).toBeLessThan(0)
+      expect(pose.gearSpeed).toBe(0)
+    }
+    const bobs = poses.map((pose) => pose.bob)
+    expect(Math.max(...bobs) - Math.min(...bobs)).toBeGreaterThan(0)
+    expect(Math.max(...bobs) - Math.min(...bobs)).toBeLessThan(0.05)
+  })
+
+  it('holds still under reduced motion', () => {
+    expect(robotPose('lounging', 0.4, 0, { isReducedMotion: true })).toEqual(
+      robotPose('lounging', 7.3, 0.5, { isReducedMotion: true })
+    )
+  })
+
+  it('leaves a working agent upright, exactly as before the lounge existed', () => {
+    expect(robotPose('working', 0.37, 0.2, { isReducedMotion: true })).toEqual({
+      bob: 0,
+      sway: 0,
+      lean: 0,
+      headPitch: 0,
+      leftArm: -0.95,
+      rightArm: -0.95,
+      rightArmRoll: 0,
+      gearSpeed: 0,
+      eyeOpen: 1
+    })
+    const moving = robotPose('working', 0.37, 0.2)
+    expect(moving.lean).toBe(0)
+    expect(moving.bob).toBe(0)
+    expect(moving.gearSpeed).toBe(6)
   })
 })
 

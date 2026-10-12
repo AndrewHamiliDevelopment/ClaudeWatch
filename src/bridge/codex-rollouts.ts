@@ -1,4 +1,6 @@
-import { join } from 'node:path'
+import { isAbsolute, join } from 'node:path'
+import { CONTROL_CHARACTER } from '../shared/unsafe-text'
+import { accountKey } from './account-key'
 import { type BridgeIo, isMissing, jsonObject, object } from './io'
 
 export interface Rollout {
@@ -6,15 +8,28 @@ export interface Rollout {
   id: string
   cwd: string
   mtimeMs: number
+  size: number
+  // When the thread was first created, however often it has been resumed since.
+  startedAtMs: number | null
+  // The account the session was created under, hashed here so its id never leaves this file.
+  accountKey: string | null
 }
 interface CachedRollout {
   mtimeMs: number
   size: number
+  derived: boolean
   rollout: Rollout | null
 }
+// A header's folder reaches the feed and, on focus, a terminal: only a plain absolute path may.
+const isFolderPath = (cwd: string): boolean => isAbsolute(cwd) && !CONTROL_CHARACTER.test(cwd)
 const caches = new WeakMap<BridgeIo, Map<string, Map<string, CachedRollout>>>()
 
-export async function findRollouts(root: string, io: BridgeIo): Promise<Rollout[]> {
+// An account key is derived only when asked for: with accounts unwatched, no identity value is.
+export async function findRollouts(
+  root: string,
+  io: BridgeIo,
+  derivesAccounts = false
+): Promise<Rollout[]> {
   let roots = caches.get(io)
   if (!roots) caches.set(io, (roots = new Map()))
   let cache = roots.get(root)
@@ -41,7 +56,12 @@ export async function findRollouts(root: string, io: BridgeIo): Promise<Rollout[
         if (!/^rollout-.*\.jsonl$/.test(file)) continue
         seen.add(path)
         const cached = entries.get(path)
-        if (cached && cached.mtimeMs === info.mtimeMs && cached.size === info.size) {
+        if (
+          cached &&
+          cached.mtimeMs === info.mtimeMs &&
+          cached.size === info.size &&
+          cached.derived === derivesAccounts
+        ) {
           if (cached.rollout) rollouts.push(cached.rollout)
           continue
         }
@@ -51,12 +71,32 @@ export async function findRollouts(root: string, io: BridgeIo): Promise<Rollout[
         if (
           header?.type === 'session_meta' &&
           typeof meta?.cwd === 'string' &&
+          isFolderPath(meta.cwd) &&
           typeof meta.id === 'string'
         ) {
-          rollout = { path, id: meta.id, cwd: meta.cwd, mtimeMs: info.mtimeMs }
+          const creator = meta.creator_account_id
+          const created = meta.timestamp ?? header.timestamp
+          const startedAtMs = typeof created === 'string' ? Date.parse(created) : Number.NaN
+          rollout = {
+            path,
+            id: meta.id,
+            cwd: meta.cwd,
+            mtimeMs: info.mtimeMs,
+            size: info.size,
+            startedAtMs: Number.isFinite(startedAtMs) ? startedAtMs : null,
+            accountKey:
+              derivesAccounts && typeof creator === 'string' && creator
+                ? accountKey('codex', creator)
+                : null
+          }
           rollouts.push(rollout)
         }
-        entries.set(path, { mtimeMs: info.mtimeMs, size: info.size, rollout })
+        entries.set(path, {
+          mtimeMs: info.mtimeMs,
+          size: info.size,
+          derived: derivesAccounts,
+          rollout
+        })
       } catch (error) {
         if (!isMissing(error)) throw error
       }

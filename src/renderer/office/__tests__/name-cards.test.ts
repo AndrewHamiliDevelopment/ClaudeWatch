@@ -56,6 +56,16 @@ describe('buildNameCards', () => {
     expect(office?.z).toBeGreaterThan(2)
   })
 
+  it('keeps the card over an agent that is in the lounge, where there is no desk', () => {
+    const lounging = makeFrame({
+      floors: [floor],
+      sessions: [makeSession({ key: 'claude:a', name: 'office renderer', attention: 'done' })],
+      agents: [makeAgent({ agentKey: 'a', roomId: 'r1', x: 9, z: 4, heading: 0, place: 'lounge' })]
+    })
+    const card = buildNameCards(lounging, 'f1', null).find((entry) => entry.agentKey === 'a')
+    expect(card).toMatchObject({ x: 9, z: 4 })
+  })
+
   it('shows only the focused floor and puts waiting agents first', () => {
     expect(cards.some((card) => card.agentKey === 'elsewhere')).toBe(false)
     expect(cards[0].agentKey).toBe('b')

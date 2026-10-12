@@ -83,6 +83,17 @@ describe('ProcessMonitor', () => {
       expect(instances[0].sessionId).toBeUndefined()
     })
 
+    it('judges by a threshold changed while running', async () => {
+      mockExecFile.mockImplementation(((_bin: string, _args: unknown, cb: unknown) => {
+        ;(cb as ExecCallback)(null, `${PS_HEADER}\n${PS_LINE_ACTIVE}\n`, '')
+      }) as typeof execFile)
+      const monitor = new ProcessMonitor({ cpuIdleThreshold: 1.0 })
+      expect((await monitor.poll())[0].status).toBe('active')
+
+      monitor.setCpuIdleThreshold(90)
+      expect((await monitor.poll())[0].status).toBe('idle')
+    })
+
     it('should exclude Claude.app GUI and grep processes', async () => {
       mockExecFile.mockImplementation(((_bin: string, _args: unknown, cb: unknown) => {
         ;(cb as ExecCallback)(null, `${PS_HEADER}\n${PS_LINE_GUI}\n${PS_LINE_GREP}\n`, '')

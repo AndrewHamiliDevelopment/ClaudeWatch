@@ -56,8 +56,10 @@ describe('usePromoStatus', () => {
   })
 
   it('starts with null promo', () => {
-    const { result } = renderHook(() => usePromoStatus())
+    const { result, unmount } = renderHook(() => usePromoStatus())
     expect(result.current.promo).toBeNull()
+    // Leaves before the pending read resolves into a finished test.
+    unmount()
   })
 
   it('fetches initial promo status', async () => {

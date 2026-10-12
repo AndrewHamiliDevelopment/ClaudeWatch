@@ -8,6 +8,8 @@ import type {
   PromoStatus,
   RateLimits
 } from '../renderer/lib/types'
+import type { FocusResult, OfficeSnapshot } from '../shared/office/types'
+import type { AccountsState, AliasResult } from '../shared/accounts'
 
 const api = {
   getInstances: (): Promise<InstanceUpdate> => ipcRenderer.invoke('instances:get'),
@@ -22,6 +24,14 @@ const api = {
   clearHistory: (): Promise<{ success: boolean }> => ipcRenderer.invoke('history:clear'),
 
   openDashboard: (): Promise<{ success: boolean }> => ipcRenderer.invoke('app:open-dashboard'),
+
+  openOffice: (): Promise<{ success: boolean }> => ipcRenderer.invoke('app:open-office'),
+
+  // What the Office shows right now; null until its bridge has reported.
+  getOfficeSnapshot: (): Promise<OfficeSnapshot | null> => ipcRenderer.invoke('office:snapshot'),
+
+  // Jumps to a tracked session's terminal: its exact Orca pane when it runs in Orca.
+  focusSession: (pid: number): Promise<FocusResult> => ipcRenderer.invoke('session:focus', pid),
 
   quit: (): Promise<void> => ipcRenderer.invoke('app:quit'),
 
@@ -102,6 +112,22 @@ const api = {
     ipcRenderer.invoke('ratelimits:statusline-status'),
 
   setupRateLimitSync: (): Promise<boolean> => ipcRenderer.invoke('ratelimits:setup-statusline'),
+
+  // Every known account with its token totals; `{ status: 'off' }` while accounts are not watched.
+  getAccounts: (): Promise<AccountsState> => ipcRenderer.invoke('accounts:get'),
+
+  // The owner's own name for an account; null or an empty name clears it.
+  setAccountAlias: (key: string, alias: string | null): Promise<AliasResult> =>
+    ipcRenderer.invoke('accounts:set-alias', key, alias),
+
+  onAccountsUpdate: (callback: (state: AccountsState) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, state: AccountsState): void =>
+      callback(state)
+    ipcRenderer.on('accounts:update', handler)
+    return () => {
+      ipcRenderer.removeListener('accounts:update', handler)
+    }
+  },
 
   // Popover pin controls
   setPopoverPinned: (pinned: boolean): Promise<{ success: boolean }> =>

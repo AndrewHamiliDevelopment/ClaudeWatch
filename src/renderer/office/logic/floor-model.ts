@@ -1,4 +1,6 @@
-import type { AgentView, SessionRef } from '../../../shared/office/types'
+import { agentKey, parseAgentKey } from '../../../shared/office/agent-key'
+import { needsHuman } from '../../../shared/office/attention'
+import type { AgentView, SessionRef, SubagentRef } from '../../../shared/office/types'
 import type { OfficeFrame, RoomGeometry } from '../scene-model'
 
 export interface FloorSummary {
@@ -18,10 +20,6 @@ export function needsYouLabel(count: number): string {
   return `${count} ${count === 1 ? 'needs' : 'need'} you`
 }
 
-export function needsHuman(agent: Pick<AgentView, 'attention'>): boolean {
-  return agent.attention === 'permission' || agent.attention === 'question'
-}
-
 export function summariseFloors(frame: OfficeFrame): FloorSummary[] {
   return frame.floors.map((floor, index) => {
     const agents = frame.agents.filter((agent) => agent.floorId === floor.floorId)
@@ -30,7 +28,7 @@ export function summariseFloors(frame: OfficeFrame): FloorSummary[] {
       label: floor.label,
       number: index + 1,
       agentCount: agents.length,
-      attentionCount: agents.filter(needsHuman).length
+      attentionCount: agents.filter((agent) => needsHuman(agent.attention)).length
     }
   })
 }
@@ -42,11 +40,25 @@ function roomForAgent(frame: OfficeFrame, agent: AgentView): RoomGeometry | unde
     ?.rooms.find((room) => room.id === agent.roomId)
 }
 
+// A theme picks an agent's character from the bay of its office; shared rooms have none.
+export function bayForAgent(frame: OfficeFrame, agent: AgentView): number {
+  return roomForAgent(frame, agent)?.bay ?? 0
+}
+
+// The subagent or teammate an agent key names within its session; the lead has none.
+export function memberForAgent(
+  session: SessionRef | undefined,
+  key: string
+): SubagentRef | undefined {
+  return session ? parseAgentKey(key, [session])?.member : undefined
+}
+
 export function sessionForAgent(frame: OfficeFrame, agent: AgentView): SessionRef | undefined {
   const sessionKey = roomForAgent(frame, agent)?.sessionKey
   if (sessionKey) return frame.sessions.find((session) => session.key === sessionKey)
-  // The shared team area belongs to no session; a subagent there is keyed `${sessionKey}#${id}`.
-  return frame.sessions.find((session) => agent.agentKey.startsWith(`${session.key}#`))
+  // The shared team area belongs to no session. Matched by prefix, not parsed: a subagent
+  // walking out is no longer listed by its lead, and still belongs to it.
+  return frame.sessions.find((session) => agent.agentKey.startsWith(agentKey(session.key, '')))
 }
 
 export function mainAgentForSession(frame: OfficeFrame, sessionKey: string): AgentView | undefined {

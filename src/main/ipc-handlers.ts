@@ -1,6 +1,6 @@
-import { ipcMain, BrowserWindow, app, shell } from 'electron'
+import { BrowserWindow, app, shell } from 'electron'
 import { isAbsolute, join } from 'path'
-import { assertTrustedSender } from './window-factory'
+import { handleTrusted } from './window-factory'
 import { conformSettings } from './settings-shape'
 import { openTerminal } from './terminal-opener'
 import type { SessionTracker } from './session-tracker'
@@ -12,37 +12,9 @@ import type { RateLimitReader } from './rate-limit-reader'
 import type { NotificationManager } from './notifications'
 import type { AppSettings, TerminalType } from '../renderer/lib/types'
 import type { TrayManager } from './tray'
-
-export function validateSettings(data: Partial<AppSettings>): Partial<AppSettings> {
-  const validated = conformSettings(data)
-
-  if (validated.pollingIntervalMs !== undefined) {
-    validated.pollingIntervalMs = Math.max(500, Math.min(60000, validated.pollingIntervalMs))
-  }
-  if (validated.cpuIdleThreshold !== undefined) {
-    validated.cpuIdleThreshold = Math.max(0.1, Math.min(100, validated.cpuIdleThreshold))
-  }
-  if (validated.maxHistoryEntries !== undefined) {
-    validated.maxHistoryEntries = Math.max(1, Math.min(10000, validated.maxHistoryEntries))
-  }
-  if (validated.weeklyTokenTarget !== undefined) {
-    validated.weeklyTokenTarget = Math.max(
-      100_000,
-      Math.min(100_000_000, validated.weeklyTokenTarget)
-    )
-  }
-  if (validated.staleThresholdMinutes !== undefined) {
-    validated.staleThresholdMinutes = Math.max(5, Math.min(120, validated.staleThresholdMinutes))
-  }
-  if (validated.notifications?.cooldownSeconds !== undefined) {
-    validated.notifications = {
-      ...validated.notifications,
-      cooldownSeconds: Math.max(10, Math.min(120, validated.notifications.cooldownSeconds))
-    }
-  }
-
-  return validated
-}
+import type { Office } from './office-setup'
+import type { AccountLedger } from './accounts'
+import type { AccountsState, AliasResult } from '../shared/accounts'
 
 const TERMINAL_TYPES = {
   'terminal-app': true,
@@ -67,7 +39,13 @@ function isTerminalType(value: unknown): value is TerminalType {
 interface IpcHandlerOptions {
   tracker: Pick<
     SessionTracker,
-    'getInstances' | 'getStats' | 'setStaleThreshold' | 'setCooldownSeconds'
+    | 'getInstances'
+    | 'getStats'
+    | 'start'
+    | 'setCpuIdleThreshold'
+    | 'setMaxHistoryEntries'
+    | 'setStaleThreshold'
+    | 'setCooldownSeconds'
   >
   store: Pick<SettingsStore, 'getSettings' | 'setSettings' | 'getHistory' | 'clearHistory'>
   updater?: Pick<AutoUpdaterManager, 'checkForUpdates' | 'downloadUpdate' | 'quitAndInstall'>
@@ -79,8 +57,15 @@ interface IpcHandlerOptions {
   >
   notifications?: Pick<NotificationManager, 'isSupported' | 'sendTest'>
   onOpenDashboard: () => void
+  onOpenOffice: Office['open']
+  focusSession: Office['focusSession']
+  getOfficeSnapshot: Office['snapshot']
   getTrayManager?: () => TrayManager | null
+  accounts?: Pick<AccountLedger, 'dashboardState' | 'setAlias' | 'setWatching'>
 }
+
+const ACCOUNTS_OFF: AccountsState = { status: 'off' }
+const ALIAS_REFUSED_OFF: AliasResult = { success: false, reason: 'off' }
 
 export function setupIpcHandlers(options: IpcHandlerOptions): void {
   const {
@@ -92,15 +77,15 @@ export function setupIpcHandlers(options: IpcHandlerOptions): void {
     rateLimitReader,
     notifications,
     onOpenDashboard,
-    getTrayManager
+    onOpenOffice,
+    focusSession,
+    getOfficeSnapshot,
+    getTrayManager,
+    accounts
   } = options
 
-  const handle = (channel: string, listener: Parameters<typeof ipcMain.handle>[1]): void => {
-    ipcMain.handle(channel, (event, ...args) => {
-      assertTrustedSender(event, 'index.html')
-      return listener(event, ...args)
-    })
-  }
+  const handle = (channel: string, listener: Parameters<typeof handleTrusted>[2]): void =>
+    handleTrusted('index.html', channel, listener)
 
   const beginQuit = (): void => {
     app.isQuitting = true
@@ -116,7 +101,7 @@ export function setupIpcHandlers(options: IpcHandlerOptions): void {
   handle('settings:get', () => store.getSettings())
 
   handle('settings:set', (_event: Electron.IpcMainInvokeEvent, data: Partial<AppSettings>) => {
-    const validated = validateSettings(data)
+    const validated = conformSettings(data)
     store.setSettings(validated)
     const updated = store.getSettings()
     if (validated.weeklyTokenTarget !== undefined && usageReader) {
@@ -125,14 +110,31 @@ export function setupIpcHandlers(options: IpcHandlerOptions): void {
     if (validated.launchAtLogin !== undefined) {
       app.setLoginItemSettings({ openAtLogin: validated.launchAtLogin })
     }
+    if (validated.pollingIntervalMs !== undefined) tracker.start(updated.pollingIntervalMs)
+    if (validated.cpuIdleThreshold !== undefined) {
+      tracker.setCpuIdleThreshold(updated.cpuIdleThreshold)
+    }
+    if (validated.maxHistoryEntries !== undefined) {
+      tracker.setMaxHistoryEntries(updated.maxHistoryEntries)
+    }
     if (validated.staleThresholdMinutes !== undefined) {
       tracker.setStaleThreshold(updated.staleThresholdMinutes)
     }
     if (validated.notifications?.cooldownSeconds !== undefined) {
       tracker.setCooldownSeconds(updated.notifications.cooldownSeconds)
     }
+    if (validated.watchAccounts !== undefined) accounts?.setWatching(updated.watchAccounts)
     return updated
   })
+
+  // Emails are in this answer, so it goes to the dashboard page alone, like every handler here.
+  handle('accounts:get', () => accounts?.dashboardState() ?? ACCOUNTS_OFF)
+
+  handle(
+    'accounts:set-alias',
+    (_event: Electron.IpcMainInvokeEvent, key: unknown, alias: unknown) =>
+      accounts?.setAlias(key, alias) ?? ALIAS_REFUSED_OFF
+  )
 
   handle('history:get', () => store.getHistory())
 
@@ -145,6 +147,17 @@ export function setupIpcHandlers(options: IpcHandlerOptions): void {
     onOpenDashboard()
     return { success: true }
   })
+
+  handle('app:open-office', () => {
+    onOpenOffice()
+    return { success: true }
+  })
+
+  // What the Office shows, for the dashboard and popover; null until the bridge reports.
+  handle('office:snapshot', () => getOfficeSnapshot())
+
+  // The pid is the renderer's word only: focusSession acts on tracked processes alone.
+  handle('session:focus', (_event: Electron.IpcMainInvokeEvent, pid: unknown) => focusSession(pid))
 
   handle('app:quit', () => {
     beginQuit()
@@ -206,12 +219,14 @@ export function setupIpcHandlers(options: IpcHandlerOptions): void {
     'notifications:mute-project',
     (_event: Electron.IpcMainInvokeEvent, projectPath: string) => {
       const settings = store.getSettings()
-      const mutedProjects = settings.notifications.mutedProjects ?? []
-      if (!mutedProjects.includes(projectPath)) {
-        mutedProjects.push(projectPath)
-      }
+      const { mutedProjects } = settings.notifications
       store.setSettings({
-        notifications: { ...settings.notifications, mutedProjects }
+        notifications: {
+          ...settings.notifications,
+          mutedProjects: mutedProjects.includes(projectPath)
+            ? mutedProjects
+            : [...mutedProjects, projectPath]
+        }
       })
       return { success: true }
     }
@@ -221,9 +236,7 @@ export function setupIpcHandlers(options: IpcHandlerOptions): void {
     'notifications:unmute-project',
     (_event: Electron.IpcMainInvokeEvent, projectPath: string) => {
       const settings = store.getSettings()
-      const mutedProjects = (settings.notifications.mutedProjects ?? []).filter(
-        (p) => p !== projectPath
-      )
+      const mutedProjects = settings.notifications.mutedProjects.filter((p) => p !== projectPath)
       store.setSettings({
         notifications: { ...settings.notifications, mutedProjects }
       })
@@ -259,6 +272,17 @@ export function setupIpcHandlers(options: IpcHandlerOptions): void {
     if (!tray) return { success: false }
     tray.closePopover()
     return { success: true }
+  })
+}
+
+// The accounts state carries email addresses: it is pushed to the dashboard window and no other.
+export function forwardAccountsToDashboard(
+  accounts: Pick<AccountLedger, 'onChange'>,
+  getDashboard: () => BrowserWindow | null
+): void {
+  accounts.onChange((state) => {
+    const window = getDashboard()
+    if (window && !window.isDestroyed()) window.webContents.send('accounts:update', state)
   })
 }
 

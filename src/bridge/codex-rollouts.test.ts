@@ -1,4 +1,5 @@
 import { expect, it, vi } from 'vitest'
+import { accountKey } from './account-key'
 import { findRollouts } from './codex-rollouts'
 import { fixtureIo } from './__fixtures__/helpers'
 
@@ -28,4 +29,51 @@ it('caches headers by path, mtime and size and prunes deleted files', async () =
   files[path] = JSON.stringify({ type: 'session_meta', payload: { id: 'b', cwd: '/new' } })
   expect((await findRollouts('/codex', io))[0].id).toBe('b')
   expect(header).toHaveBeenCalledTimes(4)
+})
+
+it('derives no account key unless asked to, and reads the header again when the answer changes', async () => {
+  const io = fixtureIo({
+    '/codex/sessions/rollout-a.jsonl': JSON.stringify({
+      type: 'session_meta',
+      payload: { id: 'a', cwd: '/repo', creator_account_id: 'acct_CANARY_ID' }
+    })
+  })
+  expect((await findRollouts('/codex', io))[0].accountKey).toBeNull()
+  expect((await findRollouts('/codex', io, true))[0].accountKey).toBe(
+    accountKey('codex', 'acct_CANARY_ID')
+  )
+  expect((await findRollouts('/codex', io))[0].accountKey).toBeNull()
+})
+
+it('names the account a rollout was created under by its hashed key, never the raw id', async () => {
+  const meta = (payload: Record<string, unknown>): string =>
+    JSON.stringify({ type: 'session_meta', payload })
+  const io = fixtureIo({
+    '/codex/sessions/rollout-a.jsonl': meta({
+      id: 'a',
+      cwd: '/repo',
+      creator_account_id: 'acct_CANARY_ID',
+      creator_user_id: 'user_CANARY_ID'
+    }),
+    '/codex/sessions/rollout-b.jsonl': meta({ id: 'b', cwd: '/repo' }),
+    '/codex/sessions/rollout-c.jsonl': meta({ id: 'c', cwd: '/repo', creator_account_id: 7 })
+  })
+  const rollouts = await findRollouts('/codex', io, true)
+  const keyOf = (id: string): unknown => rollouts.find((rollout) => rollout.id === id)?.accountKey
+  expect(keyOf('a')).toBe(accountKey('codex', 'acct_CANARY_ID'))
+  expect(keyOf('b')).toBeNull()
+  expect(keyOf('c')).toBeNull()
+  expect(JSON.stringify(rollouts)).not.toContain('CANARY')
+})
+
+it('keeps only rollouts whose folder is an absolute path with no control characters', async () => {
+  const meta = (id: string, cwd: string): string =>
+    JSON.stringify({ type: 'session_meta', payload: { id, cwd } })
+  const io = fixtureIo({
+    '/codex/sessions/rollout-a.jsonl': meta('a', '/repo'),
+    '/codex/sessions/rollout-b.jsonl': meta('b', 'repo'),
+    '/codex/sessions/rollout-c.jsonl': meta('c', '/repo\n; open -a Calculator'),
+    '/codex/sessions/rollout-d.jsonl': meta('d', '/repo\u001b[2J')
+  })
+  expect((await findRollouts('/codex', io)).map((rollout) => rollout.id)).toEqual(['a'])
 })

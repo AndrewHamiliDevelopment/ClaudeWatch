@@ -1,3 +1,5 @@
+import { object } from '../bridge/io'
+
 // Runs the orca CLI with a fixed argv and returns stdout; supplied by office-setup.
 export type OrcaExec = (args: string[]) => Promise<string>
 
@@ -25,25 +27,16 @@ export interface PaneTerminal {
 }
 
 function result(stdout: string): Record<string, unknown> {
-  const envelope: unknown = JSON.parse(stdout)
-  if (
-    typeof envelope !== 'object' ||
-    envelope === null ||
-    !('ok' in envelope) ||
-    envelope.ok !== true ||
-    !('result' in envelope) ||
-    typeof envelope.result !== 'object' ||
-    envelope.result === null
-  ) {
-    throw new Error('Orca command failed')
-  }
-  return envelope.result as Record<string, unknown>
+  const envelope = object(JSON.parse(stdout))
+  const payload = object(envelope?.result)
+  if (envelope?.ok !== true || !payload) throw new Error('Orca command failed')
+  return payload
 }
 
 function isTerminalEntry(value: unknown): value is TerminalEntry {
-  if (typeof value !== 'object' || value === null) return false
-  const entry = value as Record<string, unknown>
+  const entry = object(value)
   return (
+    entry !== null &&
     typeof entry.handle === 'string' &&
     typeof entry.tabId === 'string' &&
     typeof entry.leafId === 'string' &&
@@ -95,8 +88,22 @@ export class OrcaTerminals {
     const read = result(
       await this.exec(['terminal', 'read', '--terminal', handle, '--screen', '--json'])
     )
-    const terminal = read.terminal as { tail?: unknown } | undefined
-    return Array.isArray(terminal?.tail) ? terminal.tail.filter((l) => typeof l === 'string') : []
+    const tail = object(read.terminal)?.tail
+    return Array.isArray(tail) ? tail.filter((line) => typeof line === 'string') : []
+  }
+
+  // Makes the pane the active one in Orca's window, across worktrees and tabs. False when Orca
+  // had no window to navigate. It never brings the app forward; the caller does that.
+  async focus(handle: string): Promise<boolean> {
+    const { focus } = result(
+      await this.exec(['terminal', 'switch', '--terminal', handle, '--json'])
+    )
+    return (
+      typeof focus === 'object' &&
+      focus !== null &&
+      'navigated' in focus &&
+      focus.navigated === true
+    )
   }
 
   async create(worktreePath: string, command: AgentCommand, title: string): Promise<void> {

@@ -1,17 +1,16 @@
 export { BrassRoomDressing } from './BrassRoomDressing'
+export { BrassWalls } from './BrassWalls'
 import { STEAM } from '../office-palette'
-import { Walls } from './BrassWalls'
 import { Elevator } from './BrassElevator'
 import { signTexture } from '../scene/textures'
 import { doorSignPlacement, DESK_REACH } from '../logic/room-layout'
 import { Matte } from '../scene/InstancedParts'
 import { BRASS } from './palettes'
 import { Batch, Box } from './primitives'
-import { MaintenanceHangar } from './Hangar'
 import { ThemeTower } from './WorldArchitecture'
-import type { DeskProps, FloorProps, RoomProps, TowerProps, WallsProps } from './types'
+import type { DeskProps, FloorProps, RoomProps, RoomsProps, TowerProps } from './types'
 
-export function BrassFloor({ floor }: FloorProps) {
+export function BrassSlab({ floor }: FloorProps) {
   return (
     <>
       <Box at={[0, -0.15, 0]} size={[floor.width + 1, 0.3, floor.depth + 1]} color={STEAM.slab} />
@@ -20,7 +19,14 @@ export function BrassFloor({ floor }: FloorProps) {
         size={[floor.width, 0.008, floor.corridor.width]}
         color={STEAM.iron}
       />
-      {floor.rooms.map((room) => (
+    </>
+  )
+}
+
+export function BrassRoomFloors({ rooms }: RoomsProps) {
+  return (
+    <>
+      {rooms.map((room) => (
         <Box
           key={room.id}
           at={[room.x, 0.008, room.z]}
@@ -30,10 +36,6 @@ export function BrassFloor({ floor }: FloorProps) {
       ))}
     </>
   )
-}
-
-export function BrassWalls({ floor, mode, isReducedMotion }: WallsProps) {
-  return <Walls rooms={floor.rooms} mode={mode} isReducedMotion={isReducedMotion} />
 }
 
 export function BrassDoorway({ room }: RoomProps) {
@@ -101,24 +103,6 @@ export function BrassRoomSign({ room }: RoomProps) {
 export function BrassElevator(props: FloorProps) {
   return <Elevator {...props} />
 }
-export function BrassHangar(props: FloorProps) {
-  return <MaintenanceHangar {...props} palette={BRASS} />
-}
 export function BrassTower(props: TowerProps) {
   return <ThemeTower {...props} palette={BRASS} />
-}
-
-export function BrassDistrict({ floor }: FloorProps) {
-  return (
-    <group position={[-floor.width / 2 - 4, 0, 0]}>
-      <Box at={[0, -0.25, 0]} size={[6, 0.2, floor.depth + 8]} color={STEAM.iron} />
-      <Batch
-        color={STEAM.copper}
-        points={[-3, 0, 3].map((z) => ({ x: 0, y: 1.5, z, rotationY: 0 }))}
-      >
-        <cylinderGeometry args={[0.4, 0.4, 3, 10]} />
-      </Batch>
-      <Box at={[0, 1, 0]} size={[0.15, 0.15, 7]} color={STEAM.brass} />
-    </group>
-  )
 }

@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { fileURLToPath } from 'url'
 
@@ -53,10 +53,22 @@ export function createAppWindow(options: Electron.BrowserWindowConstructorOption
   return window
 }
 
-// Each IPC channel belongs to one page: office:* to office.html, the rest to index.html.
+// Each IPC channel belongs to one page: the dashboard and popover (index.html) or the Office.
 export function assertTrustedSender(event: Electron.IpcMainInvokeEvent, page: AppPage): void {
   const frame = event?.senderFrame
   if (!frame || frame.parent !== null || appPageOf(frame.url) !== page) {
     throw new Error('Untrusted IPC sender')
   }
+}
+
+// Registers a handler that answers its own page only, so no channel can be added without the check.
+export function handleTrusted(
+  page: AppPage,
+  channel: string,
+  listener: Parameters<typeof ipcMain.handle>[1]
+): void {
+  ipcMain.handle(channel, (event, ...args) => {
+    assertTrustedSender(event, page)
+    return listener(event, ...args)
+  })
 }

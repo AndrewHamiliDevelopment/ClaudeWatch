@@ -16,7 +16,7 @@ function mockFeed(overrides: Partial<OfficeFeed> = {}) {
       push = listener
       return () => undefined
     },
-    jump: vi.fn(),
+    focus: vi.fn().mockResolvedValue({ success: true }),
     send: vi.fn(async (): Promise<InteractionResult> => ({ success: true })),
     respond: vi.fn(async (): Promise<InteractionResult> => ({ success: true })),
     peek: vi.fn(
@@ -97,6 +97,25 @@ function selectAgent(name: string): HTMLElement {
 
 afterEach(() => vi.restoreAllMocks())
 
+describe('a view-only page', () => {
+  it('offers nothing the server would refuse, and says the page is view-only', () => {
+    setup({ isViewOnly: true })
+    expect(screen.queryByRole('button', { name: /^New agent in/ })).not.toBeInTheDocument()
+    // The queue keeps its Review button, which here can only bring the terminal forward.
+    fireEvent.click(screen.getByRole('button', { name: 'Review listing search' }))
+    expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument()
+
+    const inspector = selectAgent('office renderer')
+    expect(within(inspector).queryByRole('textbox')).not.toBeInTheDocument()
+    expect(within(inspector).getByText(/This page is view-only/)).toBeInTheDocument()
+    expect(
+      within(inspector).queryByRole('button', { name: 'Peek at screen' })
+    ).not.toBeInTheDocument()
+    // Looking is still allowed: focus types nothing.
+    expect(within(inspector).getByRole('button', { name: /^Focus terminal/ })).toBeInTheDocument()
+  })
+})
+
 describe('talk', () => {
   it('sends with ⌘↵, disables Send in flight, then clears the box and says Sent', async () => {
     let resolveSend: (result: InteractionResult) => void = () => undefined
@@ -111,6 +130,15 @@ describe('talk', () => {
     await act(async () => resolveSend({ success: true }))
     expect(box).toHaveValue('')
     expect(within(inspector).getByText('Sent')).toBeInTheDocument()
+  })
+
+  it('offers no message box while the agent has a dialog open, and says why', () => {
+    setup()
+    const inspector = selectAgent('listing search')
+    expect(within(inspector).queryByRole('textbox')).not.toBeInTheDocument()
+    expect(
+      within(inspector).getByText(/not at its input line, so a message could answer a prompt/)
+    ).toBeInTheDocument()
   })
 
   it('explains the plain-terminal case instead of offering a box', () => {
@@ -181,12 +209,13 @@ describe('permission review', () => {
     expect(screen.queryByRole('region', { name: 'Permission request' })).not.toBeInTheDocument()
   })
 
-  it('offers Review only where an answer can be sent', () => {
-    setup()
+  it('reviews in the office only where an answer can be sent, else in the terminal', () => {
+    const focus = vi.fn(async () => ({ success: true }))
+    setup({ focus })
     const queue = screen.getByRole('region', { name: 'Needs you' })
-    expect(
-      within(queue).queryByRole('button', { name: 'Review widget sync' })
-    ).not.toBeInTheDocument()
+    fireEvent.click(within(queue).getByRole('button', { name: 'Review widget sync' }))
+    expect(focus).toHaveBeenCalledWith('codex:c')
+    expect(screen.queryByRole('region', { name: 'Permission request' })).not.toBeInTheDocument()
   })
 
   it('re-reads the screen when the prompt changed since it was reviewed', async () => {

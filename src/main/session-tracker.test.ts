@@ -26,6 +26,7 @@ function createMockMonitor(): ProcessMonitor & { _setPollResult: (r: ClaudeInsta
   let pollResult: ClaudeInstance[] = []
   const monitor = {
     poll: vi.fn(async () => pollResult),
+    setCpuIdleThreshold: vi.fn(),
     _setPollResult: (r: ClaudeInstance[]) => {
       pollResult = r
     }
@@ -50,6 +51,27 @@ describe('SessionTracker', () => {
   afterEach(() => {
     tracker.stop()
     vi.useRealTimers()
+  })
+
+  describe('settings changed while running', () => {
+    it('hands a new CPU threshold to the monitor', () => {
+      tracker.setCpuIdleThreshold(1.5)
+      expect(monitor.setCpuIdleThreshold).toHaveBeenCalledWith(1.5)
+    })
+
+    it('trims its history to a smaller limit at once', async () => {
+      tracker.start(1000)
+      for (let pid = 1; pid <= 4; pid++) {
+        monitor._setPollResult([makeInstance({ pid })])
+        await vi.advanceTimersByTimeAsync(1000)
+        monitor._setPollResult([])
+        await vi.advanceTimersByTimeAsync(1000)
+      }
+      expect(tracker.getHistory()).toHaveLength(4)
+
+      tracker.setMaxHistoryEntries(2)
+      expect(tracker.getHistory().map((entry) => entry.pid)).toEqual([3, 4])
+    })
   })
 
   describe('getInstances()', () => {
@@ -509,10 +531,21 @@ describe('SessionTracker', () => {
       expect(handler).toHaveBeenCalledTimes(2) // no more calls
     })
 
-    it('should be safe to call stop() multiple times', () => {
+    it('should be safe to call stop() multiple times', async () => {
+      monitor._setPollResult([])
       tracker.start(1000)
+      await vi.advanceTimersByTimeAsync(0)
+      const pollsBeforeStop = vi.mocked(monitor.poll).mock.calls.length
+
       tracker.stop()
-      tracker.stop() // should not throw
+      expect(() => tracker.stop()).not.toThrow()
+
+      await vi.advanceTimersByTimeAsync(5000)
+      expect(monitor.poll).toHaveBeenCalledTimes(pollsBeforeStop)
+      // A stopped tracker can be started again.
+      tracker.start(1000)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(monitor.poll).toHaveBeenCalledTimes(pollsBeforeStop + 1)
     })
 
     it('should be safe to call start() multiple times (restarts)', async () => {

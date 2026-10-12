@@ -5,6 +5,7 @@ directories:
   output: dist
 files:
   - out/**/*
+  - '!out/office-web/**/*'
   - package.json
   - node_modules/**/*
   - '!node_modules/lucide-react/**/*'

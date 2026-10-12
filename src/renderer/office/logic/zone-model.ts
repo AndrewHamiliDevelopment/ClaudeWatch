@@ -1,6 +1,7 @@
 import type { AgentView, SessionRef } from '../../../shared/office/types'
 import type { FloorGeometry, OfficeFrame, ZoneGeometry } from '../scene-model'
-import { needsHuman, sessionForAgent } from './floor-model'
+import { needsHuman } from '../../../shared/office/attention'
+import { sessionForAgent } from './floor-model'
 import { doorSignPlacement, roomWallSegments, type WallSegment } from './room-layout'
 
 export interface OfficeProjectRow {
@@ -99,7 +100,7 @@ function projectRow(
     label,
     zoneId,
     agentCount: group?.agents.length ?? 0,
-    attentionCount: group?.sessions.filter(needsHuman).length ?? 0
+    attentionCount: group?.sessions.filter((session) => needsHuman(session.attention)).length ?? 0
   }
 }
 
@@ -110,19 +111,21 @@ function sum(rows: readonly OfficeProjectRow[], field: 'agentCount' | 'attention
 // Company › Project for the Offices panel: zones give the order and fly-to targets; sessions
 // whose project has no zone yet are still listed so nothing is hidden.
 export function buildOfficesTree(frame: OfficeFrame): OfficeCompanyRow[] {
-  const groups = groupByProject(frame)
+  return officesTree(frame, groupByProject(frame))
+}
+
+function officesTree(frame: OfficeFrame, groups: Map<string, Grouped>): OfficeCompanyRow[] {
   const seenProjects = new Set<string>()
   const companies = new Map<string, OfficeCompanyRow>()
 
   for (const zone of frame.floors.flatMap((floor) => floor.zones)) {
     if (zone.kind !== 'company') continue
-    const projects = zone.children
-      .filter((child) => child.kind === 'project' && child.projectKey)
-      .map((child) => {
-        const projectKey = child.projectKey ?? child.id
-        seenProjects.add(projectKey)
-        return projectRow(projectKey, child.label, child.id, groups.get(projectKey))
-      })
+    const projects = zone.children.flatMap((child) => {
+      const { projectKey } = child
+      if (child.kind !== 'project' || !projectKey) return []
+      seenProjects.add(projectKey)
+      return [projectRow(projectKey, child.label, child.id, groups.get(projectKey))]
+    })
     const companyKey = zone.companyKey ?? zone.id
     companies.set(companyKey, {
       companyKey,
@@ -171,7 +174,7 @@ function orderAgents(frame: OfficeFrame, agents: readonly AgentView[]): AgentVie
 
 export function buildCompanyList(frame: OfficeFrame): CompanyListEntry[] {
   const groups = groupByProject(frame)
-  return buildOfficesTree(frame)
+  return officesTree(frame, groups)
     .map((company) => ({
       companyKey: company.companyKey,
       label: company.label,

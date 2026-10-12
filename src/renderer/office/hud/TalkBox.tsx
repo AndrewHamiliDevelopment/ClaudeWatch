@@ -1,21 +1,22 @@
 import { useEffect, useId, useState, type KeyboardEvent } from 'react'
 import type { InteractionFailure, InteractionResult } from '../../../shared/office/types'
-import { cn } from '../../lib/utils'
+import { BUTTON_QUIET_COMPACT_CLASS } from '../../components/deck/deck-styles'
 import { failureMessage, MAX_MESSAGE_CHARS, messageProblem } from '../logic/interactions'
-import { FOCUS_RING_CLASS, HUD_BUTTON_CLASS, KBD_CLASS } from './hud-styles'
+import { FIELD_CLASS, KBD_CLASS } from './hud-styles'
 import { useRequest } from './use-request'
 
 const SENT_VISIBLE_MS = 2500
 const FAILED: InteractionResult = { success: false }
 
 interface TalkBoxProps {
-  sessionKey: string
-  sessionName: string
+  // A session, or a teammate keyed `${sessionKey}#${memberId}`.
+  agentKey: string
+  agentName: string
   send: (sessionKey: string, text: string) => Promise<InteractionResult>
-  onSent: (sessionKey: string) => void
+  onSent: (agentKey: string) => void
 }
 
-export function TalkBox({ sessionKey, sessionName, send, onSent }: TalkBoxProps) {
+export function TalkBox({ agentKey, agentName, send, onSent }: TalkBoxProps) {
   const fieldId = useId()
   const [text, setText] = useState('')
   const [localProblem, setLocalProblem] = useState<InteractionFailure | null>(null)
@@ -34,11 +35,11 @@ export function TalkBox({ sessionKey, sessionName, send, onSent }: TalkBoxProps)
     setLocalProblem(problem)
     setIsSentVisible(false)
     if (problem || isPending) return
-    const result = await run(() => send(sessionKey, text.trim()))
+    const result = await run(() => send(agentKey, text.trim()))
     if (!result.success) return
     setText('')
     setIsSentVisible(true)
-    onSent(sessionKey)
+    onSent(agentKey)
   }
 
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>): void => {
@@ -47,38 +48,33 @@ export function TalkBox({ sessionKey, sessionName, send, onSent }: TalkBoxProps)
     void submit()
   }
 
-  const failure =
-    request.status === 'done' && !request.result.success ? request.result.reason : null
+  const failed = request.status === 'done' && !request.result.success ? request.result : null
   const statusText = localProblem
     ? failureMessage(localProblem)
     : isPending
       ? 'Sending…'
       : isSentVisible
         ? 'Sent'
-        : request.status === 'done' && !request.result.success
-          ? failureMessage(failure ?? undefined)
+        : failed
+          ? failureMessage(failed.reason)
           : ''
 
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={fieldId} className="sr-only">
-        Message {sessionName}
+      <label htmlFor={fieldId} className="text-caption text-text-secondary">
+        Message {agentName}
       </label>
       <textarea
         id={fieldId}
         value={text}
         rows={2}
         maxLength={MAX_MESSAGE_CHARS}
-        placeholder={`Message ${sessionName}…`}
         onChange={(event) => setText(event.target.value)}
         onKeyDown={onKeyDown}
-        className={cn(
-          FOCUS_RING_CLASS,
-          'resize-none rounded-md border border-border-strong bg-surface px-2 py-1.5 text-body text-text-primary placeholder:text-text-secondary'
-        )}
+        className={FIELD_CLASS}
       />
       <div className="flex items-center justify-between gap-2">
-        <p aria-live="polite" className="min-w-0 text-caption text-text-secondary">
+        <p aria-live="polite" className="min-w-0 text-xs text-text-secondary">
           {statusText}
         </p>
         <button
@@ -86,11 +82,7 @@ export function TalkBox({ sessionKey, sessionName, send, onSent }: TalkBoxProps)
           disabled={isPending}
           aria-keyshortcuts="Meta+Enter"
           onClick={() => void submit()}
-          className={cn(
-            HUD_BUTTON_CLASS,
-            FOCUS_RING_CLASS,
-            'flex shrink-0 items-center gap-1.5 bg-surface-hover'
-          )}
+          className={BUTTON_QUIET_COMPACT_CLASS}
         >
           Send
           <kbd aria-hidden="true" className={KBD_CLASS}>

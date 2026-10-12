@@ -1,77 +1,101 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useReducer, useState } from 'react'
-import { useNow, useOfficeTheme } from './hooks'
-import { buildAttentionQueue } from './logic/attention-queue'
-import { mainAgentForSession, sessionForAgent, summariseFloors } from './logic/floor-model'
+import { Plate } from '../components/deck/Plate'
+import { cn } from '../lib/utils'
+import { useOfficeTheme } from './hooks'
+import { mainAgentForSession } from './logic/floor-model'
 import { canRespond } from './logic/interactions'
-import { buildNameCards, buildProjectStacks } from './logic/name-cards'
 import { INITIAL_OFFICE_STATE, officeReducer } from './logic/office-reducer'
-import { buildCompanyList, buildOfficesTree } from './logic/zone-model'
+import { buildThemeRows, countThemeChoices, useThemeAssignments } from './logic/office-themes'
+import { findZone } from './logic/zone-model'
 import { createFrameMetrics } from './frame-metrics'
 import { AgentActions } from './hud/AgentActions'
 import { AttentionRail } from './hud/AttentionRail'
 import { BottomBar } from './hud/BottomBar'
 import { EmptyState } from './hud/EmptyState'
+import { FocusNotice } from './hud/FocusNotice'
 import { HealthBanner } from './hud/HealthBanner'
 import { Inspector } from './hud/Inspector'
 import { ListView } from './hud/ListView'
 import { MetricsOverlay } from './hud/MetricsOverlay'
 import { OfficesPanel } from './hud/OfficesPanel'
+import { ResourceBar } from './hud/ResourceBar'
+import { ThemesList } from './hud/ThemesList'
+import { useWalking } from './player/use-walking'
 import { SceneErrorBoundary } from './SceneErrorBoundary'
 import type { OfficeFeed } from './scene-model'
 import {
   useAttentionAnnouncement,
   useFeedSubscription,
-  useOfficeHotkeys
+  useFocusTerminal
 } from './use-office-effects'
+import { useOfficeFeatures } from './use-office-features'
+import { selectionOf, useOfficeLists } from './use-office-model'
 import { canCreateWebGL2 } from './webgl-support'
 
 // The scene component loads separately so the HUD can paint before Canvas mounts.
 const OfficeScene = lazy(() => import('./scene/OfficeScene'))
 const SPEECH_BUBBLE_MS = 1500
 
-export function OfficeApp({ feed }: { feed: OfficeFeed }) {
+interface OfficeAppProps {
+  feed: OfficeFeed
+  // The app's window draws no title bar, so the page supplies the strip it is dragged by.
+  hasHiddenTitleBar?: boolean
+}
+
+export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
   const [state, dispatch] = useReducer(officeReducer, INITIAL_OFFICE_STATE)
   const [hasWebGL] = useState(canCreateWebGL2)
   const [hasSceneFailed, setHasSceneFailed] = useState(false)
   const [metrics] = useState(createFrameMetrics)
-  const { theme, cycleTheme } = useOfficeTheme()
-  const nowMs = useNow(1000)
   const [speakingAgentKey, setSpeakingAgentKey] = useState<string | null>(null)
+  const { notice, focusTerminal, dismissNotice } = useFocusTerminal(feed)
 
   const is3DAvailable = hasWebGL && !hasSceneFailed
   const isShowingList = state.isListView || !is3DAvailable
   useFeedSubscription(feed, dispatch)
-  useOfficeHotkeys(dispatch, !is3DAvailable, cycleTheme)
 
   const frame = state.frame
-  const queue = useMemo(() => buildAttentionQueue(frame?.sessions ?? []), [frame])
-  const announcement = useAttentionAnnouncement(queue)
-  // The Tower stays as a landmark showing the building's totals; it no longer picks floors.
-  const towerFloors = useMemo(() => (frame ? summariseFloors(frame) : []), [frame])
-  const companies = useMemo(() => (frame ? buildOfficesTree(frame) : []), [frame])
-  // Memoised on the frame: the 1 Hz clock re-renders the HUD and must not rebuild scene inputs.
+  const focusedZone = useMemo(() => {
+    const zoneId = state.focusedZoneId
+    if (!frame || !zoneId) return undefined
+    return frame.floors.flatMap((floor) => findZone(floor, zoneId) ?? [])[0]
+  }, [frame, state.focusedZoneId])
+  const officeTheme = useOfficeTheme(focusedZone)
+  const { theme, cycleTheme } = officeTheme
+  const themeAssignments = useThemeAssignments()
+
   const floorId = state.focusedFloorId
-  const floorAgents = useMemo(
-    () => (frame ? frame.agents.filter((agent) => agent.floorId === floorId) : []),
-    [frame, floorId]
+  const lists = useOfficeLists(frame, floorId, state.selectedAgentKey)
+  const { sessions, queue, towerFloors, companies, ledger, agentFacts } = lists
+  const { floorAgents, cards, stacks, companyList } = lists
+  const announcement = useAttentionAnnouncement(queue)
+  const themeRows = useMemo(
+    () => buildThemeRows(companies, themeAssignments, theme.id),
+    [companies, themeAssignments, theme.id]
   )
-  const cards = useMemo(
-    () => (frame && floorId ? buildNameCards(frame, floorId, state.selectedAgentKey) : []),
-    [frame, floorId, state.selectedAgentKey]
-  )
-  const stacks = useMemo(
-    () => (frame && floorId ? buildProjectStacks(frame, floorId) : []),
-    [frame, floorId]
-  )
-  const companyList = useMemo(() => (frame ? buildCompanyList(frame) : []), [frame])
   const isConnecting = !frame || (!frame.connected && frame.sessions.length === 0)
-  const focusedFloor = frame?.floors.find((floor) => floor.floorId === state.focusedFloorId)
-  const selectedAgent = frame?.agents.find((agent) => agent.agentKey === state.selectedAgentKey)
-  const selectedSession = frame && selectedAgent ? sessionForAgent(frame, selectedAgent) : undefined
+  const focusedFloor = frame?.floors.find((floor) => floor.floorId === floorId)
+  const { player, goToZone } = useWalking(focusedFloor, state.isWalking, dispatch)
+  const {
+    agent: selectedAgent,
+    session: selectedSession,
+    member: selectedMember,
+    target: selectedTarget,
+    character: selectedCharacter
+  } = selectionOf(frame, state.selectedAgentKey, themeAssignments, theme.id)
+  const selectedTargetKey = selectedTarget?.key
+  const isViewOnly = feed.isViewOnly === true
   const reviewableKeys = useMemo(
-    () => new Set((frame?.sessions ?? []).filter(canRespond).map((session) => session.key)),
-    [frame]
+    () =>
+      new Set(isViewOnly ? [] : (sessions ?? []).filter(canRespond).map((session) => session.key)),
+    [sessions, isViewOnly]
   )
+
+  const focusSelected = useCallback(() => {
+    if (selectedTargetKey) focusTerminal(selectedTargetKey)
+  }, [selectedTargetKey, focusTerminal])
+  const hotkeyHandlers = { onCycleTheme: cycleTheme, onFocusTerminal: focusSelected }
+  const features = useOfficeFeatures(dispatch, !is3DAvailable, state.isWalking, hotkeyHandlers)
 
   useEffect(() => {
     if (!speakingAgentKey) return
@@ -94,8 +118,11 @@ export function OfficeApp({ feed }: { feed: OfficeFeed }) {
     []
   )
   const closeReview = useCallback(() => dispatch({ type: 'review-closed' }), [])
-  const onSent = (sessionKey: string): void => {
-    const speaker = frame ? mainAgentForSession(frame, sessionKey) : undefined
+  // A teammate speaks for itself; a message to a session shows on its lead.
+  const onSent = (agentKey: string): void => {
+    const speaker =
+      frame?.agents.find((agent) => agent.isSubagent && agent.agentKey === agentKey) ??
+      (frame ? mainAgentForSession(frame, agentKey) : undefined)
     if (speaker) setSpeakingAgentKey(speaker.agentKey)
   }
 
@@ -123,73 +150,106 @@ export function OfficeApp({ feed }: { feed: OfficeFeed }) {
               reviewableKeys={reviewableKeys}
               onReview={openReview}
               speakingAgentKey={speakingAgentKey}
+              player={player}
+              isWalking={state.isWalking}
             />
           </Suspense>
         </SceneErrorBoundary>
       )}
 
-      <div className="pointer-events-none absolute inset-0 grid grid-cols-1 grid-rows-[auto_1fr_auto] gap-3 p-3 md:grid-cols-[16rem_1fr_17rem] md:grid-rows-[1fr_auto]">
-        <div className="pointer-events-auto flex min-h-0 flex-col gap-3 self-start">
+      {hasHiddenTitleBar && (
+        <div aria-hidden="true" className="drag-region absolute inset-x-0 top-0 h-9" />
+      )}
+      <div
+        className={cn(
+          'pointer-events-none absolute inset-0 grid grid-cols-1 grid-rows-[auto_minmax(0,1fr)_auto_auto] gap-3 p-3 md:grid-cols-[18.5rem_minmax(0,1fr)_20rem] md:grid-rows-[minmax(0,1fr)_auto]',
+          // Panels start below the strip and the window's own buttons.
+          hasHiddenTitleBar && 'pt-10'
+        )}
+      >
+        <div className="pointer-events-auto flex min-h-0 flex-col gap-3 self-start md:max-h-full md:overflow-y-auto">
+          <OfficesPanel
+            companies={companies}
+            ledger={ledger}
+            themeRows={themeRows}
+            onChooseTheme={officeTheme.chooseTheme}
+            focusedZoneId={state.focusedZoneId}
+            onFlyToZone={goToZone}
+            onStart={isViewOnly ? null : (projectKey, provider) => feed.start(projectKey, provider)}
+          />
           <AttentionRail
             queue={queue}
             activeSessionKey={selectedSession?.key ?? null}
-            nowMs={nowMs}
             onOpen={(sessionKey) => dispatch({ type: 'session-opened', sessionKey })}
             onNext={() => dispatch({ type: 'next-attention' })}
             reviewableKeys={reviewableKeys}
             onReview={openReview}
+            onFocusTerminal={focusTerminal}
           />
           {frame && <HealthBanner sources={frame.sources} />}
           {!is3DAvailable && (
-            <p className="rounded-card border border-border bg-surface-raised px-3 py-2 text-body text-text-secondary">
-              The 3D view is unavailable on this device, so the office is shown as a list.
-            </p>
+            <Plate faceClassName="px-3 py-2 text-xs text-text-secondary">
+              <p>The 3D view is unavailable on this device, so the office is shown as a list.</p>
+            </Plate>
           )}
         </div>
 
-        <div className="flex min-h-0 items-center justify-center md:row-span-1">
-          {isConnecting || (frame && frame.sessions.length === 0) ? (
-            <div className="pointer-events-auto">
-              <EmptyState isConnecting={isConnecting} />
-            </div>
-          ) : (
-            isShowingList &&
-            frame && (
-              <div className="pointer-events-auto h-full w-full">
-                <ListView
-                  companies={companyList}
-                  selectedAgentKey={state.selectedAgentKey}
-                  onSelectAgent={selectAgent}
-                />
+        <div className="flex min-h-0 flex-col items-center gap-3">
+          <div className="pointer-events-auto flex flex-col items-center gap-2">
+            <ResourceBar
+              agentCount={frame?.agents.length ?? 0}
+              tokens={ledger.office}
+              isPartial={ledger.isOfficePartial}
+            />
+            <FocusNotice message={notice} onDismiss={dismissNotice} />
+            <FocusNotice message={officeTheme.notice} onDismiss={officeTheme.dismissNotice} />
+            {state.isMetricsVisible && !isShowingList && <MetricsOverlay metrics={metrics} />}
+          </div>
+          <div className="flex min-h-0 w-full flex-1 items-center justify-center">
+            {isConnecting || (frame && frame.sessions.length === 0) ? (
+              <div className="pointer-events-auto">
+                <EmptyState isConnecting={isConnecting} />
               </div>
-            )
-          )}
+            ) : (
+              isShowingList &&
+              frame && (
+                <div className="pointer-events-auto h-full w-full">
+                  <ListView
+                    companies={companyList}
+                    agentFacts={agentFacts}
+                    selectedAgentKey={state.selectedAgentKey}
+                    onSelectAgent={selectAgent}
+                    onFocusTerminal={focusTerminal}
+                  />
+                </div>
+              )
+            )}
+          </div>
         </div>
 
         <div className="pointer-events-auto flex max-h-full min-h-0 flex-col gap-3 self-start overflow-y-auto">
-          <OfficesPanel
-            companies={companies}
-            focusedZoneId={state.focusedZoneId}
-            onFlyToZone={flyToZone}
-            onStart={(projectKey, provider) => feed.start(projectKey, provider)}
-          />
           {selectedAgent && (
             <Inspector
               agent={selectedAgent}
               session={selectedSession}
-              nowMs={nowMs}
+              member={selectedMember}
+              character={selectedCharacter}
+              accounts={frame?.accounts}
               canFly={!isShowingList}
-              onJump={(sessionKey) => feed.jump(sessionKey)}
+              onFocusTerminal={focusSelected}
               onFly={() => dispatch({ type: 'fly-to-selected' })}
               onClose={() => selectAgent(null)}
             >
-              {selectedSession && (
+              {selectedSession && selectedTarget && (
                 <AgentActions
-                  key={selectedSession.key}
+                  key={selectedTarget.key}
                   session={selectedSession}
+                  target={selectedTarget}
                   feed={feed}
                   isReviewing={state.reviewingSessionKey === selectedSession.key}
+                  onReview={() => openReview(selectedSession.key)}
                   onReviewClose={closeReview}
+                  onFocusTerminal={focusSelected}
                   onSent={onSent}
                 />
               )}
@@ -199,25 +259,37 @@ export function OfficeApp({ feed }: { feed: OfficeFeed }) {
 
         <div className="pointer-events-auto justify-self-center md:col-span-3">
           <BottomBar
-            themeLabel={theme.label}
-            onCycleTheme={cycleTheme}
+            floorThemeLabel={theme.label}
+            renderThemes={(id, close) => (
+              <ThemesList
+                id={id}
+                companies={themeRows}
+                floorTheme={theme}
+                choiceCount={countThemeChoices(themeAssignments)}
+                cycleScope={officeTheme.cycleScope}
+                onChoose={officeTheme.chooseTheme}
+                onClose={close}
+              />
+            )}
             wallsMode={state.wallsMode}
             isListView={state.isListView}
             is3DAvailable={is3DAvailable}
             isMetricsVisible={state.isMetricsVisible}
+            isWalking={state.isWalking}
+            onToggleWalk={() => dispatch({ type: 'walk-toggled' })}
+            hasPlayer={features.hasPlayer}
+            isSettingsOpen={features.isSettingsOpen}
+            onToggleSettings={features.toggleSettings}
             onWallsMode={(mode) => dispatch({ type: 'walls-set', mode })}
             onToggleList={() => dispatch({ type: 'list-toggled' })}
             onToggleMetrics={() => dispatch({ type: 'metrics-toggled' })}
             onRotate={(direction) => dispatch({ type: 'camera-rotated', direction })}
+            onZoom={(direction) => dispatch({ type: 'camera-zoomed', direction })}
+            onFit={() => dispatch({ type: 'camera-fit' })}
           />
         </div>
       </div>
 
-      {state.isMetricsVisible && !isShowingList && (
-        <div className="pointer-events-none absolute left-1/2 top-3 -translate-x-1/2">
-          <MetricsOverlay metrics={metrics} />
-        </div>
-      )}
       <div role="status" aria-atomic="true" className="sr-only">
         {announcement}
       </div>

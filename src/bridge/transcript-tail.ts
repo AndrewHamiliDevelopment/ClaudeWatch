@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import type { CurrentTool } from '../shared/office/types'
-import { type BridgeIo, isMissing, jsonObject, object } from './io'
+import { type BridgeIo, isLabel, isMissing, jsonObject, object } from './io'
 import { toolCategory } from './tool-category'
 
 export interface TranscriptState {
@@ -21,7 +21,7 @@ export function parseTranscript(text: string): TranscriptState {
         record?.type === 'assistant' &&
         block?.type === 'tool_use' &&
         typeof block.id === 'string' &&
-        typeof block.name === 'string'
+        isLabel(block.name)
       ) {
         tools.push({ id: block.id, name: block.name })
       }
@@ -40,6 +40,73 @@ export function parseTranscript(text: string): TranscriptState {
     tool: current ? { name: current.name, category: toolCategory(current.name) } : null,
     error: !!latest && results.get(latest.id) === true
   }
+}
+
+interface ReadTail {
+  size: number
+  mtimeMs: number
+  state: TranscriptState
+}
+interface Remembered {
+  read: Map<string, ReadTail>
+  // A subagent's type, by its transcript path: its meta file is written once, when it starts.
+  agentTypes: Map<string, string>
+  seen: Set<string>
+}
+const remembered = new WeakMap<BridgeIo, Remembered>()
+
+function memoryOf(io: BridgeIo): Remembered {
+  let memory = remembered.get(io)
+  if (!memory)
+    remembered.set(io, (memory = { read: new Map(), agentTypes: new Map(), seen: new Set() }))
+  return memory
+}
+
+// A transcript's parsed tail and when the file was last written. The tail is read and parsed
+// again only when the file's size or time moved; a caller that has just listed it passes both.
+export async function readTranscript(
+  path: string,
+  io: BridgeIo,
+  listed?: { size: number; mtimeMs: number }
+): Promise<TranscriptState & { mtimeMs: number }> {
+  const memory = memoryOf(io)
+  memory.seen.add(path)
+  const { size, mtimeMs } = listed ?? (await io.stat(path))
+  let tail = memory.read.get(path)
+  if (tail?.size !== size || tail.mtimeMs !== mtimeMs) {
+    tail = { size, mtimeMs, state: parseTranscript(await io.readTail(path)) }
+    memory.read.set(path, tail)
+  }
+  return { ...tail.state, mtimeMs }
+}
+
+// A subagent's type, read once and kept as long as its transcript is.
+export async function rememberedAgentType(
+  path: string,
+  io: BridgeIo,
+  read: () => Promise<string | null>
+): Promise<string | null> {
+  const { agentTypes } = memoryOf(io)
+  const known = agentTypes.get(path)
+  if (known) return known
+  const agentType = await read()
+  if (agentType) agentTypes.set(path, agentType)
+  return agentType
+}
+
+// Forgets every transcript not read since the last call: its session has left.
+export function pruneTranscripts(io: BridgeIo): void {
+  const memory = remembered.get(io)
+  if (!memory) return
+  for (const memo of [memory.read, memory.agentTypes]) {
+    for (const path of memo.keys()) if (!memory.seen.has(path)) memo.delete(path)
+  }
+  memory.seen.clear()
+}
+
+// The folder name Claude Code gives a working directory under `projects/`.
+export function projectSlug(cwd: string): string {
+  return cwd.replace(/[^a-zA-Z0-9]/g, '-')
 }
 
 const paths = new WeakMap<BridgeIo, Map<string, string>>()
@@ -65,7 +132,7 @@ export async function transcriptPath(
     return path
   }
   const projects = join(root, 'projects')
-  const direct = join(projects, cwd.replace(/[^a-zA-Z0-9]/g, '-'), `${sessionId}.jsonl`)
+  const direct = join(projects, projectSlug(cwd), `${sessionId}.jsonl`)
   try {
     await io.stat(direct)
     return remember(direct)

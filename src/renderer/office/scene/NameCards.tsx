@@ -1,6 +1,9 @@
+import { Fragment } from 'react'
+import { Seal, SLIP_CLASS } from '../../components/deck/WorkOrderSlip'
+import type { WorkOrder } from '../../deck/work-orders'
 import { cn } from '../../lib/utils'
 import type { ZoomBand } from '../logic/camera-bands'
-import type { NameCard, ProjectStack } from '../logic/name-cards'
+import type { CardStatus, NameCard, ProjectStack } from '../logic/name-cards'
 import { CARD_STATUS_COLOR } from '../office-palette'
 import { OFFSCREEN, type CardAnchors } from './CardProjector'
 
@@ -14,6 +17,12 @@ function StatusDot({ card, isLarge = false }: { card: NameCard; isLarge?: boolea
       style={{ backgroundColor: CARD_STATUS_COLOR[card.status] }}
     />
   )
+}
+
+// The two states that wait on the owner; their cards are paper slips like the queue's.
+const NEEDS_YOU: Partial<Record<CardStatus, WorkOrder['attention']>> = {
+  permission: 'permission',
+  waiting: 'question'
 }
 
 function register(map: Map<string, HTMLElement>, key: string) {
@@ -56,52 +65,63 @@ export function NameCardLayer(props: NameCardLayerProps) {
             </span>
           )
         }
-        return [
-          <div
-            key={card.agentKey}
-            ref={register(props.anchors.cards, card.agentKey)}
-            style={{ transform: OFFSCREEN }}
-            className={cn(
-              'absolute left-0 top-0 flex flex-col whitespace-nowrap rounded-lg bg-white text-neutral-900 shadow-md',
-              isCompact ? 'px-1.5 py-0.5' : 'px-2.5 py-1',
-              isSelected && 'outline outline-2 outline-accent'
-            )}
-          >
-            <span className="flex items-center gap-1.5">
-              <StatusDot card={card} />
-              <span
-                className={cn(
-                  'font-bold uppercase tracking-wide',
-                  isCompact ? 'text-[9px]' : 'text-[11px]'
-                )}
-              >
-                {card.title}
+        const attention = NEEDS_YOU[card.status]
+        // A keyed fragment, not an array: arrays are matched by position, which remounted every
+        // card after the one that left.
+        return (
+          <Fragment key={card.agentKey}>
+            <div
+              ref={register(props.anchors.cards, card.agentKey)}
+              style={{ transform: OFFSCREEN }}
+              className={cn(
+                'absolute left-0 top-0 flex flex-col whitespace-nowrap',
+                attention ? SLIP_CLASS : 'rounded-lg bg-white text-neutral-900 shadow-md',
+                isCompact ? 'px-1.5 py-0.5' : 'px-2.5 py-1',
+                isSelected && 'outline outline-2 outline-accent'
+              )}
+            >
+              <span className="flex items-center gap-1.5">
+                {attention ? <Seal attention={attention} isSmall /> : <StatusDot card={card} />}
+                <span
+                  className={cn(
+                    'font-bold uppercase tracking-wide',
+                    isCompact ? 'text-[9px]' : 'text-[11px]'
+                  )}
+                >
+                  {card.title}
+                </span>
               </span>
+              {!isCompact && (
+                <span
+                  className={cn(
+                    'text-[10px]',
+                    attention ? 'pl-5 text-ink-soft' : 'pl-3.5 text-neutral-600'
+                  )}
+                >
+                  {card.detail}
+                </span>
+              )}
+              {!isCompact && card.sessionKey && props.reviewableKeys.has(card.sessionKey) && (
+                // Mouse shortcut only: the layer is aria-hidden; the queue row has the keyboard Review.
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  onClick={() => card.sessionKey && props.onReview(card.sessionKey)}
+                  className="pointer-events-auto mt-1 rounded-md bg-neutral-900 px-2 py-0.5 text-[10px] font-semibold text-white hover:bg-neutral-700"
+                >
+                  Review
+                </button>
+              )}
+            </div>
+            <span
+              ref={register(props.anchors.dots, card.agentKey)}
+              style={{ transform: OFFSCREEN }}
+              className="absolute left-0 top-0"
+            >
+              <StatusDot card={card} isLarge />
             </span>
-            {!isCompact && (
-              <span className="pl-3.5 text-[10px] text-neutral-600">{card.detail}</span>
-            )}
-            {!isCompact && card.sessionKey && props.reviewableKeys.has(card.sessionKey) && (
-              // Mouse shortcut only: the layer is aria-hidden; the queue row has the keyboard Review.
-              <button
-                type="button"
-                tabIndex={-1}
-                onClick={() => card.sessionKey && props.onReview(card.sessionKey)}
-                className="pointer-events-auto mt-1 rounded-md bg-neutral-900 px-2 py-0.5 text-[10px] font-semibold text-white hover:bg-neutral-700"
-              >
-                Review
-              </button>
-            )}
-          </div>,
-          <span
-            key={`${card.agentKey}:dot`}
-            ref={register(props.anchors.dots, card.agentKey)}
-            style={{ transform: OFFSCREEN }}
-            className="absolute left-0 top-0"
-          >
-            <StatusDot card={card} isLarge />
-          </span>
-        ]
+          </Fragment>
+        )
       })}
       {props.stacks.map((stack) => (
         <button

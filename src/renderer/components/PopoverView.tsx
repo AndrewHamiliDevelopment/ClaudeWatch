@@ -1,478 +1,202 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
-import {
-  Activity,
-  Moon,
-  XCircle,
-  CheckCircle,
-  Cpu,
-  MemoryStick,
-  Pin,
-  PinOff,
-  X
-} from 'lucide-react'
-import { cn, formatElapsedTime, formatCompactNumber, formatCurrency, timeAgo } from '../lib/utils'
-import { useUsage } from '../hooks/useUsage'
+import { useEffect, useState } from 'react'
+import { Building2, Lamp, Pin, PinOff, Power, X } from 'lucide-react'
 import { usePromoStatus } from '../hooks/usePromoStatus'
 import { useRateLimits } from '../hooks/useRateLimits'
-import type { ClaudeInstance, InstanceUpdate, RateLimits } from '../lib/types'
-import { statusConfig } from './StatusBadge'
-
-const RECENT_WINDOW_MS = 10 * 60 * 1000
-
-const emptyStats: InstanceUpdate['stats'] = {
-  total: 0,
-  active: 0,
-  idle: 0,
-  stale: 0,
-  exited: 0,
-  recentlyCompleted: 0
-}
-
-const statusIcons: Record<ClaudeInstance['status'], typeof Activity> = {
-  active: Activity,
-  idle: Moon,
-  stale: Moon,
-  exited: XCircle
-}
-
-interface GroupedInstances {
-  recentlyCompleted: ClaudeInstance[]
-  inProgress: ClaudeInstance[]
-  waiting: ClaudeInstance[]
-  stale: ClaudeInstance[]
-}
+import { useSquads } from '../hooks/useSquads'
+import { useUsage } from '../hooks/useUsage'
+import { deckApi, openOffice } from '../deck/deck-api'
+import { tallySquads, type Squad, type SquadTally } from '../deck/roster'
+import { needsYouLabel } from '../office/logic/floor-model'
+import type { UsageStats } from '../lib/types'
+import { cn, formatCurrency } from '../lib/utils'
+import {
+  BUTTON_PRIMARY_CLASS,
+  BUTTON_QUIET_CLASS,
+  ICON_BUTTON_CLASS,
+  ICON_BUTTON_REGULAR_CLASS
+} from './deck/deck-styles'
+import { Crest } from './deck/Plate'
+import { LimitLines } from './deck/LimitLines'
+import { SquadTokens } from './deck/SquadTokens'
+import { StateIcon } from './deck/StateMark'
+import { WorkOrderSlip } from './deck/WorkOrderSlip'
 
 export function PopoverView() {
-  const [instances, setInstances] = useState<ClaudeInstance[]>([])
-  const [stats, setStats] = useState(emptyStats)
-  const [isPinned, setIsPinned] = useState(false)
+  const { squads, workOrders } = useSquads()
   const { usage } = useUsage()
   const { promo } = usePromoStatus()
   const { rateLimits } = useRateLimits()
+  const [isPinned, setIsPinned] = useState(false)
 
   useEffect(() => {
-    if (typeof window === 'undefined' || !window.api) return
-
-    window.api.getInstances().then((data) => {
-      setInstances(data.instances)
-      setStats(data.stats)
-    })
-
-    // Load initial pin state
-    window.api.getPopoverPinned?.().then(setIsPinned)
-
-    const unsubscribe = window.api.onInstancesUpdate((data) => {
-      setInstances(data.instances)
-      setStats(data.stats)
-    })
-
-    // Listen for pin state changes from main process
-    const unsubscribePin = window.api.onPopoverPinChanged?.((pinned) => {
-      setIsPinned(pinned)
-    })
-
-    return () => {
-      unsubscribe()
-      unsubscribePin?.()
-    }
+    const api = deckApi()
+    if (!api) return
+    void api.getPopoverPinned?.().then((pinned) => setIsPinned(pinned === true))
+    return api.onPopoverPinChanged?.(setIsPinned)
   }, [])
 
-  const handleTogglePin = useCallback(() => {
-    const newPinned = !isPinned
-    window.api?.setPopoverPinned(newPinned)
-  }, [isPinned])
-
-  const handleClose = useCallback(() => {
-    window.api?.closePopover()
-  }, [])
-
-  const sorted = [...instances].sort((a, b) => {
-    const order: Record<string, number> = { active: 0, idle: 1, stale: 2, exited: 3 }
-    const diff = (order[a.status] ?? 4) - (order[b.status] ?? 4)
-    if (diff !== 0) return diff
-    return b.cpuPercent - a.cpuPercent
-  })
-
-  // Tick every 30s so items age out of "Recently Done" without waiting for a poll
-  const [now, setNow] = useState(Date.now())
-  useEffect(() => {
-    const interval = setInterval(() => setNow(Date.now()), 30_000)
-    return () => clearInterval(interval)
-  }, [])
-
-  const grouped = useMemo((): GroupedInstances => {
-    const recentlyCompleted: ClaudeInstance[] = []
-    const inProgress: ClaudeInstance[] = []
-    const waiting: ClaudeInstance[] = []
-    const stale: ClaudeInstance[] = []
-
-    for (const inst of sorted) {
-      if (inst.status === 'stale') {
-        stale.push(inst)
-      } else if (inst.status === 'active') {
-        inProgress.push(inst)
-      } else if (
-        inst.status === 'idle' &&
-        inst.lastBecameIdleAt &&
-        now - new Date(inst.lastBecameIdleAt).getTime() < RECENT_WINDOW_MS
-      ) {
-        recentlyCompleted.push(inst)
-      } else {
-        waiting.push(inst)
-      }
-    }
-
-    return { recentlyCompleted, inProgress, waiting, stale }
-  }, [sorted, now])
-
-  const hasGroupedContent =
-    grouped.recentlyCompleted.length > 0 ||
-    grouped.inProgress.length > 0 ||
-    grouped.waiting.length > 0 ||
-    grouped.stale.length > 0
+  const tally = tallySquads(squads)
 
   return (
     <div
       className={cn(
-        'flex h-screen flex-col overflow-hidden bg-surface',
-        isPinned && 'drag-region ring-1 ring-accent/40 rounded-lg'
+        'flex h-screen flex-col overflow-hidden bg-surface text-body',
+        isPinned && 'drag-region rounded-lg ring-1 ring-inset ring-brass'
       )}
     >
-      {/* Compact header */}
-      <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <div className="flex items-center gap-2">
-          <span className="text-heading text-text-primary">ClaudeWatch</span>
+      <header className="flex h-[42px] shrink-0 items-center gap-1 border-b border-brass-line bg-surface-rail pl-3 pr-2">
+        <h1 className="mr-auto flex items-center gap-1.5 pt-[3px] font-plate text-title">
+          <Lamp className="-mt-[3px] size-4 text-gold" aria-hidden="true" />
+          ClaudeWatch
           {promo?.is2x && (
-            <span className="rounded-full bg-status-active/20 px-1.5 py-0.5 text-[10px] font-semibold text-status-active">
-              2x
+            <span className="rounded bg-surface-hover px-1.5 font-sans text-caption font-semibold text-status-active">
+              2x limits
             </span>
           )}
-        </div>
-        <div className="no-drag flex items-center gap-2">
-          <div className="flex items-center gap-3 text-mono-sm tabular-nums">
-            <span className="inline-flex items-center gap-1.5">
-              <span className="inline-block h-2 w-2 rounded-full bg-status-active" />
-              <span className="text-status-active">{stats.active}</span>
-            </span>
-            {stats.recentlyCompleted > 0 && (
-              <span className="inline-flex items-center gap-1.5">
-                <span className="inline-block h-2 w-2 rounded-full bg-emerald-400" />
-                <span className="text-emerald-400">{stats.recentlyCompleted}</span>
-              </span>
-            )}
-            <span className="inline-flex items-center gap-1.5">
-              <span className="inline-block h-2 w-2 rounded-full bg-status-idle" />
-              <span className="text-status-idle">{stats.idle}</span>
-            </span>
-            {stats.stale > 0 && (
-              <span className="inline-flex items-center gap-1.5">
-                <span className="inline-block h-2 w-2 rounded-full bg-text-tertiary" />
-                <span className="text-text-tertiary">{stats.stale}</span>
-              </span>
-            )}
-            <span className="inline-flex items-center gap-1.5">
-              <span className="inline-block h-2 w-2 rounded-full bg-status-exited" />
-              <span className="text-status-exited">{stats.exited}</span>
-            </span>
-          </div>
-          <div className="ml-1 flex items-center gap-0.5">
-            <button
-              type="button"
-              onClick={handleTogglePin}
-              className={cn(
-                'rounded p-1 transition-colors',
-                isPinned
-                  ? 'text-accent hover:bg-accent/15'
-                  : 'text-text-tertiary hover:bg-surface-hover hover:text-text-secondary'
-              )}
-              aria-label={isPinned ? 'Unpin window' : 'Pin window'}
-              title={isPinned ? 'Unpin window' : 'Pin window (always on top)'}
-            >
-              {isPinned ? <Pin className="h-3 w-3" /> : <PinOff className="h-3 w-3" />}
-            </button>
-            <button
-              type="button"
-              onClick={handleClose}
-              className="rounded p-1 text-text-tertiary transition-colors hover:bg-surface-hover hover:text-text-secondary"
-              aria-label="Close popover"
-              title="Close"
-            >
-              <X className="h-3 w-3" />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Usage bar */}
-      {usage?.dataAvailable && (
-        <div className="border-b border-border px-4 py-2">
-          <div className="text-[11px] tabular-nums text-text-secondary">
-            {formatCurrency(usage.totalCostUSD)} &middot;{' '}
-            {formatCompactNumber(usage.totalInputTokens)} in &middot;{' '}
-            {formatCompactNumber(usage.totalOutputTokens)} out
-          </div>
-          {usage.weeklyTokenTarget > 0 && (
-            <PopoverWeeklyBar
-              weeklyTokens={usage.weeklyTokens}
-              weeklyTokenTarget={usage.weeklyTokenTarget}
-            />
+        </h1>
+        <button
+          type="button"
+          onClick={() => void window.api?.setPopoverPinned(!isPinned)}
+          aria-label={isPinned ? 'Unpin window' : 'Pin window'}
+          aria-pressed={isPinned}
+          title={isPinned ? 'Unpin window' : 'Pin window (always on top)'}
+          className={cn(ICON_BUTTON_CLASS, 'no-drag aria-pressed:text-accent')}
+        >
+          {isPinned ? (
+            <Pin className="size-3.5" aria-hidden="true" />
+          ) : (
+            <PinOff className="size-3.5" aria-hidden="true" />
           )}
-          {rateLimits?.dataAvailable && <PopoverRateLimitBars rateLimits={rateLimits} />}
-        </div>
-      )}
+        </button>
+        <button
+          type="button"
+          onClick={() => void window.api?.closePopover()}
+          aria-label="Close popover"
+          className={cn(ICON_BUTTON_CLASS, 'no-drag')}
+        >
+          <X className="size-3.5" aria-hidden="true" />
+        </button>
+      </header>
 
-      {/* Rate limits standalone (when usage unavailable) */}
-      {!usage?.dataAvailable && rateLimits?.dataAvailable && (
-        <div className="border-b border-border px-4 py-2">
-          <PopoverRateLimitBars rateLimits={rateLimits} />
-        </div>
-      )}
+      <Tally tally={tally} isFeedLive={workOrders !== null} usage={usage} />
 
-      {/* Instance list with groups */}
-      <div className="no-drag min-h-0 flex-1 overflow-y-auto">
-        {!hasGroupedContent ? (
-          <div className="flex h-full items-center justify-center px-4 py-8">
-            <span className="text-body text-text-tertiary">No instances detected</span>
-          </div>
+      <div className="no-drag flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto pb-2">
+        {workOrders !== null && workOrders.length > 0 && (
+          <ol className="flex flex-col gap-1.5 px-2.5" aria-label="Needs you">
+            {workOrders.map((order) => (
+              <WorkOrderSlip key={order.sessionKey} order={order} isCompact />
+            ))}
+          </ol>
+        )}
+        {squads.length === 0 ? (
+          <p className="px-3 py-8 text-center text-text-secondary" role="status">
+            No agents running
+          </p>
         ) : (
-          <div>
-            {grouped.inProgress.length > 0 && (
-              <PopoverSection
-                label="In Progress"
-                colorClass="text-status-active"
-                instances={grouped.inProgress}
-              />
-            )}
-            {grouped.recentlyCompleted.length > 0 && (
-              <PopoverSection
-                label="Recently Done"
-                colorClass="text-emerald-400"
-                instances={grouped.recentlyCompleted}
-                iconOverride={CheckCircle}
-                dotColor="bg-emerald-400"
-              />
-            )}
-            {grouped.waiting.length > 0 && (
-              <PopoverSection
-                label="Waiting"
-                colorClass="text-status-idle"
-                instances={grouped.waiting}
-              />
-            )}
-            {grouped.stale.length > 0 && (
-              <PopoverSection
-                label="Stale"
-                colorClass="text-text-tertiary"
-                instances={grouped.stale}
-                dotColor="bg-text-tertiary"
-              />
-            )}
-          </div>
+          <ul className="px-3" aria-label="Squads">
+            {squads.map((squad) => (
+              <SquadLine key={squad.key} squad={squad} />
+            ))}
+          </ul>
         )}
       </div>
 
-      {/* Actions */}
-      <div className="no-drag flex items-center gap-2 border-t border-border px-4 py-3">
-        <button
-          type="button"
-          onClick={() => window.api?.openDashboard()}
-          className="flex-1 rounded-md bg-accent/15 px-3 py-1.5 text-xs font-medium text-accent transition-colors hover:bg-accent/25"
-        >
-          Open Dashboard
-        </button>
-        <button
-          type="button"
-          onClick={() => window.api?.quit()}
-          className="rounded-md px-3 py-1.5 text-xs font-medium text-text-tertiary transition-colors hover:bg-surface-hover hover:text-text-secondary"
-        >
-          Quit
-        </button>
-      </div>
+      <footer className="no-drag flex shrink-0 flex-col gap-2 border-t border-border bg-surface-rail px-3 pb-3 pt-2">
+        <LimitLines usage={usage} rateLimits={rateLimits} />
+        <div className="grid grid-cols-[1fr_1fr_auto] gap-2">
+          <button type="button" onClick={openOffice} className={BUTTON_PRIMARY_CLASS}>
+            <Building2 className="size-4" aria-hidden="true" />
+            Open Office
+          </button>
+          <button
+            type="button"
+            onClick={() => void window.api?.openDashboard()}
+            className={BUTTON_QUIET_CLASS}
+          >
+            Dashboard
+          </button>
+          <button
+            type="button"
+            onClick={() => void window.api?.quit()}
+            aria-label="Quit ClaudeWatch"
+            title="Quit ClaudeWatch"
+            className={ICON_BUTTON_REGULAR_CLASS}
+          >
+            <Power className="size-4" aria-hidden="true" />
+          </button>
+        </div>
+      </footer>
     </div>
   )
 }
 
-function PopoverSection({
-  label,
-  colorClass,
-  instances,
-  iconOverride,
-  dotColor
-}: {
-  label: string
-  colorClass: string
-  instances: ClaudeInstance[]
-  iconOverride?: typeof Activity
-  dotColor?: string
-}) {
+interface TallyProps {
+  tally: SquadTally
+  // Without the office feed nobody can say who waits, so that count is left out.
+  isFeedLive: boolean
+  usage: UsageStats | null
+}
+
+// Doubles as the legend for the pips in the squad rows.
+function Tally({ tally, isFeedLive, usage }: TallyProps) {
   return (
-    <div>
-      <div
-        className={cn('px-4 py-1.5 text-[9px] font-semibold uppercase tracking-widest', colorClass)}
-      >
-        {label}
-      </div>
-      <div className="divide-y divide-border">
-        {instances.map((inst) => (
-          <PopoverInstanceRow
-            key={inst.pid}
-            instance={inst}
-            iconOverride={iconOverride}
-            dotColor={dotColor}
+    <div className="flex h-9 shrink-0 items-center gap-3 px-3 text-xs text-text-secondary">
+      <p role="status" aria-label="Agents" className="flex items-center gap-3">
+        {isFeedLive && (
+          <span
+            className={cn(
+              'inline-flex items-center gap-1.5',
+              tally.needsYou > 0 && 'font-semibold text-text-primary'
+            )}
+          >
+            <StateIcon state="needs-you" />
+            {needsYouLabel(tally.needsYou)}
+          </span>
+        )}
+        <span className="inline-flex items-center gap-1.5">
+          <StateIcon state="working" />
+          {tally.working} working
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <StateIcon state="idle" />
+          {tally.resting} at rest
+        </span>
+      </p>
+      {usage?.dataAvailable && (
+        <span className="ml-auto tabular-nums" title="Cost of the latest sessions">
+          {formatCurrency(usage.totalCostUSD)}
+        </span>
+      )}
+    </div>
+  )
+}
+
+function describePips(tally: SquadTally): string {
+  return [
+    tally.needsYou > 0 && needsYouLabel(tally.needsYou),
+    tally.working > 0 && `${tally.working} working`,
+    tally.resting > 0 && `${tally.resting} at rest`
+  ]
+    .filter(Boolean)
+    .join(', ')
+}
+
+function SquadLine({ squad }: { squad: Squad }) {
+  const tally = tallySquads([squad])
+  return (
+    <li className="grid h-[30px] grid-cols-[22px_minmax(0,1fr)_auto_auto] items-center gap-2 border-b border-border/40">
+      <Crest letters={squad.crest} />
+      <span className="truncate font-semibold">{squad.name}</span>
+      <span className="inline-flex items-center gap-1">
+        <span className="sr-only">{describePips(tally)}</span>
+        {squad.agents.map((agent) => (
+          <StateIcon
+            key={agent.pid}
+            state={agent.state === 'needs-you' || agent.state === 'working' ? agent.state : 'idle'}
           />
         ))}
-      </div>
-    </div>
-  )
-}
-
-function PopoverInstanceRow({
-  instance,
-  iconOverride,
-  dotColor
-}: {
-  instance: ClaudeInstance
-  iconOverride?: typeof Activity
-  dotColor?: string
-}) {
-  const [elapsed, setElapsed] = useState(instance.elapsedSeconds)
-
-  useEffect(() => {
-    setElapsed(instance.elapsedSeconds)
-
-    if (instance.status !== 'active' && instance.status !== 'idle' && instance.status !== 'stale')
-      return
-
-    const interval = setInterval(() => {
-      setElapsed((prev) => prev + 1)
-    }, 1000)
-
-    return () => clearInterval(interval)
-  }, [instance.elapsedSeconds, instance.status, instance.pid])
-
-  const StatusIcon = iconOverride ?? statusIcons[instance.status]
-  const resolvedDotColor = dotColor ?? statusConfig[instance.status].dotClass
-
-  const idleAgo =
-    instance.lastBecameIdleAt && instance.status === 'idle'
-      ? timeAgo(new Date(instance.lastBecameIdleAt))
-      : null
-
-  return (
-    <div className="flex items-center gap-3 px-4 py-2.5">
-      {/* Status dot */}
-      <span
-        className={cn(
-          'inline-block h-2 w-2 shrink-0 rounded-full',
-          resolvedDotColor,
-          instance.status === 'active' && !dotColor && 'animate-pulse-dot'
-        )}
-      />
-
-      {/* Project name + metrics */}
-      <div className="min-w-0 flex-1">
-        <span className="block truncate text-xs font-medium text-text-primary">
-          {instance.projectName}
-        </span>
-        <div className="mt-0.5 flex items-center gap-3 text-[10px] text-text-tertiary">
-          <span className="tabular-nums">{idleAgo ?? formatElapsedTime(elapsed)}</span>
-          <span className="inline-flex items-center gap-0.5 tabular-nums">
-            <Cpu className="h-2.5 w-2.5" aria-hidden="true" />
-            {instance.cpuPercent.toFixed(1)}%
-          </span>
-          <span className="inline-flex items-center gap-0.5 tabular-nums">
-            <MemoryStick className="h-2.5 w-2.5" aria-hidden="true" />
-            {instance.memPercent.toFixed(1)}%
-          </span>
-        </div>
-      </div>
-
-      {/* Status icon */}
-      <StatusIcon
-        className={cn(
-          'h-3 w-3 shrink-0',
-          iconOverride ? 'text-emerald-400' : statusConfig[instance.status].colorClass
-        )}
-        aria-label={instance.status}
-      />
-    </div>
-  )
-}
-
-function PopoverWeeklyBar({
-  weeklyTokens,
-  weeklyTokenTarget
-}: {
-  weeklyTokens: number
-  weeklyTokenTarget: number
-}) {
-  const percent = Math.min(100, (weeklyTokens / weeklyTokenTarget) * 100)
-  const barColor =
-    percent >= 80 ? 'bg-red-400' : percent >= 60 ? 'bg-amber-400' : 'bg-status-active'
-
-  return (
-    <div className="mt-1.5 flex items-center gap-2">
-      <div className="h-1 flex-1 overflow-hidden rounded-full bg-border">
-        <div
-          className={cn('h-full rounded-full transition-all duration-500', barColor)}
-          style={{ width: `${percent}%` }}
-          role="progressbar"
-          aria-valuenow={Math.round(percent)}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-label="Weekly token usage"
-        />
-      </div>
-      <span className="shrink-0 text-[10px] tabular-nums text-text-tertiary">
-        {formatCompactNumber(weeklyTokens)}/{formatCompactNumber(weeklyTokenTarget)}
       </span>
-    </div>
-  )
-}
-
-function rateLimitBarColor(percent: number): string {
-  if (percent >= 80) return 'bg-red-400'
-  if (percent >= 50) return 'bg-amber-400'
-  return 'bg-status-active'
-}
-
-function rateLimitTextColor(percent: number): string {
-  if (percent >= 80) return 'text-red-400'
-  if (percent >= 50) return 'text-amber-400'
-  return 'text-text-tertiary'
-}
-
-function PopoverRateLimitBars({ rateLimits }: { rateLimits: RateLimits }) {
-  if (rateLimits.isVeryStale) return null
-
-  return (
-    <div
-      className={cn(
-        'mt-1.5 flex flex-col gap-1.5 text-[10px] tabular-nums',
-        rateLimits.isStale && 'opacity-60'
-      )}
-    >
-      <PopoverMiniBar label="5h" percent={rateLimits.window_5h.used_percentage} />
-      <PopoverMiniBar label="7d" percent={rateLimits.window_7d.used_percentage} />
-    </div>
-  )
-}
-
-function PopoverMiniBar({ label, percent: raw }: { label: string; percent: number }) {
-  const percent = Math.round(Math.min(100, raw))
-  return (
-    <div className="flex items-center gap-2">
-      <span className={cn('w-5 shrink-0', rateLimitTextColor(percent))}>{label}</span>
-      <div className="h-1 flex-1 overflow-hidden rounded-full bg-border">
-        <div
-          className={cn(
-            'h-full rounded-full transition-all duration-500',
-            rateLimitBarColor(percent)
-          )}
-          style={{ width: `${percent}%` }}
-        />
-      </div>
-      <span className={cn('w-7 text-right', rateLimitTextColor(percent))}>{percent}%</span>
-    </div>
+      <SquadTokens squad={squad} className="min-w-10" />
+    </li>
   )
 }

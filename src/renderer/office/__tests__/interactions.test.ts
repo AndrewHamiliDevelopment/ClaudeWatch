@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
+import { INTERACTION_FAILURES } from '../../../shared/office/types'
 import {
-  canPeek,
   canRespond,
-  canTalk,
   failureMessage,
+  focusMessage,
+  reachBlocker,
   MAX_MESSAGE_CHARS,
-  messageProblem
+  messageProblem,
+  reachTarget
 } from '../logic/interactions'
 import { INITIAL_OFFICE_STATE, officeReducer } from '../logic/office-reducer'
 import { makeAgent, makeFloor, makeFrame, makeRoom, makeSession } from './fixtures'
@@ -13,11 +15,16 @@ import { makeAgent, makeFloor, makeFrame, makeRoom, makeSession } from './fixtur
 describe('availability', () => {
   const orcaClaude = makeSession({ key: 'claude:a', host: 'orca', attention: 'permission' })
 
-  it('lets talk and peek reach only Orca sessions', () => {
-    expect(canTalk(orcaClaude)).toBe(true)
-    expect(canPeek(orcaClaude)).toBe(true)
-    expect(canTalk(makeSession({ key: 'claude:t', host: 'terminal' }))).toBe(false)
-    expect(canPeek(makeSession({ key: 'claude:t', host: 'vscode' }))).toBe(false)
+  it('lets talk and peek reach only an Orca pane that is known', () => {
+    const blocker = (session: Parameters<typeof reachTarget>[0]) =>
+      reachBlocker(reachTarget(session, undefined))
+    expect(blocker(orcaClaude)).toBeNull()
+    expect(blocker(makeSession({ key: 'claude:t', host: 'terminal' }))).toBe('not-in-orca')
+    expect(blocker(makeSession({ key: 'claude:t', host: 'vscode' }))).toBe('not-in-orca')
+    // In Orca, but another process claimed its pane: there is nowhere to type.
+    expect(blocker(makeSession({ key: 'claude:t', host: 'orca', orcaPaneKey: null }))).toBe(
+      'terminal-not-found'
+    )
   })
 
   it('answers prompts only for Claude in Orca with a permission prompt showing', () => {
@@ -31,7 +38,7 @@ describe('availability', () => {
 describe('failureMessage', () => {
   it('has plain words for every failure', () => {
     expect(failureMessage('not-in-orca')).toBe(
-      'This agent runs in a plain terminal. Use Jump to terminal to reply there.'
+      'This agent runs in a plain terminal. Use Focus terminal to reply there.'
     )
     expect(failureMessage('orca-unavailable')).toBe(
       "Orca isn't responding. Check that it's running."
@@ -43,14 +50,87 @@ describe('failureMessage', () => {
       'No permission prompt is showing for this agent right now.'
     )
     expect(failureMessage('unsupported-provider')).toBe(
-      'Answering prompts from the office works for Claude agents. Jump to the terminal for Codex.'
+      'Answering prompts from the office works for Claude agents. Focus the terminal for Codex and OpenCode.'
     )
     expect(failureMessage('invalid-input')).toBe('Type a message first (up to 4000 characters).')
     expect(failureMessage('unknown-session')).toBe('This agent has left the office.')
+    expect(failureMessage('not-permitted')).toBe(
+      'This page is view-only. Start it with --interactive to act on agents.'
+    )
+  })
+
+  it('has its own words for each failure the contract lists', () => {
+    const messages = INTERACTION_FAILURES.map((reason) => failureMessage(reason))
+    expect(new Set(messages).size).toBe(INTERACTION_FAILURES.length)
+    expect(messages).not.toContain(failureMessage(undefined))
   })
 
   it('still says something when the reason is missing', () => {
     expect(failureMessage(undefined)).toMatch(/try again/i)
+  })
+})
+
+describe('reachTarget', () => {
+  const lead = makeSession({ key: 'claude:a', name: 'office renderer', host: 'terminal' })
+  const teammate = {
+    id: 't1',
+    type: 'lena',
+    name: 'lena-hud',
+    kind: 'teammate',
+    activity: 'editing',
+    orcaPaneKey: 'pane-2'
+  } as const
+
+  it('reaches a lead or one of its subagents through the lead terminal', () => {
+    expect(reachTarget(lead, undefined)).toEqual({
+      key: 'claude:a',
+      name: 'office renderer',
+      host: 'terminal',
+      hasPane: false,
+      isLead: true
+    })
+    expect(reachTarget(lead, { id: 's1', type: 'Explore', activity: 'idle' })).toMatchObject({
+      key: 'claude:a',
+      isLead: true
+    })
+  })
+
+  it('reaches a teammate through its own pane, under its own name', () => {
+    expect(reachTarget(lead, teammate)).toEqual({
+      key: 'claude:a#t1',
+      name: 'lena-hud',
+      host: 'orca',
+      hasPane: true,
+      isLead: false
+    })
+  })
+
+  it('falls back to the lead host for a teammate without a pane', () => {
+    expect(reachTarget(lead, { ...teammate, orcaPaneKey: null }).host).toBe('terminal')
+  })
+})
+
+describe('focusMessage', () => {
+  it('says nothing when the agent pane itself came forward', () => {
+    expect(focusMessage({ success: true, target: 'pane' })).toBe('')
+  })
+
+  it('says plainly when only Orca could be raised, with the reason', () => {
+    expect(focusMessage({ success: false, target: 'app', reason: 'terminal-not-found' })).toBe(
+      "Orca is in front, but not on this agent's pane. Couldn't find this agent's Orca pane. It may have closed."
+    )
+  })
+
+  it('says when a terminal was opened at the folder instead', () => {
+    expect(focusMessage({ success: true, target: 'terminal' })).toBe(
+      "Opened a terminal at this agent's folder."
+    )
+  })
+
+  it('explains a failure that raised nothing', () => {
+    expect(focusMessage({ success: false, reason: 'unknown-session' })).toBe(
+      'This agent has left the office.'
+    )
   })
 })
 

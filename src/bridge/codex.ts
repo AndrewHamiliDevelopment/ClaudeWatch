@@ -1,122 +1,340 @@
-import { basename, dirname } from 'node:path'
+import { basename } from 'node:path'
 import type {
   AgentActivity,
   AgentAttention,
+  CurrentTool,
   SessionRef,
+  SessionUsage,
   SourceHealth
 } from '../shared/office/types'
-import { projectKey } from '../shared/office/project-key'
-import { type BridgeIo, jsonObject, object } from './io'
-import { resolveProject } from './project-root'
-import { findRollouts } from './codex-rollouts'
+import { type CodexTotal, codexTotalOf } from '../shared/accounts'
+import { type BridgeIo, folderName, isLabel, isMissing, jsonObject, object } from './io'
+import { placementOf, resolveProject } from './project-root'
+import { findRollouts, type Rollout } from './codex-rollouts'
+import { parseCodexUsage } from './codex-usage'
+import { NEXT_STEP_MS } from './opencode-activity'
+import { isStillWorking, OPEN_TOOL_HOLD_MS, quietFor } from './liveness'
+import { toolActivity, toolCategory } from './tool-category'
+import {
+  forgetExited,
+  isInsideAppBundle,
+  keyOf,
+  newestFirst,
+  placeholderId,
+  type ProcessRow,
+  readProcessTable,
+  rememberedFolder,
+  type SessionOwner
+} from './process-table'
 
-export function parseCodexProcesses(output: string): { pid: number; startedAtMs: number }[] {
-  const processes: { pid: number; startedAtMs: number }[] = []
-  for (const line of output.split('\n')) {
-    const match = /^\s*(\d+)\s+(\w{3}\s+\w{3}\s+\d+\s+\d\d:\d\d:\d\d\s+\d{4})\s+(.+)$/.exec(line)
-    if (!match) continue
-    const argv = match[3].trim().split(/\s+/)
-    if (
-      basename(argv[0]) !== 'codex' ||
-      argv.slice(1).some((arg) => /^(app-server|helper)/.test(arg))
-    )
-      continue
-    processes.push({ pid: Number(match[1]), startedAtMs: Date.parse(`${match[2]} UTC`) })
-  }
-  return processes
+// A Codex app-server: the host of desktop, IDE and plugin threads.
+function isAppServer({ argv }: ProcessRow): boolean {
+  return basename(argv[0]) === 'codex' && argv.includes('app-server', 1)
 }
+
+export function codexProcesses(rows: ProcessRow[]): { pid: number; startedAtMs: number }[] {
+  return rows
+    .filter(({ argv }) => {
+      if (basename(argv[0]) !== 'codex') return false
+      const sessionCommand = argv.findIndex((arg) => /^(exec|e|resume|fork)$/.test(arg))
+      // An exec prompt may mention a helper; only command arguments precede it.
+      const commandArgs = argv.slice(1, sessionCommand < 0 ? undefined : sessionCommand)
+      return !commandArgs.some((arg) =>
+        /^(app-server|exec-server|mcp-server|sandbox|helper)(?:$|-)/.test(arg)
+      )
+    })
+    .map(({ pid, startedAtMs }) => ({ pid, startedAtMs }))
+}
+
+const CALLS = new Set(['function_call', 'custom_tool_call', 'local_shell_call'])
+const OUTPUTS = new Set([
+  'function_call_output',
+  'custom_tool_call_output',
+  'local_shell_call_output'
+])
+const THINKING = new Set(['reasoning', 'agent_reasoning', 'agent_message', 'task_started'])
+const DEFAULT_CALL_NAME: Record<string, string> = { local_shell_call: 'exec_command' }
+
 export function parseCodexActivity(tail: string): {
   activity: AgentActivity
   attention: AgentAttention
   updatedAtMs: number
+  currentTool: CurrentTool | null
 } {
   let activity: AgentActivity = 'idle'
   let attention: AgentAttention = 'none'
   let updatedAtMs = 0
+  const openCalls = new Map<string, CurrentTool>()
   for (const line of tail.split('\n')) {
     const record = jsonObject(line)
-    // Current CLI rollouts place tool/reasoning events in response_item records.
     if (record?.type !== 'event_msg' && record?.type !== 'response_item') continue
-    const type = object(record.payload)?.type
-    if (type === 'function_call' || type === 'custom_tool_call') activity = 'running'
-    else if (type === 'reasoning') activity = 'thinking'
-    else if (type === 'task_complete') activity = 'idle'
-    else continue
+    const payload = object(record.payload)
+    const type = typeof payload?.type === 'string' ? payload.type : ''
+    const callId = payload?.call_id ?? payload?.id
+    const callKey = typeof callId === 'string' ? callId : 'unknown'
+    if (CALLS.has(type)) {
+      // A shell call carries no name of its own.
+      const name = isLabel(payload?.name) ? payload.name : (DEFAULT_CALL_NAME[type] ?? 'unknown')
+      openCalls.set(callKey, { name, category: toolCategory(name) })
+    } else if (OUTPUTS.has(type)) {
+      // Outputs close their own call, not another tool still running in parallel.
+      openCalls.delete(callKey)
+      activity = 'thinking'
+    } else if (THINKING.has(type) || (type === 'message' && payload?.role === 'assistant'))
+      activity = 'thinking'
+    else if (type === 'task_complete' || type === 'turn_aborted') {
+      openCalls.clear()
+      activity = 'idle'
+    } else continue
     attention = type === 'task_complete' ? 'done' : 'none'
     const timestamp = typeof record.timestamp === 'string' ? Date.parse(record.timestamp) : 0
     updatedAtMs = Number.isFinite(timestamp) ? timestamp : 0
   }
-  return { activity, attention, updatedAtMs }
+  const currentTool = [...openCalls.values()].at(-1) ?? null
+  return {
+    activity: currentTool ? toolActivity(currentTool.category) : activity,
+    attention,
+    updatedAtMs,
+    currentTool
+  }
+}
+
+interface Remembered {
+  // The last full walk of the session folders, and its rollouts kept fresh since.
+  walk: Walk | null
+  // The usage last read from each live rollout, by session id. A long tool output pushes the
+  // newest `token_count` out of the 64 KB tail, and its total still stands until the next one.
+  usage: Map<string, SessionUsage>
+  // Where each live process runs, by pid and start time: asking costs an `lsof` run.
+  folders: Map<string, string>
+  // The placeholder key a process without a rollout was first shown under, by pid and start time.
+  placeholders: Map<string, string>
+  // What each live rollout's tail held, by path, with the size and time of the file it was read from.
+  tails: Map<
+    string,
+    {
+      mtimeMs: number
+      size: number
+      state: ReturnType<typeof parseCodexActivity>
+      usage: SessionUsage | null
+      // The session last shown for this rollout: what its final total is filed under.
+      session: SessionRef | null
+    }
+  >
+}
+const remembered = new WeakMap<BridgeIo, Remembered>()
+// A hosted thread has no process of its own: quiet this long, it has finished.
+const HOSTED_FRESH_MS = 120_000
+// Codex never deletes a rollout, so a full walk grows with history: between full walks only
+// the ones written lately are looked at again. A new thread waits at most this long.
+const FULL_WALK_MS = 30_000
+
+interface Walk {
+  atMs: number
+  processes: string
+  derived: boolean
+  rollouts: Rollout[]
+}
+
+async function currentRollouts(
+  root: string,
+  io: BridgeIo,
+  memory: Remembered,
+  processes: { pid: number; startedAtMs: number }[],
+  derivesAccounts: boolean,
+  now: number
+): Promise<Rollout[]> {
+  // A running process's folder: its rollout is followed however long it has been quiet.
+  const liveFolders = new Set(memory.folders.values())
+  const key = processes.map(({ pid, startedAtMs }) => `${pid}:${startedAtMs}`).join(',')
+  const last = memory.walk
+  const isDue =
+    !last ||
+    last.processes !== key ||
+    last.derived !== derivesAccounts ||
+    now < last.atMs ||
+    now - last.atMs >= FULL_WALK_MS
+  if (isDue) {
+    const rollouts = await findRollouts(root, io, derivesAccounts)
+    memory.walk = { atMs: now, processes: key, derived: derivesAccounts, rollouts }
+    return rollouts
+  }
+  const refreshed = await Promise.all(
+    last.rollouts.map(async (rollout): Promise<Rollout | null> => {
+      // Re-checked as long as a quiet thread with an open tool is held, so its next write is seen.
+      if (now - rollout.mtimeMs >= OPEN_TOOL_HOLD_MS && !liveFolders.has(rollout.cwd))
+        return rollout
+      try {
+        const { mtimeMs, size } = await io.stat(rollout.path)
+        return { ...rollout, mtimeMs, size }
+      } catch (error) {
+        if (isMissing(error)) return null
+        throw error
+      }
+    })
+  )
+  last.rollouts = refreshed
+    .filter((rollout) => rollout !== null)
+    .sort((a, b) => b.mtimeMs - a.mtimeMs || a.path.localeCompare(b.path))
+  return last.rollouts
+}
+
+export interface CodexBatch {
+  sessions: SessionRef[]
+  // The total each rollout ended on, for the sessions that left since the last look: one may
+  // have finished a turn after the last look that found its process.
+  departed: CodexTotal[]
+  sources: SourceHealth[]
 }
 
 export async function collectCodex(
   root: string,
-  io: BridgeIo
-): Promise<{ sessions: SessionRef[]; sources: SourceHealth[] }> {
+  io: BridgeIo,
+  readProcesses = (): Promise<ProcessRow[]> => readProcessTable(io),
+  derivesAccounts = false,
+  now = Date.now()
+): Promise<CodexBatch> {
   const sessions: SessionRef[] = []
+  const departed: CodexTotal[] = []
   const health: SourceHealth = { id: 'codex', ok: true, detail: 'empty' }
-  try {
-    const processes = parseCodexProcesses(
-      await io.exec('/bin/ps', ['-Ao', 'pid=,lstart=,command='])
+  let memory = remembered.get(io)
+  if (!memory) {
+    remembered.set(
+      io,
+      (memory = {
+        walk: null,
+        usage: new Map(),
+        folders: new Map(),
+        placeholders: new Map(),
+        tails: new Map()
+      })
     )
-    const rollouts = processes.length ? await findRollouts(root, io) : []
+  }
+  const { usage: known, folders, placeholders, tails } = memory
+  const live = new Set<string>()
+  const liveTails = new Set<string>()
+  try {
+    const rows = await readProcesses()
+    const processes = codexProcesses(rows)
+    const isHosting = rows.some(isAppServer)
+    const rollouts =
+      processes.length || isHosting
+        ? await currentRollouts(root, io, memory, processes, derivesAccounts, now)
+        : []
     const used = new Set<string>()
-    for (const process of processes) {
+    // One session per rollout: its activity and usage from the tail, its place from `cwd`.
+    const show = async (
+      rollout: Rollout | undefined,
+      cwd: string,
+      owner: SessionOwner
+    ): Promise<void> => {
+      const id = rollout?.id ?? placeholderId(owner)
+      let tail = rollout ? tails.get(rollout.path) : undefined
+      // The walk over rollouts has just read each file's size and time: an unchanged tail is
+      // not read or parsed again.
+      if (rollout && (tail?.mtimeMs !== rollout.mtimeMs || tail.size !== rollout.size)) {
+        const text = await io.readTail(rollout.path)
+        tail = {
+          mtimeMs: rollout.mtimeMs,
+          size: rollout.size,
+          state: parseCodexActivity(text),
+          usage: parseCodexUsage(text),
+          session: null
+        }
+        tails.set(rollout.path, tail)
+      }
+      if (rollout) liveTails.add(rollout.path)
+      const state = tail
+        ? tail.state
+        : { ...parseCodexActivity(''), updatedAtMs: owner.startedAtMs }
+      // Cached assistant output must age out even when no new bytes arrive.
+      const activity =
+        state.activity === 'thinking' &&
+        state.updatedAtMs > 0 &&
+        now - state.updatedAtMs >= NEXT_STEP_MS
+          ? 'idle'
+          : state.activity
+      const usage = tail?.usage ?? known.get(id) ?? null
+      if (usage) known.set(id, usage)
+      live.add(id)
+      const project = await resolveProject(cwd, io, now)
+      const session: SessionRef = {
+        key: keyOf(placeholders, owner, 'codex', rollout?.id),
+        provider: 'codex',
+        sessionId: id,
+        pid: owner.pid,
+        name: folderName(cwd),
+        cwd,
+        ...placementOf(project),
+        host: 'terminal',
+        orcaPaneKey: null,
+        ...state,
+        activity,
+        subagents: [],
+        startedAtMs: owner.startedAtMs,
+        usage,
+        ...(rollout?.startedAtMs != null && { threadStartedAtMs: rollout.startedAtMs }),
+        accountKey: rollout?.accountKey ?? null,
+        // A rollout names its own account, so nothing is inferred from who is signed in.
+        ...(rollout?.accountKey && { accountConfidence: 'exact' as const })
+      }
+      sessions.push(session)
+      if (tail) tail.session = session
+      health.detail = 'live'
+    }
+    for (const process of newestFirst(processes)) {
       try {
-        const cwdOutput = await io.exec('/usr/sbin/lsof', [
-          '-a',
-          '-p',
-          String(process.pid),
-          '-d',
-          'cwd',
-          '-Fn'
-        ])
-        const cwd = cwdOutput
-          .split('\n')
-          .find((line) => line.startsWith('n/'))
-          ?.slice(1)
-        // Codex bundled in an app (ChatGPT, Orca helpers) runs from inside the bundle; not a session.
-        if (!cwd || /\.app\/Contents(\/|$)/.test(cwd)) continue
+        const cwd = await rememberedFolder(io, folders, process)
+        if (!cwd || isInsideAppBundle(cwd)) continue
         const rollout = rollouts.find((item) => item.cwd === cwd && !used.has(item.id))
         if (rollout) used.add(rollout.id)
-        const id = rollout?.id ?? `pid-${process.pid}-${process.startedAtMs}`
-        const state = rollout
-          ? parseCodexActivity(await io.readTail(rollout.path))
-          : {
-              activity: 'idle' as const,
-              attention: 'none' as const,
-              updatedAtMs: process.startedAtMs
-            }
-        const project = await resolveProject(cwd, io)
-        sessions.push({
-          key: `codex:${id}`,
-          provider: 'codex',
-          sessionId: id,
-          pid: process.pid,
-          name: basename(cwd),
-          cwd,
-          projectKey: projectKey(project.root),
-          projectLabel: basename(project.root),
-          projectRoot: project.root,
-          companyKey: projectKey(dirname(project.root)),
-          companyLabel: basename(dirname(project.root)),
-          worktree: project.worktree,
-          host: 'terminal',
-          orcaPaneKey: null,
-          ...state,
-          currentTool: null,
-          subagents: [],
-          startedAtMs: process.startedAtMs
-        })
-        health.detail = 'live'
+        await show(rollout, cwd, process)
       } catch {
         health.ok = false
         health.detail = 'process read failed'
+      }
+    }
+    // The desktop app, the IDE extension and plugins run their threads inside an app-server,
+    // which no process maps to: a thread is live while its rollout is being written.
+    for (const rollout of isHosting ? rollouts : []) {
+      const quietMs = quietFor(now, rollout.mtimeMs)
+      if (quietMs === null) continue
+      // Newest first: past the hold, every later one is quieter still.
+      if (quietMs >= OPEN_TOOL_HOLD_MS) break
+      const shown = tails.get(rollout.path)
+      if (!isStillWorking(quietMs, HOSTED_FRESH_MS, shown?.state.currentTool != null)) continue
+      if (used.has(rollout.id) || isInsideAppBundle(rollout.cwd)) continue
+      used.add(rollout.id)
+      try {
+        await show(rollout, rollout.cwd, {
+          pid: null,
+          // An undated rollout keeps the time it was first shown with, not each new write's.
+          startedAtMs: rollout.startedAtMs ?? shown?.session?.startedAtMs ?? rollout.mtimeMs
+        })
+      } catch {
+        health.ok = false
+        health.detail = 'rollout read failed'
+      }
+    }
+    for (const id of known.keys()) if (!live.has(id)) known.delete(id)
+    forgetExited(processes, folders, placeholders)
+    for (const [path, { session }] of tails) {
+      if (liveTails.has(path)) continue
+      tails.delete(path)
+      try {
+        // Its last turn may have been written after the last look that found its process.
+        const usage = session && parseCodexUsage(await io.readTail(path))
+        const total = usage && codexTotalOf({ ...session, usage })
+        if (total) departed.push(total)
+      } catch (error) {
+        if (isMissing(error)) continue
+        health.ok = false
+        health.detail = 'rollout read failed'
       }
     }
   } catch {
     health.ok = false
     health.detail = 'discovery failed'
   }
-  return { sessions, sources: [health] }
+  return { sessions, departed, sources: [health] }
 }

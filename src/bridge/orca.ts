@@ -1,4 +1,5 @@
-import type { SessionRef, SourceHealth } from '../shared/office/types'
+import type { SessionRef, SourceHealth, SubagentRef } from '../shared/office/types'
+import { ORCA_CLI } from '../shared/orca-bundle'
 import { type BridgeIo, jsonObject } from './io'
 
 export interface OrcaEnvironment {
@@ -6,10 +7,11 @@ export interface OrcaEnvironment {
   worktreeId: string | null
   jobDir: string | null
 }
-export function parseOrcaEnvironment(command: string): OrcaEnvironment {
+// Only these three keys survive; everything else in the text is dropped.
+export function parseOrcaEnvironment(environment: string): OrcaEnvironment {
   const filtered: OrcaEnvironment = { paneKey: null, worktreeId: null, jobDir: null }
   const pattern = /(?:^|\s)(ORCA_PANE_KEY|ORCA_WORKTREE_ID|CLAUDE_JOB_DIR)=([^\s]*)/g
-  for (const match of command.matchAll(pattern)) {
+  for (const match of environment.matchAll(pattern)) {
     const value = match[2] || null
     if (match[1] === 'ORCA_PANE_KEY') filtered.paneKey = value
     if (match[1] === 'ORCA_WORKTREE_ID') filtered.worktreeId = value
@@ -22,25 +24,61 @@ export function parseOrcaEnvironment(command: string): OrcaEnvironment {
   return filtered
 }
 
+// `ps -E` prints the arguments and then the environment with nothing to tell them apart, so
+// the arguments are read alone first and only what follows them is parsed. Still a hint, not
+// proof: a process can rewrite its own environment.
+export async function readOrcaEnvironment(
+  pid: number,
+  ps: (args: string[]) => Promise<string>
+): Promise<OrcaEnvironment> {
+  const argv = (await ps(['-o', 'command=', '-p', String(pid)])).trim()
+  const listing = (await ps(['-E', '-o', 'command=', '-p', String(pid)])).trim()
+  const environment = listing.slice(argv.length)
+  if (!argv || !listing.startsWith(argv) || !/^(\s|$)/.test(environment))
+    throw new Error('process arguments changed between reads')
+  return parseOrcaEnvironment(environment)
+}
+
+const isTeammate = (agent: SubagentRef): boolean => agent.kind === 'teammate'
+
 // A child agent started inside a pane inherits its parent's pane key. The pane belongs to the
-// earliest session; the others keep their host but cannot be driven through it.
+// earliest session or teammate; the others keep their host but cannot be driven through it.
 export function claimPanes(sessions: SessionRef[]): SessionRef[] {
-  const owners = new Map<string, SessionRef>()
-  for (const session of sessions) {
-    if (!session.orcaPaneKey) continue
-    const owner = owners.get(session.orcaPaneKey)
-    if (!owner || session.startedAtMs < owner.startedAtMs) owners.set(session.orcaPaneKey, session)
+  const owners = new Map<string, SessionRef | SubagentRef>()
+  const claim = (holder: SessionRef | SubagentRef): void => {
+    if (!holder.orcaPaneKey) return
+    const owner = owners.get(holder.orcaPaneKey)
+    if (!owner || (holder.startedAtMs ?? Infinity) < (owner.startedAtMs ?? Infinity))
+      owners.set(holder.orcaPaneKey, holder)
   }
+  // Sessions claim first, so a teammate never wins a tie against a session.
+  sessions.forEach(claim)
+  for (const session of sessions) session.subagents.filter(isTeammate).forEach(claim)
+  const owns = (holder: SessionRef | SubagentRef): boolean =>
+    !holder.orcaPaneKey || owners.get(holder.orcaPaneKey) === holder
   return sessions.map((session) =>
-    session.orcaPaneKey && owners.get(session.orcaPaneKey) !== session
-      ? { ...session, orcaPaneKey: null }
-      : session
+    owns(session) && session.subagents.every(owns)
+      ? session
+      : {
+          ...session,
+          orcaPaneKey: owns(session) ? session.orcaPaneKey : null,
+          subagents: session.subagents.map((agent) =>
+            owns(agent) ? agent : { ...agent, orcaPaneKey: null }
+          )
+        }
   )
 }
 
+// Each ask verifies Orca's whole bundle first (about 1.3 CPU-seconds), so a healthy Orca is
+// asked every five minutes. A failing one is retried sooner, backing off to once a minute, and
+// at once when a session shows a pane key: Orca is then running.
+const HEALTHY_POLL_MS = 5 * 60_000
+const FIRST_RETRY_MS = 10_000
+const MAX_RETRY_MS = 60_000
+
 export class OrcaSource {
   private nextPoll = 0
-  private delay = 10000
+  private delay = FIRST_RETRY_MS
   private health: SourceHealth = { id: 'orca', ok: true, detail: 'not polled' }
   private environments = new Map<string, { value: OrcaEnvironment; retryAt: number }>()
   constructor(private readonly io: BridgeIo) {}
@@ -48,40 +86,67 @@ export class OrcaSource {
   async poll(now: number): Promise<SourceHealth> {
     if (now < this.nextPoll) return { ...this.health }
     try {
-      await this.io.stat('/opt/homebrew/bin/orca')
-      const response = jsonObject(
-        await this.io.exec('/opt/homebrew/bin/orca', ['worktree', 'ps', '--json'])
-      )
+      await this.io.stat(ORCA_CLI)
+      const response = jsonObject(await this.io.exec(ORCA_CLI, ['worktree', 'ps', '--json']))
       if (!response || response.ok === false) throw new Error('invalid response')
       this.health = { id: 'orca', ok: true, detail: 'available' }
-      this.delay = 10000
-      this.nextPoll = now + this.delay
+      this.delay = FIRST_RETRY_MS
+      this.nextPoll = now + HEALTHY_POLL_MS
     } catch {
       this.health = { id: 'orca', ok: false, detail: 'unavailable' }
       this.nextPoll = now + this.delay
-      this.delay = Math.min(this.delay * 2, 60000)
+      this.delay = Math.min(this.delay * 2, MAX_RETRY_MS)
     }
     return { ...this.health }
   }
 
   prune(sessions: SessionRef[]): void {
-    const live = new Set(sessions.map((session) => `${session.pid}:${session.startedAtMs}`))
+    const live = new Set(
+      sessions.flatMap((session) => [
+        `${session.pid}:${session.startedAtMs}`,
+        ...session.subagents.filter(isTeammate).map((t) => `${t.pid}:${t.startedAtMs}`)
+      ])
+    )
     for (const identity of this.environments.keys()) {
       if (!live.has(identity)) this.environments.delete(identity)
     }
   }
 
   async enrich(session: SessionRef, now = Date.now()): Promise<SessionRef> {
-    if (session.provider !== 'claude' || session.pid === null) return session
-    const identity = `${session.pid}:${session.startedAtMs}`
+    if (session.provider === 'codex' || session.pid === null) return session
+    const environment = await this.environment(session.pid, session.startedAtMs, now)
+    const enriched: SessionRef = {
+      ...session,
+      host: environment.paneKey ? 'orca' : session.host,
+      orcaPaneKey: environment.paneKey
+    }
+    if (!session.subagents.some(isTeammate)) return enriched
+    // A teammate is its own process in its own pane, so its key is read from its own environment.
+    const subagents = await Promise.all(
+      session.subagents.map(async (agent) =>
+        isTeammate(agent) && typeof agent.pid === 'number'
+          ? {
+              ...agent,
+              orcaPaneKey: (await this.environment(agent.pid, agent.startedAtMs, now)).paneKey
+            }
+          : agent
+      )
+    )
+    return { ...enriched, subagents }
+  }
+
+  private async environment(
+    pid: number,
+    startedAtMs: number | undefined,
+    now: number
+  ): Promise<OrcaEnvironment> {
+    const identity = `${pid}:${startedAtMs}`
     let cached = this.environments.get(identity)
     if (!cached || now >= cached.retryAt) {
       try {
-        // Only these three keys survive the process-environment read.
-        const value = parseOrcaEnvironment(
-          await this.io.exec('/bin/ps', ['-E', '-o', 'command=', '-p', String(session.pid)])
-        )
+        const value = await readOrcaEnvironment(pid, (args) => this.io.exec('/bin/ps', args))
         cached = { value, retryAt: Infinity }
+        if (value.paneKey && !this.health.ok) this.nextPoll = 0
       } catch {
         cached = {
           value: { paneKey: null, worktreeId: null, jobDir: null },
@@ -90,11 +155,6 @@ export class OrcaSource {
       }
       this.environments.set(identity, cached)
     }
-    const environment = cached.value
-    return {
-      ...session,
-      host: environment.paneKey ? 'orca' : session.host,
-      orcaPaneKey: environment.paneKey
-    }
+    return cached.value
   }
 }

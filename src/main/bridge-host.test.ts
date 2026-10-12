@@ -5,6 +5,7 @@ import type { FeedMessage, OfficeSnapshot } from '../shared/office/types'
 
 class FakeProcess extends EventEmitter implements BridgeProcess {
   kill = vi.fn(() => true)
+  postMessage = vi.fn()
 }
 
 const hello = (rev: number): FeedMessage => {
@@ -45,6 +46,31 @@ describe('BridgeHost', () => {
     expect(listener).toHaveBeenCalledWith(hello(3))
   })
 
+  it('tells a running bridge its new pace at once, and a restarted bridge once it is up', () => {
+    host.start()
+    spawned[0].emit('message', hello(1))
+    expect(spawned[0].postMessage).not.toHaveBeenCalled()
+
+    host.setPollInterval(30_000)
+    host.setPollInterval(30_000)
+    expect(spawned[0].postMessage.mock.calls).toEqual([[{ type: 'pace', intervalMs: 30_000 }]])
+
+    spawned[0].emit('exit', 1)
+    vi.advanceTimersByTime(1_000)
+    expect(spawned[1].postMessage).not.toHaveBeenCalled()
+    spawned[1].emit('message', hello(1))
+    expect(spawned[1].postMessage.mock.calls).toEqual([[{ type: 'pace', intervalMs: 30_000 }]])
+  })
+
+  it('runs a bridge that takes no messages, as the web server’s does', () => {
+    const plain = new EventEmitter() as EventEmitter & BridgeProcess
+    plain.kill = () => true
+    const webHost = new BridgeHost({ spawn: () => plain })
+    webHost.start()
+    expect(() => webHost.setPollInterval(30_000)).not.toThrow()
+    webHost.stop()
+  })
+
   it('ignores messages that are not feed messages', () => {
     const listener = vi.fn()
     host.onMessage(listener)
@@ -80,6 +106,21 @@ describe('BridgeHost', () => {
 
     expect(host.snapshot()).toBeNull()
     expect(listener).toHaveBeenLastCalledWith({ type: 'resync' })
+  })
+
+  it('replaces a running bridge on request, telling listeners to resync, and starts none when stopped', () => {
+    const listener = vi.fn()
+    host.onMessage(listener)
+    host.start()
+    spawned[0].emit('message', hello(3))
+    host.restart()
+    expect(spawned[0].kill).toHaveBeenCalledOnce()
+    expect(spawned).toHaveLength(2)
+    expect(host.snapshot()).toBeNull()
+    expect(listener).toHaveBeenLastCalledWith({ type: 'resync' })
+    host.stop()
+    host.restart()
+    expect(spawned).toHaveLength(2)
   })
 
   it('kills the bridge on stop and does not restart it', () => {

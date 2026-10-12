@@ -4,7 +4,7 @@ import { session } from './fixtures'
 
 // An office that was open and empty when session `a` started, so `a` walks in.
 function world() {
-  const world = new World({ now: () => 0 })
+  const world = new World()
   world.apply({
     type: 'hello',
     v: 1,
@@ -13,8 +13,37 @@ function world() {
   world.apply({ type: 'patch', v: 1, seq: 1, upserts: [session('a')], removed: [] })
   return world
 }
+it('keeps applying later messages after one it could not place', () => {
+  const sim = world()
+  // A session the feed sent malformed: its placement throws.
+  const broken = { ...session('x'), subagents: null } as unknown as ReturnType<typeof session>
+  expect(() => sim.apply({ type: 'patch', v: 1, seq: 2, upserts: [broken], removed: [] })).toThrow()
+  // Nothing of the bad message was kept, so the next one places as if it never came.
+  expect(() =>
+    sim.apply({ type: 'patch', v: 1, seq: 3, upserts: [session('b')], removed: [] })
+  ).not.toThrow()
+  expect(sim.step(0).map((agent) => agent.agentKey)).toEqual(['a', 'b'])
+  expect(sim.layout().floors[0].rooms.map((room) => room.sessionKey)).toEqual(['a', 'b'])
+})
+it('reads a saved map only for order and bays, never as the floor it moves agents from', () => {
+  const first = new World()
+  const hello = {
+    type: 'hello' as const,
+    v: 1 as const,
+    snapshot: { rev: 1, generatedAtMs: 0, sessions: [session('a')], sources: [] }
+  }
+  first.apply(hello)
+  const saved = first.layout()
+  // Storage only vouches for the outline; what is inside a saved room is not to be trusted.
+  saved.floors[0].rooms = saved.floors[0].rooms.map(
+    (room) => ({ ...room, slots: null }) as unknown as (typeof saved.floors)[0]['rooms'][0]
+  )
+  const sim = new World({ saved })
+  expect(() => sim.apply(hello)).not.toThrow()
+  expect(sim.step(0).map((agent) => agent.agentKey)).toEqual(['a'])
+})
 it('seats the sessions that were already running when the office opens', () => {
-  const sim = new World({ now: () => 0 })
+  const sim = new World()
   sim.apply({
     type: 'hello',
     v: 1,
@@ -47,7 +76,7 @@ it('leaves after removal and disappears at the elevator', () => {
   expect(sim.step(0)).toEqual([])
 })
 it('creates distinct subagent views', () => {
-  const sim = new World({ now: () => 0 })
+  const sim = new World()
   const main = session('a')
   main.subagents = Array.from({ length: 6 }, (_, i) => ({
     id: String(i),
@@ -76,7 +105,7 @@ it('uses fixed ticks and protects returned layout data', () => {
 })
 
 it('applies the patch that follows the hello revision, then rejects duplicates and late ones', () => {
-  const sim = new World({ now: () => 0 })
+  const sim = new World()
   // A patch's seq is the snapshot revision it produces, so it continues from the hello.
   sim.apply({
     type: 'hello',
@@ -99,7 +128,7 @@ it('applies the patch that follows the hello revision, then rejects duplicates a
 })
 
 it('arrives from the same gate for all 60 agents across four companies', () => {
-  const sim = new World({ now: () => 0 })
+  const sim = new World()
   const sessions = Array.from({ length: 60 }, (_, i) => ({
     ...session(`s${i}`, `p_${i % 12}`),
     companyKey: `c_${i % 4}`,
@@ -116,7 +145,7 @@ it('arrives from the same gate for all 60 agents across four companies', () => {
     expect({ x: view.x, z: view.z, floorId: view.floorId }).toEqual({ x: 0, z: 0, floorId: 'hq' })
 })
 it('keeps a subagent at its desk when a sibling finishes', () => {
-  const sim = new World({ now: () => 0 })
+  const sim = new World()
   const worker = (id: string) => ({ id, type: 'worker', activity: 'reading' as const })
   const main = { ...session('a'), subagents: ['0', '1', '2'].map(worker) }
   sim.apply({
@@ -142,8 +171,60 @@ it('keeps a subagent at its desk when a sibling finishes', () => {
   expect(views.find((a) => a.agentKey === 'a#2')!.slotId).toBe('desk_guest_0')
 })
 
-it('walks to a moved seat from where the agent is, not from the gate', () => {
-  const sim = new World({ now: () => 0 })
+it('seats teammates like subagents, under their own names, and keeps their seats', () => {
+  const sim = new World()
+  const mate = (name: string) => ({
+    id: `${name}@session-a`,
+    type: 'lena',
+    activity: 'thinking' as const,
+    kind: 'teammate' as const,
+    name
+  })
+  const worker = { id: 'abc', type: 'Explore', activity: 'reading' as const }
+  const lead = { ...session('a'), subagents: [worker, ...['kai', 'lena', 'ravi'].map(mate)] }
+  sim.apply({
+    type: 'hello',
+    v: 1,
+    snapshot: { rev: 0, generatedAtMs: 0, sessions: [lead], sources: [] }
+  })
+  const seats = () =>
+    Object.fromEntries(
+      sim
+        .step(0)
+        .filter((a) => a.isSubagent)
+        .map((a) => [a.label, `${a.roomId}/${a.slotId}`])
+    )
+  const before = seats()
+  expect(Object.keys(before).sort()).toEqual(['Explore', 'kai', 'lena', 'ravi'])
+  expect(new Set(Object.values(before)).size).toBe(4)
+
+  // Teammates take the desks beside their lead first: they stay, while subagents come and go.
+  expect(before.kai).toContain('desk_guest')
+  expect(before.lena).toContain('desk_guest')
+
+  // The subagent leaves the team area; nobody else is moved, at a desk or in the team area.
+  sim.apply({
+    type: 'patch',
+    v: 1,
+    seq: 1,
+    upserts: [{ ...lead, subagents: ['kai', 'lena', 'ravi'].map(mate) }],
+    removed: []
+  })
+  const after = seats()
+  for (const name of ['kai', 'lena', 'ravi']) expect(after[name]).toBe(before[name])
+  expect(before.ravi).toContain('team_seat')
+})
+
+const seatOf = (sim: World, agent: { roomId: string; slotId: string }) => {
+  const seat = sim
+    .layout()
+    .floors[0].rooms.find((r) => r.id === agent.roomId)!
+    .slots.find((s) => s.id === agent.slotId)!
+  return { x: seat.x, z: seat.z }
+}
+
+it('moves a seated team-area sitter with its seat when a desk row pushes the team area down', () => {
+  const sim = new World()
   const worker = (id: string) => ({ id, type: 'worker', activity: 'reading' as const })
   const main = { ...session('a'), subagents: ['0', '1', '2'].map(worker) }
   sim.apply({
@@ -162,10 +243,13 @@ it('walks to a moved seat from where the agent is, not from the gate', () => {
   expect(sim.layout().floors[0].rooms.find((r) => r.id === after.roomId)!.z).toBeGreaterThan(
     before.z
   )
-  expect({ x: after.x, z: after.z }).toEqual({ x: before.x, z: before.z })
+  expect(after.slotId).toBe('team_seat_0')
+  // Seated, so it goes with its seat: it is never left standing where the seat used to be.
+  expect({ x: after.x, z: after.z }).toEqual(seatOf(sim, after))
+  expect(after.z).toBeGreaterThan(before.z)
 })
-it('keeps a team-area sitter in place when a new office is built over its old seat', () => {
-  const sim = new World({ now: () => 0 })
+it('never leaves a team-area sitter where a new office is built over its old seat', () => {
+  const sim = new World()
   const worker = (id: string) => ({ id: `s${id}`, type: 'worker', activity: 'reading' as const })
   const busy = { ...session('a'), subagents: ['0', '1', '2', '3'].map(worker) }
   sim.apply({
@@ -181,7 +265,27 @@ it('keeps a team-area sitter in place when a new office is built over its old se
   const before = sim.step(0).find((a) => a.agentKey === 'a#s3')!
   sim.apply({ type: 'patch', v: 1, seq: 2, upserts: [session('e')], removed: [] })
   const after = sim.step(0).find((a) => a.agentKey === 'a#s3')!
-  expect({ x: after.x, z: after.z }).toEqual({ x: before.x, z: before.z })
+  expect({ x: after.x, z: after.z }).toEqual(seatOf(sim, after))
+  expect({ x: after.x, z: after.z }).not.toEqual({ x: before.x, z: before.z })
+})
+it('keeps a seated agent at its desk when the floor shrinks and its company slides over', () => {
+  const sim = new World()
+  const neighbours = Array.from({ length: 4 }, (_, index) => ({
+    ...session(`n${index}`, `p_n${index}`),
+    companyKey: `c_${index}`,
+    companyLabel: `Neighbour ${index}`
+  }))
+  sim.apply({
+    type: 'hello',
+    v: 1,
+    snapshot: { rev: 1, generatedAtMs: 0, sessions: [session('a'), ...neighbours], sources: [] }
+  })
+  const before = sim.step(0).find((a) => a.agentKey === 'a')!
+  const gone = neighbours.map((neighbour) => neighbour.key)
+  sim.apply({ type: 'patch', v: 1, seq: 2, upserts: [], removed: gone })
+  const after = sim.step(0).find((a) => a.agentKey === 'a')!
+  expect(Math.abs(before.x)).toBeGreaterThan(sim.layout().floors[0].width / 2)
+  expect({ x: after.x, z: after.z }).toEqual(seatOf(sim, after))
 })
 it('brings a new arrival to rest exactly on its seat', () => {
   const sim = world()
@@ -194,7 +298,7 @@ it('brings a new arrival to rest exactly on its seat', () => {
   expect({ x: arrived.x, z: arrived.z }).toEqual({ x: seat.x, z: seat.z })
 })
 it('turns a robot that was walking out back to its desk when its session returns', () => {
-  const sim = new World({ now: () => 0 })
+  const sim = new World()
   const hello = (rev: number, sessions: ReturnType<typeof session>[]) =>
     sim.apply({ type: 'hello', v: 1, snapshot: { rev, generatedAtMs: 0, sessions, sources: [] } })
   hello(1, [session('a')])

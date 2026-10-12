@@ -3,11 +3,19 @@ import { SettingsStore } from './store'
 import type { SessionHistoryEntry } from '../renderer/lib/types'
 import { DEFAULT_SETTINGS } from '../renderer/lib/types'
 
+// What the settings file holds before the app starts; a test sets it to model an older install.
+// `written` is what the newest store has saved: the file its next start would find.
+const seed = vi.hoisted(() => ({
+  file: {} as Record<string, unknown>,
+  written: {} as Record<string, unknown>
+}))
+
 // Mock electron-store
 vi.mock('electron-store', () => {
   return {
     default: vi.fn().mockImplementation(() => {
-      const data: Record<string, unknown> = {}
+      const data: Record<string, unknown> = { ...seed.file }
+      seed.written = data
       return {
         get: vi.fn((key: string, defaultValue?: unknown) => {
           return key in data ? data[key] : defaultValue
@@ -30,7 +38,31 @@ describe('SettingsStore', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    seed.file = {}
     store = new SettingsStore()
+  })
+
+  describe('the old CPU threshold default', () => {
+    it('moves a file still on 1.0 to the current default', () => {
+      seed.file = { settings: { ...DEFAULT_SETTINGS, cpuIdleThreshold: 1.0 } }
+      expect(new SettingsStore().getSettings().cpuIdleThreshold).toBe(3.0)
+    })
+
+    it('keeps 1.0 when the owner chooses it afterwards, across a restart', () => {
+      store.setSettings({ cpuIdleThreshold: 1.0 })
+      expect(store.getSettings().cpuIdleThreshold).toBe(1.0)
+
+      seed.file = seed.written
+      expect(new SettingsStore().getSettings().cpuIdleThreshold).toBe(1.0)
+    })
+
+    it('does not migrate a second time on the next start', () => {
+      seed.file = {
+        settings: { ...DEFAULT_SETTINGS, cpuIdleThreshold: 1.0 },
+        cpuIdleDefaultMigrated: true
+      }
+      expect(new SettingsStore().getSettings().cpuIdleThreshold).toBe(1.0)
+    })
   })
 
   describe('getSettings()', () => {
@@ -180,6 +212,28 @@ describe('SettingsStore', () => {
       const history = store.getHistory()
       expect(history.length).toBeLessThanOrEqual(3)
     })
+
+    it('trims the stored list as soon as the limit is lowered, keeping the newest', () => {
+      for (let i = 0; i < 5; i++) {
+        store.addHistoryEntry({
+          pid: 2000 + i,
+          projectPath: `/project/${i}`,
+          projectName: `project/${i}`,
+          status: 'exited',
+          startedAt: new Date(),
+          endedAt: new Date(),
+          durationSeconds: 100,
+          flags: []
+        })
+      }
+
+      store.setSettings({ maxHistoryEntries: 2 })
+      expect(store.getHistory().map((entry) => entry.pid)).toEqual([2003, 2004])
+
+      // Another setting leaves the list alone.
+      store.setSettings({ theme: 'light' })
+      expect(store.getHistory()).toHaveLength(2)
+    })
   })
 
   describe('clearHistory()', () => {
@@ -240,6 +294,19 @@ describe('SettingsStore', () => {
       expect(settings.openOfficeOnLaunch).toBe(false)
       expect(settings.pollingIntervalMs).toBe(DEFAULT_SETTINGS.pollingIntervalMs)
       expect(settings.notifications.sound).toBe(DEFAULT_SETTINGS.notifications.sound)
+    })
+
+    it('pulls a stored number back into its allowed range', () => {
+      const raw = store as unknown as { store: { set(key: string, value: unknown): void } }
+      raw.store.set('settings', {
+        ...DEFAULT_SETTINGS,
+        pollingIntervalMs: 1,
+        notifications: { ...DEFAULT_SETTINGS.notifications, cooldownSeconds: 100000 }
+      })
+
+      const settings = store.getSettings()
+      expect(settings.pollingIntervalMs).toBe(500)
+      expect(settings.notifications.cooldownSeconds).toBe(120)
     })
 
     it('keeps the other notification choices when one is changed', () => {

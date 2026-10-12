@@ -3,28 +3,64 @@ import {
   BAND_ZOOM,
   buildingFraming,
   bandForZoom,
-  createWheelStepper,
   followAnchor,
   followStep,
   ISO_POLAR,
-  snapAzimuth,
-  stepBand
+  loungesByRoom,
+  snapAzimuth
 } from '../logic/camera-bands'
+import { makeZone } from './fixtures'
 
 const DEG = Math.PI / 180
 
 describe('camera bands', () => {
-  it('steps through desk, floor and building bands and stops at the ends', () => {
-    expect(stepBand('floor', 'out')).toBe('building')
-    expect(stepBand('building', 'out')).toBe('building')
-    expect(stepBand('floor', 'in')).toBe('desk')
-    expect(stepBand('desk', 'in')).toBe('desk')
+  it('reads the band off the zoom: desk up close, building below the floor fit', () => {
+    expect(bandForZoom(BAND_ZOOM.desk, 'floor', 8.2)).toBe('desk')
+    expect(bandForZoom(8.2, 'floor', 8.2)).toBe('floor')
+    expect(bandForZoom(34, 'floor', 8.2)).toBe('floor')
+    expect(bandForZoom(4.5, 'floor', 8.2)).toBe('building')
   })
 
-  it('maps an orthographic zoom to the nearest band', () => {
-    expect(bandForZoom(BAND_ZOOM.desk * 1.1)).toBe('desk')
-    expect(bandForZoom(BAND_ZOOM.floor)).toBe('floor')
-    expect(bandForZoom(1)).toBe('building')
+  it('measures the building threshold against the floor fit, not a fixed zoom', () => {
+    // A lone office fits at 60 px/m: 30 is already further out than its floor view.
+    expect(bandForZoom(30, 'floor', 60)).toBe('building')
+    expect(bandForZoom(30, 'floor', 8.2)).toBe('floor')
+  })
+
+  it('keeps a floor level between desk and building for a lone office that fits at 60', () => {
+    expect(bandForZoom(47, 'desk', 60)).toBe('floor')
+    expect(bandForZoom(39, 'floor', 60)).toBe('floor')
+    expect(bandForZoom(38, 'floor', 60)).toBe('building')
+    expect(bandForZoom(43, 'building', 60)).toBe('building')
+    expect(bandForZoom(44, 'building', 60)).toBe('floor')
+    expect(bandForZoom(54, 'floor', 60)).toBe('floor')
+  })
+
+  it('enters desk at 55 px/m and leaves it under 48', () => {
+    expect(bandForZoom(54, 'floor', 8.2)).toBe('floor')
+    expect(bandForZoom(55, 'floor', 8.2)).toBe('desk')
+    expect(bandForZoom(50, 'desk', 8.2)).toBe('desk')
+    expect(bandForZoom(47, 'desk', 8.2)).toBe('floor')
+  })
+
+  it('enters building under 0.8 of the fit and leaves it above 0.9', () => {
+    expect(bandForZoom(8.1, 'floor', 10)).toBe('floor')
+    expect(bandForZoom(7.9, 'floor', 10)).toBe('building')
+    expect(bandForZoom(8.9, 'building', 10)).toBe('building')
+    expect(bandForZoom(9.1, 'building', 10)).toBe('floor')
+  })
+
+  it('changes band at most once when the zoom wobbles 10 % around a threshold', () => {
+    for (const threshold of [55, 8]) {
+      let band = bandForZoom(threshold * 0.9, 'floor', 10)
+      let changes = 0
+      for (const factor of [1.0, 1.05, 0.95, 1.05, 0.95, 1.02, 0.98]) {
+        const next = bandForZoom(threshold * factor, band, 10)
+        if (next !== band) changes += 1
+        band = next
+      }
+      expect(changes).toBeLessThanOrEqual(1)
+    }
   })
 
   it('fixes the isometric elevation at 35 degrees', () => {
@@ -37,23 +73,27 @@ describe('camera bands', () => {
     expect(snapAzimuth(60 * DEG, -1)).toBeCloseTo(45 * DEG)
     expect(snapAzimuth(60 * DEG, 1)).toBeCloseTo(135 * DEG)
   })
-
-  it('turns a burst of wheel deltas into one band step per gesture', () => {
-    const step = createWheelStepper({ threshold: 50, cooldownMs: 300 })
-    expect(step(20, 0)).toBeNull()
-    expect(step(40, 10)).toBe('out')
-    expect(step(200, 50)).toBeNull()
-    expect(step(-80, 400)).toBe('in')
-  })
 })
 
-it('fits the district, hangar and tall tower inside a small building viewport', () => {
-  const framing = buildingFraming({ width: 64, depth: 16 }, 12, { width: 800, height: 600 })
+it('fits the scene and its tall tower inside a small building viewport', () => {
+  const framing = buildingFraming({ width: 88, depth: 42 }, 12, { width: 800, height: 600 })
   expect(framing.zoom).toBeLessThanOrEqual(BAND_ZOOM.building)
   expect(framing.zoom * framing.projectedWidth).toBeLessThan(800)
   expect(framing.zoom * framing.projectedHeight).toBeLessThan(600)
   expect(framing.target[1]).toBeGreaterThan(0)
-  expect(framing.target[2]).toBeLessThan(0)
+  expect(framing.target[2]).toBe(0)
+})
+
+it('aims the building view at the scene where it lies, not at the gate', () => {
+  const viewport = { width: 800, height: 600 }
+  const centred = buildingFraming({ width: 88, depth: 42 }, 12, viewport)
+  const offCentre = buildingFraming({ x: 34, z: 7, width: 88, depth: 42 }, 12, viewport)
+  expect(offCentre.target).toEqual([
+    centred.target[0] + 34,
+    centred.target[1],
+    centred.target[2] + 7
+  ])
+  expect(offCentre.zoom).toBe(centred.zoom)
 })
 
 describe('desk follow', () => {
@@ -64,6 +104,49 @@ describe('desk follow', () => {
   it('anchors on the centre of the room the agent sits in, not on the agent', () => {
     expect(followAnchor(agents[0], rooms)).toEqual(anchor)
     expect(followAnchor({ agentKey: 'a', roomId: 'gone' }, rooms)).toBeNull()
+  })
+
+  it('goes with the agent to its company lounge, and back to its room when it returns', () => {
+    const lounges = new Map([['r1', { x: 30, z: 9 }]])
+    const lounging = [{ agentKey: 'a', roomId: 'r1', place: 'lounge' as const }]
+    expect(followStep(anchor, lounging, rooms, lounges)).toEqual({
+      kind: 'shift',
+      dx: 20,
+      dz: 5,
+      anchor: { agentKey: 'a', roomX: 30, roomZ: 9 }
+    })
+    const inLounge = { agentKey: 'a', roomX: 30, roomZ: 9 }
+    expect(followStep(inLounge, lounging, rooms, lounges)).toEqual({ kind: 'stay' })
+    expect(followStep(inLounge, agents, rooms, lounges)).toMatchObject({ dx: -20, dz: -5 })
+  })
+
+  it("finds every office room's company lounge", () => {
+    const lounge = {
+      id: 'c1:lounge',
+      x: 30,
+      z: 9,
+      width: 6,
+      depth: 5,
+      door: { x: 30, z: 6 },
+      seats: []
+    }
+    const zones = [
+      makeZone({
+        id: 'c1',
+        kind: 'company',
+        lounge,
+        children: [
+          makeZone({
+            id: 'p1',
+            kind: 'project',
+            children: [makeZone({ id: 'r1', kind: 'office' })]
+          })
+        ]
+      }),
+      makeZone({ id: 'c2', kind: 'company', children: [makeZone({ id: 'p2', kind: 'project' })] })
+    ]
+    expect(loungesByRoom(zones).get('r1')).toMatchObject({ x: 30, z: 9 })
+    expect(loungesByRoom(zones).has('p2')).toBe(false)
   })
 
   it('stays put while the room has not moved', () => {

@@ -79,6 +79,8 @@ export interface AppSettings {
   maxHistoryEntries: number
   weeklyTokenTarget: number
   staleThresholdMinutes: number
+  // Off: no identity file is read, no usage is attributed and the accounts ledger is not written.
+  watchAccounts: boolean
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -101,7 +103,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   theme: 'dark',
   maxHistoryEntries: 100,
   weeklyTokenTarget: 5_000_000,
-  staleThresholdMinutes: 30
+  staleThresholdMinutes: 30,
+  watchAccounts: true
 }
 
 export interface InstanceUpdate {
@@ -137,10 +140,12 @@ export interface UpdateProgress {
   total: number
 }
 
-export interface UpdaterStatusPayload {
-  status: UpdateStatus
-  data?: UpdateInfo | UpdateProgress | string
-}
+// Each status carries its own data, so neither side has to cast it.
+export type UpdaterStatusPayload =
+  | { status: 'idle' | 'checking' | 'not-available' | 'downloaded' }
+  | { status: 'available'; data: UpdateInfo }
+  | { status: 'downloading'; data: UpdateProgress }
+  | { status: 'error'; data: string }
 
 export interface UsageStats {
   totalInputTokens: number

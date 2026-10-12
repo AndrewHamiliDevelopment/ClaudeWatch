@@ -133,6 +133,35 @@ describe('OrcaTerminals', () => {
     ])
   })
 
+  describe('focus', () => {
+    const switched = (navigated: unknown): string =>
+      envelope({ focus: { handle: 'term_a', tabId: 'tab1', worktreeId: 'wt1', navigated } })
+
+    it('switches Orca to the terminal by handle and sends no input', async () => {
+      const exec = vi.fn().mockResolvedValue(switched(true))
+      expect(await new OrcaTerminals(exec).focus('term_a')).toBe(true)
+      expect(exec.mock.calls).toEqual([[['terminal', 'switch', '--terminal', 'term_a', '--json']]])
+    })
+
+    it.each([
+      ['Orca did not navigate', switched(false)],
+      ['navigated is not a boolean', switched('true')],
+      ['the answer carries no focus', envelope({})]
+    ])('reports no navigation when %s', async (_case, stdout) => {
+      expect(await new OrcaTerminals(vi.fn().mockResolvedValue(stdout)).focus('term_a')).toBe(false)
+    })
+
+    it('throws when Orca refuses the switch or answers with non-JSON', async () => {
+      const refused = JSON.stringify({ ok: false, error: { code: 'terminal_exited' } })
+      await expect(
+        new OrcaTerminals(vi.fn().mockResolvedValue(refused)).focus('term_a')
+      ).rejects.toThrow()
+      await expect(
+        new OrcaTerminals(vi.fn().mockResolvedValue('boom')).focus('term_a')
+      ).rejects.toThrow()
+    })
+  })
+
   it('throws when Orca answers ok:false or with non-JSON', async () => {
     await expect(
       new OrcaTerminals(vi.fn().mockResolvedValue(JSON.stringify({ ok: false }))).screen('t')

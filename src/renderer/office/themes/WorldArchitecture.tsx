@@ -3,7 +3,7 @@ import { Batch, Box, Lantern } from './primitives'
 import { towerLayout } from './layout'
 import type { ThemePalette, TowerProps } from './types'
 
-export function Roof({ width, palette }: { width: number; palette: ThemePalette }) {
+function Roof({ width, palette }: { width: number; palette: ThemePalette }) {
   const strips = [-1, 1].flatMap((side) =>
     [0, 1, 2].map((step) => ({
       x: 0,

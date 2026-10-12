@@ -1,4 +1,7 @@
 import type { FeedMessage, OfficeSnapshot, SessionRef, SourceHealth } from '../shared/office/types'
+import { quietFor } from './liveness'
+
+const DONE_BADGE_MS = 120_000
 
 export interface IngestBatch {
   now: number
@@ -13,12 +16,13 @@ export function reduce(prev: OfficeSnapshot, batch: IngestBatch): OfficeSnapshot
   const sessions = new Map<string, SessionRef>()
   for (const session of batch.sessions) {
     const old = previous.get(session.key)
+    const quietMs = quietFor(batch.now, session.updatedAtMs)
     const recentlyFinished =
       session.activity === 'idle' &&
       old &&
       (old.activity !== 'idle' || old.attention === 'done') &&
-      batch.now - session.updatedAtMs >= 0 &&
-      batch.now - session.updatedAtMs < 120000
+      quietMs !== null &&
+      quietMs < DONE_BADGE_MS
     sessions.set(
       session.key,
       recentlyFinished && session.attention === 'none'
@@ -33,7 +37,11 @@ export function reduce(prev: OfficeSnapshot, batch: IngestBatch): OfficeSnapshot
     sources: batch.sources.map((source) => ({ ...source }))
   }
 }
-export function diff(prev: OfficeSnapshot, next: OfficeSnapshot, seq: number): FeedMessage {
+export function diff(
+  prev: OfficeSnapshot,
+  next: OfficeSnapshot,
+  seq: number
+): Extract<FeedMessage, { type: 'patch' }> {
   const old = new Map(prev.sessions.map((session) => [session.key, JSON.stringify(session)]))
   const keys = new Set(next.sessions.map((session) => session.key))
   return {

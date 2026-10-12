@@ -23,6 +23,13 @@ import { validateConfiguration } from 'app-builder-lib/out/util/config/config'
 import type { Configuration } from 'app-builder-lib'
 import { DebugLogger } from 'builder-util'
 
+describe('electron-builder files', () => {
+  it('leaves the standalone web bundle out of the app package', async () => {
+    const config = await readFile(resolve(process.cwd(), 'electron-builder.yml'), 'utf-8')
+    expect(config).toMatch(/\nfiles:\n(?:[ \t]+- .*\n)*[ \t]+- '!out\/office-web\/\*\*\/\*'\n/)
+  })
+})
+
 describe('platform hardening integration', () => {
   it.each(['src/main/index.ts', 'src/main/tray.ts'])('uses the factory in %s', async (path) => {
     const source = await readFile(resolve(process.cwd(), path), 'utf-8')

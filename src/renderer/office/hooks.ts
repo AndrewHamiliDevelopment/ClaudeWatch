@@ -1,6 +1,18 @@
 import { useCallback, useEffect, useState } from 'react'
 
-import { listThemes, themeForTeam } from './themes/registry'
+import { readStored, writeStored } from '../office-live/browser-storage'
+import {
+  countThemeChoices,
+  everyOfficeNotice,
+  officeThemes,
+  resolveTheme,
+  themeChangeNotice,
+  useThemeAssignments,
+  type ThemeTarget
+} from './logic/office-themes'
+import type { ZoneGeometry } from './scene-model'
+import { getTheme, listThemes, themeForTeam } from './themes/registry'
+import type { OfficeTheme } from './themes/types'
 
 const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)'
 
@@ -18,43 +30,80 @@ export function usePrefersReducedMotion(): boolean {
   return isReduced
 }
 
-export function useNow(intervalMs: number): number {
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), intervalMs)
-    return () => clearInterval(timer)
-  }, [intervalMs])
-  return now
+const THEME_STORAGE_KEY = 'claudewatch.office.theme'
+const NOTICE_MS = 8000
+
+function themeAfter(themeId: string): OfficeTheme {
+  const themes = listThemes()
+  return themes[(themes.findIndex((candidate) => candidate.id === themeId) + 1) % themes.length]
 }
 
-const THEME_STORAGE_KEY = 'claudewatch.office.theme'
+// A project target carries its company's key too, so the project key decides which it is.
+function assignTheme(target: ThemeTarget, themeId: string | null): void {
+  if (target.projectKey) {
+    if (themeId) officeThemes.setProjectTheme(target.projectKey, themeId)
+    else officeThemes.clearProjectTheme(target.projectKey)
+  } else if (target.companyKey) {
+    if (themeId) officeThemes.setCompanyTheme(target.companyKey, themeId)
+    else officeThemes.clearCompanyTheme(target.companyKey)
+  }
+}
 
-export function useOfficeTheme() {
+// `theme` is the floor's theme, which an office without a choice of its own follows. Every
+// change, by any route, leaves a notice naming what changed.
+export function useOfficeTheme(focusedZone?: ZoneGeometry) {
+  const assignments = useThemeAssignments()
   const [hasChosenTheme, setHasChosenTheme] = useState(false)
+  const [notice, setNotice] = useState('')
   const [theme, setTheme] = useState(() => {
-    try {
-      const stored = localStorage.getItem(THEME_STORAGE_KEY)
-      return listThemes().find((candidate) => candidate.id === stored) ?? themeForTeam()
-    } catch {
-      return themeForTeam()
-    }
+    const stored = readStored(THEME_STORAGE_KEY)
+    return listThemes().find((candidate) => candidate.id === stored) ?? themeForTeam()
   })
   useEffect(() => {
     if (!hasChosenTheme) return
-    try {
-      localStorage.setItem(THEME_STORAGE_KEY, theme.id)
-    } catch {
-      // A locked-down storage backend must not disable the office controls.
-    }
+    writeStored(THEME_STORAGE_KEY, theme.id)
   }, [theme.id, hasChosenTheme])
+  useEffect(() => {
+    if (!notice) return
+    const timer = setTimeout(() => setNotice(''), NOTICE_MS)
+    return () => clearTimeout(timer)
+  }, [notice])
+
+  // A null theme puts a company or project back to following its parent.
+  const chooseTheme = useCallback(
+    (target: ThemeTarget, themeId: string | null) => {
+      if (target.projectKey || target.companyKey) {
+        assignTheme(target, themeId)
+        const resolved = resolveTheme(target, officeThemes.getAssignments(), theme.id)
+        return setNotice(themeChangeNotice(target, getTheme(resolved).label, themeId === null))
+      }
+      if (!themeId) return
+      const removedCount = countThemeChoices(officeThemes.getAssignments())
+      officeThemes.clearAll()
+      setHasChosenTheme(true)
+      setTheme(getTheme(themeId))
+      setNotice(everyOfficeNotice(getTheme(themeId).label, removedCount))
+    },
+    [theme.id]
+  )
+
+  const zoneThemeId = focusedZone ? resolveTheme(focusedZone, assignments, theme.id) : null
+  // T changes the office the camera last flew to, and the floor default before any flight.
   const cycleTheme = useCallback(() => {
+    if (focusedZone && zoneThemeId) return chooseTheme(focusedZone, themeAfter(zoneThemeId).id)
+    const next = themeAfter(theme.id)
     setHasChosenTheme(true)
-    setTheme((current) => {
-      const themes = listThemes()
-      return themes[
-        (themes.findIndex((candidate) => candidate.id === current.id) + 1) % themes.length
-      ]
-    })
-  }, [])
-  return { theme, cycleTheme }
+    setTheme(next)
+    setNotice(`The floor default is now ${next.label}. Offices with their own theme keep it.`)
+  }, [focusedZone, zoneThemeId, chooseTheme, theme.id])
+  const dismissNotice = useCallback(() => setNotice(''), [])
+
+  return {
+    theme,
+    chooseTheme,
+    cycleTheme,
+    cycleScope: focusedZone?.label ?? null,
+    notice,
+    dismissNotice
+  }
 }

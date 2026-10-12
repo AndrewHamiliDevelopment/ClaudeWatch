@@ -14,7 +14,7 @@ function controllableFeed() {
       push = listener
       return () => undefined
     },
-    jump: vi.fn(),
+    focus: vi.fn().mockResolvedValue({ success: true, target: 'pane' }),
     send: vi.fn().mockResolvedValue({ success: true }),
     respond: vi.fn().mockResolvedValue({ success: true }),
     peek: vi.fn().mockResolvedValue({ success: true, lines: [] }),
@@ -107,8 +107,8 @@ describe('OfficeApp', () => {
     push(busyFrame)
     expect(screen.getByText(/3D view is unavailable/i)).toBeInTheDocument()
     const table = screen.getByRole('table', { name: /agents by company and project/i })
-    expect(within(table).getByRole('button', { name: /office renderer/i })).toBeInTheDocument()
-    expect(within(table).getByRole('button', { name: /Explore/ })).toBeInTheDocument()
+    expect(within(table).getByRole('button', { name: /^office renderer/i })).toBeInTheDocument()
+    expect(within(table).getByRole('button', { name: /^Explore/ })).toBeInTheDocument()
   })
 
   it('lists waiting sessions in the attention queue and announces them', () => {
@@ -124,7 +124,7 @@ describe('OfficeApp', () => {
     )
   })
 
-  it('opens the inspector for a selected agent and jumps to its terminal', () => {
+  it('opens the inspector for a selected agent and focuses its terminal', () => {
     const { feed, push } = controllableFeed()
     render(<OfficeApp feed={feed} />)
     push(busyFrame)
@@ -134,9 +134,9 @@ describe('OfficeApp', () => {
     expect(within(inspector).getByText('Claude')).toBeInTheDocument()
     expect(within(inspector).getByText('Edit')).toBeInTheDocument()
     expect(within(inspector).getByText('2:05')).toBeInTheDocument()
-    expect(within(inspector).getByText('1')).toBeInTheDocument()
-    fireEvent.click(within(inspector).getByRole('button', { name: 'Jump to terminal' }))
-    expect(feed.jump).toHaveBeenCalledWith('claude:a')
+    expect(within(inspector).getByText('1 active')).toBeInTheDocument()
+    fireEvent.click(within(inspector).getByRole('button', { name: /^Focus terminal/ }))
+    expect(feed.focus).toHaveBeenCalledWith('claude:a')
   })
 
   it('works from the keyboard: N opens the next waiting session', () => {

@@ -1,5 +1,8 @@
 import { brassWorkshop, neoEdoSteam } from './builtins'
-import type { OfficeTheme } from './types'
+import { orbitalGarrison } from './orbital-garrison'
+import { quietGrove } from './quiet-grove'
+import type { OfficeTheme, RosterAgent, RosterEntry } from './types'
+import { violetCourt } from './violet-court'
 
 export const DEFAULT_THEME_ID = 'neo-edo-steam'
 const themes = new Map<string, OfficeTheme>()
@@ -11,6 +14,9 @@ export function registerTheme(theme: OfficeTheme): void {
 
 registerTheme(neoEdoSteam)
 registerTheme(brassWorkshop)
+registerTheme(violetCourt)
+registerTheme(orbitalGarrison)
+registerTheme(quietGrove)
 
 export function getTheme(id: string): OfficeTheme {
   return themes.get(id) ?? neoEdoSteam
@@ -20,6 +26,16 @@ export function listThemes(): OfficeTheme[] {
   return Array.from(themes.values())
 }
 
-export function themeForTeam(_teamId?: string): OfficeTheme {
+export function themeForTeam(): OfficeTheme {
   return getTheme(DEFAULT_THEME_ID)
+}
+
+// The character an agent plays in a theme, or null where the theme has no cast.
+export function themeCharacter(
+  themeId: string,
+  agent: RosterAgent,
+  bay: number
+): RosterEntry | null {
+  const roster = getTheme(themeId).roster
+  return roster?.entries()[roster.indexFor(agent, bay)] ?? null
 }
