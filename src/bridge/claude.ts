@@ -1,6 +1,6 @@
-import { basename, dirname } from 'node:path'
+import { basename } from 'node:path'
 import type { SessionRef, SubagentRef } from '../shared/office/types'
-import { projectKey } from '../shared/office/project-key'
+import { placementOf } from './project-root'
 import type { RegistryEntry } from './registry'
 import type { TranscriptState } from './transcript-tail'
 
@@ -22,12 +22,7 @@ export function sessionFromRegistry(
     pid: entry.pid,
     name: entry.name || basename(entry.cwd),
     cwd: entry.cwd,
-    projectKey: projectKey(root),
-    projectLabel: basename(root),
-    projectRoot: root,
-    companyKey: projectKey(dirname(root)),
-    companyLabel: basename(dirname(root)),
-    worktree,
+    ...placementOf({ root, worktree }),
     host: 'terminal',
     orcaPaneKey: null,
     activity:

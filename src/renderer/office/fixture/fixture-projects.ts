@@ -158,7 +158,8 @@ export const PROJECTS: readonly FixtureProject[] = [
         period: 4,
         offset: 1,
         attentionScript: ['question', 'none', 'none']
-      }
+      },
+      { name: 'release notes', provider: 'opencode', period: 4, offset: 3 }
     ]
   }
 ]

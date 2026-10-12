@@ -29,3 +29,15 @@ export function parseProcessTable(output: string): ProcessRow[] {
 
 export const readProcessTable = (io: BridgeIo): Promise<ProcessRow[]> =>
   io.exec('/bin/ps', PROCESS_TABLE_ARGS).then(parseProcessTable)
+
+// The folder a process runs in; undefined when `lsof` names none.
+export async function readWorkingFolder(io: BridgeIo, pid: number): Promise<string | undefined> {
+  const output = await io.exec('/usr/sbin/lsof', ['-a', '-p', String(pid), '-d', 'cwd', '-Fn'])
+  return output
+    .split('\n')
+    .find((line) => line.startsWith('n/'))
+    ?.slice(1)
+}
+
+// An agent bundled in an app (ChatGPT, Orca helpers) runs from inside the bundle; not a session.
+export const isInsideAppBundle = (folder: string): boolean => /\.app\/Contents(\/|$)/.test(folder)

@@ -20,7 +20,8 @@ export const quietGrove: OfficeTheme = {
     Model: GroveSpirit,
     skins: {
       claude: { label: 'Keepers', body: GROVE.clay, trim: GROVE.paper, eye: GROVE.lumen },
-      codex: { label: 'Helpers', body: GROVE.stone, trim: GROVE.pond, eye: GROVE.pond }
+      codex: { label: 'Helpers', body: GROVE.stone, trim: GROVE.pond, eye: GROVE.pond },
+      opencode: { label: 'Wanderers', body: GROVE.moss, trim: GROVE.timber, eye: GROVE.fern }
     }
   },
   kit: {

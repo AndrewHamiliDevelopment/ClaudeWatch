@@ -1,4 +1,4 @@
-import { basename, dirname } from 'node:path'
+import { basename } from 'node:path'
 import type {
   AgentActivity,
   AgentAttention,
@@ -7,12 +7,16 @@ import type {
   SourceHealth
 } from '../shared/office/types'
 import { type CodexTotal, codexTotalOf } from '../shared/accounts'
-import { projectKey } from '../shared/office/project-key'
 import { type BridgeIo, isMissing, jsonObject, object } from './io'
-import { resolveProject } from './project-root'
+import { placementOf, resolveProject } from './project-root'
 import { findRollouts } from './codex-rollouts'
 import { parseCodexUsage } from './codex-usage'
-import { type ProcessRow, readProcessTable } from './process-table'
+import {
+  isInsideAppBundle,
+  type ProcessRow,
+  readProcessTable,
+  readWorkingFolder
+} from './process-table'
 
 export function codexProcesses(rows: ProcessRow[]): { pid: number; startedAtMs: number }[] {
   return rows
@@ -102,22 +106,10 @@ export async function collectCodex(
         const identity = `${process.pid}:${process.startedAtMs}`
         let cwd = folders.get(identity)
         if (!cwd) {
-          const cwdOutput = await io.exec('/usr/sbin/lsof', [
-            '-a',
-            '-p',
-            String(process.pid),
-            '-d',
-            'cwd',
-            '-Fn'
-          ])
-          cwd = cwdOutput
-            .split('\n')
-            .find((line) => line.startsWith('n/'))
-            ?.slice(1)
+          cwd = await readWorkingFolder(io, process.pid)
           if (cwd) folders.set(identity, cwd)
         }
-        // Codex bundled in an app (ChatGPT, Orca helpers) runs from inside the bundle; not a session.
-        if (!cwd || /\.app\/Contents(\/|$)/.test(cwd)) continue
+        if (!cwd || isInsideAppBundle(cwd)) continue
         const rollout = rollouts.find((item) => item.cwd === cwd && !used.has(item.id))
         if (rollout) used.add(rollout.id)
         const id = rollout?.id ?? `pid-${process.pid}-${process.startedAtMs}`
@@ -154,12 +146,7 @@ export async function collectCodex(
           pid: process.pid,
           name: basename(cwd),
           cwd,
-          projectKey: projectKey(project.root),
-          projectLabel: basename(project.root),
-          projectRoot: project.root,
-          companyKey: projectKey(dirname(project.root)),
-          companyLabel: basename(dirname(project.root)),
-          worktree: project.worktree,
+          ...placementOf(project),
           host: 'terminal',
           orcaPaneKey: null,
           ...state,

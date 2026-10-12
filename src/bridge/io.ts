@@ -1,8 +1,15 @@
 import { execFile } from 'node:child_process'
 import { open, readdir, realpath, stat } from 'node:fs/promises'
+import { basename } from 'node:path'
 import { isJsonObject } from '../shared/json-object'
 import { assertOrcaTrusted, ORCA_CLI } from '../shared/orca-bundle'
 import { PARSED_OUTPUT_ENV } from '../shared/ps'
+import {
+  OPENCODE_STATEMENTS,
+  OpencodeDbError,
+  type OpencodeQuery,
+  readOpencodeDb
+} from './opencode-db'
 
 interface FileInfo {
   directory: boolean
@@ -22,6 +29,8 @@ export interface BridgeIo {
   list(path: string): Promise<string[]>
   stat(path: string): Promise<FileInfo>
   exec(file: string, args: string[]): Promise<string>
+  // OpenCode's session database, read-only, through the fixed statements and nothing else.
+  readOpencode<Result>(path: string, read: (query: OpencodeQuery) => Result): Promise<Result>
 }
 
 export function isMissing(error: unknown): boolean {
@@ -100,6 +109,19 @@ const guarded =
     return read(target, ...rest)
   }
 
+// The one SQLite file the bridge opens. Its neighbours auth.json and mcp-auth.json are refused
+// above like any credential store; the statement is picked by name from a fixed set.
+const OPENCODE_DATABASE = 'opencode.db'
+function readOpencode<Result>(target: string, read: (query: OpencodeQuery) => Result): Result {
+  if (basename(target) !== OPENCODE_DATABASE) throw forbidden('database')
+  return readOpencodeDb(target, (run) =>
+    read((statement, ...values) => {
+      if (!Object.hasOwn(OPENCODE_STATEMENTS, statement)) throw forbidden('statement')
+      return run(statement, ...values)
+    })
+  )
+}
+
 // Rosters, registry entries and agent metadata are a few kilobytes. The size is checked on
 // the open file, so a file that grows afterwards cannot be read past it.
 const MAX_WHOLE_FILE_BYTES = 1024 * 1024
@@ -141,6 +163,13 @@ export const systemIo: BridgeIo = {
         }
       )
     })
+  },
+  readOpencode: async (path, read) => {
+    try {
+      return await guarded(async (target: string) => readOpencode(target, read))(path)
+    } catch (error) {
+      throw isMissing(error) ? new OpencodeDbError('missing') : error
+    }
   }
 }
 

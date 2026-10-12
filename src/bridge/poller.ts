@@ -11,6 +11,7 @@ import type { FeedMessage, OfficeSnapshot } from '../shared/office/types'
 import { type BridgeIo, systemIo } from './io'
 import { type ClaudeBatch, collectClaude } from './registry'
 import { type CodexBatch, collectCodex } from './codex'
+import { collectOpencode } from './opencode'
 import { claimPanes, OrcaSource } from './orca'
 import { type ProcessRow, readProcessTable } from './process-table'
 import { diff, emptySnapshot, reduce } from './reducer'
@@ -22,6 +23,8 @@ export interface PollerOptions {
   io?: BridgeIo
   claudeRoots?: string[]
   codexRoot?: string
+  // OpenCode's data folder, holding its session database.
+  opencodeRoot?: string
   now?: () => number
   // Hears the tokens every tick added, line by line, for whoever attributes them to an account.
   onUsage?: (deltas: UsageDelta[]) => void
@@ -47,6 +50,7 @@ export class BridgePoller {
   private readonly postedCodex = new Map<string, string>()
   private readonly roots: string[]
   private readonly codexRoot: string
+  private readonly opencodeRoot: string
   private readonly now: () => number
   private readonly onUsage: PollerOptions['onUsage']
   private readonly onCodexTotals: PollerOptions['onCodexTotals']
@@ -59,6 +63,7 @@ export class BridgePoller {
     this.usage = new UsageTracker(this.io)
     this.roots = options.claudeRoots ?? [join(homedir(), '.claude')]
     this.codexRoot = options.codexRoot ?? join(homedir(), '.codex')
+    this.opencodeRoot = options.opencodeRoot ?? join(homedir(), '.local/share/opencode')
     this.now = options.now ?? Date.now
     this.onUsage = options.onUsage
     this.onCodexTotals = options.onCodexTotals
@@ -77,29 +82,37 @@ export class BridgePoller {
   }
   private async ingest(): Promise<OfficeSnapshot> {
     const now = this.now()
-    // One process table, read and parsed once, serves both sources: it is the tick's most
+    // One process table, read and parsed once, serves every source: it is the tick's most
     // expensive read.
     let processTable: Promise<ProcessRow[]> | undefined
     const readProcesses = (): Promise<ProcessRow[]> => (processTable ??= readProcessTable(this.io))
-    const [claude, codex, orca] = await Promise.all([
+    const [claude, codex, opencode, orca] = await Promise.all([
       collectClaude(this.roots, this.io, now, this.teammates, readProcesses),
       collectCodex(this.codexRoot, this.io, readProcesses, this.derivesAccounts, now),
+      collectOpencode(this.opencodeRoot, this.io, readProcesses, now),
       this.orca.poll(now)
     ])
     // The first snapshot goes out with usage unknown, so no window waits on a first scan: that
     // scan reads nothing, and only notes the transcripts a session leaving before the next had.
     await this.scanUsage(claude, now, this.snapshot.rev > 0 ? undefined : 0)
-    this.orca.prune(claude.sessions)
+    const paneHolders = [...claude.sessions, ...opencode.sessions]
+    this.orca.prune(paneHolders)
     const enriched = claimPanes(
-      await Promise.all(claude.sessions.map((session) => this.orca.enrich(session, now)))
+      await Promise.all(paneHolders.map((session) => this.orca.enrich(session, now)))
     )
-    const sessions = [...enriched.map((session) => this.usage.fill(session)), ...codex.sessions]
+    // Only Claude's tokens are counted from transcripts; the others carry their own totals.
+    const sessions = [
+      ...enriched.map((session) =>
+        session.provider === 'claude' ? this.usage.fill(session) : session
+      ),
+      ...codex.sessions
+    ]
     this.reportCodex(codex)
     this.throttle.prune(new Set(sessions.map((session) => session.key)))
     this.snapshot = reduce(this.snapshot, {
       now,
       sessions: sessions.map((session) => this.throttle.apply(session, now)),
-      sources: [...claude.sources, ...codex.sources, orca, this.usage.health()]
+      sources: [...claude.sources, ...codex.sources, ...opencode.sources, orca, this.usage.health()]
     })
     return this.snapshot
   }

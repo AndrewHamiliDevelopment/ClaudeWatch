@@ -92,9 +92,13 @@ function usageFor(session: FixtureSession, index: number, tick: number): Session
     own: splitTokens(total - crewTotal),
     subagents: splitTokens(crewTotal),
     spawned: hasCrew ? 8 + ((index * 5 + session.offset) % 25) : 0,
-    contextTokens: isCodex
-      ? 90_000 + ((index * 41_000) % 160_000)
-      : 225_000 + ((index * 97_000 + session.offset * 53_000) % 545_000),
+    // OpenCode's database gives a running total and no window.
+    contextTokens:
+      session.provider === 'opencode'
+        ? null
+        : isCodex
+          ? 90_000 + ((index * 41_000) % 160_000)
+          : 225_000 + ((index * 97_000 + session.offset * 53_000) % 545_000),
     contextLimit: isCodex ? CODEX_CONTEXT_LIMIT : null
   }
 }

@@ -41,6 +41,12 @@ export const orbitalGarrison: OfficeTheme = {
         body: GARRISON.orange,
         trim: GARRISON.white,
         eye: GARRISON.ice
+      },
+      opencode: {
+        label: 'Signal Corps',
+        body: GARRISON.navy,
+        trim: GARRISON.steel,
+        eye: GARRISON.white
       }
     }
   },

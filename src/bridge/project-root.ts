@@ -1,4 +1,6 @@
-import { dirname, join, resolve } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
+import { projectKey } from '../shared/office/project-key'
+import type { SessionRef } from '../shared/office/types'
 import { type BridgeIo, isMissing } from './io'
 
 const COMMONDIR_MAX_BYTES = 1024
@@ -14,6 +16,22 @@ async function isDirectory(path: string, io: BridgeIo): Promise<boolean> {
 interface Project {
   root: string
   worktree: string | null
+}
+
+type Placement = Pick<
+  SessionRef,
+  'projectKey' | 'projectLabel' | 'projectRoot' | 'companyKey' | 'companyLabel' | 'worktree'
+>
+// The project office and the company a session belongs to: the company is the folder holding the project.
+export function placementOf({ root, worktree }: Project): Placement {
+  return {
+    projectKey: projectKey(root),
+    projectLabel: basename(root),
+    projectRoot: root,
+    companyKey: projectKey(dirname(root)),
+    companyLabel: basename(dirname(root)),
+    worktree
+  }
 }
 
 const PROJECT_TTL_MS = 60_000

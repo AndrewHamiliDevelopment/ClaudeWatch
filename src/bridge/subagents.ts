@@ -12,6 +12,8 @@ export interface AgentFile {
 // subagents/agent-<id>.jsonl, and subagents/workflows/<wf>/agent-<id>.jsonl for workflow agents.
 const AGENT_TRANSCRIPT = /^agent-([\w-]+)\.jsonl$/
 const MAX_FOLDER_DEPTH = 3
+// An agent whose record has been quiet this long is taken to have finished.
+export const SUBAGENT_FRESH_MS = 60_000
 
 export async function listAgentFiles(transcript: string, io: BridgeIo): Promise<AgentFile[]> {
   const found: AgentFile[] = []
@@ -48,7 +50,7 @@ export async function liveSubagents(
 ): Promise<SubagentRef[]> {
   const agents: SubagentRef[] = []
   for (const file of files) {
-    if (now - file.mtimeMs >= 60000 || file.mtimeMs > now) continue
+    if (now - file.mtimeMs >= SUBAGENT_FRESH_MS || file.mtimeMs > now) continue
     try {
       const meta = jsonObject(await io.readText(file.path.replace(/\.jsonl$/, '.meta.json')))
       if (isLabel(meta?.agentType))

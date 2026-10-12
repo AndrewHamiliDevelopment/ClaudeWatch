@@ -12,6 +12,7 @@ import type {
   SessionRef,
   SubagentRef
 } from '../shared/office/types'
+import { ORCA_AGENTS, PERMISSION_PROMPT, showsInputLine, visibleLines } from './office-screen'
 import type { AgentCommand, OrcaTerminals, PaneTerminal } from './orca-terminals'
 
 interface OfficeInteractionsDeps {
@@ -38,66 +39,13 @@ export type PaneOwner = Pick<
 >
 
 const MAX_PROMPT_LENGTH = 4000
-const PEEK_LINES = 40
-// Claude Code's permission dialog; respond() sends nothing unless it is on screen.
-const PERMISSION_PROMPT = /Do you want to (proceed|make this edit|create|allow)|❯\s*1\.\s*Yes/
 const DECISION_KEYS: Record<PermissionDecision, string> = { approve: '1', deny: '\u001b' }
-// Claude Code reports 'waiting' only while a dialog covers its prompt (a permission, a picker,
-// an MCP form), never for a turn that merely ended with a question: that one is idle.
-// The rule Claude Code draws directly above and below its input line.
-const RULE = /^─{8,}/
-// Status lines and a task list sit under Claude Code's input line; Codex shows a footer or two.
-const CLAUDE_FOOTER_LINES = 24
-const CODEX_FOOTER_LINES = 4
-// A highlighted row of a picker or dialog, boxed or not.
-const POINTER_ROW = /^[\s│|]*[❯›]\s/
-const AGENT_TITLES: Record<ProviderId, string> = {
+const AGENT_TITLES: Record<AgentCommand, string> = {
   claude: 'New Claude agent',
   codex: 'New Codex agent'
 }
 
-// What Orca calls each provider's agent in a pane.
-const ORCA_AGENTS: Record<ProviderId, readonly string[]> = {
-  claude: ['claude', 'claude-agent-teams'],
-  codex: ['codex']
-}
-
 const fail = (reason: InteractionFailure): InteractionResult => ({ success: false, reason })
-
-// The last PEEK_LINES rendered lines without trailing blanks: what the owner sees in the office.
-function visibleLines(screen: string[]): string[] {
-  let end = screen.length
-  while (end > 0 && !screen[end - 1].trim()) end--
-  return screen.slice(Math.max(0, end - PEEK_LINES), end)
-}
-
-// True only when the bottom of the screen is the agent's own input line, in a shape read off
-// live panes; a dialog, a picker or any screen not recognised is not one, so nothing is typed.
-// Claude Code: `❯` in the first column, alone or before a draft, a rule directly above and below.
-// Codex: `›` in the first column before its placeholder or a draft, never a numbered row, with
-// only indented footer lines under it, one of them the shortcuts hint.
-function showsInputLine(agent: string | null, screen: string[]): boolean {
-  if (ORCA_AGENTS.codex.some((name) => name === agent)) {
-    const at = screen.findLastIndex((line) => /^›\s/.test(line))
-    const footer = screen.slice(at + 1)
-    return (
-      at >= 0 &&
-      !/^›\s*\d+[.)]/.test(screen[at]) &&
-      footer.length <= CODEX_FOOTER_LINES &&
-      footer.every((line) => /^\s{2}\S/.test(line)) &&
-      footer.some((line) => /^\s+\? for shortcuts/.test(line))
-    )
-  }
-  const at = screen.findLastIndex((line) => /^❯(\s|$)/.test(line))
-  const footer = screen.slice(at + 2)
-  return (
-    at > 0 &&
-    RULE.test(screen[at - 1]) &&
-    RULE.test(screen[at + 1] ?? '') &&
-    footer.length <= CLAUDE_FOOTER_LINES &&
-    !footer.some((line) => POINTER_ROW.test(line))
-  )
-}
 
 const fingerprintOf = (lines: string[]): string =>
   createHash('sha256').update(lines.join('\n')).digest('hex')
@@ -128,8 +76,10 @@ export class OfficeInteractions {
     if (!prompt || prompt.length > MAX_PROMPT_LENGTH || !isPrintable(prompt)) {
       return fail('invalid-input')
     }
-    const attention = this.session(sessionKey)?.attention
-    if (needsHuman(attention)) return fail('prompt-on-screen')
+    const session = this.session(sessionKey)
+    // OpenCode's input line has not been read off a live pane, so nothing is typed into one.
+    if (session?.provider === 'opencode') return fail('unsupported-provider')
+    if (needsHuman(session?.attention)) return fail('prompt-on-screen')
     return this.withTerminal(sessionKey, async ({ handle, agent }) => {
       // The snapshot is seconds old and says nothing of a teammate or a Codex agent, so the
       // screen decides. A dialog that opens between this read and the send is not caught.
@@ -188,6 +138,8 @@ export class OfficeInteractions {
   }
 
   async start(projectKey: string, provider: ProviderId): Promise<InteractionResult> {
+    // Starting OpenCode through Orca is unproven, and proving it would open a real session.
+    if (provider === 'opencode') return fail('unsupported-provider')
     if (!Object.hasOwn(AGENT_TITLES, provider)) return fail('invalid-input')
     const anchor = this.deps.snapshot()?.sessions.find((s) => s.projectKey === projectKey)
     if (!anchor) return fail('unknown-session')
