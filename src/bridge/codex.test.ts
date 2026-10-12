@@ -492,3 +492,52 @@ it('shows no hosted thread when no app-server is running', async () => {
   io.exec = vi.fn(async () => '')
   expect((await collectCodex('/codex', io, undefined, false, 1500)).sessions).toEqual([])
 })
+
+it('walks the session folders fully only every 30 s while app-servers run, and follows fresh rollouts between', async () => {
+  const meta = (id: string) =>
+    JSON.stringify({ type: 'session_meta', payload: { id, cwd: '/repo' } })
+  const files: Record<string, string | null> = {
+    '/codex/sessions/2026/05/rollout-old.jsonl': meta('old'),
+    '/codex/sessions/2026/10/rollout-live.jsonl': `${meta('live')}\n`,
+    '/repo/.git': null
+  }
+  const io = fixtureIo(files)
+  let now = 1_000_000
+  const times: Record<string, number> = { live: now - 5_000, old: now - 9_000_000, late: now }
+  const stat = io.stat
+  io.stat = async (path) => {
+    const id = /rollout-(\w+)/.exec(path)?.[1]
+    const info = await stat(path)
+    return id && times[id] !== undefined ? { ...info, mtimeMs: times[id] } : info
+  }
+  io.exec = vi.fn(async (file: string) =>
+    file.endsWith('ps')
+      ? '43 Sat Oct 10 15:29:12 2026 /Applications/Codex.app/codex app-server'
+      : ''
+  )
+  const list = vi.spyOn(io, 'list')
+  await collectCodex('/codex', io, undefined, false, now)
+  const fullWalk = list.mock.calls.length
+  expect(fullWalk).toBeGreaterThan(0)
+
+  // Ten seconds on the live thread opens a shell: seen without listing a folder again.
+  now += 10_000
+  times.live = now - 1_000
+  files['/codex/sessions/2026/10/rollout-live.jsonl'] += activityRecords([
+    { type: 'local_shell_call', call_id: 'c1' }
+  ])
+  const between = await collectCodex('/codex', io, undefined, false, now)
+  expect(list.mock.calls.length).toBe(fullWalk)
+  expect(between.sessions.map((session) => [session.key, session.activity])).toEqual([
+    ['codex:live', 'running']
+  ])
+
+  // A thread started since the last walk appears once the next full walk is due.
+  files['/codex/sessions/2026/10/rollout-late.jsonl'] = meta('late')
+  now += 25_000
+  times.late = now - 1_000
+  times.live = now - 1_000
+  const later = await collectCodex('/codex', io, undefined, false, now)
+  expect(list.mock.calls.length).toBeGreaterThan(fullWalk)
+  expect(later.sessions.map((session) => session.key).sort()).toEqual(['codex:late', 'codex:live'])
+})

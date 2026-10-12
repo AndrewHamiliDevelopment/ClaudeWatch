@@ -53,7 +53,7 @@ const THINKING: OpencodeState = { activity: 'thinking', attention: 'none', curre
 
 // A reply that ended on tool calls is followed by the next step within moments. One that is not
 // was stopped (a refused permission leaves exactly these rows), so it stops counting as work.
-const NEXT_STEP_MS = 60_000
+export const NEXT_STEP_MS = 60_000
 const isRecent = (atMs: unknown, now: number): boolean =>
   typeof atMs === 'number' && now - atMs < NEXT_STEP_MS
 
