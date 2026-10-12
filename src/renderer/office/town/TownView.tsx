@@ -16,6 +16,7 @@ import { townSteamStacks } from './town-ambient'
 import { dressLot, type TownDress } from './town-dress'
 import type { TownLot } from './town-lots'
 import type { TownPlan } from './town-plan'
+import { themeIdsByZone } from './town-trips'
 import type { Town } from './use-town-plan'
 
 // A theme's own town, or one made from its palette until it has drawn one.
@@ -40,11 +41,7 @@ type ThemeFinder = (lot: { id: string; zoneId: string | null }) => string
 
 // The theme of whoever owns a lot or a plot of the belt: its company's, else the floor's.
 function themeFinder({ town, floorTheme, zoneGroups }: TownProps): ThemeFinder {
-  const themeIdByCompany = new Map(
-    zoneGroups.flatMap(({ themeId, companies }) =>
-      companies.map((company) => [company.id, themeId] as const)
-    )
-  )
+  const themeIdByCompany = themeIdsByZone(zoneGroups)
   return (lot) => {
     const companyId = town.owners.get(lot.id) ?? lot.zoneId
     return (companyId === null ? undefined : themeIdByCompany.get(companyId)) ?? floorTheme.id
@@ -66,6 +63,14 @@ function townRevision(props: TownProps, themeIdOf: ThemeFinder): string {
     props.floorTheme.id,
     owned
   ])
+}
+
+// The lot theme lookup and its revision, shared by the buildings and the ambient layer.
+function useLotThemes(props: TownProps): { themeIdOf: ThemeFinder; lotsRevision: string } {
+  const { town, floorTheme, zoneGroups } = props
+  const themeIdOf = useMemo(() => themeFinder(props), [town, floorTheme, zoneGroups])
+  const lotsRevision = useMemo(() => townRevision(props, themeIdOf), [themeIdOf])
+  return { themeIdOf, lotsRevision }
 }
 
 interface DressedLot {
@@ -95,8 +100,7 @@ function dressedTown(plan: TownPlan, themeIdOf: ThemeFinder, revision: string): 
 // The belt has its own batch so that ordinary growth of the plate never rebuilds the town.
 export function TownView(props: TownProps) {
   const { town, floor } = props
-  const themeIdOf = useMemo(() => themeFinder(props), [town, props.floorTheme, props.zoneGroups])
-  const lotsRevision = useMemo(() => townRevision(props, themeIdOf), [themeIdOf])
+  const { themeIdOf, lotsRevision } = useLotThemes(props)
   const beltRevision = useMemo(
     () =>
       JSON.stringify(
@@ -150,8 +154,7 @@ interface TownAmbientProps extends TownProps {
 // Followed frame by frame, so it is kept apart from the buildings, which are placed once.
 export function TownAmbient(props: TownAmbientProps) {
   const { town, floor, share, isReducedMotion } = props
-  const themeIdOf = useMemo(() => themeFinder(props), [town, props.floorTheme, props.zoneGroups])
-  const lotsRevision = useMemo(() => townRevision(props, themeIdOf), [themeIdOf])
+  const { themeIdOf, lotsRevision } = useLotThemes(props)
   return useMemo(() => {
     if (share <= 0) return null
     const byTheme = Map.groupBy(

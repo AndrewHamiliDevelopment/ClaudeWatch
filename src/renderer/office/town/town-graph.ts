@@ -20,6 +20,9 @@ export interface RoadGraph {
   edges: RoadEdge[]
 }
 
+// Roads are axis-aligned, so along one this is the distance.
+export const apart = (a: Point, b: Point): number => Math.abs(a.x - b.x) + Math.abs(a.z - b.z)
+
 // Where the avenue meets the boulevard, in front of the gate: as far as a citizen comes.
 export function gatePlaza(claim: Rect): Point {
   return { x: claim.x - claim.width / 2 + ROAD_WIDTH_M.boulevard / 2, z: 0 }
@@ -50,16 +53,14 @@ export function roadGraph(roads: readonly TownRoad[], claim: Rect): RoadGraph {
     return nodes.length - 1
   }
   const join = (from: number, to: number, roadClass: RoadClass): void => {
-    const length = Math.abs(nodes[to].x - nodes[from].x) + Math.abs(nodes[to].z - nodes[from].z)
-    edges.push({ from, to, class: roadClass, length })
+    edges.push({ from, to, class: roadClass, length: apart(nodes[from], nodes[to]) })
   }
 
   const edge = boundsOfZone(claim)
   const centre = boundsOfZone(grow(claim, -ROAD_WIDTH_M.boulevard / 2))
   const joinedOn: number[] = []
   for (const road of roads.filter((each) => each.class !== 'boulevard')) {
-    const steps =
-      (Math.abs(road.to.x - road.from.x) + Math.abs(road.to.z - road.from.z)) / LOT_PITCH_M
+    const steps = apart(road.from, road.to) / LOT_PITCH_M
     const along = Array.from({ length: steps + 1 }, (_, step) =>
       nodeAt({
         x: road.from.x + ((road.to.x - road.from.x) * step) / steps,

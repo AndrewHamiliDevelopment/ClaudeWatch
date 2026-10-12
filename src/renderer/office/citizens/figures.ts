@@ -10,7 +10,7 @@ import { BRASS_CITIZENS, EDO_CITIZENS } from './figures-edo-brass'
 export { citizenGeometry, type CitizenFigure } from './figure-parts'
 
 // Quiet Grove: walkers on the trails, and the animals that were there first.
-const GROVE_CITIZENS: readonly CitizenFigure[] = [
+export const GROVE_CITIZENS: readonly CitizenFigure[] = [
   {
     name: 'Trail Hiker',
     parts: () => [

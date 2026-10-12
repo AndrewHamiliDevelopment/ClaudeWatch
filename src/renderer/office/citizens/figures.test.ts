@@ -1,6 +1,7 @@
-import { Box3, Mesh } from 'three'
+import { Box3, Mesh, Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
 import { listThemes } from '../themes/registry'
+import { wheel } from './figure-parts'
 import { citizenFigures, citizenGeometry } from './figures'
 
 // A citizen's crown is at 1.3 m, under an agent's 1.65 m; only what it carries (a parasol, a
@@ -44,5 +45,18 @@ describe('citizenFigures', () => {
 
   it('dresses a theme it does not know as the default town', () => {
     expect(citizenFigures('a-plug-in-theme')).toBe(citizenFigures('neo-edo-steam'))
+  })
+})
+
+describe('wheel', () => {
+  it('turns its axle across the figure and centres it where it is put', () => {
+    const { geometry } = wheel('#000000', 0.3, 0.1, [0.5, 0.3, 1])
+    const box = new Box3().setFromObject(new Mesh(geometry))
+    const size = box.getSize(new Vector3())
+    expect(size.x).toBeCloseTo(0.1)
+    expect(size.y).toBeCloseTo(0.6, 1)
+    expect(box.getCenter(new Vector3()).x).toBeCloseTo(0.5)
+    expect(box.min.y).toBeGreaterThan(-1e-6)
+    geometry.dispose()
   })
 })

@@ -48,6 +48,18 @@ export const ball = (color: string, radius: number, at: Triple): FigurePart => (
   color
 })
 
+// A wheel on an axle across the figure: a cylinder stands along y, so it is laid over first.
+export function wheel(
+  color: string,
+  radius: number,
+  width: number,
+  at: Triple,
+  sides = SIDES
+): FigurePart {
+  const geometry = new CylinderGeometry(radius, radius, width, sides)
+  return { geometry: geometry.rotateZ(Math.PI / 2).translate(...at), color }
+}
+
 // A person on foot: robe, coat, head and hair.
 export function person(dress: { robe: string; coat: string; hair: string }): FigurePart[] {
   return [

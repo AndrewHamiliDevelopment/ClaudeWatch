@@ -1,5 +1,4 @@
-import { CylinderGeometry } from 'three'
-import { ball, box, tube, type FigurePart } from '../citizens/figure-parts'
+import { ball, box, tube, wheel, type FigurePart } from '../citizens/figure-parts'
 import type { ThemePalette } from '../themes/types'
 import type { VehicleDesign, VehicleRole } from './town-dress'
 
@@ -12,12 +11,9 @@ const WHEEL_WIDTH = 0.1
 // A wheel on each side of every axle, standing on the ground.
 function wheels(color: string, radius: number, halfTrack: number, axles: number[]): FigurePart[] {
   return axles.flatMap((z) =>
-    [-1, 1].map((side) => ({
-      geometry: new CylinderGeometry(radius, radius, WHEEL_WIDTH, WHEEL_SIDES)
-        .rotateZ(Math.PI / 2)
-        .translate(side * halfTrack, radius, z),
-      color
-    }))
+    [-1, 1].map((side) =>
+      wheel(color, radius, WHEEL_WIDTH, [side * halfTrack, radius, z], WHEEL_SIDES)
+    )
   )
 }
 

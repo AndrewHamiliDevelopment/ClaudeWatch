@@ -1,5 +1,6 @@
 import type { Point } from '../../../office/sim/path'
 import { clamp } from '../../../shared/range'
+import { apart } from './town-graph'
 import type { TownPlan } from './town-plan'
 import type { RoadClass } from './town-roads'
 
@@ -62,9 +63,6 @@ export function roadNet(plan: TownPlan, traveller: Traveller): RoadNet {
   })
   return { plan, ways, waysAt }
 }
-
-// Roads are axis-aligned, so along one this is the distance.
-const apart = (a: Point, b: Point): number => Math.abs(a.x - b.x) + Math.abs(a.z - b.z)
 
 // The nearest point of the net to a place off it: where a door meets its road.
 function attach(net: RoadNet, point: Point): { way: number; at: Point } {

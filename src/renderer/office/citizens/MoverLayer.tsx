@@ -10,7 +10,7 @@ import type { FloorGeometry } from '../scene-model'
 import { getTheme } from '../themes/registry'
 import type { OfficeTheme } from '../themes/types'
 import type { TownPlan } from '../town/town-plan'
-import { townTrips, type MoverKind } from '../town/town-trips'
+import { themeIdsByZone, townTrips, type MoverKind } from '../town/town-trips'
 import { citizenGeometry } from './figure-parts'
 import { moverFigure, moverKinds } from './mover-kinds'
 import { routePose, walkedSec, type RoutePoint } from './route-pose'
@@ -63,16 +63,11 @@ export function MoverLayer(props: MoverLayerProps) {
     .map(({ themeId, companies }) => `${themeId}=${companies.map((zone) => zone.id).join(',')}`)
     .join('|')
   const trips = useMemo(() => {
-    const themeIdByZone = new Map(
-      zoneGroups.flatMap(({ themeId, companies }) =>
-        companies.map((company) => [company.id, themeId] as const)
-      )
-    )
     return townTrips({
       plan,
       owners,
       floorThemeId: floorTheme.id,
-      themeIdByZone,
+      themeIdByZone: themeIdsByZone(zoneGroups),
       detail,
       hasVehicles
     })

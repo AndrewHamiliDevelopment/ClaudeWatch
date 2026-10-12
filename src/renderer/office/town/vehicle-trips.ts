@@ -6,7 +6,7 @@ import type { VehicleRole } from './town-dress'
 import { ROAD_WIDTH_M } from './town-grid'
 import type { TownLot } from './town-lots'
 import type { TownPlan } from './town-plan'
-import { MOVER_COUNTS, type TownInput, type Trip } from './town-trips'
+import { MOVER_COUNTS, themeOfLot, type TownInput, type Trip } from './town-trips'
 import { KEEP_RIGHT_M, closedLoop, lengthOf, secondsAt, sidePath } from './trip-paths'
 
 // The order vehicles are sent out in: a smaller level takes the first of them. The first six
@@ -140,7 +140,7 @@ export function vehicleTrips(town: TownInput, count: number): Trip[] {
     const seed = hashOf(`freight:${nth}`)
     const run = freightRun(yards, seed)
     if (!run) return []
-    const owner = town.themeIdByZone.get(town.owners.get(run.workshop.id) ?? '') ?? floorThemeId
+    const owner = themeOfLot(town, run.workshop.id)
     if (freightThemes.size < freightBudget) freightThemes.add(owner)
     const speed = between(FREIGHT_M_PER_SEC, draw(seed, DRAW.speed))
     return [

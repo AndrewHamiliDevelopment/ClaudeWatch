@@ -25,6 +25,11 @@ const PIECE_ALONG_M = 1.2
 const STAND_DEPTH_M = ROAD_WIDTH_M.boulevard - 0.4
 const STAND_ROLES: readonly GardenRole[] = ['plazaPair', 'seat']
 
+// The avenue's width carried through the claim: the way in to the gate and on east.
+export function campusStreet(claim: Rect): Rect {
+  return { ...claim, z: 0, depth: ROAD_WIDTH_M.avenue }
+}
+
 // The square in front of the gate: across the boulevard and the belt, twice the avenue deep.
 export function plazaSquare(claim: Rect): Rect {
   const west = boundsOfZone(claim).minX

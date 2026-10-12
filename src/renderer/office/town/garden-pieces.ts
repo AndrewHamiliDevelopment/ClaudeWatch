@@ -10,6 +10,7 @@ import {
   type ZoneProp
 } from './town-dress'
 import { box, cylinder, sphere } from '../themes/parts'
+import type { Ground, Side } from './belt-frame'
 import { MIN_BELT_M } from './town-grid'
 import { ZONE_HEIGHT_CAP_M } from './town-zones'
 
@@ -69,6 +70,21 @@ export function gardenPiece(id: string, role: PieceRole, rect: Rect, placing: Pl
     role,
     ...placing
   }
+}
+
+// A piece facing out of its side of the belt, owned by that side's company.
+export function sidePiece(
+  ground: Ground,
+  side: Side,
+  id: string,
+  role: PieceRole,
+  rect: Rect
+): GreenPlot {
+  return gardenPiece(id, role, rect, {
+    facing: side,
+    zoneId: ground.zoneIdOf(side),
+    maxHeight: roomOver(rect, ground.site, ground.promenades)
+  })
 }
 
 // The park's height rule: under the cap, and low enough to hide no office and no promenade.
