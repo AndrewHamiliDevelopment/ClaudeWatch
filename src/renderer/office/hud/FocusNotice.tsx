@@ -2,8 +2,8 @@ import { X } from 'lucide-react'
 import { ICON_BUTTON_CLASS } from '../../components/deck/deck-styles'
 import { Plate } from '../../components/deck/Plate'
 
-// Where Focus terminal landed when it was not the agent's own pane. The live region stays
-// mounted while empty so a screen reader hears the message arrive.
+// One line of what just happened: where Focus terminal landed, or which office changed theme.
+// The live region stays mounted while empty so a screen reader hears the message arrive.
 export function FocusNotice({ message, onDismiss }: { message: string; onDismiss: () => void }) {
   return (
     <div aria-live="polite">
