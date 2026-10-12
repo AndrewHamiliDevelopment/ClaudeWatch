@@ -30,7 +30,7 @@ function crowdedFloor(): FloorGeometry {
       projectLabel: `Project ${index % 10}`
     })
   )
-  return layoutFloor({ floorId: 'fill', label: 'Fill', plate: 1, sessions })
+  return layoutFloor({ sessions })
 }
 
 function named(elements: readonly SceneElement[], name: string): SceneElement[] {

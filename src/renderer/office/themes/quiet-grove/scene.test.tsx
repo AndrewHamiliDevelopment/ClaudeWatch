@@ -43,7 +43,7 @@ function twentyAgents(companyCount: number) {
       projectLabel: `Project ${index % companyCount}`
     })
   )
-  const floor = layoutFloor({ floorId: 'budget', label: 'Budget', plate: 1, sessions })
+  const floor = layoutFloor({ sessions })
   return { floor, agents: agentsForFloor(floor, sessions) }
 }
 
