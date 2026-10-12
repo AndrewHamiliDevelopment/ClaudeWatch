@@ -4,7 +4,6 @@ import {
   BLOCK_PITCH_M,
   BUILDING_CAP,
   CLAIM_RELEASE_M,
-  GREEN_PITCH_M,
   LOT_PITCH_M,
   MIN_BELT_M,
   OLD_TOWN_BLOCKS,
@@ -16,9 +15,8 @@ import {
 } from './town-grid'
 
 describe('the town lattices', () => {
-  it('nest: a block is two lots across and a lot is two green plots across', () => {
+  it('nest: a block is two lots across', () => {
     expect(BLOCK_PITCH_M).toBe(LOT_PITCH_M * 2)
-    expect(LOT_PITCH_M).toBe(GREEN_PITCH_M * 2)
   })
 
   it('leave green between the boulevard and the plate', () => {

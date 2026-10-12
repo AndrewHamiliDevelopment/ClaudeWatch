@@ -10,6 +10,7 @@ import type { TownPlan } from './town-plan'
 import {
   MOVER_COUNTS,
   destinationOf,
+  themeOfLot,
   type Destination,
   type TownInput,
   type Trip
@@ -32,7 +33,7 @@ const OPEN_SAMPLE_M = 0.5
 const DRAW = { speed: 1, away: 2, home: 3, start: 4, trip: 5 }
 
 // Where the avenue meets the boulevard: the paving a citizen may stand on in front of the gate.
-export function plazaOf(claim: Rect): Rect {
+function plazaOf(claim: Rect): Rect {
   return { ...gatePlaza(claim), width: ROAD_WIDTH_M.boulevard, depth: ROAD_WIDTH_M.avenue }
 }
 
@@ -140,14 +141,12 @@ export function citizenTrips(town: TownInput, count: number): Trip[] {
     const destination = destinationOf(seed)
     return { seed, destination, walk: walkOf(ground, seed, destination) }
   })
-  const themeOf = (home: TownLot): string =>
-    town.themeIdByZone.get(town.owners.get(home.id) ?? '') ?? town.floorThemeId
   // Past the budget a theme has no draw left: its streets get the floor's townsfolk.
   const budget = MOVER_COUNTS[town.detail].citizenKinds
   const drawn = [
     ...new Set([
       town.floorThemeId,
-      ...walked.flatMap(({ walk }) => (walk ? [themeOf(walk.home)] : []))
+      ...walked.flatMap(({ walk }) => (walk ? [themeOfLot(town, walk.home.id)] : []))
     ])
   ].slice(0, budget)
   const slots = Math.max(1, Math.min(FIGURES_PER_THEME, Math.floor(budget / drawn.length)))
@@ -155,7 +154,7 @@ export function citizenTrips(town: TownInput, count: number): Trip[] {
 
   return walked.flatMap(({ seed, destination, walk }): Trip[] => {
     if (!walk) return []
-    const owner = themeOf(walk.home)
+    const owner = themeOfLot(town, walk.home.id)
     const themeId = drawn.includes(owner) ? owner : town.floorThemeId
     const rank = countByTheme.get(themeId) ?? 0
     countByTheme.set(themeId, rank + 1)

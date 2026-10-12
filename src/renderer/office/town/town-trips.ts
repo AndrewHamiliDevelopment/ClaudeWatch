@@ -1,4 +1,5 @@
 import type { CitizenRoute } from '../citizens/route-pose'
+import type { ThemeZoneGroup } from '../logic/office-themes'
 import type { QualityLevel } from '../logic/quality'
 import { draw } from '../themes/lot-math'
 import { citizenTrips } from './citizen-trips'
@@ -7,7 +8,7 @@ import type { TownSize } from './town-grid'
 import type { TownPlan } from './town-plan'
 import { vehicleTrips } from './vehicle-trips'
 
-export const DESTINATIONS = ['market', 'entertainment', 'park', 'plaza', 'civic'] as const
+const DESTINATIONS = ['market', 'entertainment', 'park', 'plaza', 'civic'] as const
 export type Destination = (typeof DESTINATIONS)[number]
 export type MoverKind = 'citizen' | VehicleRole
 
@@ -37,6 +38,20 @@ export interface TownInput {
   hasVehicles?: boolean
 }
 
+// A company zone's id to the theme it wears.
+export function themeIdsByZone(groups: readonly ThemeZoneGroup[]): Map<string, string> {
+  return new Map(
+    groups.flatMap(({ themeId, companies }) =>
+      companies.map((company) => [company.id, themeId] as const)
+    )
+  )
+}
+
+// The theme a lot's movers wear: its owning company's, else the floor's.
+export function themeOfLot(town: TownInput, lotId: string): string {
+  return town.themeIdByZone.get(town.owners.get(lotId) ?? '') ?? town.floorThemeId
+}
+
 // How many movers each detail level sends out, and how many instanced draws they may cost.
 export const MOVER_COUNTS: Record<
   QualityLevel,
@@ -49,7 +64,7 @@ export const MOVER_COUNTS: Record<
 
 // A smaller town sends out fewer of the same movers. Seven vehicles still reach the first
 // freight cart, so a village keeps a tram, a cart and a runabout.
-export const SIZE_MOVERS: Record<TownSize, { citizenShare: number; vehicleCap: number }> = {
+const SIZE_MOVERS: Record<TownSize, { citizenShare: number; vehicleCap: number }> = {
   village: { citizenShare: 0.5, vehicleCap: 7 },
   town: { citizenShare: 0.75, vehicleCap: 9 },
   city: { citizenShare: 1, vehicleCap: 12 }

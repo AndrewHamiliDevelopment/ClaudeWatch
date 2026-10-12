@@ -341,6 +341,28 @@ describe('subagents', () => {
     ])
     expect(await liveSubagents(files, io, 62000)).toEqual([])
   })
+  it('shows what a subagent is doing from the open tool at the end of its transcript', async () => {
+    const opened = (name: string) =>
+      JSON.stringify({
+        type: 'assistant',
+        message: { content: [{ type: 'tool_use', id: `t-${name}`, name, input: {} }] }
+      })
+    const meta = JSON.stringify({ agentType: 'ravi' })
+    const io = fixtureIo({
+      '/t/subagents/agent-e.meta.json': meta,
+      '/t/subagents/agent-e.jsonl': opened('Edit'),
+      '/t/subagents/agent-r.meta.json': meta,
+      '/t/subagents/agent-r.jsonl': opened('Read'),
+      '/t/subagents/agent-b.meta.json': meta,
+      '/t/subagents/agent-b.jsonl': opened('Bash')
+    })
+    const files = await listAgentFiles('/t.jsonl', io)
+    expect(await liveSubagents(files, io, 2000)).toEqual([
+      { id: 'b', type: 'ravi', activity: 'running' },
+      { id: 'e', type: 'ravi', activity: 'editing' },
+      { id: 'r', type: 'ravi', activity: 'reading' }
+    ])
+  })
   it('finds workflow agents beside plain ones and skips journals and stray files', async () => {
     const meta = (agentType: string) => JSON.stringify({ agentType })
     const io = fixtureIo({

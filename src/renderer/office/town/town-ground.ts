@@ -2,9 +2,9 @@ import { Color } from 'three'
 import type { Rect } from '../themes/lot-math'
 import { GROUND_Y } from '../themes/surroundings'
 import type { TownDress } from './town-dress'
-import { ROAD_WIDTH_M, SIDEWALK_M } from './town-grid'
+import { SIDEWALK_M } from './town-grid'
 import type { TownPlan } from './town-plan'
-import { plazaSquare } from './town-plaza'
+import { campusStreet, plazaSquare } from './town-plaza'
 import { roadPromenades, type TownRoad } from './town-roads'
 
 // Lowest first: a later layer lies over an earlier one wherever they meet.
@@ -54,12 +54,10 @@ function strip(road: TownRoad, inset: number): Rect {
 // the campus over the part of a block the claim cuts, then roads, walks and the gate plaza.
 export function groundQuads(plan: TownPlan, dress: TownDress): GroundQuad[] {
   const { roads } = dress
-  // The avenue's width carried through the claim: the way in to the gate and on east.
-  const campusStreet: Rect = { ...plan.claim, z: 0, depth: ROAD_WIDTH_M.avenue }
   return [
     ...plan.blocks.map((block) => quad('pad', block, dress.looks[block.zone].ground)),
     quad('campus', plan.claim, dress.looks.park.ground),
-    quad('street', campusStreet, roads.sidewalk),
+    quad('street', campusStreet(plan.claim), roads.sidewalk),
     ...plan.roads.map((road) => quad('sidewalk', strip(road, 0), roads.sidewalk)),
     ...plan.roads
       .filter((road) => road.class !== 'lane')

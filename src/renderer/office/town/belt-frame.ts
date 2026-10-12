@@ -1,5 +1,5 @@
 import type { Bounds } from '../logic/zone-framing'
-import type { Rect, Span } from '../themes/lot-math'
+import { gapBetween, overlaps, type Rect, type Span } from '../themes/lot-math'
 import type { Site } from '../themes/surroundings'
 import { MIN_BELT_M, ROAD_WIDTH_M } from './town-grid'
 
@@ -54,6 +54,20 @@ export function runsOf(side: Side, claim: Bounds): Span[] {
     { min: GATE_BAND_M, max: claim.maxZ - MIN_BELT_M }
   ]
   return runs.filter((run) => run.max > run.min)
+}
+
+// Slot numbers centred on a run's middle, as many each way as `pitch` fits short of its ends.
+export function centredSlots(run: Span, along: number, pitch: number): number[] {
+  const reach = (run.max - run.min) / 2 - RUN_END_CLEAR_M - along / 2
+  const last = Math.floor(reach / pitch)
+  return Array.from({ length: Math.max(0, last * 2 + 1) }, (_, index) => index - last)
+}
+
+// Off the plate and the campus street, with at least `clear` metres to the plate.
+export function isClearOfPlate(rect: Rect, { site, street }: Ground, clear: number): boolean {
+  return (
+    !overlaps(rect, site.plate) && !overlaps(rect, street) && gapBetween(rect, site.plate) >= clear
+  )
 }
 
 // Where a rectangle lies along a side.

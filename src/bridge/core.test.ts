@@ -171,3 +171,15 @@ it('clears failed-tool attention when Claude becomes idle', () => {
     companyLabel: 'company'
   })
 })
+
+it('shows a busy lead with live subagents and no open tool as delegating, not thinking', () => {
+  // Subagents started in the background answer their Agent call at once: the lead then waits.
+  const crew = [{ id: 'a1', type: 'ravi', activity: 'editing' as const }]
+  const busy = { ...registryEntry(), status: 'busy' as const }
+  expect(
+    sessionFromRegistry(busy, { tool: null, error: false }, crew, '/repo', null).activity
+  ).toBe('delegating')
+  expect(sessionFromRegistry(busy, { tool: null, error: false }, [], '/repo', null).activity).toBe(
+    'thinking'
+  )
+})

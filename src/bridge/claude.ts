@@ -31,7 +31,10 @@ export function sessionFromRegistry(
         : transcript.tool
           ? toolActivity(transcript.tool.category)
           : entry.status === 'busy'
-            ? 'thinking'
+            ? // Background subagents answer their Agent call at once: the lead is waiting on them.
+              subagents.length > 0
+              ? 'delegating'
+              : 'thinking'
             : entry.status === 'shell'
               ? 'running'
               : 'idle',

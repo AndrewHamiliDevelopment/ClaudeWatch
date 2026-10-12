@@ -1,7 +1,7 @@
 import { draw, hashOf } from '../themes/lot-math'
 import { MAX_LOT_HEIGHT_M } from '../themes/surroundings'
 
-// `work` is the campus itself, inside the claim; every other zone is a district of the town.
+// The districts of the town outside the campus claim.
 export const TOWN_DISTRICTS = [
   'civic',
   'market',
@@ -11,7 +11,6 @@ export const TOWN_DISTRICTS = [
   'park'
 ] as const
 export type TownDistrict = (typeof TOWN_DISTRICTS)[number]
-export type TownZone = 'work' | TownDistrict
 
 export const ZONE_HEIGHT_CAP_M: Record<TownDistrict, number> = {
   civic: 24,
