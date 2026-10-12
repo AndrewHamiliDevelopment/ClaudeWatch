@@ -1,0 +1,27 @@
+flowchart LR
+  subgraph Before["Before: 2 agents"]
+    B1["Company 63 x 87 m"] --> B2["Project 24 x 56 m"]
+    B2 --> B3["2 desks in use, 30 empty"]
+    B1 --> B4["Floor 138 x 186 m, far plane 200 m"]
+  end
+  subgraph After["After: same 2 agents"]
+    A1["Company fits its offices"] --> A2["Project sized to live sessions"]
+    A1 --> A3["Lounge for finished agents"]
+    A1 --> A4["Themed buildings and props around it"]
+    A4 --> A5["Ground to the horizon"]
+  end
+  Before --> After
+%% ---
+flowchart LR
+  A["A: floor (sim)"] --> C["C: lounge trips (sim)"]
+  A --> D["D: Neo Edo + Brass, poses"]
+  A --> E["E: Violet Court + Quiet Grove"]
+  A --> F["F: Orbital Garrison"]
+  B["B: horizon + surroundings engine"] --> C
+  B --> D
+  B --> E
+  B --> F
+  C --> R["Review, gates, close"]
+  D --> R
+  E --> R
+  F --> R
