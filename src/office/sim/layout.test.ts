@@ -50,6 +50,121 @@ function expectClearLanes(layout: LayoutMap): void {
   }
 }
 
+type Seed = [company: string, project: string, sessions: number][]
+const sessionsOf = (seed: Seed) =>
+  seed.flatMap(([company, project, count]) =>
+    Array.from({ length: count }, (_, seat) => inCompany(company, project, `${seat}`))
+  )
+const workers = (count: number) =>
+  Array.from({ length: count }, (_, id) => ({
+    id: `${id}`,
+    type: 'worker',
+    activity: 'reading' as const
+  }))
+// A session's bay and where its office sits, measured from its company's top-left corner.
+function placeInCompany(layout: LayoutMap, sessionKey: string) {
+  const floor = layout.floors[0]
+  const room = floor.rooms.find((candidate) => candidate.sessionKey === sessionKey)!
+  const company = floor.zones.find((zone) => zone.companyKey === room.companyKey)!
+  return {
+    bay: room.bay,
+    x: room.x - (company.x - company.width / 2),
+    z: room.z - (company.z - company.depth / 2)
+  }
+}
+
+describe("a floor shaped like the owner's: one company of four projects and two of one", () => {
+  const OWNER: Seed = [
+    ['zkidz', '1', 3],
+    ['zkidz', '2', 2],
+    ['zkidz', '3', 1],
+    ['zkidz', '4', 2],
+    ['alpha', '1', 1],
+    ['beta', '1', 1]
+  ]
+  const built = () => buildLayout(sessionsOf(OWNER), undefined, 0)
+  const sizes = (boxes: Box[]) => boxes.map((box) => [box.width, box.depth])
+
+  it('keeps all the company grounds within 1,900 m2', () => {
+    const grounds = built().floors[0].zones.reduce((total, company) => total + area(company), 0)
+    expect(grounds).toBeLessThanOrEqual(1900)
+  })
+  it('uses at least 45% of the grounds for project offices and lounges', () => {
+    const companies = built().floors[0].zones
+    const grounds = companies.reduce((total, company) => total + area(company), 0)
+    const used = companies
+      .flatMap((company) => [...company.children, company.lounge!])
+      .reduce((total, box) => total + area(box), 0)
+    expect(used / grounds).toBeGreaterThanOrEqual(0.45)
+  })
+  it('makes a project as wide as its desk columns, and a one-session one within 9 x 9 m', () => {
+    const [alpha, beta, zkidz] = built().floors[0].zones
+    expect(sizes(zkidz.children)).toEqual([
+      [16, 8],
+      [11, 8],
+      [6, 8],
+      [11, 8]
+    ])
+    expect(sizes([...alpha.children, ...beta.children])).toEqual([
+      [6, 8],
+      [6, 8]
+    ])
+  })
+  it('overlaps nothing and keeps every lane at least 3 m wide', () => {
+    expectClearLanes(built())
+  })
+  it('gives the widest company one side of the street and the two small ones the other', () => {
+    const floor = built().floors[0]
+    const [alpha, beta, zkidz] = floor.zones
+    expect([alpha, beta, zkidz].map((company) => Math.sign(company.z))).toEqual([-1, -1, 1])
+    expect([floor.width, floor.depth]).toEqual([71, 31])
+  })
+  it("keeps a project's place while it and its earlier neighbours stay the same size", () => {
+    const layout = built()
+    const joiners = ['x', 'y'].map((seat) => inCompany('zkidz', '3', seat))
+    const grown = buildLayout([...sessionsOf(OWNER), ...joiners], layout, 1)
+    const moved = (key: string) => placeInCompany(grown, key).x - placeInCompany(layout, key).x
+    for (const live of sessionsOf(OWNER)) {
+      // Two more desk columns in project 3 push only project 4, the one after it.
+      if (live.projectKey === 'p_zkidz_4') expect(moved(live.key)).toBe(10)
+      else expect(placeInCompany(grown, live.key)).toEqual(placeInCompany(layout, live.key))
+    }
+    expectClearLanes(grown)
+  })
+})
+
+it('adds a desk column for each session up to four, then a second row', () => {
+  const project = (count: number) => {
+    const crew = Array.from({ length: count }, (_, seat) => session(`s${seat}`))
+    const { width, depth, capacity } = buildLayout(crew, undefined, 0).floors[0].zones[0]
+      .children[0]
+    return [width, depth, capacity]
+  }
+  expect([1, 2, 3, 4, 5, 8, 9].map(project)).toEqual([
+    [6, 8, 4],
+    [11, 8, 4],
+    [16, 8, 4],
+    [21, 8, 4],
+    [21, 14, 8],
+    [21, 14, 8],
+    [21, 20, 12]
+  ])
+})
+
+it('has no team area without subagents, and one only as large as the overflow needs', () => {
+  const teamFor = (subagents: number) => {
+    const sessions = [{ ...session('a'), subagents: workers(subagents) }]
+    const layout = buildLayout(sessions, undefined, 0)
+    expect(placements(sessions, layout)).toHaveLength(1 + subagents)
+    const team = layout.floors[0].rooms.find((room) => room.kind === 'team')
+    return team && [team.slots.filter((slot) => slot.id !== 'door').length, team.width, team.depth]
+  }
+  expect(teamFor(0)).toBeUndefined()
+  // placements.ts looks the team room up for any subagent, so one seat stays while guests fit.
+  expect(teamFor(2)).toEqual([1, 4, 4])
+  expect(teamFor(7)).toEqual([5, 6, 8])
+})
+
 const many = (count: number) =>
   Array.from({ length: count }, (_, i) => ({
     ...session(`s${String(i).padStart(3, '0')}`, `p_${i % 12}`),
@@ -68,12 +183,12 @@ describe('nested headquarters layout', () => {
     expect(layout.floors[0].zones.flatMap((c) => c.children)).toHaveLength(12)
     expect(layout.floors[0].rooms.filter((r) => r.sessionKey)).toHaveLength(60)
   })
-  it('keeps existing desks and zones fixed across additions, removals and reloads', () => {
+  it('keeps a desk and its place in the company across additions, removals and reloads', () => {
     const saved = buildLayout([session('b')], undefined, 0)
     const before = JSON.stringify(saved)
     const next = buildLayout([session('a'), session('b')], saved, 1)
     expect(next.reservations.b).toEqual(saved.reservations.b)
-    expect(next.floors[0].rooms.find((r) => r.sessionKey === 'b')).toEqual(saved.floors[0].rooms[0])
+    expect(placeInCompany(next, 'b')).toEqual(placeInCompany(saved, 'b'))
     expect(next.floors[0].zones[0].x).toBe(saved.floors[0].zones[0].x)
     expect(JSON.stringify(saved)).toBe(before)
     const removed = buildLayout([session('b')], next, 2)
@@ -81,7 +196,7 @@ describe('nested headquarters layout', () => {
       next.reservations.a
     )
   })
-  it('reserves in steps of four and grows without moving existing offices', () => {
+  it('reserves in steps of four and grows without moving an office inside its company', () => {
     const initial = buildLayout([session('a')], undefined, 0)
     const expanded = buildLayout(
       Array.from({ length: 9 }, (_, i) => session(i ? `b${i}` : 'a')),
@@ -90,9 +205,7 @@ describe('nested headquarters layout', () => {
     )
     expect(initial.floors[0].zones[0].children[0].capacity).toBe(4)
     expect(expanded.floors[0].zones[0].children[0].capacity).toBe(12)
-    expect(expanded.floors[0].rooms.find((r) => r.sessionKey === 'a')).toEqual(
-      initial.floors[0].rooms[0]
-    )
+    expect(placeInCompany(expanded, 'a')).toEqual(placeInCompany(initial, 'a'))
   })
   it('drops a project and a company with their last session, and the floor shrinks', () => {
     const remaining = [session('b', 'p_b')]
@@ -108,14 +221,20 @@ describe('nested headquarters layout', () => {
     expect(empty.floors[0]).toMatchObject({ zones: [], rooms: [], width: 12, depth: 12 })
     expect(empty.reservations).toEqual({})
   })
-  it('closes a row when a session leaves and never moves a desk for an arrival', () => {
+  it('moves a session down only to close a row or a desk column, never for an arrival', () => {
     const bayOf = (layout: LayoutMap) =>
       Object.fromEntries(Object.entries(layout.reservations).map(([key, held]) => [key, held.bay]))
+    // Seven sessions still need both rows, so the freed desk waits for a newcomer.
+    const eight = Array.from({ length: 8 }, (_, seat) => session(`k${seat}`))
+    const seven = buildLayout(eight.slice(1), buildLayout(eight, undefined, 0), 1)
+    expect(bayOf(seven)).toEqual({ k1: 1, k2: 2, k3: 3, k4: 4, k5: 5, k6: 6, k7: 7 })
+    expect(bayOf(buildLayout(eight, seven, 2)).k0).toBe(0)
+
     const five = ['a', 'b', 'c', 'd', 'e'].map((key) => session(key))
     const full = buildLayout(five, undefined, 0)
     expect(bayOf(full)).toEqual({ a: 0, b: 1, c: 2, d: 3, e: 4 })
 
-    // Four sessions need one row: only the one in the second row moves, into the freed bay.
+    // Only the session in the last bay moves, into the freed one, and the second row closes.
     const closed = buildLayout(
       five.filter((s) => s.key !== 'b'),
       full,
@@ -129,9 +248,12 @@ describe('nested headquarters layout', () => {
       closed,
       2
     )
+    // Three sessions in one row: the one in the fourth column moves in so that column closes.
+    expect(bayOf(holed)).toEqual({ a: 0, c: 2, d: 1 })
+    expect(holed.floors[0].zones[0].children[0].width).toBe(16)
+
     const joined = buildLayout([...five.filter((s) => s.key !== 'b'), session('z')], holed, 3)
-    expect(bayOf(joined)).toEqual({ a: 0, c: 2, d: 3, e: 1, z: 4 })
-    expect(bayOf(holed)).toEqual({ a: 0, c: 2, d: 3 })
+    expect(bayOf(joined)).toEqual({ a: 0, c: 2, d: 1, e: 3, z: 4 })
   })
   it('treats a saved order or bay that is not a whole number as never saved', () => {
     const sessions = [session('a'), session('b')]
@@ -159,17 +281,15 @@ describe('nested headquarters layout', () => {
   })
 })
 
-it('keeps projects fixed when a lexically earlier project arrives', () => {
+it('keeps a project in its place when a lexically earlier project arrives', () => {
   const saved = buildLayout([session('z', 'p_z')], undefined, 0)
   const next = buildLayout([session('z', 'p_z'), session('a', 'p_a')], saved, 1)
-  expect(next.floors[0].rooms.find((r) => r.sessionKey === 'z')).toEqual(
-    saved.floors[0].rooms.find((r) => r.sessionKey === 'z')
-  )
+  expect(placeInCompany(next, 'z')).toEqual(placeInCompany(saved, 'z'))
   const projects = next.floors[0].zones[0].children
   expect(projects[0].x === projects[1].x && projects[0].z === projects[1].z).toBe(false)
 })
 
-it('grows a busy project in place without repacking a free neighbouring column', () => {
+it('moves only the projects after a busy one when it grows', () => {
   const sessions = [session('a', 'p_a'), session('b', 'p_b'), session('c', 'p_c')]
   const saved = buildLayout(sessions, undefined, 0)
   const grown = buildLayout(
@@ -177,9 +297,13 @@ it('grows a busy project in place without repacking a free neighbouring column',
     saved,
     1
   )
-  expect(grown.floors[0].rooms.find((r) => r.sessionKey === 'c')).toEqual(
-    saved.floors[0].rooms.find((r) => r.sessionKey === 'c')
-  )
+  expect(placeInCompany(grown, 'a')).toEqual(placeInCompany(saved, 'a'))
+  expect(placeInCompany(grown, 'b')).toEqual(placeInCompany(saved, 'b'))
+  // p_b went from one desk column to four: p_c stands 15 m further along the shelf.
+  expect(placeInCompany(grown, 'c')).toEqual({
+    ...placeInCompany(saved, 'c'),
+    x: placeInCompany(saved, 'c').x + 15
+  })
 })
 
 it('keeps every project inside its company after growth and pruning a slot', () => {
@@ -326,13 +450,13 @@ it('loads a map saved with oversized numbers and brings it out compact', () => {
   expect(layout.reservations.lead.bay).toBe(0)
   expect(liveBays(layout)).toEqual([0, 1])
   expect(Object.keys(layout.reservations).sort()).toEqual(['last', 'lead'])
-  expect(floor.zones[0].children[0]).toMatchObject({ width: 24, depth: 14, capacity: 4 })
+  expect(floor.zones[0].children[0]).toMatchObject({ width: 11, depth: 8, capacity: 4 })
   expect(area(floor.zones[0])).toBeLessThan(63 * 87)
   expect(area(floor)).toBeLessThan(3000)
 })
 
 describe('a seeded floor of three companies, eight projects and twelve sessions', () => {
-  const SEED: [company: string, project: string, sessions: number][] = [
+  const SEED: Seed = [
     ['a', '1', 2],
     ['a', '2', 2],
     ['a', '3', 1],
@@ -342,10 +466,7 @@ describe('a seeded floor of three companies, eight projects and twelve sessions'
     ['c', '1', 2],
     ['c', '2', 1]
   ]
-  const seeded = () =>
-    SEED.flatMap(([company, project, count]) =>
-      Array.from({ length: count }, (_, seat) => inCompany(company, project, `${seat}`))
-    )
+  const seeded = () => sessionsOf(SEED)
   const floorOf = (layout: LayoutMap) => {
     const floor = layout.floors[0]
     const companies = floor.zones
@@ -360,10 +481,14 @@ describe('a seeded floor of three companies, eight projects and twelve sessions'
     expect(floor.rooms.filter((room) => room.kind === 'office')).toHaveLength(12)
   })
 
-  it('covers at least 30% of the floor with project offices and lounges', () => {
-    const { floor, projects, lounges } = floorOf(buildLayout(seeded(), undefined, 0))
+  // Offices sized to their desks are a smaller share of a floor whose lanes stay 3 m wide, so
+  // the share is measured on the grounds and the floor is held to an area.
+  it('uses at least 45% of the grounds and keeps the floor under 3,000 m2', () => {
+    const { floor, companies, projects, lounges } = floorOf(buildLayout(seeded(), undefined, 0))
     const used = [...projects, ...lounges].reduce((total, box) => total + area(box), 0)
-    expect(used / area(floor)).toBeGreaterThanOrEqual(0.3)
+    const grounds = companies.reduce((total, company) => total + area(company), 0)
+    expect(used / grounds).toBeGreaterThanOrEqual(0.45)
+    expect(area(floor)).toBeLessThan(3000)
   })
 
   it('overlaps nothing and keeps every lane at least 3 m wide', () => {
@@ -390,14 +515,22 @@ describe('a seeded floor of three companies, eight projects and twelve sessions'
     expect(buildLayout(seeded(), layout, 1)).toEqual(layout)
   })
 
-  it("moves no other live session's room when one session arrives", () => {
+  it('moves only the project after the one a session joins, and nobody across the street', () => {
     const layout = buildLayout(seeded(), undefined, 0)
     const next = buildLayout([...seeded(), inCompany('b', '2', 'new')], layout, 1)
-    expect(next.floors[0].rooms.some((room) => room.sessionKey === 'b-2-new')).toBe(true)
+    const roomOf = (map: LayoutMap, key: string) =>
+      map.floors[0].rooms.find((room) => room.sessionKey === key)
+    expect(roomOf(next, 'b-2-new')).toBeDefined()
     for (const live of seeded()) {
-      expect(next.floors[0].rooms.find((room) => room.sessionKey === live.key)).toEqual(
-        layout.floors[0].rooms.find((room) => room.sessionKey === live.key)
-      )
+      // Project b-2 gains a desk column, which pushes b-3 along its shelf by 5 m.
+      const shift = live.projectKey === 'p_b_3' ? 5 : 0
+      expect(placeInCompany(next, live.key)).toEqual({
+        ...placeInCompany(layout, live.key),
+        x: placeInCompany(layout, live.key).x + shift
+      })
+      // Company a has the other side of the street to itself.
+      if (live.companyKey === 'c_a')
+        expect(roomOf(next, live.key)).toEqual(roomOf(layout, live.key))
     }
   })
 

@@ -59,8 +59,38 @@ export function bounds(left: number, top: number, width: number, depth: number):
   }
 }
 
-export function teamDepth(seats: number): number {
-  return Math.max(4, Math.ceil(seats / 8) * 2 + 2)
+export interface ProjectPlan {
+  width: number
+  depth: number
+  capacity: number
+  teamSeatsPerRow: number
+}
+
+const DESK_PITCH = 5
+const DESK_ROW_PITCH = 6
+const SEAT_PITCH = 2
+
+function teamSize(seats: number, seatsPerRow: number): { width: number; depth: number } {
+  return {
+    width: Math.min(seats, seatsPerRow) * SEAT_PITCH + 2,
+    depth: Math.ceil(seats / seatsPerRow) * SEAT_PITCH + 2
+  }
+}
+
+// A desk column per session up to four, then further rows. The team area sits under the desks,
+// as wide and deep as its seats only, and is left out when it has none.
+export function planProject(sessionCount: number, teamSeats: number): ProjectPlan {
+  const columns = Math.min(4, sessionCount)
+  const rows = Math.ceil(sessionCount / 4)
+  const teamSeatsPerRow = Math.max(2, Math.floor((columns * DESK_PITCH - 3) / SEAT_PITCH))
+  const desks = { width: columns * DESK_PITCH + 1, depth: rows * DESK_ROW_PITCH + 2 }
+  const team = teamSize(teamSeats, teamSeatsPerRow)
+  return {
+    width: teamSeats ? Math.max(desks.width, team.width + 2) : desks.width,
+    depth: teamSeats ? desks.depth + 2 + team.depth : desks.depth,
+    capacity: rows * 4,
+    teamSeatsPerRow
+  }
 }
 
 export function loungeDepth(seats: number): number {
@@ -87,15 +117,22 @@ export function room(
   sessionKey: string | null,
   label: string,
   worktree: string | null,
-  seats = 0
+  seats = 0,
+  seatsPerRow = 1
 ): RoomLayout {
   const left = project.x - project.width / 2
   const top = project.z - project.depth / 2
   const isTeam = sessionKey === null
   const rows = project.capacity / 4
+  const team = teamSize(seats, seatsPerRow)
   const geometry = isTeam
-    ? bounds(left + 1, top + 3 + rows * 6, 20, teamDepth(seats))
-    : bounds(left + 1 + (bay % 4) * 5, top + 3 + Math.floor(bay / 4) * 6, 4, 4)
+    ? bounds(left + 1, top + 3 + rows * DESK_ROW_PITCH, team.width, team.depth)
+    : bounds(
+        left + 1 + (bay % 4) * DESK_PITCH,
+        top + 3 + Math.floor(bay / 4) * DESK_ROW_PITCH,
+        4,
+        4
+      )
   // Seats face +z, toward the default camera; the scene draws each desk 0.62 m in front of
   // its seat, so every seat keeps that strip clear of walls and of the other seats.
   const slot = (id: string, x: number, z: number): Slot => ({ id, x, z, heading: 0 })
@@ -103,8 +140,8 @@ export function room(
     ? Array.from({ length: seats }, (_, index) =>
         slot(
           `team_seat_${index}`,
-          left + 3 + (index % 8) * 2,
-          geometry.door.z + 2 + Math.floor(index / 8) * 2
+          left + 3 + (index % seatsPerRow) * SEAT_PITCH,
+          geometry.door.z + 2 + Math.floor(index / seatsPerRow) * SEAT_PITCH
         )
       )
     : [
