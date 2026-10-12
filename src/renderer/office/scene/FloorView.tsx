@@ -27,7 +27,10 @@ export function FloorView({
         return (
           <group key={zoneGroup.themeId}>
             {zoneGroup.companies.map((company) => (
-              <kit.CompanyZone key={company.id} zone={company} />
+              <group key={company.id}>
+                <kit.CompanyZone zone={company} />
+                {kit.Lounge && company.lounge && <kit.Lounge lounge={company.lounge} />}
+              </group>
             ))}
             {zoneGroup.projects.map((project) => (
               <kit.ProjectOffice key={project.id} zone={project} />

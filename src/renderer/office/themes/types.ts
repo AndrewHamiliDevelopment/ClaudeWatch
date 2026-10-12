@@ -1,7 +1,13 @@
 import type { ComponentType, RefObject } from 'react'
 import type { Group, Mesh } from 'three'
 import type { AgentView, ProviderId } from '../../../shared/office/types'
-import type { DeskSlot, FloorGeometry, RoomGeometry, ZoneGeometry } from '../scene-model'
+import type {
+  DeskSlot,
+  FloorGeometry,
+  LoungeGeometry,
+  RoomGeometry,
+  ZoneGeometry
+} from '../scene-model'
 import type { WallsMode } from '../logic/room-layout'
 import type { Lot } from './surroundings'
 
@@ -72,6 +78,9 @@ export interface ZoneProps {
 export interface DeskProps extends RoomProps {
   slot: DeskSlot
 }
+export interface LoungeProps {
+  lounge: LoungeGeometry
+}
 // Only the lots this theme must draw: its companies' own, and the far ring for the floor's theme.
 export interface SurroundingsProps {
   floor: FloorGeometry
@@ -111,6 +120,8 @@ interface ZoneKit {
   Desk: ComponentType<DeskProps>
   RoomDressing: ComponentType<RoomProps>
   RoomSign: ComponentType<RoomProps>
+  // A company's place to rest: agents whose turn is done sit at `lounge.seats`.
+  Lounge?: ComponentType<LoungeProps>
   // Buildings and props on the lots around this theme's companies. Static: it is merged once.
   Surroundings?: ComponentType<SurroundingsProps>
   // A theme's moving things. Move them in useFrame and never invalidate: the scene paces frames.
