@@ -55,8 +55,9 @@ function bare(theme: OfficeTheme): OfficeTheme {
   return stripped
 }
 
-// A tree every 6 m with lamps and seats between, round the largest campus these floors make.
-const GARDEN_PIECE_CEILING = 160
+// Two rows of trees every 6 m, with lamps, seats and hedges, round the largest campus these
+// floors make. Instanced: the pieces cost triangles, which are bounded below, not draws.
+const GARDEN_PIECE_CEILING = 240
 
 for (const theme of REAL_THEMES) {
   const unfilled = bare(theme)
