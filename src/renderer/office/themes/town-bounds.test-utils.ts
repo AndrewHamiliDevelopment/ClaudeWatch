@@ -1,9 +1,9 @@
 import { Box3, Color, Euler, Matrix4, Quaternion, Vector3 } from 'three'
 import { expect } from 'vitest'
-import type { CitizenFigure } from '../../citizens/figure-parts'
-import type { ZoneDesign, ZonePlot } from '../../town/town-dress'
-import type { PartSpec } from '../parts'
-import { UNIT_SHAPES } from '../unit-parts'
+import type { CitizenFigure } from '../citizens/figure-parts'
+import type { ZoneDesign, ZonePlot } from '../town/town-dress'
+import type { PartSpec } from './parts'
+import { UNIT_SHAPES } from './unit-parts'
 
 export const EPSILON = 1e-6
 export const TEST_ACCENT = '#12AB34'

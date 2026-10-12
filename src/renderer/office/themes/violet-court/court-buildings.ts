@@ -1,8 +1,6 @@
-import { box, lit, SIDES, type PartSpec, cone, cylinder, sphere } from '../parts'
+import { box, CORNERS, lit, SIDES, type PartSpec, cone, cylinder, sphere } from '../parts'
 import type { BuildingDesign, Plot } from '../lot-kit'
 import { COURT } from './palette'
-
-const CORNERS = SIDES.flatMap((x) => SIDES.map((z) => ({ x, z })))
 
 // A formal garden: a violet lawn crossed by two paths, a fountain and four clipped shrubs.
 function parterre({ width, depth, height }: Plot): PartSpec[] {

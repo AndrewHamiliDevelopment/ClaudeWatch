@@ -1,6 +1,7 @@
 import { COURT_CITIZENS } from '../../citizens/figures-court-garrison'
-import type { TownDress, ZoneProp } from '../../town/town-dress'
+import type { TownDress } from '../../town/town-dress'
 import type { TownDistrict } from '../../town/town-zones'
+import { zonedProps } from '../heritage'
 import { COURT_LOT_KIT } from './court-lots'
 import { COURT } from './palette'
 import { COURT_CIVIC_DESIGNS } from './town-civic'
@@ -21,11 +22,6 @@ const PROP_ZONES: Record<string, readonly TownDistrict[] | undefined> = {
   brazier: ['workshop', 'entertainment']
 }
 
-const COURT_ZONE_PROPS: readonly ZoneProp[] = COURT_LOT_KIT.props.map((prop) => ({
-  ...prop,
-  zones: PROP_ZONES[prop.name] ?? []
-}))
-
 // A palace-and-academy city. Roofs and pads are the court's own colours, one pair to a zone:
 // gold for the crown, crimson for trade, lilac for revels, blue for homes, pewter for the yards.
 export const COURT_TOWN: TownDress = {
@@ -35,7 +31,7 @@ export const COURT_TOWN: TownDress = {
     ...COURT_LEISURE_DESIGNS,
     ...COURT_QUARTER_DESIGNS
   ],
-  props: COURT_ZONE_PROPS,
+  props: zonedProps(COURT_LOT_KIT.props, PROP_ZONES),
   looks: {
     civic: { accent: COURT.gold, ground: '#4D4638' },
     market: { accent: COURT.crimson, ground: '#55303A' },

@@ -35,13 +35,8 @@ export function fixtureLayout(
   return { floors: toFloorGeometry(layout, [...sessions]), agents, layout }
 }
 
-export function layoutFloor(options: {
-  floorId: string
-  label: string
-  plate: number
-  sessions: readonly SessionRef[]
-}): FloorGeometry {
-  return fixtureLayout(options.sessions).floors[0]
+export function layoutFloor({ sessions }: { sessions: readonly SessionRef[] }): FloorGeometry {
+  return fixtureLayout(sessions).floors[0]
 }
 
 export function agentsForFloor(floor: FloorGeometry, sessions: readonly SessionRef[]): AgentView[] {

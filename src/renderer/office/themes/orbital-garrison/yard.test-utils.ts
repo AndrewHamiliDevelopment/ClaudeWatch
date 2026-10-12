@@ -15,7 +15,7 @@ function floorWith(agentCount: number, companyCount: number): FloorGeometry {
       projectLabel: `Project ${index % companyCount}`
     })
   )
-  return layoutFloor({ floorId: 'garrison', label: 'Garrison', plate: 1, sessions })
+  return layoutFloor({ sessions })
 }
 
 // One company, four companies and a wide ten-company floor.

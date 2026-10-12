@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { COURT_CITIZENS } from '../../citizens/figures-court-garrison'
 import { violetCourt } from './index'
 import { COURT_TOWN } from './town'
-import { describeTownDress, heightOf } from './town-dress.test-utils'
+import { describeTownDress, heightOf } from '../town-dress.test-utils'
 
 describeTownDress(violetCourt, COURT_TOWN)
 

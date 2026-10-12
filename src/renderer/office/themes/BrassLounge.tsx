@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import type { LoungeGeometry } from '../scene-model'
 import { BrassBoiler } from './BrassRoomDressing'
 import { firstClear, spotAt, type Footprint } from './lounge-layout'
@@ -99,10 +100,11 @@ export function brassLoungeParts(lounge: LoungeGeometry): PartSpec[] {
 }
 
 export function BrassLounge({ lounge }: LoungeProps) {
-  const { stove } = planCanteen(lounge)
+  const { stove } = useMemo(() => planCanteen(lounge), [lounge])
+  const parts = useMemo(() => brassLoungeParts(lounge), [lounge])
   return (
     <>
-      <Parts parts={brassLoungeParts(lounge)} />
+      <Parts parts={parts} />
       {stove && (
         <group position={[stove.x, 0, stove.z]}>
           <BrassBoiler />

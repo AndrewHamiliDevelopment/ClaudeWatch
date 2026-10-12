@@ -33,6 +33,7 @@ export const lit = (part: PartSpec): PartSpec => ({ ...part, glow: true })
 
 // Mirrors a part across the figure's centre line.
 export const SIDES = [-1, 1] as const
+export const CORNERS = SIDES.flatMap((x) => SIDES.map((z) => ({ x, z })))
 
 export function Parts({ parts }: { parts: readonly PartSpec[] }) {
   return (

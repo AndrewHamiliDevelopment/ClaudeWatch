@@ -1,38 +1,24 @@
 import type { LoungeGeometry } from '../scene-model'
+import { gapBetween, overlaps, type Rect } from './lot-math'
 
-export interface Footprint {
-  x: number
-  z: number
-  width: number
-  depth: number
-}
+// A piece of furniture's footprint on the floor, centred at x and z.
+export type Footprint = Rect
 
 // Kept free around a seat and around the straight walk from the door to it.
 const BODY_CLEAR_M = 0.55
 const WALK_STEPS = 24
 const WALL_GAP_M = 0.15
 
-function gapTo(spot: Footprint, x: number, z: number): number {
-  const dx = Math.max(0, Math.abs(x - spot.x) - spot.width / 2)
-  const dz = Math.max(0, Math.abs(z - spot.z) - spot.depth / 2)
-  return Math.hypot(dx, dz)
-}
-
-function overlaps(a: Footprint, b: Footprint): boolean {
-  return (
-    Math.abs(a.x - b.x) < (a.width + b.width) / 2 && Math.abs(a.z - b.z) < (a.depth + b.depth) / 2
-  )
-}
-
 function isWalkable(lounge: LoungeGeometry, spot: Footprint): boolean {
   return lounge.seats.every((seat) =>
     Array.from({ length: WALK_STEPS + 1 }, (_, step) => step / WALK_STEPS).every(
       (share) =>
-        gapTo(
-          spot,
-          lounge.door.x + (seat.x - lounge.door.x) * share,
-          lounge.door.z + (seat.z - lounge.door.z) * share
-        ) >= BODY_CLEAR_M
+        gapBetween(spot, {
+          x: lounge.door.x + (seat.x - lounge.door.x) * share,
+          z: lounge.door.z + (seat.z - lounge.door.z) * share,
+          width: 0,
+          depth: 0
+        }) >= BODY_CLEAR_M
     )
   )
 }

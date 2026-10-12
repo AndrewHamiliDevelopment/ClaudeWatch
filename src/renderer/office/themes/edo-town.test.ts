@@ -1,4 +1,4 @@
-import { Box3, Color, Euler, Matrix4, Quaternion, Vector3 } from 'three'
+import { Box3, Euler, Matrix4, Quaternion, Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
 import { citizenGeometry } from '../citizens/figure-parts'
 import { BRASS_CITIZENS, EDO_CITIZENS } from '../citizens/figures-edo-brass'
@@ -13,6 +13,8 @@ import { LIVE_FLOORS } from './floors.test-utils'
 import { makeGeometry } from './geometry-audit.test-utils'
 import type { PartSpec } from './parts'
 import type { Vector } from './primitives'
+import { luminance } from './town-bounds.test-utils'
+import { describeTownDress } from './town-dress.test-utils'
 import { UNIT_SHAPES } from './unit-parts'
 
 function boundsOf(parts: readonly PartSpec[]): Box3 {
@@ -54,6 +56,9 @@ const THEMES: readonly (readonly [string, TownDress])[] = [
   ['Neo Edo Steam', EDO_TOWN],
   ['Brass Workshop', BRASS_TOWN]
 ]
+
+// Brass is not yet held to the shared checks: its foundry paints no accent above half height.
+describeTownDress(neoEdoSteam, EDO_TOWN)
 
 describe.each(THEMES)('%s zoned town', (_name, dress) => {
   it('provides two designs per zone, distinct names and the three civic landmarks', () => {
@@ -105,12 +110,8 @@ describe.each(THEMES)('%s zoned town', (_name, dress) => {
     ]) {
       expect(color).toMatch(/^#[0-9A-F]{6}$/i)
     }
-    const lightness = (hex: string): number => {
-      const color = new Color(hex)
-      return color.r * 0.2126 + color.g * 0.7152 + color.b * 0.0722
-    }
-    expect(lightness(dress.roads.sidewalk)).toBeGreaterThan(lightness(dress.roads.carriageway))
-    expect(lightness(dress.roads.promenade)).toBeGreaterThan(lightness(dress.roads.sidewalk))
+    expect(luminance(dress.roads.sidewalk)).toBeGreaterThan(luminance(dress.roads.carriageway))
+    expect(luminance(dress.roads.promenade)).toBeGreaterThan(luminance(dress.roads.sidewalk))
   })
 
   it('tags at least eight props, each contained by its declared size', () => {

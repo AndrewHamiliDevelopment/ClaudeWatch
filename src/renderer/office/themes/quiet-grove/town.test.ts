@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { citizenFigures } from '../../citizens/figures'
-import { describeTownDress, heightOf } from '../violet-court/town-dress.test-utils'
+import { describeTownDress, heightOf } from '../town-dress.test-utils'
 import { quietGrove } from './index'
 import { GROVE } from './palette'
 import { QUIET_GROVE_ID } from './roster'

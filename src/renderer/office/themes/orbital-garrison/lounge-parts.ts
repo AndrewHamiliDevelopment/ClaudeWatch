@@ -10,10 +10,13 @@ const MAT_Y = 0.012
 const BEHIND_SEATS_M = 0.9
 const SIDE_INSET_M = 0.42
 
+const SEAT_M = 0.08
+const POST_M = STOOL_HEIGHT - SEAT_M
+
 function stool(x: number, z: number): PartSpec[] {
   return [
-    box([x, 0.11, z], [0.14, 0.22, 0.14], GARRISON.steel),
-    box([x, 0.26, z], [0.44, 0.08, 0.44], GARRISON.orange)
+    box([x, POST_M / 2, z], [0.14, POST_M, 0.14], GARRISON.steel),
+    box([x, POST_M + SEAT_M / 2, z], [0.44, SEAT_M, 0.44], GARRISON.orange)
   ]
 }
 

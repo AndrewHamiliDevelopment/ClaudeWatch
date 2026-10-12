@@ -143,7 +143,7 @@ export function agentsOn(
       projectLabel: `Project ${i % companyCount}`
     })
   )
-  const floor = layoutFloor({ floorId: 'budget', label: 'Budget', plate: 1, sessions })
+  const floor = layoutFloor({ sessions })
   const agents = agentsForFloor(floor, sessions)
   expect(agents).toHaveLength(agentCount)
   return { floor, agents }
