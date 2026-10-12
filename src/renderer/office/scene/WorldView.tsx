@@ -4,6 +4,7 @@ import type { ThemeZoneGroup } from '../logic/office-themes'
 import { plateLocalFloor } from '../logic/zone-framing'
 import type { FloorGeometry } from '../scene-model'
 import { towerStand } from '../themes/apron'
+import { thinnedLots } from '../themes/lot-thinning'
 import { getTheme } from '../themes/registry'
 import { officesOf, type Lot } from '../themes/surroundings'
 import type { OfficeTheme, TowerFloor } from '../themes/types'
@@ -85,12 +86,15 @@ export function SurroundingsView({
   floorTheme,
   zoneGroups,
   lots,
+  ambientShare = 1,
   isReducedMotion
 }: {
   floor: FloorGeometry
   floorTheme: OfficeTheme
   zoneGroups: readonly ThemeZoneGroup[]
   lots: readonly Lot[]
+  // The share of ring lots a theme may put a mover on; at 0 nothing ambient is mounted.
+  ambientShare?: number
   isReducedMotion: boolean
 }) {
   const drawn = useMemo(
@@ -101,7 +105,10 @@ export function SurroundingsView({
       }),
     [lots, zoneGroups, floorTheme.id]
   )
-  const revision = useMemo(() => JSON.stringify([drawn, isReducedMotion]), [drawn, isReducedMotion])
+  const revision = useMemo(
+    () => JSON.stringify([drawn, ambientShare, isReducedMotion]),
+    [drawn, ambientShare, isReducedMotion]
+  )
   // The buildings are placed once; only the few moving things are followed frame by frame. The
   // same elements are handed back while nothing here changed, so React skips the whole town.
   return useMemo(
@@ -115,23 +122,25 @@ export function SurroundingsView({
               return Surroundings && <Surroundings key={themeId} floor={floor} lots={themeLots} />
             })}
           </BatchedScene>
-          <BatchedScene revision={revision}>
-            {drawn.map(({ themeId, lots: themeLots }) => {
-              const { Ambient } = getTheme(themeId).kit.zone
-              return (
-                Ambient && (
-                  <Ambient
-                    key={themeId}
-                    floor={floor}
-                    lots={themeLots}
-                    isReducedMotion={isReducedMotion}
-                  />
+          {ambientShare > 0 && (
+            <BatchedScene revision={revision}>
+              {drawn.map(({ themeId, lots: themeLots }) => {
+                const { Ambient } = getTheme(themeId).kit.zone
+                return (
+                  Ambient && (
+                    <Ambient
+                      key={themeId}
+                      floor={floor}
+                      lots={thinnedLots(themeLots, ambientShare, floor)}
+                      isReducedMotion={isReducedMotion}
+                    />
+                  )
                 )
-              )
-            })}
-          </BatchedScene>
+              })}
+            </BatchedScene>
+          )}
         </>
       ),
-    [drawn, revision, floor, isReducedMotion]
+    [drawn, revision, floor, ambientShare, isReducedMotion]
   )
 }

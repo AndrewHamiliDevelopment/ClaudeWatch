@@ -24,7 +24,9 @@ import { districtLots } from '../player/district-lots'
 import { PlayerLayer } from '../player/PlayerLayer'
 import { Streets } from '../player/Streets'
 import { sendPlayer, type Player } from '../player/walking'
+import { useQualitySettings } from '../quality-store'
 import { TOWER_STOREY_M } from '../themes/layout'
+import { thinnedLots } from '../themes/lot-thinning'
 import { GROUND_Y, MAX_LOT_HEIGHT_M, sceneExtent, surroundingLots } from '../themes/surroundings'
 import type { OfficeTheme, TowerFloor } from '../themes/types'
 
@@ -99,7 +101,17 @@ function OfficeScene(props: OfficeSceneProps) {
       ]),
     [theme.id, zoneGroups, floor, agents, selectedAgentKey, speakingAgentKey]
   )
-  const lots = useMemo(() => surroundingLots(floor), [floor])
+  // The detail level in use: how much of the town is drawn, how sharply and how often.
+  const quality = useQualitySettings()
+  const lots = useMemo(
+    () => thinnedLots(surroundingLots(floor), quality.ringShare, floor),
+    [floor, quality.ringShare]
+  )
+  // In walk mode the owner's character may set off at any moment, so the walking rate holds.
+  const pace = useMemo(
+    () => ({ idleFps: isWalking ? quality.walkFps : quality.idleFps, walkFps: quality.walkFps }),
+    [isWalking, quality.idleFps, quality.walkFps]
+  )
   // What the player and the streets go round: the ring's lots and the floor theme's district.
   const solids = useMemo(() => [...lots, ...districtLots(theme.id, floor)], [lots, theme.id, floor])
   const walkTo = useMemo(
@@ -131,7 +143,7 @@ function OfficeScene(props: OfficeSceneProps) {
         orthographic
         frameloop="demand"
         flat
-        dpr={[1, 1.5]}
+        dpr={[1, quality.maxPixelRatio]}
         gl={{ powerPreference: 'low-power', alpha: false, antialias: true }}
         camera={{ zoom: BAND_ZOOM.floor, near: 1, far: 200, position: INITIAL_CAMERA_POSITION }}
         onPointerMissed={() => props.onSelectAgent(null)}
@@ -166,6 +178,7 @@ function OfficeScene(props: OfficeSceneProps) {
           floorTheme={theme}
           zoneGroups={zoneGroups}
           lots={lots}
+          ambientShare={quality.ambientShare}
           isReducedMotion={isReducedMotion}
         />
         <ZonePickers
@@ -204,7 +217,7 @@ function OfficeScene(props: OfficeSceneProps) {
           isWalking={isWalking}
           onBandChange={setBand}
         />
-        <FrameGovernor />
+        <FrameGovernor pace={pace} agents={agents} />
         <MetricsProbe metrics={props.metrics} />
       </Canvas>
       <NameCardLayer

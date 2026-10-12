@@ -1,7 +1,8 @@
 import { useFrame } from '@react-three/fiber'
 import { useLayoutEffect, useRef, type ReactNode } from 'react'
-import { Group } from 'three'
+import type { Group } from 'three'
 import {
+  createBatchRoot,
   createMeshBatches,
   freezeMatrices,
   releaseMeshBatches,
@@ -43,7 +44,7 @@ interface BatchedSceneProps {
 }
 
 export function BatchedScene({ children, revision, isStatic = false }: BatchedSceneProps) {
-  const root = useRef(new Group()).current
+  const root = useRef(createBatchRoot()).current
   return (
     <primitive object={root}>
       {children}
