@@ -7,7 +7,7 @@ import { lounge } from './rooms'
 const desk = { floorId: 'hq', roomId: 'room', slotId: 'desk_main', x: 0, z: 0, heading: 0 }
 const waiting = (key: string) =>
   tickAgent(setFinished(createAgent(session(key), desk, []), true), LOUNGE_DELAY_MS)
-const loungeWith = (seats: number) => new Map([['room', lounge('company:c', 0, 0, seats)]])
+const loungeWith = (seats: number) => new Map([['room', lounge('company:c', 0, 0, seats, false)]])
 
 it('leaves an agent at its desk while the lounge is full', () => {
   const lounges = loungeWith(1)

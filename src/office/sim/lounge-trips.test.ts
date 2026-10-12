@@ -131,7 +131,10 @@ it('sends an idle guest to the lounge and back, and leaves the busy ones', () =>
   expect(at(view(sim, 'a#quiet'))).toEqual(at(desk))
 })
 
-// Other companies beside this one: each pair that comes or goes shifts it along the street.
+// An earlier project in the same company: each desk column it gains pushes what stands after it.
+const mates = (count: number): SessionRef[] =>
+  Array.from({ length: count }, (_, index) => session(`m${index}`, 'p_0'))
+// Other companies beside this one: when they all go, the floor shrinks from under it.
 const neighbours = (count: number): SessionRef[] =>
   Array.from({ length: count }, (_, index) => ({
     ...session(`n${index}`, `p_n${index}`),
@@ -140,19 +143,31 @@ const neighbours = (count: number): SessionRef[] =>
   }))
 
 it.each([
-  { when: 'seated as the floor grows', seconds: SETTLE_S, before: 2, after: 4 },
-  { when: 'on its way as the floor grows', seconds: DELAY_S + 2, before: 2, after: 4 },
+  { when: 'seated as its company grows', seconds: SETTLE_S, others: mates, before: 1, after: 3 },
+  {
+    when: 'on its way as its company grows',
+    seconds: DELAY_S + 2,
+    others: mates,
+    before: 1,
+    after: 3
+  },
   // The smaller floor's path grid no longer reaches where it sits.
-  { when: 'seated as the floor shrinks from under it', seconds: SETTLE_S, before: 4, after: 0 }
-])('walks to its moved seat from where it stands, $when', ({ seconds, before, after }) => {
-  const sim = open([done('a'), ...neighbours(before)])
+  {
+    when: 'seated as the floor shrinks from under it',
+    seconds: SETTLE_S,
+    others: neighbours,
+    before: 4,
+    after: 0
+  }
+])('walks to its moved seat from where it stands, $when', ({ seconds, others, before, after }) => {
+  const sim = open([done('a'), ...others(before)])
   run(sim, seconds)
   const was = view(sim, 'a')
   const oldSeat = seat(sim, 0)
   patch(
     sim,
-    neighbours(after).slice(before),
-    neighbours(before)
+    others(after).slice(before),
+    others(before)
       .slice(after)
       .map((gone) => gone.key)
   )
@@ -170,10 +185,11 @@ it.each([
 })
 
 it('walks back to a desk that moved while it was in the lounge', () => {
-  const sim = open([done('a'), session('z', 'p_z')])
+  // The earlier project gains desk columns, which pushes this agent's own office along.
+  const sim = open([done('a'), ...mates(1)])
   run(sim, SETTLE_S)
   const oldDesk = deskOf(sim, 'a')
-  patch(sim, [session('a'), ...['b', 'c', 'd', 'e'].map((key) => session(key, 'p_0'))])
+  patch(sim, [session('a'), ...mates(4).slice(1)])
   expect(at(deskOf(sim, 'a'))).not.toEqual(at(oldDesk))
   run(sim, SETTLE_S * 2)
   expect(view(sim, 'a')).toMatchObject({ ...at(deskOf(sim, 'a')), roomId: officeOf(sim, 'a').id })
