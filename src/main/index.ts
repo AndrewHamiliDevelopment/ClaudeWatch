@@ -270,7 +270,7 @@ app.whenReady().then(() => {
     // Before the bridge: the ledger must know who is signed in when the first counts arrive.
     accounts.start()
     office.start()
-    if (opensOfficeOnStart(settings, process.argv)) office.open()
+    if (opensOfficeOnStart(settings, process.argv)) office.open({ isAtStartup: true })
   } catch (error) {
     console.error('Office failed to start:', error)
   }

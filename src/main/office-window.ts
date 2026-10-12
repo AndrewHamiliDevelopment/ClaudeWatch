@@ -11,6 +11,9 @@ export function opensOfficeOnStart(
 export interface OfficeWindowLike {
   webContents: { send(channel: string, message: FeedMessage): void }
   focus(): void
+  show(): void
+  restore(): void
+  isMinimized(): boolean
   isDestroyed(): boolean
   on(event: 'closed', listener: () => void): unknown
 }
@@ -21,6 +24,8 @@ interface OfficeWindowDeps {
     onMessage(listener: (message: FeedMessage) => void): () => void
   }
   createWindow: () => OfficeWindowLike
+  // Brings the app in front of other apps: a tray app's window otherwise opens behind them.
+  activate: () => void
 }
 
 // The window only listens to the bridge. The app runs it, because the dashboard reads the
@@ -31,8 +36,13 @@ export class OfficeWindowController {
 
   constructor(private readonly deps: OfficeWindowDeps) {}
 
-  open(): void {
+  open({ isAtStartup = false } = {}): void {
+    // At start-up the window appears without taking the keyboard from the app in use.
+    if (!isAtStartup) this.deps.activate()
     if (this.window && !this.window.isDestroyed()) {
+      // focus() alone leaves a minimized or hidden window where it is.
+      if (this.window.isMinimized()) this.window.restore()
+      this.window.show()
       this.window.focus()
       return
     }

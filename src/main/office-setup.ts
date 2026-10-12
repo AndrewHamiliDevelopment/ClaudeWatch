@@ -1,4 +1,4 @@
-import { screen, utilityProcess } from 'electron'
+import { app, screen, utilityProcess } from 'electron'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 import { BridgeHost } from './bridge-host'
@@ -46,7 +46,7 @@ function createOfficeWindow(store: OfficeWindowStore): Electron.BrowserWindow {
 }
 
 export interface Office {
-  open: () => void
+  open: (options?: { isAtStartup?: boolean }) => void
   // The bridge runs from start to stop, with or without the Office window.
   start: () => void
   stop: () => void
@@ -84,7 +84,8 @@ export function setupOffice(
   const host = withAccounts(bridge, accounts)
   const controller = new OfficeWindowController({
     host,
-    createWindow: () => createOfficeWindow(store)
+    createWindow: () => createOfficeWindow(store),
+    activate: () => app.focus({ steal: true })
   })
 
   // The same service the standalone web Office runs; here IPC carries it.
@@ -124,7 +125,7 @@ export function setupOffice(
   handle('office:focus', (_event, agentKey: unknown) => service.focus(agentKey))
 
   return {
-    open: () => controller.open(),
+    open: (options) => controller.open(options),
     start: () => bridge.start(),
     stop: () => bridge.stop(),
     snapshot: () => host.snapshot(),

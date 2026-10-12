@@ -6,6 +6,12 @@ import type { FeedMessage, OfficeSnapshot, SessionRef } from '../shared/office/t
 class FakeWindow extends EventEmitter implements OfficeWindowLike {
   webContents = { send: vi.fn() }
   focus = vi.fn()
+  show = vi.fn()
+  restore = vi.fn(() => {
+    this.minimized = false
+  })
+  minimized = false
+  isMinimized = (): boolean => this.minimized
   destroyed = false
   isDestroyed = (): boolean => this.destroyed
   close(): void {
@@ -54,6 +60,7 @@ describe('OfficeWindowController', () => {
     }
   }
   let controller: OfficeWindowController
+  const activate = vi.fn()
 
   beforeEach(() => {
     vi.clearAllMocks()
@@ -62,12 +69,48 @@ describe('OfficeWindowController', () => {
     snapshot = null
     controller = new OfficeWindowController({
       host,
+      activate,
       createWindow: () => {
         const window = new FakeWindow()
         windows.push(window)
         return window
       }
     })
+  })
+
+  it('brings a minimized window back and the app to the front on a second open', () => {
+    controller.open()
+    windows[0].minimized = true
+    activate.mockClear()
+
+    controller.open()
+
+    expect(windows[0].restore).toHaveBeenCalledOnce()
+    expect(windows[0].show).toHaveBeenCalledOnce()
+    expect(windows[0].focus).toHaveBeenCalledOnce()
+    expect(activate).toHaveBeenCalledOnce()
+  })
+
+  it('shows a window that is there but not on screen, without restoring it', () => {
+    controller.open()
+
+    controller.open()
+
+    expect(windows[0].restore).not.toHaveBeenCalled()
+    expect(windows[0].show).toHaveBeenCalledOnce()
+  })
+
+  it('brings the app to the front when the owner opens the window the first time', () => {
+    controller.open()
+
+    expect(activate).toHaveBeenCalledOnce()
+  })
+
+  it('does not take the keyboard from another app when it opens at start-up', () => {
+    controller.open({ isAtStartup: true })
+
+    expect(windows).toHaveLength(1)
+    expect(activate).not.toHaveBeenCalled()
   })
 
   it('creates the window once and focuses it on a second open', () => {
