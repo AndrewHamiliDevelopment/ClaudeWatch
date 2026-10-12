@@ -23,6 +23,8 @@ export interface OfficeState {
   wallsMode: WallsMode
   isListView: boolean
   isMetricsVisible: boolean
+  // The owner is moving their own character: the arrow keys and clicks walk it instead of the camera.
+  isWalking: boolean
   cameraRequest: CameraRequest | null
 }
 
@@ -43,6 +45,8 @@ export type OfficeAction =
   | { type: 'walls-set'; mode: WallsMode }
   | { type: 'list-toggled' }
   | { type: 'metrics-toggled' }
+  | { type: 'walk-toggled' }
+  | { type: 'zone-walked'; zoneId: string }
 
 export const INITIAL_OFFICE_STATE: OfficeState = {
   frame: null,
@@ -53,6 +57,7 @@ export const INITIAL_OFFICE_STATE: OfficeState = {
   wallsMode: 'cutaway',
   isListView: false,
   isMetricsVisible: false,
+  isWalking: false,
   cameraRequest: null
 }
 
@@ -165,6 +170,11 @@ export function officeReducer(state: OfficeState, action: OfficeAction): OfficeS
       return { ...state, isListView: !state.isListView }
     case 'metrics-toggled':
       return { ...state, isMetricsVisible: !state.isMetricsVisible }
+    case 'walk-toggled':
+      return { ...state, isWalking: !state.isWalking }
+    // The camera goes with the player, so the office is marked current without a flight.
+    case 'zone-walked':
+      return { ...state, focusedZoneId: action.zoneId }
     default: {
       const unreachable: never = action
       return unreachable

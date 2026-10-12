@@ -45,4 +45,21 @@ describe('ZonePickers', () => {
     project.props.onClick({ clientX: 180, clientY: 140 })
     expect(onMiss).toHaveBeenCalledOnce()
   })
+
+  it('sends the player to a still click while walking, once, and keeps the selection', () => {
+    const onMiss = vi.fn()
+    const onWalk = vi.fn()
+    const [, project] = plates(ZonePickers({ floor, onFly: vi.fn(), onMiss, onWalk }))
+    const stopPropagation = vi.fn()
+    const click = { clientX: 50, clientY: 50, point: { x: 1, y: 0, z: 2 }, stopPropagation }
+
+    project.props.onPointerDown(click)
+    project.props.onClick(click)
+    expect(onWalk).toHaveBeenCalledWith(click.point)
+    expect(stopPropagation).toHaveBeenCalledOnce()
+    expect(onMiss).not.toHaveBeenCalled()
+
+    project.props.onClick({ ...click, clientX: 150 })
+    expect(onWalk).toHaveBeenCalledOnce()
+  })
 })

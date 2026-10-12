@@ -20,6 +20,10 @@ import { RobotCrew } from './Robot'
 import { BatchedScene } from './BatchedScene'
 import { SurroundingsView, WorldView } from './WorldView'
 import { ZonePickers } from './ZonePickers'
+import { districtLots } from '../player/district-lots'
+import { PlayerLayer } from '../player/PlayerLayer'
+import { Streets } from '../player/Streets'
+import { sendPlayer, type Player } from '../player/walking'
 import { TOWER_STOREY_M } from '../themes/layout'
 import { GROUND_Y, MAX_LOT_HEIGHT_M, sceneExtent, surroundingLots } from '../themes/surroundings'
 import type { OfficeTheme, TowerFloor } from '../themes/types'
@@ -43,6 +47,9 @@ interface OfficeSceneProps {
   reviewableKeys: ReadonlySet<string>
   onReview: (sessionKey: string) => void
   speakingAgentKey: string | null
+  // The owner's own character; null until the floor it stands on is known.
+  player?: Player | null
+  isWalking?: boolean
 }
 
 // Orthographic distance only sets clipping, not size; zoom sets size.
@@ -63,7 +70,15 @@ function OfficeScene(props: OfficeSceneProps) {
     stacks: new Map()
   }))
   // Serialising the floor is costly; redo it only when an input to the batches changes.
-  const { theme, floor, agents, selectedAgentKey, speakingAgentKey } = props
+  const {
+    theme,
+    floor,
+    agents,
+    selectedAgentKey,
+    speakingAgentKey,
+    player,
+    isWalking = false
+  } = props
   const assignments = useThemeAssignments()
   const zoneGroups = useMemo(
     () => groupZonesByTheme(floor, (zone) => resolveTheme(zone, assignments, theme.id)),
@@ -85,6 +100,15 @@ function OfficeScene(props: OfficeSceneProps) {
     [theme.id, zoneGroups, floor, agents, selectedAgentKey, speakingAgentKey]
   )
   const lots = useMemo(() => surroundingLots(floor), [floor])
+  // What the player and the streets go round: the ring's lots and the floor theme's district.
+  const solids = useMemo(() => [...lots, ...districtLots(theme.id, floor)], [lots, theme.id, floor])
+  const walkTo = useMemo(
+    () =>
+      isWalking && player
+        ? (point: { x: number; z: number }) => sendPlayer(player, point)
+        : undefined,
+    [isWalking, player]
+  )
   const storeyCount = props.floors.length
   const sceneBox = useMemo(
     () => ({
@@ -116,6 +140,7 @@ function OfficeScene(props: OfficeSceneProps) {
         <hemisphereLight args={['#FFF3DD', '#3A3A40', 2.2]} />
         <directionalLight position={[10, 20, 6]} intensity={1.8} />
         <Horizon box={sceneBox} color={theme.palette.stone} />
+        <Streets floor={floor} solids={solids} color={theme.palette.ink} />
         <BatchedScene revision={revision}>
           <FloorView
             floorTheme={theme}
@@ -147,7 +172,20 @@ function OfficeScene(props: OfficeSceneProps) {
           floor={props.floor}
           onFly={props.onFlyToZone}
           onMiss={() => props.onSelectAgent(null)}
+          onWalk={walkTo}
         />
+        {player && (
+          <PlayerLayer
+            player={player}
+            isWalking={isWalking}
+            floor={floor}
+            solids={solids}
+            agents={agents}
+            palette={theme.palette}
+            isReducedMotion={isReducedMotion}
+            onSelectAgent={props.onSelectAgent}
+          />
+        )}
         <CardProjector
           cards={props.cards}
           stacks={props.stacks}
@@ -163,6 +201,7 @@ function OfficeScene(props: OfficeSceneProps) {
           liveSessionKeys={liveSessionKeys}
           request={props.cameraRequest}
           isReducedMotion={isReducedMotion}
+          isWalking={isWalking}
           onBandChange={setBand}
         />
         <FrameGovernor />

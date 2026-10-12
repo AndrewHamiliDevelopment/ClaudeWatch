@@ -46,6 +46,8 @@ interface CameraRigProps {
   liveSessionKeys: ReadonlySet<string>
   request: CameraRequest | null
   isReducedMotion: boolean
+  // The owner is walking their player: the arrow keys are its, and the camera goes with it.
+  isWalking?: boolean
   onBandChange: (band: ZoomBand) => void
 }
 
@@ -109,6 +111,7 @@ export function CameraRig(props: CameraRigProps) {
   gesturesRef.current = useCameraGestures({
     controlsRef,
     isReducedMotion: props.isReducedMotion,
+    isWalking: props.isWalking ?? false,
     onManualMove: rig.manualMove,
     onFit: rig.fit
   })
@@ -128,6 +131,12 @@ export function CameraRig(props: CameraRigProps) {
     controls.addEventListener('controlstart', rig.manualMove)
     return () => controls.removeEventListener('controlstart', rig.manualMove)
   }, [rig])
+
+  // The camera follows the player from here on, so framing the floor by itself would fight it.
+  const { isWalking } = props
+  useEffect(() => {
+    if (isWalking) rig.manualMove()
+  }, [isWalking, rig])
 
   const { isReducedMotion } = props
   useEffect(() => {

@@ -33,6 +33,8 @@ function actionForCommand(command: Exclude<OfficeCommand, OutsideCommand>): Offi
       return { type: 'camera-zoomed', direction: command.direction }
     case 'fly-to-selected':
       return { type: 'fly-to-selected' }
+    case 'toggle-walk':
+      return { type: 'walk-toggled' }
     default: {
       const unreachable: never = command
       return unreachable
@@ -48,11 +50,12 @@ interface HotkeyHandlers {
 export function useOfficeHotkeys(
   dispatch: Dispatch<OfficeAction>,
   isListForced: boolean,
-  { onCycleTheme, onFocusTerminal }: HotkeyHandlers
+  { onCycleTheme, onFocusTerminal }: HotkeyHandlers,
+  isWalking = false
 ): void {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
-      const command = commandForKey(keyInputFrom(event))
+      const command = commandForKey(keyInputFrom(event), isWalking)
       if (!command || (isListForced && command.type === 'toggle-list')) return
       event.preventDefault()
       if (command.type === 'cycle-theme') onCycleTheme()
@@ -61,7 +64,7 @@ export function useOfficeHotkeys(
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [dispatch, isListForced, onCycleTheme, onFocusTerminal])
+  }, [dispatch, isListForced, onCycleTheme, onFocusTerminal, isWalking])
 }
 
 const FOCUS_FAILED: FocusResult = { success: false }
