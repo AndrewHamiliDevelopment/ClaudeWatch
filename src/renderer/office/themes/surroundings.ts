@@ -1,8 +1,8 @@
 import type { FloorGeometry, ZoneGeometry } from '../scene-model'
-import { contains, draw, gapBetween, hashOf, rectOf, type Rect } from './lot-math'
+import { contains, draw, gapBetween, rectOf, type Rect } from './lot-math'
 
 // The one seeded pick and the one gap measure every theme shares.
-export { draw, gapBetween, hashOf }
+export { draw, gapBetween }
 
 export interface Lot {
   id: string
@@ -42,7 +42,7 @@ export interface Site {
 }
 
 // The band round the plate the camera keeps in view when the town is off.
-export function apronOf(plate: Rect): Rect {
+function apronOf(plate: Rect): Rect {
   return rectOf(
     plate.x - plate.width / 2 - WORLD_APRON.west,
     plate.x + plate.width / 2 + WORLD_APRON.east,

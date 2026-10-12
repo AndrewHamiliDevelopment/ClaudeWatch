@@ -3,7 +3,7 @@ export interface RoutePoint {
   z: number
 }
 
-export interface RouteStop {
+interface RouteStop {
   // Metres along the route where the wait happens.
   at: number
   sec: number

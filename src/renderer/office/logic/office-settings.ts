@@ -4,7 +4,7 @@ import { browserStorage } from '../../office-live/browser-storage'
 import { TOWN_SIZES, type TownSize } from '../town/town-grid'
 
 // Each feature of the living world the owner can switch off. Local to this page's origin.
-export interface OfficeSwitches {
+interface OfficeSwitches {
   town: boolean
   citizens: boolean
   vehicles: boolean

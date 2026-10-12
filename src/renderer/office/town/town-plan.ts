@@ -17,7 +17,7 @@ import { roadPromenades, townRoads, type TownRoad } from './town-roads'
 import { lotSites, parkPromenades } from './town-sites'
 import { zoneOfBlock, type TownDistrict } from './town-zones'
 
-export interface TownBlock extends Rect {
+interface TownBlock extends Rect {
   // `block:${column}:${row}` on the 24 m lattice.
   id: string
   column: number

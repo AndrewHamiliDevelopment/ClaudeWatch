@@ -9,7 +9,7 @@ import { roadPromenades, type TownRoad } from './town-roads'
 
 // Lowest first: a later layer lies over an earlier one wherever they meet.
 const LAYERS = ['pad', 'campus', 'street', 'sidewalk', 'carriageway', 'promenade'] as const
-export type GroundLayer = (typeof LAYERS)[number]
+type GroundLayer = (typeof LAYERS)[number]
 
 export interface GroundQuad extends Rect {
   layer: GroundLayer

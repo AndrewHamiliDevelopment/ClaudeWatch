@@ -25,7 +25,7 @@ export interface ZoneProp extends PropDesign {
   zones: readonly TownDistrict[]
 }
 
-export interface ZoneLook {
+interface ZoneLook {
   accent: string
   ground: string
 }
