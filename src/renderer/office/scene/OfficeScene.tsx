@@ -83,6 +83,13 @@ function OfficeScene(props: OfficeSceneProps) {
     () => groupZonesByTheme(floor, (zone) => resolveTheme(zone, assignments, theme.id)),
     [floor, assignments, theme.id]
   )
+  // A new agents array arrives every walk tick; only who is present and how they look
+  // reaches the batches.
+  const rosterKey = useMemo(
+    () =>
+      agents.map((agent) => `${agent.agentKey}|${agent.provider}|${agent.isSubagent}`).join(' '),
+    [agents]
+  )
   const revision = useMemo(
     () =>
       JSON.stringify([
@@ -94,9 +101,9 @@ function OfficeScene(props: OfficeSceneProps) {
         floor,
         selectedAgentKey,
         speakingAgentKey,
-        agents.map((agent) => [agent.agentKey, agent.provider, agent.isSubagent])
+        rosterKey
       ]),
-    [theme.id, zoneGroups, floor, agents, selectedAgentKey, speakingAgentKey]
+    [theme.id, zoneGroups, floor, rosterKey, selectedAgentKey, speakingAgentKey]
   )
   // The detail level in use: how sharply and how often the scene is drawn. The plan thins the
   // town by that level itself.
