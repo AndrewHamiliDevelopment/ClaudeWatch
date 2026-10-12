@@ -28,8 +28,8 @@ Per-item tier: LW-1 T2 (fix, sim logic, risk 1) · LW-2 T1 (fix, risk 1) · LW-3
 ## Ledger
 
 - [ ] Phase 1 — Compact floor: offices sized to who is there, companies packed tight, the floor grows and shrinks with the work
-- [ ] Phase 2 — Nothing is cut off: camera planes from the scene's size, ground to the horizon
-- [ ] Phase 3 — Surroundings engine: themed building lots and props around every company, drawn by that company's theme
+- [x] Phase 2 — Nothing is cut off: camera planes from the scene's size, ground to the horizon
+- [x] Phase 3 — Surroundings engine: themed building lots and props around every company, drawn by that company's theme
 - [ ] Phase 4 — Lounge: each company has an entertainment zone; an agent whose turn is done walks there and walks back when work resumes
 - [ ] Phase 5 — Five themes filled in: buildings, props, lounge and ambient life for Neo Edo Steam, Brass Workshop, Violet Court, Orbital Garrison, Quiet Grove
 - [x] Phase 6 — Themes you can see and set: one place that names every office's theme and sets it for everything, one company or one project
@@ -178,4 +178,6 @@ Total **14h with Claude | 57h without** (about 4x): Phase 1 2|8, Phase 2 1|3, Ph
 ## Deviations
 
 - Phase 6 also changed `src/renderer/office/hud/ThemesList.tsx` (new), `src/renderer/office/hud/themes-list.test.tsx` (new), `src/renderer/office/hud/hud-test-harness.tsx`, `src/renderer/office/hud/FocusNotice.tsx`, `src/renderer/office/logic/office-themes.test.ts`, `src/renderer/office/__tests__/bottom-bar.test.tsx`, `src/renderer/office/__tests__/theme-selection.test.tsx` and `src/renderer/office/__tests__/theme-office-app.test.tsx`: the three older tests asserted the bar's cycling button, which is gone.
+- Phases 2 and 3 fit the planes in a new `src/renderer/office/scene/Horizon.tsx` (with `src/renderer/office/scene/horizon.test.tsx`) instead of `src/renderer/office/scene/CameraRig.tsx`, and added `src/renderer/office/scene/surroundings-view.test.tsx`, `src/renderer/office/__tests__/clip-planes.test.ts`, `src/renderer/office/__tests__/camera-bands.test.ts`, `src/renderer/office/themes/scene.test-utils.ts`, `src/renderer/office/logic/room-layout.ts` and `src/renderer/office/themes/layout.ts` (one shared definition each for the wall normals and the tower storey). `src/renderer/office/scene/FloorView.tsx` and `src/renderer/office/themes/types.ts` also carry the lounge part of the theme contract.
+- Phase 1 runs in three passes: sizes from live sessions (done), project offices sized to their occupied desks with tight company packing (running), and a floor plate that is no longer mirrored around the gate (after the scene work is merged). It also changed `src/renderer/office-live/layout-geometry.test.ts`, and dropped the 24-hour hold on empty projects and companies.
 - Phase 6 left `src/renderer/office/logic/office-reducer.ts` alone: an office stays focused once flown to, and the themes list says what the T key will change.

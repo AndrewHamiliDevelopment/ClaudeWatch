@@ -9,10 +9,14 @@ interface Size {
   depth: number
 }
 
+// The strip between a company's own wall and what stands inside it.
+const VERGE = LANE / 2
+// Three four-column projects and the lanes between them.
+const SHELF_WIDTH = 69
+
 export interface Grounds extends Size {
-  // Top-left corners, measured from the company's own top-left corner.
-  projects: Point[]
-  lounge: Point
+  // One top-left corner per box, measured from the company's own top-left corner.
+  corners: Point[]
 }
 
 function nextBay(occupied: Iterable<number>): number {
@@ -22,18 +26,20 @@ function nextBay(occupied: Iterable<number>): number {
   return bay
 }
 
-// Desks and lounge seats both come in rows of four.
+// Lounge seats come in rows of four, one row at least.
 export function reserveCapacity(count: number): number {
   return Math.max(4, Math.ceil(count / 4) * 4)
 }
 
 // A session keeps the bay it holds and a newcomer takes the lowest free one. A session moves
-// down only from past the last row its project still needs, which takes a departure.
+// down only from past the desks its project still needs (one column each up to four, then
+// whole rows), so a move always closes a row or a column and takes a departure.
 export function assignBays(
   sessionKeys: string[],
   held: ReadonlyMap<string, number>
 ): Map<string, number> {
-  const capacity = reserveCapacity(sessionKeys.length)
+  const count = sessionKeys.length
+  const capacity = count <= 4 ? count : Math.ceil(count / 4) * 4
   const bays = new Map<string, number>()
   const taken = new Set<number>()
   for (const key of sessionKeys) {
@@ -53,41 +59,26 @@ export function assignBays(
   return bays
 }
 
-// Two projects to a column, columns left to right, so a new project never moves an older one.
-// The lounge goes under a lone last project when that does not deepen the grounds, else beside.
-export function packGrounds(projects: Size[], lounge: Size): Grounds {
+// Boxes go left to right along a shelf and start a new shelf below when the next one will not
+// fit. A box's corner depends only on the boxes before it, so a later arrival never moves it.
+export function packGrounds(boxes: Size[]): Grounds {
   const corners: Point[] = []
-  let left = LANE
-  let deepest = 0
-  let lastLeft = LANE
-  let lastDepth = 0
-  for (let first = 0; first < projects.length; first += 2) {
-    const column = projects.slice(first, first + 2)
-    let top = LANE
-    for (const project of column) {
-      corners.push({ x: left, z: top })
-      top += project.depth + LANE
+  let left = VERGE
+  let top = VERGE
+  let shelfDepth = 0
+  let width = 0
+  for (const box of boxes) {
+    if (left > VERGE && left + box.width > VERGE + SHELF_WIDTH) {
+      top += shelfDepth + LANE
+      left = VERGE
+      shelfDepth = 0
     }
-    lastLeft = left
-    lastDepth = top - 2 * LANE
-    deepest = Math.max(deepest, lastDepth)
-    left += Math.max(...column.map((project) => project.width)) + LANE
+    corners.push({ x: left, z: top })
+    shelfDepth = Math.max(shelfDepth, box.depth)
+    width = Math.max(width, left + box.width + VERGE)
+    left += box.width + LANE
   }
-  const under = lastDepth + LANE + lounge.depth
-  if (projects.length % 2 === 1 && under <= deepest) {
-    return {
-      width: left,
-      depth: deepest + 2 * LANE,
-      projects: corners,
-      lounge: { x: lastLeft, z: LANE + lastDepth + LANE }
-    }
-  }
-  return {
-    width: left + lounge.width + LANE,
-    depth: Math.max(deepest, lounge.depth) + 2 * LANE,
-    projects: corners,
-    lounge: { x: left, z: LANE }
-  }
+  return { width, depth: top + shelfDepth + VERGE, corners }
 }
 
 // One row of companies on each side of the street, each row centred on the gate. A company keeps
@@ -99,7 +90,11 @@ export function packCompanies(companies: ZoneLayout[]): void {
       .sort((a, b) => a.index - b.index)
   const span = (members: ZoneLayout[]): number =>
     members.reduce((total, company) => total + company.width + LANE, -LANE)
-  for (const company of companies.filter((candidate) => candidate.index < 0)) {
+  // Widest first, so the rows come out even when several companies are placed at once.
+  const newcomers = companies
+    .filter((candidate) => candidate.index < 0)
+    .sort((a, b) => b.width - a.width || a.id.localeCompare(b.id))
+  for (const company of newcomers) {
     const side = span(row(0)) <= span(row(1)) ? 0 : 1
     const taken = new Set(row(side).map((member) => member.index))
     let index = side
