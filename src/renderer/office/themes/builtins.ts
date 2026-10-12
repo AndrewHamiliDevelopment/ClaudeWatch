@@ -1,3 +1,5 @@
+import { BRASS_TOWN } from './brass-town'
+import { EDO_TOWN } from './edo-town'
 import { ROBOT_PALETTE } from '../office-palette'
 import { BrassAmbient } from './BrassAmbient'
 import { BrassFrame } from './BrassFrame'
@@ -22,6 +24,7 @@ export const neoEdoSteam: OfficeTheme = {
   label: 'Neo Edo Steam',
   description: 'A lantern-lit cedar atelier within a vast steam-powered pagoda district.',
   palette: EDO,
+  town: EDO_TOWN,
   robot: {
     Model: SamuraiFrame,
     skins: {
@@ -54,6 +57,7 @@ export const brassWorkshop: OfficeTheme = {
   label: 'Brass Workshop',
   description: 'The original brass hover automatons, copper archways and birdcage lift.',
   palette: BRASS,
+  town: BRASS_TOWN,
   robot: {
     Model: BrassFrame,
     skins: {
