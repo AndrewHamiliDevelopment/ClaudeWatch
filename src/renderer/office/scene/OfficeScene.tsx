@@ -5,6 +5,7 @@ import type { FrameMetrics } from '../frame-metrics'
 import { usePrefersReducedMotion } from '../hooks'
 import { BAND_ZOOM, ISO_POLAR, ISO_START_AZIMUTH, type ZoomBand } from '../logic/camera-bands'
 import type { NameCard, ProjectStack } from '../logic/name-cards'
+import { useOfficeSettings } from '../logic/office-settings'
 import { groupZonesByTheme, resolveTheme, useThemeAssignments } from '../logic/office-themes'
 import type { CameraRequest } from '../logic/office-reducer'
 import type { WallsMode } from '../logic/room-layout'
@@ -73,15 +74,10 @@ function OfficeScene(props: OfficeSceneProps) {
     stacks: new Map()
   }))
   // Serialising the floor is costly; redo it only when an input to the batches changes.
-  const {
-    theme,
-    floor,
-    agents,
-    selectedAgentKey,
-    speakingAgentKey,
-    player,
-    isWalking = false
-  } = props
+  const { theme, floor, agents, selectedAgentKey, speakingAgentKey, isWalking = false } = props
+  // The owner's switches: a feature that is off is not mounted, so it costs no frame work.
+  const settings = useOfficeSettings()
+  const player = settings.player ? props.player : null
   const assignments = useThemeAssignments()
   const zoneGroups = useMemo(
     () => groupZonesByTheme(floor, (zone) => resolveTheme(zone, assignments, theme.id)),
@@ -105,8 +101,8 @@ function OfficeScene(props: OfficeSceneProps) {
   // The detail level in use: how much of the town is drawn, how sharply and how often.
   const quality = useQualitySettings()
   const lots = useMemo(
-    () => thinnedLots(surroundingLots(floor), quality.ringShare, floor),
-    [floor, quality.ringShare]
+    () => (settings.town ? thinnedLots(surroundingLots(floor), quality.ringShare, floor) : []),
+    [floor, quality.ringShare, settings.town]
   )
   // In walk mode the owner's character may set off at any moment, so the walking rate holds.
   const pace = useMemo(
@@ -114,7 +110,10 @@ function OfficeScene(props: OfficeSceneProps) {
     [isWalking, quality.idleFps, quality.walkFps]
   )
   // What the player and the streets go round: the ring's lots and the floor theme's district.
-  const solids = useMemo(() => [...lots, ...districtLots(theme.id, floor)], [lots, theme.id, floor])
+  const solids = useMemo(
+    () => (settings.town ? [...lots, ...districtLots(theme.id, floor)] : lots),
+    [lots, theme.id, floor, settings.town]
+  )
   const walkTo = useMemo(
     () =>
       isWalking && player
@@ -153,7 +152,7 @@ function OfficeScene(props: OfficeSceneProps) {
         <hemisphereLight args={['#FFF3DD', '#3A3A40', 2.2]} />
         <directionalLight position={[10, 20, 6]} intensity={1.8} />
         <Horizon box={sceneBox} color={theme.palette.stone} />
-        <Streets floor={floor} solids={solids} color={theme.palette.ink} />
+        {settings.town && <Streets floor={floor} solids={solids} color={theme.palette.ink} />}
         <BatchedScene revision={revision}>
           <FloorView
             floorTheme={theme}
@@ -173,30 +172,36 @@ function OfficeScene(props: OfficeSceneProps) {
             onFly={props.onFlyToAgent}
           />
         </BatchedScene>
-        <WorldView theme={props.theme} floor={props.floor} floors={props.floors} band={band} />
-        <SurroundingsView
-          floor={floor}
-          floorTheme={theme}
-          zoneGroups={zoneGroups}
-          lots={lots}
-          ambientShare={quality.ambientShare}
-          isReducedMotion={isReducedMotion}
-        />
+        {settings.town && (
+          <>
+            <WorldView theme={props.theme} floor={props.floor} floors={props.floors} band={band} />
+            <SurroundingsView
+              floor={floor}
+              floorTheme={theme}
+              zoneGroups={zoneGroups}
+              lots={lots}
+              ambientShare={settings.ambient ? quality.ambientShare : 0}
+              isReducedMotion={isReducedMotion}
+            />
+          </>
+        )}
         <ZonePickers
           floor={props.floor}
           onFly={props.onFlyToZone}
           onMiss={() => props.onSelectAgent(null)}
           onWalk={walkTo}
         />
-        <CitizenLayer
-          floor={floor}
-          solids={solids}
-          floorTheme={theme}
-          zoneGroups={zoneGroups}
-          player={player}
-          isReducedMotion={isReducedMotion}
-          share={quality.citizenShare}
-        />
+        {settings.citizens && (
+          <CitizenLayer
+            floor={floor}
+            solids={solids}
+            floorTheme={theme}
+            zoneGroups={zoneGroups}
+            player={player}
+            isReducedMotion={isReducedMotion}
+            share={quality.citizenShare}
+          />
+        )}
         {player && (
           <PlayerLayer
             player={player}

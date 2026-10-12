@@ -13,6 +13,7 @@ export type OfficeCommand =
   | { type: 'zoom'; direction: ZoomDirection }
   | { type: 'fly-to-selected' }
   | { type: 'toggle-walk' }
+  | { type: 'toggle-settings' }
 
 export interface KeyInput {
   key: string
@@ -24,6 +25,9 @@ export interface KeyInput {
 
 // The keycaps the HUD shows for walking: the switch, and speaking to the agent beside the player.
 export const WALK_KEYS = { toggle: 'G', talk: 'X' }
+
+// The keycap on the bar's Settings button.
+export const SETTINGS_KEY = ','
 
 const FIXED_COMMANDS: Record<string, OfficeCommand> = {
   home: { type: 'walls', mode: 'up' },
@@ -38,16 +42,23 @@ const FIXED_COMMANDS: Record<string, OfficeCommand> = {
   e: { type: 'rotate', direction: 1 },
   '-': { type: 'zoom', direction: 'out' },
   '=': { type: 'zoom', direction: 'in' },
-  '+': { type: 'zoom', direction: 'in' }
+  '+': { type: 'zoom', direction: 'in' },
+  [SETTINGS_KEY]: { type: 'toggle-settings' }
 }
 
-// While walking, W A S D move the player, so W stops being the cutaway key.
-export function commandForKey(input: KeyInput, isWalking = false): OfficeCommand | null {
+// While walking, W A S D move the player, so W stops being the cutaway key. With the player
+// switched off in the settings there is nobody to walk, so its key does nothing.
+export function commandForKey(
+  input: KeyInput,
+  isWalking = false,
+  hasPlayer = true
+): OfficeCommand | null {
   if (input.hasModifier || input.isTargetEditable) return null
   if (isWalking && walkKey(input.key)) return null
   if (input.key === 'Enter') return input.isTargetInteractive ? null : { type: 'fly-to-selected' }
   if (/^[1-9]$/.test(input.key)) return { type: 'company-number', number: Number(input.key) }
-  return FIXED_COMMANDS[input.key.toLowerCase()] ?? null
+  const command = FIXED_COMMANDS[input.key.toLowerCase()] ?? null
+  return command?.type === 'toggle-walk' && !hasPlayer ? null : command
 }
 
 export function keyInputFrom(event: KeyboardEvent): KeyInput {

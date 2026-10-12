@@ -22,6 +22,9 @@ function setup(overrides: Partial<Parameters<typeof BottomBar>[0]> = {}) {
       onFit={onFit}
       isWalking={false}
       onToggleWalk={vi.fn()}
+      hasPlayer
+      isSettingsOpen={false}
+      onToggleSettings={vi.fn()}
       {...overrides}
     />
   )

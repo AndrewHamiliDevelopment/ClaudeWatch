@@ -15,7 +15,10 @@ export function useFeedSubscription(feed: OfficeFeed, dispatch: Dispatch<OfficeA
 }
 
 // Commands the reducer cannot carry out: they act outside the office state.
-type OutsideCommand = Extract<OfficeCommand, { type: 'cycle-theme' | 'focus-terminal' }>
+type OutsideCommand = Extract<
+  OfficeCommand,
+  { type: 'cycle-theme' | 'focus-terminal' | 'toggle-settings' }
+>
 
 function actionForCommand(command: Exclude<OfficeCommand, OutsideCommand>): OfficeAction {
   switch (command.type) {
@@ -42,29 +45,40 @@ function actionForCommand(command: Exclude<OfficeCommand, OutsideCommand>): Offi
   }
 }
 
-interface HotkeyHandlers {
+export interface HotkeyHandlers {
   onCycleTheme: () => void
   onFocusTerminal: () => void
+  onToggleSettings: () => void
 }
 
 export function useOfficeHotkeys(
   dispatch: Dispatch<OfficeAction>,
   isListForced: boolean,
-  { onCycleTheme, onFocusTerminal }: HotkeyHandlers,
-  isWalking = false
+  { onCycleTheme, onFocusTerminal, onToggleSettings }: HotkeyHandlers,
+  isWalking = false,
+  hasPlayer = true
 ): void {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
-      const command = commandForKey(keyInputFrom(event), isWalking)
+      const command = commandForKey(keyInputFrom(event), isWalking, hasPlayer)
       if (!command || (isListForced && command.type === 'toggle-list')) return
       event.preventDefault()
       if (command.type === 'cycle-theme') onCycleTheme()
       else if (command.type === 'focus-terminal') onFocusTerminal()
+      else if (command.type === 'toggle-settings') onToggleSettings()
       else dispatch(actionForCommand(command))
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [dispatch, isListForced, onCycleTheme, onFocusTerminal, isWalking])
+  }, [
+    dispatch,
+    isListForced,
+    onCycleTheme,
+    onFocusTerminal,
+    onToggleSettings,
+    isWalking,
+    hasPlayer
+  ])
 }
 
 const FOCUS_FAILED: FocusResult = { success: false }

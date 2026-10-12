@@ -26,9 +26,9 @@ import type { OfficeFeed } from './scene-model'
 import {
   useAttentionAnnouncement,
   useFeedSubscription,
-  useFocusTerminal,
-  useOfficeHotkeys
+  useFocusTerminal
 } from './use-office-effects'
+import { useOfficeFeatures } from './use-office-features'
 import { selectionOf, useOfficeLists } from './use-office-model'
 import { canCreateWebGL2 } from './webgl-support'
 
@@ -95,7 +95,7 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
     if (selectedTargetKey) focusTerminal(selectedTargetKey)
   }, [selectedTargetKey, focusTerminal])
   const hotkeyHandlers = { onCycleTheme: cycleTheme, onFocusTerminal: focusSelected }
-  useOfficeHotkeys(dispatch, !is3DAvailable, hotkeyHandlers, state.isWalking)
+  const features = useOfficeFeatures(dispatch, !is3DAvailable, state.isWalking, hotkeyHandlers)
 
   useEffect(() => {
     if (!speakingAgentKey) return
@@ -277,6 +277,9 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
             isMetricsVisible={state.isMetricsVisible}
             isWalking={state.isWalking}
             onToggleWalk={() => dispatch({ type: 'walk-toggled' })}
+            hasPlayer={features.hasPlayer}
+            isSettingsOpen={features.isSettingsOpen}
+            onToggleSettings={features.toggleSettings}
             onWallsMode={(mode) => dispatch({ type: 'walls-set', mode })}
             onToggleList={() => dispatch({ type: 'list-toggled' })}
             onToggleMetrics={() => dispatch({ type: 'metrics-toggled' })}

@@ -1,0 +1,143 @@
+import { X } from 'lucide-react'
+import { useEffect, useId, useRef } from 'react'
+import {
+  BUTTON_QUIET_COMPACT_CLASS,
+  ICON_BUTTON_CLASS,
+  PLATE_TITLE_CLASS
+} from '../../components/deck/deck-styles'
+import { Plate } from '../../components/deck/Plate'
+import { SettingRow, ToggleSwitch } from '../../components/settings/controls'
+import { officeSettings, useOfficeSettings, type OfficeSettingKey } from '../logic/office-settings'
+import { levelInUse, QUALITY_PINS, type QualityPin } from '../logic/quality'
+import { pinQuality, useQualityChoice } from '../quality-store'
+import { BAR_BUTTON_CLASS } from './hud-styles'
+
+interface Feature {
+  key: OfficeSettingKey
+  label: string
+  // What it is, and what switching it off saves.
+  description: string
+}
+
+const FEATURES: readonly Feature[] = [
+  {
+    key: 'town',
+    label: 'Town buildings',
+    description:
+      'The buildings, streets and props around the offices. Off draws the floor alone, the largest saving.'
+  },
+  {
+    key: 'citizens',
+    label: 'Citizens',
+    description: 'People walking the streets. Off removes them and the work of moving them.'
+  },
+  {
+    key: 'vehicles',
+    label: 'Vehicles',
+    description: 'Traffic on the streets. Vehicles arrive with the zoned town; off keeps them out.'
+  },
+  {
+    key: 'ambient',
+    label: 'Ambient motion',
+    description: 'Moving scenery among the town buildings. Off lets a quiet office stop redrawing.'
+  },
+  {
+    key: 'loungeTrips',
+    label: 'Lounge trips',
+    description:
+      'Finished agents walk to their lounge. Off keeps them at their desks, with no walks.'
+  },
+  {
+    key: 'player',
+    label: 'Your character',
+    description:
+      'The figure you walk through the office. Off removes it, the Walk button and its key.'
+  }
+]
+
+const PIN_LABEL: Record<QualityPin, string> = {
+  auto: 'Auto',
+  full: 'Full',
+  balanced: 'Balanced',
+  light: 'Light'
+}
+
+function restoreDefaults(): void {
+  officeSettings.reset()
+  pinQuality('auto')
+}
+
+// Every feature of the living world, each with its own switch. The choices are this page's own
+// and apply as they are made.
+export function OfficeSettingsPanel({ id, onClose }: { id: string; onClose: () => void }) {
+  const titleId = useId()
+  const titleRef = useRef<HTMLHeadingElement>(null)
+  const settings = useOfficeSettings()
+  const { pin, chosen } = useQualityChoice()
+  useEffect(() => titleRef.current?.focus(), [])
+
+  return (
+    <div
+      id={id}
+      role="dialog"
+      aria-labelledby={titleId}
+      className="absolute bottom-full left-1/2 z-10 mb-2 w-[25rem] max-w-[calc(100vw-1.5rem)] -translate-x-1/2"
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') onClose()
+      }}
+    >
+      <Plate faceClassName="flex max-h-[70vh] flex-col overflow-y-auto p-3">
+        <div className="flex items-center gap-2">
+          <h2 id={titleId} ref={titleRef} tabIndex={-1} className={`${PLATE_TITLE_CLASS} flex-1`}>
+            Office settings
+          </h2>
+          <button
+            type="button"
+            aria-label="Close settings"
+            onClick={onClose}
+            className={ICON_BUTTON_CLASS}
+          >
+            <X aria-hidden="true" className="size-4" />
+          </button>
+        </div>
+        <div className="divide-y divide-border">
+          {FEATURES.map(({ key, label, description }) => (
+            <SettingRow key={key} label={label} description={description}>
+              <ToggleSwitch
+                label={label}
+                checked={settings[key]}
+                onChange={(isOn) => officeSettings.set(key, isOn)}
+              />
+            </SettingRow>
+          ))}
+          <div className="py-2.5">
+            <p className="text-body font-semibold text-text-primary">Detail level</p>
+            <p className="mt-0.5 text-xs text-text-secondary">
+              How much of the town is drawn, and how sharply. Auto picks for this machine: now{' '}
+              {levelInUse(pin, chosen)}.
+            </p>
+            <div role="group" aria-label="Detail level" className="mt-1.5 flex gap-1">
+              {QUALITY_PINS.map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  aria-pressed={pin === option}
+                  className={BAR_BUTTON_CLASS}
+                  onClick={() => pinQuality(option)}
+                >
+                  {PIN_LABEL[option]}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center justify-between gap-3 pt-2">
+          <p className="text-caption text-text-secondary">Kept on this machine.</p>
+          <button type="button" className={BUTTON_QUIET_COMPACT_CLASS} onClick={restoreDefaults}>
+            Restore defaults
+          </button>
+        </div>
+      </Plate>
+    </div>
+  )
+}

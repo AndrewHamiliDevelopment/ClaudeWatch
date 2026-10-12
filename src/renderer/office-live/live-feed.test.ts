@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createLiveFeed, type FeedSource } from './live-feed'
 import type { FeedMessage, SessionRef } from '../../shared/office/types'
+import { createOfficeSettingsStore } from '../office/logic/office-settings'
 import type { OfficeFrame } from '../office/scene-model'
 
 const session = (key: string): SessionRef => ({
@@ -206,6 +207,58 @@ describe('createLiveFeed', () => {
     listener?.(hello)
     listener?.({ ...hello, snapshot: { ...hello.snapshot, rev: 2 } })
     expect(setItem).toHaveBeenCalledTimes(1)
+  })
+
+  describe('lounge trips', () => {
+    const LOUNGE_MS = 200_000
+    const helloDone = (): void =>
+      listener?.({
+        type: 'hello',
+        v: 1,
+        snapshot: {
+          rev: 1,
+          generatedAtMs: 1,
+          sessions: [{ ...session('claude:a'), attention: 'done' }],
+          sources: []
+        }
+      })
+    const place = (frames: OfficeFrame[]): string | undefined => frames.at(-1)?.agents[0].place
+
+    it('keeps a finished agent at its desk while the setting is off', () => {
+      const settings = createOfficeSettingsStore(null)
+      settings.set('loungeTrips', false)
+      const frames: OfficeFrame[] = []
+      createLiveFeed(source, { storage: store, settings }).subscribe((frame) => frames.push(frame))
+      helloDone()
+      vi.advanceTimersByTime(LOUNGE_MS)
+      expect(place(frames)).toBeUndefined()
+    })
+
+    it('follows the setting on a running office, both ways', () => {
+      const settings = createOfficeSettingsStore(null)
+      const frames: OfficeFrame[] = []
+      const unsubscribe = createLiveFeed(source, { storage: store, settings }).subscribe((frame) =>
+        frames.push(frame)
+      )
+      helloDone()
+      vi.advanceTimersByTime(LOUNGE_MS)
+      expect(place(frames)).toBe('lounge')
+
+      settings.set('loungeTrips', false)
+      vi.advanceTimersByTime(200)
+      expect(place(frames)).toBeUndefined()
+
+      settings.set('loungeTrips', true)
+      vi.advanceTimersByTime(200)
+      expect(place(frames)).toBe('lounge')
+
+      // A stopped feed no longer listens for the setting.
+      unsubscribe()
+      const count = frames.length
+      settings.set('loungeTrips', false)
+      vi.advanceTimersByTime(1_000)
+      expect(frames).toHaveLength(count)
+    })
   })
 
   it('forwards a focus request to the bridge and returns where it landed', async () => {
