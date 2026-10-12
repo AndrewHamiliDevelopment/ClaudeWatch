@@ -47,32 +47,61 @@ interface ReadTail {
   mtimeMs: number
   state: TranscriptState
 }
-const tails = new WeakMap<BridgeIo, { read: Map<string, ReadTail>; seen: Set<string> }>()
+interface Remembered {
+  read: Map<string, ReadTail>
+  // A subagent's type, by its transcript path: its meta file is written once, when it starts.
+  agentTypes: Map<string, string>
+  seen: Set<string>
+}
+const remembered = new WeakMap<BridgeIo, Remembered>()
+
+function memoryOf(io: BridgeIo): Remembered {
+  let memory = remembered.get(io)
+  if (!memory)
+    remembered.set(io, (memory = { read: new Map(), agentTypes: new Map(), seen: new Set() }))
+  return memory
+}
 
 // A transcript's parsed tail and when the file was last written. The tail is read and parsed
-// again only when the file's size or time moved.
+// again only when the file's size or time moved; a caller that has just listed it passes both.
 export async function readTranscript(
   path: string,
-  io: BridgeIo
+  io: BridgeIo,
+  listed?: { size: number; mtimeMs: number }
 ): Promise<TranscriptState & { mtimeMs: number }> {
-  let cache = tails.get(io)
-  if (!cache) tails.set(io, (cache = { read: new Map(), seen: new Set() }))
-  cache.seen.add(path)
-  const { size, mtimeMs } = await io.stat(path)
-  let tail = cache.read.get(path)
+  const memory = memoryOf(io)
+  memory.seen.add(path)
+  const { size, mtimeMs } = listed ?? (await io.stat(path))
+  let tail = memory.read.get(path)
   if (tail?.size !== size || tail.mtimeMs !== mtimeMs) {
     tail = { size, mtimeMs, state: parseTranscript(await io.readTail(path)) }
-    cache.read.set(path, tail)
+    memory.read.set(path, tail)
   }
   return { ...tail.state, mtimeMs }
 }
 
+// A subagent's type, read once and kept as long as its transcript is.
+export async function rememberedAgentType(
+  path: string,
+  io: BridgeIo,
+  read: () => Promise<string | null>
+): Promise<string | null> {
+  const { agentTypes } = memoryOf(io)
+  const known = agentTypes.get(path)
+  if (known) return known
+  const agentType = await read()
+  if (agentType) agentTypes.set(path, agentType)
+  return agentType
+}
+
 // Forgets every transcript not read since the last call: its session has left.
 export function pruneTranscripts(io: BridgeIo): void {
-  const cache = tails.get(io)
-  if (!cache) return
-  for (const path of cache.read.keys()) if (!cache.seen.has(path)) cache.read.delete(path)
-  cache.seen.clear()
+  const memory = remembered.get(io)
+  if (!memory) return
+  for (const memo of [memory.read, memory.agentTypes]) {
+    for (const path of memo.keys()) if (!memory.seen.has(path)) memo.delete(path)
+  }
+  memory.seen.clear()
 }
 
 // The folder name Claude Code gives a working directory under `projects/`.

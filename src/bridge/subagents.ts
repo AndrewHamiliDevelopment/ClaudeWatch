@@ -3,7 +3,7 @@ import type { AgentActivity, CurrentTool, SubagentRef } from '../shared/office/t
 import { type BridgeIo, isLabel, isMissing, jsonObject } from './io'
 import { isStillWorking, OPEN_TOOL_HOLD_MS, quietFor, SUBAGENT_FRESH_MS } from './liveness'
 import { toolActivity } from './tool-category'
-import { readTranscript } from './transcript-tail'
+import { readTranscript, rememberedAgentType } from './transcript-tail'
 
 export interface AgentFile {
   id: string
@@ -47,11 +47,18 @@ export async function listAgentFiles(transcript: string, io: BridgeIo): Promise<
 // The tool still open at the end of an agent's record, if any.
 async function openTool(file: AgentFile, io: BridgeIo): Promise<CurrentTool | null> {
   try {
-    return (await readTranscript(file.path, io)).tool
+    return (await readTranscript(file.path, io, file)).tool
   } catch (error) {
     if (isMissing(error)) return null
     throw error
   }
+}
+
+async function agentTypeOf(file: AgentFile, io: BridgeIo): Promise<string | null> {
+  return rememberedAgentType(file.path, io, async () => {
+    const meta = jsonObject(await io.readText(file.path.replace(/\.jsonl$/, '.meta.json')))
+    return isLabel(meta?.agentType) ? meta.agentType : null
+  })
 }
 
 export async function liveSubagents(
@@ -66,9 +73,9 @@ export async function liveSubagents(
     try {
       const tool = await openTool(file, io)
       if (!isStillWorking(quietMs, SUBAGENT_FRESH_MS, tool !== null)) continue
-      const meta = jsonObject(await io.readText(file.path.replace(/\.jsonl$/, '.meta.json')))
+      const type = await agentTypeOf(file, io)
       const activity: AgentActivity = tool ? toolActivity(tool.category) : 'thinking'
-      if (isLabel(meta?.agentType)) agents.push({ id: file.id, type: meta.agentType, activity })
+      if (type) agents.push({ id: file.id, type, activity })
     } catch (error) {
       if (!isMissing(error)) throw error
     }
