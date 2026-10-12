@@ -141,6 +141,8 @@ export interface AgentView {
   provider: ProviderId
   isSubagent: boolean
   label: string
+  // Absent means the agent is at its own desk.
+  place?: 'lounge'
 }
 
 // Why an office interaction did not happen; the UI turns each into plain words.

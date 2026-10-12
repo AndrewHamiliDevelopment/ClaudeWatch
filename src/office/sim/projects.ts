@@ -1,122 +1,133 @@
 import type { SessionRef } from '../../shared/office/types'
-import { bounds, room, type ZoneLayout, type RoomLayout } from './rooms'
+import { assignBays, packGrounds, reserveCapacity, type Grounds } from './allocation'
 import {
-  nextBay,
-  overlaps,
-  reserveCapacity,
-  RESERVATION_MS,
-  PROJECT_STRIDE_X,
-  PROJECT_STRIDE_Z
-} from './allocation'
+  bounds,
+  lounge,
+  LOUNGE_WIDTH,
+  loungeDepth,
+  room,
+  teamDepth,
+  type RoomLayout,
+  type ZoneLayout
+} from './rooms'
 import type { LayoutMap } from './layout'
 
-export function refreshProjects(
-  company: ZoneLayout,
-  sessions: SessionRef[],
-  layout: LayoutMap,
-  now: number
-): void {
-  const active = new Set(sessions.map((s) => s.projectKey))
-  company.children = company.children.filter((project) => {
-    if (active.has(project.projectKey!)) project.releasedAtMs = null
-    else project.releasedAtMs ??= now
-    return project.releasedAtMs === null || now - project.releasedAtMs < RESERVATION_MS
-  })
-  for (const session of sessions) {
-    if (company.children.some((p) => p.projectKey === session.projectKey)) continue
-    company.children.push({
-      ...bounds(0, 0, 24, 18),
-      id: `${company.id}:project:${session.projectKey}`,
-      kind: 'project',
-      label: session.projectLabel,
-      companyKey: company.companyKey,
-      projectKey: session.projectKey,
-      sessionKey: null,
-      index: nextBay(company.children.map((p) => p.index)),
-      capacity: 4,
-      releasedAtMs: null,
-      children: []
-    })
-  }
-  company.children.sort((a, b) => a.id.localeCompare(b.id))
-  for (const project of company.children) {
-    const members = sessions.filter((s) => s.projectKey === project.projectKey)
-    const reserved = Object.values(layout.reservations).filter(
-      (r) => r.companyKey === company.companyKey && r.projectKey === project.projectKey
-    )
-    for (const member of members) {
-      if (layout.reservations[member.key]) continue
-      const bay = nextBay(reserved.map((r) => r.bay))
-      const reservation = {
-        floorId: 'hq',
-        plate: 0,
-        bay,
-        companyKey: company.companyKey,
-        projectKey: member.projectKey,
-        releasedAtMs: null
-      }
-      reserved.push(reservation)
-      layout.reservations[member.key] = reservation
-    }
-    project.capacity = reserveCapacity(
-      Math.max(0, ...reserved.map((r) => r.bay + 1)),
-      project.capacity
-    )
-    const overflow = members.reduce((count, s) => count + Math.max(0, s.subagents.length - 2), 0)
-    const seats = Math.max(8, Math.ceil(overflow / 8) * 8)
-    const teamDepth = Math.max(4, Math.ceil(seats / 8) * 2 + 2)
-    project.depth = Math.max(project.depth, (project.capacity / 4) * 6 + 4 + teamDepth)
-    if (members.length) project.label = members[0].projectLabel
-  }
+const PROJECT_WIDTH = 24
+const UNSAVED = -1
+
+// A company sized from its live sessions, not yet placed on the floor.
+export interface CompanyDraft {
+  zone: ZoneLayout
+  members: SessionRef[]
+  grounds: Grounds
+  loungeSeats: number
+  reservations: LayoutMap['reservations']
 }
 
-export function positionProjects(company: ZoneLayout, previous = new Set<string>()): void {
-  const left = company.x - company.width / 2
-  const top = company.z - company.depth / 2
-  const placed: ZoneLayout[] = []
-  const ordered = [...company.children].sort(
-    (a, b) => Number(previous.has(b.id)) - Number(previous.has(a.id)) || a.index - b.index
+// Saved maps come from storage: only a whole, non-negative number counts as an order or a bay.
+const isOrdinal = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isInteger(value) && value >= 0
+
+function teamSeats(crew: SessionRef[]): number {
+  const overflow = crew.reduce((count, s) => count + Math.max(0, s.subagents.length - 2), 0)
+  return Math.max(8, Math.ceil(overflow / 8) * 8)
+}
+
+function heldBays(crew: SessionRef[], saved: LayoutMap | undefined): Map<string, number> {
+  const held = new Map<string, number>()
+  for (const { key, companyKey, projectKey } of crew) {
+    const reservation = saved?.reservations?.[key]
+    if (
+      reservation?.companyKey === companyKey &&
+      reservation.projectKey === projectKey &&
+      isOrdinal(reservation.bay)
+    )
+      held.set(key, reservation.bay)
+  }
+  return held
+}
+
+// `members` are one company's sessions, sorted by project and key.
+export function draftCompany(members: SessionRef[], saved: LayoutMap | undefined): CompanyDraft {
+  const [{ companyKey, companyLabel }] = members
+  const id = `company:${companyKey}`
+  const zones = saved?.floors?.[0]?.zones
+  const previous = Array.isArray(zones) ? zones.find((zone) => zone.id === id) : undefined
+  const savedIndex = previous?.index
+  const savedProjects = previous?.children
+  const savedOrder = new Map(
+    (Array.isArray(savedProjects) ? savedProjects : [])
+      .filter((project) => isOrdinal(project.index))
+      .map((project) => [project.projectKey, project.index])
   )
-  for (const project of ordered) {
-    let index = project.index
-    while (true) {
-      const geometry = bounds(
-        left + 3 + (index % 2) * PROJECT_STRIDE_X,
-        top + 3 + Math.floor(index / 2) * PROJECT_STRIDE_Z,
-        project.width,
-        project.depth
-      )
-      if (!placed.some((p) => overlaps(p, geometry, 3))) {
-        Object.assign(project, geometry, { index })
-        placed.push(project)
-        break
-      }
-      index++
+  const rank = (projectKey: string): number => savedOrder.get(projectKey) ?? Number.MAX_SAFE_INTEGER
+  // Projects keep the order they arrived in; the ones that left close up.
+  const projectKeys = [...new Set(members.map((s) => s.projectKey))].sort(
+    (a, b) => rank(a) - rank(b) || a.localeCompare(b)
+  )
+  const reservations: LayoutMap['reservations'] = {}
+  const projects = projectKeys.map((projectKey, index): ZoneLayout => {
+    const crew = members.filter((s) => s.projectKey === projectKey)
+    const bays = assignBays(
+      crew.map((s) => s.key),
+      heldBays(crew, saved)
+    )
+    for (const [key, bay] of bays)
+      reservations[key] = { floorId: 'hq', plate: 0, bay, companyKey, projectKey }
+    const capacity = reserveCapacity(crew.length)
+    return {
+      ...bounds(0, 0, PROJECT_WIDTH, (capacity / 4) * 6 + 4 + teamDepth(teamSeats(crew))),
+      id: `${id}:project:${projectKey}`,
+      kind: 'project',
+      label: crew[0].projectLabel,
+      companyKey,
+      projectKey,
+      sessionKey: null,
+      capacity,
+      index,
+      children: []
     }
+  })
+  const loungeSeats = reserveCapacity(members.reduce((n, s) => n + 1 + s.subagents.length, 0))
+  const grounds = packGrounds(projects, { width: LOUNGE_WIDTH, depth: loungeDepth(loungeSeats) })
+  return {
+    zone: {
+      ...bounds(0, 0, grounds.width, grounds.depth),
+      id,
+      kind: 'company',
+      label: companyLabel,
+      companyKey,
+      projectKey: null,
+      sessionKey: null,
+      capacity: projects.reduce((desks, project) => desks + project.capacity, 0),
+      index: isOrdinal(savedIndex) ? savedIndex : UNSAVED,
+      children: projects
+    },
+    members,
+    grounds,
+    loungeSeats,
+    reservations
   }
-  company.depth = Math.max(company.depth, ...placed.map((p) => p.z + p.depth / 2 - top + 3))
-  company.z = top + company.depth / 2
 }
 
-export function populateRooms(
-  company: ZoneLayout,
-  sessions: SessionRef[],
-  layout: LayoutMap
-): RoomLayout[] {
-  return company.children.flatMap((project) => {
-    const members = sessions.filter((s) => s.projectKey === project.projectKey)
-    const offices = members.map((s) =>
-      room(project, layout.reservations[s.key].bay, s.key, s.name, s.worktree)
+// Once the company has its place on the floor: puts its projects, lounge and rooms on the map.
+export function settleCompany(draft: CompanyDraft): RoomLayout[] {
+  const { zone, members, grounds, loungeSeats, reservations } = draft
+  const left = zone.x - zone.width / 2
+  const top = zone.z - zone.depth / 2
+  zone.door = { x: left + 1.5, z: top }
+  zone.lounge = lounge(zone.id, left + grounds.lounge.x, top + grounds.lounge.z, loungeSeats)
+  for (const project of zone.children) {
+    const corner = grounds.projects[project.index]
+    Object.assign(project, bounds(left + corner.x, top + corner.z, project.width, project.depth))
+  }
+  zone.children.sort((a, b) => a.id.localeCompare(b.id))
+  return zone.children.flatMap((project) => {
+    const crew = members.filter((s) => s.projectKey === project.projectKey)
+    const offices = crew.map((s) =>
+      room(project, reservations[s.key].bay, s.key, s.name, s.worktree)
     )
-    const overflow = members.reduce((count, s) => count + Math.max(0, s.subagents.length - 2), 0)
-    const team = room(
-      project,
-      -1,
-      null,
-      `${project.label} team`,
-      null,
-      Math.max(8, Math.ceil(overflow / 8) * 8)
-    )
+    const team = room(project, -1, null, `${project.label} team`, null, teamSeats(crew))
     project.children = [...offices, team]
     return [...offices, team]
   })
