@@ -2,7 +2,7 @@ import type { CameraControlsImpl } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, type RefObject } from 'react'
 import { Vector3 } from 'three'
-import { keyInputFrom } from '../logic/hotkeys'
+import { isInsideScroller, keyInputFrom } from '../logic/hotkeys'
 import {
   releaseVelocity,
   startFling,
@@ -33,11 +33,13 @@ const MAX_FRAME_SEC = 0.05
 const MAX_DRAG_SAMPLES = 8
 const SCREEN_CENTRE = { x: 0, y: 0 }
 // Before the frame subscriber camera-controls registers at -1, so the pose it applies is this frame's.
-const BEFORE_CONTROLS = -2
+export const BEFORE_CONTROLS = -2
 
 interface GestureOptions {
   controlsRef: RefObject<CameraControlsImpl | null>
   isReducedMotion: boolean
+  // While the owner walks their player the arrow keys are its, not the camera's.
+  isWalking: boolean
   // The owner moved the camera by hand (wheel, pinch, scroll, arrow key, zoom key).
   onManualMove: () => void
   onFit: () => void
@@ -52,24 +54,6 @@ export interface CameraGestures {
 
 // OfficeScene's root: the element that holds both the canvas and the name-card layer above it.
 export const SCENE_ROOT_SELECTOR = '[data-scene-root]'
-
-const SCROLLING_OVERFLOW = new Set(['auto', 'scroll'])
-
-// Arrow keys scroll a HUD panel when focus is inside one that overflows; panning as well would
-// take keyboard scrolling away from it.
-function isInsideScroller(target: EventTarget | null): boolean {
-  let element = target instanceof Element ? target : null
-  while (element && element !== document.body) {
-    const { overflowX, overflowY } = getComputedStyle(element)
-    const scrollsDown =
-      SCROLLING_OVERFLOW.has(overflowY) && element.scrollHeight > element.clientHeight
-    const scrollsAcross =
-      SCROLLING_OVERFLOW.has(overflowX) && element.scrollWidth > element.clientWidth
-    if (scrollsDown || scrollsAcross) return true
-    element = element.parentElement
-  }
-  return false
-}
 
 interface GestureSurface {
   camera: { readonly zoom: number }
@@ -166,7 +150,8 @@ function createGestureRig({ camera, domElement, invalidate, latestRef }: Gesture
     }
     const direction = PAN_KEYS[event.key]
     const controls = latestRef.current.controlsRef.current
-    if (!direction || !controls || isInsideScroller(event.target)) return
+    if (!direction || !controls || latestRef.current.isWalking) return
+    if (isInsideScroller(event.target)) return
     event.preventDefault()
     latestRef.current.onManualMove()
     const [dx, dy] = [direction[0] * KEY_PAN_PX, direction[1] * KEY_PAN_PX]

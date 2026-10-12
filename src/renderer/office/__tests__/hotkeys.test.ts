@@ -51,3 +51,21 @@ describe('commandForKey', () => {
     expect(commandForKey(key('0'))).toBeNull()
   })
 })
+
+describe('commandForKey while walking', () => {
+  it('toggles walking with G, walking or not', () => {
+    expect(commandForKey(key('g'))).toEqual({ type: 'toggle-walk' })
+    expect(commandForKey(key('G'), true)).toEqual({ type: 'toggle-walk' })
+  })
+
+  it('leaves W A S D to the player, so W no longer cuts the walls away', () => {
+    for (const letter of ['w', 'W', 'a', 's', 'd'])
+      expect(commandForKey(key(letter), true)).toBeNull()
+  })
+
+  it('keeps every other key doing what it does', () => {
+    expect(commandForKey(key('q'), true)).toEqual({ type: 'rotate', direction: -1 })
+    expect(commandForKey(key('Home'), true)).toEqual({ type: 'walls', mode: 'up' })
+    expect(commandForKey(key('Enter'), true)).toEqual({ type: 'fly-to-selected' })
+  })
+})

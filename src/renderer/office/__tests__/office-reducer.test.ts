@@ -122,3 +122,18 @@ describe('officeReducer', () => {
     expect(state).toMatchObject({ wallsMode: 'down', isListView: true, isMetricsVisible: true })
   })
 })
+
+describe('walking', () => {
+  it('starts off, and the switch turns it on and off', () => {
+    expect(INITIAL_OFFICE_STATE.isWalking).toBe(false)
+    const walking = officeReducer(INITIAL_OFFICE_STATE, { type: 'walk-toggled' })
+    expect(walking.isWalking).toBe(true)
+    expect(officeReducer(walking, { type: 'walk-toggled' }).isWalking).toBe(false)
+  })
+
+  it('marks the office the player was sent to without flying the camera there', () => {
+    const state = officeReducer(INITIAL_OFFICE_STATE, { type: 'zone-walked', zoneId: 'company:a' })
+    expect(state.focusedZoneId).toBe('company:a')
+    expect(state.cameraRequest).toBeNull()
+  })
+})

@@ -20,6 +20,8 @@ function setup(overrides: Partial<Parameters<typeof BottomBar>[0]> = {}) {
       onRotate={onRotate}
       onZoom={onZoom}
       onFit={onFit}
+      isWalking={false}
+      onToggleWalk={vi.fn()}
       {...overrides}
     />
   )
@@ -70,5 +72,31 @@ describe('BottomBar camera controls', () => {
     fireEvent.click(themes)
     expect(themes).toHaveAttribute('aria-expanded', 'true')
     expect(screen.getByText('Themes list')).toBeInTheDocument()
+  })
+})
+
+describe('BottomBar walking', () => {
+  it('offers a Walk switch with its own key, off until pressed', () => {
+    const onToggleWalk = vi.fn()
+    setup({ onToggleWalk })
+    const walk = screen.getByRole('button', { name: /Walk/ })
+    expect(walk).toHaveAttribute('aria-pressed', 'false')
+    expect(walk).toHaveTextContent('G')
+    fireEvent.click(walk)
+    expect(onToggleWalk).toHaveBeenCalledOnce()
+    expect(screen.queryByText(/to walk/)).not.toBeInTheDocument()
+  })
+
+  it('shows one line naming the keys while walking is on', () => {
+    setup({ isWalking: true })
+    expect(screen.getByRole('button', { name: /Walk/ })).toHaveAttribute('aria-pressed', 'true')
+    const hint = screen.getByText(/to walk/)
+    expect(hint).toHaveTextContent('W A S D')
+    expect(hint).toHaveTextContent('X')
+  })
+
+  it('cannot be switched on while the office is shown as a list', () => {
+    setup({ isListView: true })
+    expect(screen.getByRole('button', { name: /Walk/ })).toBeDisabled()
   })
 })

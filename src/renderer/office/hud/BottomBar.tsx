@@ -10,6 +10,7 @@ import {
 import { useId, useRef, useState, type ReactNode } from 'react'
 import { Plate } from '../../components/deck/Plate'
 import type { ZoomDirection } from '../logic/camera-bands'
+import { WALK_KEYS } from '../logic/hotkeys'
 import type { WallsMode } from '../logic/room-layout'
 import { BAR_BUTTON_CLASS, KBD_CLASS } from './hud-styles'
 
@@ -21,6 +22,9 @@ interface BottomBarProps {
   isListView: boolean
   is3DAvailable: boolean
   isMetricsVisible: boolean
+  // The owner is moving their own character through the office.
+  isWalking: boolean
+  onToggleWalk: () => void
   onWallsMode: (mode: WallsMode) => void
   onToggleList: () => void
   onToggleMetrics: () => void
@@ -150,6 +154,13 @@ export function BottomBar(props: BottomBarProps) {
         </div>
         <Divider />
         <ToggleButton
+          label="Walk"
+          shortcut={WALK_KEYS.toggle}
+          isPressed={props.isWalking && isShowing3D}
+          isDisabled={!isShowing3D}
+          onClick={props.onToggleWalk}
+        />
+        <ToggleButton
           label="List view"
           shortcut="L"
           isPressed={props.isListView || !props.is3DAvailable}
@@ -174,6 +185,12 @@ export function BottomBar(props: BottomBarProps) {
           isDisabled={!isShowing3D}
           onClick={props.onToggleMetrics}
         />
+        {props.isWalking && isShowing3D && (
+          <p className="basis-full px-1 pb-0.5 text-xs text-text-secondary">
+            Arrow keys or W A S D to walk, click to go there, {WALK_KEYS.talk} to talk to the agent
+            beside you.
+          </p>
+        )}
       </Plate>
     </div>
   )

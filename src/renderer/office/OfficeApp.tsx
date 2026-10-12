@@ -20,6 +20,7 @@ import { MetricsOverlay } from './hud/MetricsOverlay'
 import { OfficesPanel } from './hud/OfficesPanel'
 import { ResourceBar } from './hud/ResourceBar'
 import { ThemesList } from './hud/ThemesList'
+import { useWalking } from './player/use-walking'
 import { SceneErrorBoundary } from './SceneErrorBoundary'
 import type { OfficeFeed } from './scene-model'
 import {
@@ -74,6 +75,7 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
   )
   const isConnecting = !frame || (!frame.connected && frame.sessions.length === 0)
   const focusedFloor = frame?.floors.find((floor) => floor.floorId === floorId)
+  const { player, goToZone } = useWalking(focusedFloor, state.isWalking, dispatch)
   const {
     agent: selectedAgent,
     session: selectedSession,
@@ -92,10 +94,8 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
   const focusSelected = useCallback(() => {
     if (selectedTargetKey) focusTerminal(selectedTargetKey)
   }, [selectedTargetKey, focusTerminal])
-  useOfficeHotkeys(dispatch, !is3DAvailable, {
-    onCycleTheme: cycleTheme,
-    onFocusTerminal: focusSelected
-  })
+  const hotkeyHandlers = { onCycleTheme: cycleTheme, onFocusTerminal: focusSelected }
+  useOfficeHotkeys(dispatch, !is3DAvailable, hotkeyHandlers, state.isWalking)
 
   useEffect(() => {
     if (!speakingAgentKey) return
@@ -150,6 +150,8 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
               reviewableKeys={reviewableKeys}
               onReview={openReview}
               speakingAgentKey={speakingAgentKey}
+              player={player}
+              isWalking={state.isWalking}
             />
           </Suspense>
         </SceneErrorBoundary>
@@ -172,7 +174,7 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
             themeRows={themeRows}
             onChooseTheme={officeTheme.chooseTheme}
             focusedZoneId={state.focusedZoneId}
-            onFlyToZone={flyToZone}
+            onFlyToZone={goToZone}
             onStart={isViewOnly ? null : (projectKey, provider) => feed.start(projectKey, provider)}
           />
           <AttentionRail
@@ -273,6 +275,8 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
             isListView={state.isListView}
             is3DAvailable={is3DAvailable}
             isMetricsVisible={state.isMetricsVisible}
+            isWalking={state.isWalking}
+            onToggleWalk={() => dispatch({ type: 'walk-toggled' })}
             onWallsMode={(mode) => dispatch({ type: 'walls-set', mode })}
             onToggleList={() => dispatch({ type: 'list-toggled' })}
             onToggleMetrics={() => dispatch({ type: 'metrics-toggled' })}
