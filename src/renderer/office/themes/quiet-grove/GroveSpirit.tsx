@@ -5,9 +5,8 @@ import { JointedFigure } from '../JointedFigure'
 import type { RobotModelProps } from '../types'
 import { UNIT_SHAPES, UnitPart } from '../unit-parts'
 import { Parts } from '../parts'
-import { GROVE_CAST } from './cast'
 import { GROVE } from './palette'
-import { quietGroveRoster } from './roster'
+import { groveLook } from './roster'
 import { spiritBuild } from './spirit-parts'
 
 // Where each firefly rises (x, z); the rig sets its height and size while the agent works,
@@ -53,35 +52,38 @@ function GroveEffects({ rig, crown }: Pick<RobotModelProps, 'rig'> & { crown: nu
   )
 }
 
-// A keeper, a helper or a sprout; which one is decided by the provider and the office bay.
+// A keeper, a helper, a wanderer or a sprout: the agent's own key picks the character, its
+// build and its trim.
 export function GroveSpirit({ agent, skin, rosterIndex, rig }: RobotModelProps) {
-  const castIndex = quietGroveRoster.indexFor(agent, rosterIndex)
-  const build = useMemo(() => spiritBuild(GROVE_CAST[castIndex]), [castIndex])
+  const { who, build: stretch } = groveLook(agent, rosterIndex)
+  const build = useMemo(() => spiritBuild(who), [who])
   const isAsking = moodFor(agent, false) === 'needs-you'
   return (
-    <JointedFigure
-      rig={rig}
-      joints={build.joints}
-      pivot={build.pivot}
-      eye={{ ...build.eye, color: skin.eye }}
-      effects={<GroveEffects rig={rig} crown={build.crown} />}
-      ground={
-        // Hidden, never unmounted: a merged batch keeps drawing a mesh that leaves the tree.
-        <group name="needs-you-halo" visible={isAsking}>
-          <UnitPart
-            shape="cylinder"
-            at={[0, HALO.y, 0]}
-            size={[HALO.width, 0.006, HALO.width]}
-            color={GROVE.beacon}
-            glow
-          />
-        </group>
-      }
-      inRightHand={
-        <group name="needs-you-beacon" visible={isAsking}>
-          <Parts parts={build.beacon} />
-        </group>
-      }
-    />
+    <group scale={[stretch.girth, stretch.height, stretch.girth]}>
+      <JointedFigure
+        rig={rig}
+        joints={build.joints}
+        pivot={build.pivot}
+        eye={{ ...build.eye, color: skin.eye }}
+        effects={<GroveEffects rig={rig} crown={build.crown} />}
+        ground={
+          // Hidden, never unmounted: a merged batch keeps drawing a mesh that leaves the tree.
+          <group name="needs-you-halo" visible={isAsking}>
+            <UnitPart
+              shape="cylinder"
+              at={[0, HALO.y, 0]}
+              size={[HALO.width, 0.006, HALO.width]}
+              color={GROVE.beacon}
+              glow
+            />
+          </group>
+        }
+        inRightHand={
+          <group name="needs-you-beacon" visible={isAsking}>
+            <Parts parts={build.beacon} />
+          </group>
+        }
+      />
+    </group>
   )
 }

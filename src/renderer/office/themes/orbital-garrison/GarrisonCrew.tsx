@@ -3,19 +3,22 @@ import { JointedFigure, VISOR_EYE } from '../JointedFigure'
 import { RobotEffects } from '../RobotEffects'
 import type { RobotModelProps } from '../types'
 import { CREW_PIVOT, crewParts } from './crew-parts'
-import { characterFor } from './roster'
+import { garrisonLook } from './roster'
 
-// A suited pilot or deck hand at the console; the provider and the office bay decide which one.
+// A suited member of the garrison at the console: the agent's own key picks the character,
+// its build and its trim.
 export function GarrisonCrew({ agent, skin, rosterIndex, rig }: RobotModelProps) {
-  const character = characterFor(agent, rosterIndex)
-  const joints = useMemo(() => crewParts(character), [character])
+  const { who, build } = garrisonLook(agent, rosterIndex)
+  const joints = useMemo(() => crewParts(who), [who])
   return (
-    <JointedFigure
-      rig={rig}
-      joints={joints}
-      pivot={CREW_PIVOT}
-      eye={{ ...VISOR_EYE, color: skin.eye }}
-      effects={<RobotEffects rig={rig} />}
-    />
+    <group scale={[build.girth, build.height, build.girth]}>
+      <JointedFigure
+        rig={rig}
+        joints={joints}
+        pivot={CREW_PIVOT}
+        eye={{ ...VISOR_EYE, color: skin.eye }}
+        effects={<RobotEffects rig={rig} />}
+      />
+    </group>
   )
 }

@@ -1,7 +1,8 @@
 import type { Vector } from '../primitives'
 import { box, lit, turned, type PartSpec, SIDES, cone, cylinder, sphere } from '../parts'
-import type { GroveCharacter } from './cast'
+import type { GroveCharacter } from './kin'
 import { GROVE } from './palette'
+import { CARRIED_PARTS } from './spirit-carried'
 import { FEATURE_PARTS, type SpiritJoint, type SpiritParts } from './spirit-features'
 
 export interface SpiritBuild {
@@ -115,6 +116,38 @@ function helper(who: GroveCharacter): SpiritBuild {
   }
 }
 
+// Between the two in height: a leaf-headed traveller on thin legs under a short cape.
+function wanderer(who: GroveCharacter): SpiritBuild {
+  const arm = (): PartSpec[] => [
+    cylinder([0, -0.12, 0], [0.07, 0.24, 0.07], who.body),
+    sphere([0, -0.27, 0], [0.085, 0.085, 0.085], GROVE.paper)
+  ]
+  return {
+    pivot: {
+      leftArm: [-0.17, 0.58, 0],
+      rightArm: [0.17, 0.58, 0],
+      head: [0, 0.68, 0],
+      gear: [0.3, 0.9, -0.05]
+    },
+    eye: { at: eyeAt(0.1, 0.14), size: EYE_SIZE },
+    crown: 1.3,
+    joints: {
+      base: SIDES.map((side) => box([side * 0.07, 0.03, 0.04], [0.09, 0.06, 0.15], GROVE.soil)),
+      legs: SIDES.map((side) => cylinder([side * 0.07, 0.17, 0], [0.07, 0.26, 0.07], GROVE.bark)),
+      body: [
+        cone([0, 0.47, 0], [0.46, 0.44, 0.38], who.body),
+        cylinder([0, 0.65, 0], [0.2, 0.06, 0.18], who.trim),
+        cylinder([0, 0.27, 0], [0.4, 0.03, 0.33], who.trim)
+      ],
+      leftArm: arm(),
+      rightArm: arm(),
+      head: [sphere([0, 0.1, 0], [0.3, 0.28, 0.28], GROVE.fern), ...face(0.1, 0.14)],
+      gear: pinwheel(who.trim)
+    },
+    beacon: lantern(0.27, 0.32)
+  }
+}
+
 const LEAF_SPLAY = 0.78
 
 // A seedling in a pot: its two leaves are its arms, so they wave and type like anyone's.
@@ -167,10 +200,13 @@ const JOINTS: readonly SpiritJoint[] = [
   'gear'
 ]
 
+const GROWN = { keeper, helper, wanderer }
+const EVERY_FEATURE = { ...FEATURE_PARTS, ...CARRIED_PARTS }
+
 export function spiritBuild(who: GroveCharacter): SpiritBuild {
-  const build = who.isSprout ? sprout(who) : who.kin === 'keeper' ? keeper(who) : helper(who)
+  const build = who.isSprout ? sprout(who) : GROWN[who.kin](who)
   for (const feature of who.features) {
-    const added = FEATURE_PARTS[feature](who)
+    const added = EVERY_FEATURE[feature](who)
     for (const joint of JOINTS) build.joints[joint].push(...(added[joint] ?? []))
   }
   return build

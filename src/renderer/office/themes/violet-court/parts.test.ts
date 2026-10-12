@@ -42,12 +42,16 @@ describe('Violet Court figures', () => {
     expect(new Set(shapes).size).toBe(COURT_CAST.length)
   })
 
-  it('dresses the two factions in different uniform colours', () => {
+  it('dresses the Order and the Corps in different jackets, and only the Guild in a tabard', () => {
     const jackets = (faction: 'order' | 'corps') =>
       COURT_CAST.filter((character) => character.faction === faction).map(
         (character) => pilotParts(character).body[0].color
       )
     for (const color of jackets('order')) expect(jackets('corps')).not.toContain(color)
+    for (const character of COURT_CAST)
+      expect(character.features.includes('tabard'), character.id).toBe(
+        character.faction === 'guild'
+      )
   })
 
   it('builds three different knight frames, each taller than a pilot', () => {

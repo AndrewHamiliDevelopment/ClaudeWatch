@@ -3,9 +3,11 @@ import { ROSTER_NAMES_STORAGE_KEY } from '../roster-names'
 import { GROVE_CAST } from './cast'
 import { quietGroveRoster } from './roster'
 
-const lead = (provider: 'claude' | 'codex', bay: number) =>
+type Provider = 'claude' | 'codex' | 'opencode'
+const PROVIDERS = ['claude', 'codex', 'opencode'] as const
+const lead = (provider: Provider, bay: number) =>
   GROVE_CAST[quietGroveRoster.indexFor({ provider, isSubagent: false }, bay)]
-const sprout = (provider: 'claude' | 'codex', bay: number) =>
+const sprout = (provider: Provider, bay: number) =>
   GROVE_CAST[quietGroveRoster.indexFor({ provider, isSubagent: true }, bay)]
 
 describe('Quiet Grove roster', () => {
@@ -21,18 +23,19 @@ describe('Quiet Grove roster', () => {
     expect(new Set(GROVE_CAST.map((entry) => entry.name)).size).toBe(GROVE_CAST.length)
   })
 
-  it('gives the first five bays of one provider five different characters, then wraps', () => {
-    for (const provider of ['claude', 'codex'] as const) {
-      const ids = [0, 1, 2, 3, 4].map((bay) => lead(provider, bay).id)
-      expect(new Set(ids).size).toBe(5)
-      expect(lead(provider, 5).id).toBe(ids[0])
+  it('gives the first eight bays of one provider eight different characters, then wraps', () => {
+    for (const provider of PROVIDERS) {
+      const ids = [0, 1, 2, 3, 4, 5, 6, 7].map((bay) => lead(provider, bay).id)
+      expect(new Set(ids).size).toBe(8)
+      expect(lead(provider, 8).id).toBe(ids[0])
     }
   })
 
-  it('casts a Claude session as a keeper and a Codex session as a helper', () => {
-    for (const bay of [0, 1, 2, 3, 4, 5, 6]) {
+  it('casts Claude as a keeper, Codex as a helper and OpenCode as a wanderer', () => {
+    for (const bay of [0, 1, 2, 3, 4, 5, 6, 7, 8]) {
       expect(lead('claude', bay)).toMatchObject({ kin: 'keeper', isSprout: false })
       expect(lead('codex', bay)).toMatchObject({ kin: 'helper', isSprout: false })
+      expect(lead('opencode', bay)).toMatchObject({ kin: 'wanderer', isSprout: false })
     }
   })
 
@@ -40,8 +43,27 @@ describe('Quiet Grove roster', () => {
     for (const bay of [0, 3, 7]) {
       expect(sprout('claude', bay)).toMatchObject({ isSprout: true, kin: 'keeper' })
       expect(sprout('codex', bay)).toMatchObject({ isSprout: true, kin: 'helper' })
+      expect(sprout('opencode', bay)).toMatchObject({ isSprout: true, kin: 'wanderer' })
     }
     expect(sprout('claude', 0)).toBe(sprout('claude', 4))
+  })
+
+  // The owner's local renames are stored by index: a founder never moves.
+  it('keeps the founding cast at the indexes it shipped with', () => {
+    expect(GROVE_CAST.slice(0, 12).map((character) => character.id)).toEqual([
+      'tansy-rushlight',
+      'bracken-holt',
+      'linden-quill',
+      'sorrel-wick',
+      'alder-moss',
+      'pebble-brook',
+      'flint-burrow',
+      'drizzle-fen',
+      'cobble-wren',
+      'nettle-tarn',
+      'hearth-sprout',
+      'brook-sapling'
+    ])
   })
 
   it('exports id, name and role, with the owner local renames applied by index', () => {

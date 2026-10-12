@@ -1,8 +1,7 @@
 import { brassWorkshop, neoEdoSteam } from './builtins'
 import { orbitalGarrison } from './orbital-garrison'
 import { quietGrove } from './quiet-grove'
-import type { AgentView } from '../../../shared/office/types'
-import type { OfficeTheme, RosterEntry } from './types'
+import type { OfficeTheme, RosterAgent, RosterEntry } from './types'
 import { violetCourt } from './violet-court'
 
 export const DEFAULT_THEME_ID = 'neo-edo-steam'
@@ -34,7 +33,7 @@ export function themeForTeam(): OfficeTheme {
 // The character an agent plays in a theme, or null where the theme has no cast.
 export function themeCharacter(
   themeId: string,
-  agent: Pick<AgentView, 'provider' | 'isSubagent'>,
+  agent: RosterAgent,
   bay: number
 ): RosterEntry | null {
   const roster = getTheme(themeId).roster

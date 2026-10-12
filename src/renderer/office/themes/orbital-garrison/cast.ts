@@ -1,58 +1,9 @@
-import type { RosterEntry } from '../types'
+import { GARRISON_NEWCOMERS } from './cast-newcomers'
 import { GARRISON } from './palette'
+import { DECK, WING, type GarrisonCharacter } from './section'
 
-type Section = 'wing' | 'deck'
-export type CrewFeature =
-  | 'peaked-cap'
-  | 'greatcoat'
-  | 'shoulder-boards'
-  | 'flight-helmet'
-  | 'hard-hat'
-  | 'headset'
-  | 'ear-defenders'
-  | 'antenna'
-  | 'goggles'
-  | 'respirator'
-  | 'braid'
-  | 'scarf'
-  | 'bandolier'
-  | 'hi-vis-bands'
-  | 'tool-pack'
-  | 'tank-pack'
-  | 'tablet'
-  | 'wands'
-
-export interface GarrisonCharacter extends RosterEntry {
-  section: Section
-  isSquad: boolean
-  suit: string
-  trim: string
-  headgear: string
-  hair: string
-  skin: string
-  features: readonly CrewFeature[]
-}
-
-// Claude sessions fly: white flight suits. Codex sessions keep the deck: orange coveralls.
-const WING = {
-  section: 'wing',
-  isSquad: false,
-  suit: GARRISON.white,
-  trim: GARRISON.orange,
-  headgear: GARRISON.white,
-  skin: GARRISON.skin
-} as const
-const DECK = {
-  section: 'deck',
-  isSquad: false,
-  suit: GARRISON.orange,
-  trim: GARRISON.white,
-  headgear: GARRISON.white,
-  skin: GARRISON.skin
-} as const
-
-// Original characters. A session's office bay picks its lead, in this order.
-export const WING_LEADS: readonly GarrisonCharacter[] = [
+// The founding cast: five of the wing, five of the deck, then one squad member each.
+const WING_LEADS: readonly GarrisonCharacter[] = [
   {
     ...WING,
     id: 'idris-calloway',
@@ -169,5 +120,6 @@ export const GARRISON_CAST: readonly GarrisonCharacter[] = [
   ...WING_LEADS,
   ...DECK_LEADS,
   WING_CADET,
-  DECKHAND
+  DECKHAND,
+  ...GARRISON_NEWCOMERS
 ]

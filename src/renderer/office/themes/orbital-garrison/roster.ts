@@ -1,23 +1,28 @@
-import type { AgentView } from '../../../../shared/office/types'
-import { makeRoster } from '../roster'
+import type { ProviderId } from '../../../../shared/office/types'
+import { makeLooks, makeRoster } from '../roster'
 import type { RosterEntry } from '../types'
-import { GARRISON_CAST, WING_LEADS, type GarrisonCharacter } from './cast'
+import { GARRISON_CAST } from './cast'
+import { SECTION_ACCENTS, type Section } from './section'
 
 export const ORBITAL_GARRISON_ID = 'orbital-garrison'
 
-// The provider picks the section, the office bay the lead within it.
-export const orbitalGarrisonRoster = makeRoster(
-  ORBITAL_GARRISON_ID,
-  GARRISON_CAST,
-  WING_LEADS.length
-)
-
-export function characterFor(
-  agent: Pick<AgentView, 'provider' | 'isSubagent'>,
-  rosterIndex: number
-): GarrisonCharacter {
-  return GARRISON_CAST[orbitalGarrisonRoster.indexFor(agent, rosterIndex)]
+const PROVIDER_OF: Record<Section, ProviderId> = {
+  wing: 'claude',
+  deck: 'codex',
+  signal: 'opencode'
 }
+
+// The provider picks the section; the agent's own key and its office bay the character in it.
+export const orbitalGarrisonRoster = makeRoster(ORBITAL_GARRISON_ID, GARRISON_CAST, (who) => ({
+  provider: PROVIDER_OF[who.section],
+  isSquad: who.isSquad
+}))
+
+export const garrisonLook = makeLooks(
+  orbitalGarrisonRoster,
+  GARRISON_CAST,
+  (who) => SECTION_ACCENTS[who.section]
+)
 
 export type FrameKind = 'trooper' | 'heavy' | 'scout'
 type GarrisonFrame = RosterEntry & { kind: FrameKind }

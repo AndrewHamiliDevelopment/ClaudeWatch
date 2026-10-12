@@ -1,13 +1,28 @@
-import { makeRoster } from '../roster'
+import type { ProviderId } from '../../../../shared/office/types'
+import { makeLooks, makeRoster } from '../roster'
 import type { RosterEntry } from '../types'
 import { COURT_CAST } from './cast'
+import { FACTION_ACCENTS, type Faction } from './faction'
 
 export const VIOLET_COURT_ID = 'violet-court'
 
-const LEADS_PER_FACTION = 5
+const PROVIDER_OF: Record<Faction, ProviderId> = {
+  order: 'claude',
+  corps: 'codex',
+  guild: 'opencode'
+}
 
-// The provider picks the faction, the office bay the character within it.
-export const violetCourtRoster = makeRoster(VIOLET_COURT_ID, COURT_CAST, LEADS_PER_FACTION)
+// The provider picks the faction; the agent's own key and its office bay the character in it.
+export const violetCourtRoster = makeRoster(VIOLET_COURT_ID, COURT_CAST, (who) => ({
+  provider: PROVIDER_OF[who.faction],
+  isSquad: who.isSquad
+}))
+
+export const courtLook = makeLooks(
+  violetCourtRoster,
+  COURT_CAST,
+  (who) => FACTION_ACCENTS[who.faction]
+)
 
 export type FrameKind = 'command' | 'vanguard' | 'lancer'
 type CourtFrame = RosterEntry & { kind: FrameKind }

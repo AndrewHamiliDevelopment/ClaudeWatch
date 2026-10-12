@@ -3,9 +3,11 @@ import { ROSTER_NAMES_STORAGE_KEY } from '../roster-names'
 import { COURT_CAST } from './cast'
 import { COURT_FRAMES, frameForBay, violetCourtRoster } from './roster'
 
-const lead = (provider: 'claude' | 'codex', bay: number) =>
+type Provider = 'claude' | 'codex' | 'opencode'
+const PROVIDERS = ['claude', 'codex', 'opencode'] as const
+const lead = (provider: Provider, bay: number) =>
   COURT_CAST[violetCourtRoster.indexFor({ provider, isSubagent: false }, bay)]
-const squad = (provider: 'claude' | 'codex', bay: number) =>
+const squad = (provider: Provider, bay: number) =>
   COURT_CAST[violetCourtRoster.indexFor({ provider, isSubagent: true }, bay)]
 
 describe('Violet Court roster', () => {
@@ -23,18 +25,19 @@ describe('Violet Court roster', () => {
     expect(new Set(all.map((entry) => entry.name)).size).toBe(all.length)
   })
 
-  it('gives the first five bays of one provider five different characters, then wraps', () => {
-    for (const provider of ['claude', 'codex'] as const) {
-      const ids = [0, 1, 2, 3, 4].map((bay) => lead(provider, bay).id)
-      expect(new Set(ids).size).toBe(5)
-      expect(lead(provider, 5).id).toBe(ids[0])
+  it('gives the first eight bays of one provider eight different characters, then wraps', () => {
+    for (const provider of PROVIDERS) {
+      const ids = [0, 1, 2, 3, 4, 5, 6, 7].map((bay) => lead(provider, bay).id)
+      expect(new Set(ids).size).toBe(8)
+      expect(lead(provider, 8).id).toBe(ids[0])
     }
   })
 
-  it('puts a Claude session and a Codex session in different factions', () => {
-    for (const bay of [0, 1, 2, 3, 4, 5, 6]) {
+  it('puts each provider in a faction of its own', () => {
+    for (const bay of [0, 1, 2, 3, 4, 5, 6, 7, 8]) {
       expect(lead('claude', bay).faction).toBe('order')
       expect(lead('codex', bay).faction).toBe('corps')
+      expect(lead('opencode', bay).faction).toBe('guild')
     }
   })
 
@@ -42,8 +45,27 @@ describe('Violet Court roster', () => {
     for (const bay of [0, 3, 7]) {
       expect(squad('claude', bay)).toMatchObject({ isSquad: true, faction: 'order' })
       expect(squad('codex', bay)).toMatchObject({ isSquad: true, faction: 'corps' })
+      expect(squad('opencode', bay)).toMatchObject({ isSquad: true, faction: 'guild' })
     }
     expect(squad('claude', 0)).toBe(squad('claude', 4))
+  })
+
+  // The owner's local renames are stored by index: a founder never moves.
+  it('keeps the founding cast at the indexes it shipped with', () => {
+    expect(COURT_CAST.slice(0, 12).map((character) => character.id)).toEqual([
+      'aurel-vane',
+      'sable-rooke',
+      'ilse-marrow',
+      'tobin-cask',
+      'wren-halloway',
+      'odette-vey',
+      'garrick-hobb',
+      'lucan-albright',
+      'mirelle-dane',
+      'tamsin-roe',
+      'violet-squire',
+      'lance-cadet'
+    ])
   })
 
   it('parks one of the three knight frames in every bay', () => {
