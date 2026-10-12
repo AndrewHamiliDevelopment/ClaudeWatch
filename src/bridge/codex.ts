@@ -13,7 +13,7 @@ import { placementOf, resolveProject } from './project-root'
 import { findRollouts, type Rollout } from './codex-rollouts'
 import { parseCodexUsage } from './codex-usage'
 import { NEXT_STEP_MS } from './opencode-activity'
-import { CLOCK_SKEW_MS, OPEN_TOOL_HOLD_MS } from './subagents'
+import { isStillWorking, OPEN_TOOL_HOLD_MS, quietFor } from './liveness'
 import { toolActivity, toolCategory } from './tool-category'
 import {
   forgetExited,
@@ -304,12 +304,12 @@ export async function collectCodex(
     // The desktop app, the IDE extension and plugins run their threads inside an app-server,
     // which no process maps to: a thread is live while its rollout is being written.
     for (const rollout of isHosting ? rollouts : []) {
-      const quietMs = now - rollout.mtimeMs
+      const quietMs = quietFor(now, rollout.mtimeMs)
+      if (quietMs === null) continue
       // Newest first: past the hold, every later one is quieter still.
       if (quietMs >= OPEN_TOOL_HOLD_MS) break
       const shown = tails.get(rollout.path)
-      const isLive = quietMs < HOSTED_FRESH_MS || shown?.state.currentTool != null
-      if (!isLive || quietMs < -CLOCK_SKEW_MS) continue
+      if (!isStillWorking(quietMs, HOSTED_FRESH_MS, shown?.state.currentTool != null)) continue
       if (used.has(rollout.id) || isInsideAppBundle(rollout.cwd)) continue
       used.add(rollout.id)
       try {

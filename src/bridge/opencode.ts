@@ -24,7 +24,8 @@ import {
   rememberedFolder
 } from './process-table'
 import { placementOf, resolveProject } from './project-root'
-import { CLOCK_SKEW_MS, SUBAGENT_FRESH_MS } from './subagents'
+import { isStillWorking, OPEN_TOOL_HOLD_MS, quietFor, SUBAGENT_FRESH_MS } from './liveness'
+import { toolActivity } from './tool-category'
 import { tokenCount } from './usage-fold'
 
 const FAILURE_DETAIL: Record<OpencodeFailure, string> = {
@@ -67,16 +68,26 @@ function sessionRow(row: OpencodeRow): SessionRow | null {
   }
 }
 
-// A child session written within the last minute is an agent still at work.
-function subagentOf(row: OpencodeRow, now: number): SubagentRef | null {
+// What a session's newest message says it is doing.
+function stateOf(query: OpencodeQuery, sessionId: string, now: number): OpencodeState {
+  const [message] = query('newestMessage', sessionId)
+  const parts = typeof message?.id === 'string' ? query('messageParts', message.id, sessionId) : []
+  return opencodeState(message, parts, now)
+}
+
+// A child session written within the last minute is an agent still at work. Its row is written
+// as a step ends, not while a tool runs, so a quiet one is held while its newest tool is open.
+function subagentOf(query: OpencodeQuery, row: OpencodeRow, now: number): SubagentRef | null {
   if (typeof row.id !== 'string' || !SESSION_ID.test(row.id)) return null
   if (typeof row.time_updated !== 'number') return null
-  const quietMs = now - row.time_updated
-  if (quietMs < -CLOCK_SKEW_MS || quietMs >= SUBAGENT_FRESH_MS) return null
+  const quietMs = quietFor(now, row.time_updated)
+  if (quietMs === null || quietMs >= OPEN_TOOL_HOLD_MS) return null
+  const tool = quietMs < SUBAGENT_FRESH_MS ? null : stateOf(query, row.id, now).currentTool
+  if (!isStillWorking(quietMs, SUBAGENT_FRESH_MS, tool !== null)) return null
   return {
     id: row.id,
     type: isLabel(row.agent) ? row.agent : 'subagent',
-    activity: 'thinking',
+    activity: tool ? toolActivity(tool.category) : 'thinking',
     tokens: countsOf(row)
   }
 }
@@ -101,12 +112,12 @@ function readConversation(
     .find(({ id, updatedAtMs }) => updatedAtMs >= process.startedAtMs && !taken.has(id))
   if (!session) return null
   taken.add(session.id)
-  const [message] = query('newestMessage', session.id)
-  const parts = typeof message?.id === 'string' ? query('messageParts', message.id, session.id) : []
   return {
     session,
-    state: opencodeState(message, parts, now),
-    subagents: query('childSessions', session.id).flatMap((row) => subagentOf(row, now) ?? [])
+    state: stateOf(query, session.id, now),
+    subagents: query('childSessions', session.id).flatMap(
+      (row) => subagentOf(query, row, now) ?? []
+    )
   }
 }
 
