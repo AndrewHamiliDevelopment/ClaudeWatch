@@ -82,12 +82,19 @@ describe.each(TOWNS)('citizenRoutes on %s', (_name, { floor, solids, streets }) 
         expect(streets.some((street) => isOn(street, sample))).toBe(true)
   })
 
-  it('never steps inside a lot, the plate or a company', () => {
-    const plate = { x: floor.x, z: floor.z, width: floor.width, depth: floor.depth }
-    const closed: Rect[] = [...solids, plate, ...floor.zones]
+  it('never steps inside a lot or a company', () => {
+    const closed: Rect[] = [...solids, ...floor.zones]
     for (const route of routes)
       for (const sample of samplesOf(route))
         expect(closed.some((rect) => isInside(rect, sample))).toBe(false)
+  })
+
+  it('walks some of them through the campus, in the open beside the offices', () => {
+    const plate = { x: floor.x, z: floor.z, width: floor.width, depth: floor.depth }
+    const strollers = routes.filter((route) =>
+      samplesOf(route).some((sample) => isInside(plate, sample))
+    )
+    expect(strollers.length).toBeGreaterThanOrEqual(3)
   })
 
   it('gives the same town the same routes', () => {

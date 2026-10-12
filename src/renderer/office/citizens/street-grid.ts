@@ -28,7 +28,13 @@ const ANY_WAY = [0, LEFT, RIGHT, 2]
 
 const cellOf = (metres: number): number => Math.round(metres / STREET_CELL_M)
 
-export function streetGrid(streets: readonly StreetRect[]): StreetGrid {
+type Closed = Pick<StreetRect, 'x' | 'z' | 'width' | 'depth'>
+
+// `closed` is ground no citizen may stand on even where a street crosses it: a company's grounds.
+export function streetGrid(
+  streets: readonly StreetRect[],
+  closed: readonly Closed[] = []
+): StreetGrid {
   const spans = streets.map((street) => ({
     west: cellOf(street.x - street.width / 2),
     east: cellOf(street.x + street.width / 2),
@@ -51,6 +57,14 @@ export function streetGrid(streets: readonly StreetRect[]): StreetGrid {
   for (const span of spans)
     for (let row = span.north - northCell; row < span.south - northCell; row++)
       open.fill(1, row * columns + span.west - westCell, row * columns + span.east - westCell)
+  for (const rect of closed) {
+    const west = Math.max(0, cellOf(rect.x - rect.width / 2) - westCell)
+    const east = Math.min(columns, cellOf(rect.x + rect.width / 2) - westCell)
+    const north = Math.max(0, cellOf(rect.z - rect.depth / 2) - northCell)
+    const south = Math.min(rows, cellOf(rect.z + rect.depth / 2) - northCell)
+    for (let row = north; row < south; row++)
+      if (east > west) open.fill(0, row * columns + west, row * columns + east)
+  }
   const starts: number[] = []
   open.forEach((isOpen, cell) => {
     if (isOpen) starts.push(cell)

@@ -10,9 +10,10 @@ import type { OfficeTheme } from '../themes/types'
 import { SHARED_BATCH } from './mesh-batches'
 import { blobShadowTexture } from './textures'
 
-// Sized up from the 1 m desk scale so robots read at the floor zoom band.
-const ROBOT_SCALE = 1.3
-const SUBAGENT_SCALE = 0.9
+// Sized up from the 1 m desk scale: agents are the largest figures in the town, so they are
+// found first. Townsfolk are drawn at 1.3, the size agents used to be.
+const ROBOT_SCALE = 1.65
+const SUBAGENT_SCALE = 1.2
 const MOVE_RATE = 5
 const TURN_RATE = 6
 const MOVING_EPSILON = 0.05

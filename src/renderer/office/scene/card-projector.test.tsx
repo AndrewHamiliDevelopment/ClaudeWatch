@@ -2,7 +2,7 @@ import { render } from '@testing-library/react'
 import { OrthographicCamera, Vector3 } from 'three'
 import { expect, it, vi } from 'vitest'
 import type { NameCard } from '../logic/name-cards'
-import { CardProjector, type CardAnchors } from './CardProjector'
+import { CARD_HEIGHT, CardProjector, type CardAnchors } from './CardProjector'
 
 type FrameCallback = (state: {
   camera: OrthographicCamera
@@ -68,7 +68,7 @@ it('places a card where the camera will draw it, even before the renderer refres
 
   const fresh = camera.clone()
   fresh.updateMatrixWorld()
-  const expected = new Vector3(CARD.x, 1.95, CARD.z).project(fresh)
+  const expected = new Vector3(CARD.x, CARD_HEIGHT, CARD.z).project(fresh)
   const placed = readTranslate(element)
   expect(placed.x).toBeCloseTo(((expected.x + 1) / 2) * SIZE.width, 3)
   expect(placed.y).toBeCloseTo(((1 - expected.y) / 2) * SIZE.height, 3)

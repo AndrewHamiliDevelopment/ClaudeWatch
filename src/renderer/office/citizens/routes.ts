@@ -37,7 +37,27 @@ function townSeed(lots: readonly Lot[]): number {
   return seed >>> 0
 }
 
-// The streets citizens keep to: the open ground round the offices.
+// How wide a walk through the campus is, and how far in from the plate's edge it runs.
+const CAMPUS_WALK_M = 2
+const CAMPUS_EDGE_M = 0.5
+
+// Through the campus: the street between the company rows and a walk round the plate's edge.
+// Out in the open beside the offices, which is where a citizen is seen.
+export function campusWalks(floor: FloorGeometry): StreetRect[] {
+  const edge = CAMPUS_EDGE_M + CAMPUS_WALK_M / 2
+  const along = { width: floor.width - 2 * CAMPUS_EDGE_M, depth: CAMPUS_WALK_M }
+  const across = { width: CAMPUS_WALK_M, depth: floor.depth - 2 * CAMPUS_EDGE_M }
+  const walks = [
+    { x: floor.x, z: floor.corridor.z, ...along },
+    { x: floor.x, z: floor.z - floor.depth / 2 + edge, ...along },
+    { x: floor.x, z: floor.z + floor.depth / 2 - edge, ...along },
+    { x: floor.x - floor.width / 2 + edge, z: floor.z, ...across },
+    { x: floor.x + floor.width / 2 - edge, z: floor.z, ...across }
+  ]
+  return walks.map((walk) => ({ ...walk, y: 0 }))
+}
+
+// The streets citizens keep to: the open ground round the offices, and the walks through them.
 // `lots` is everything the streets were laid round: the same list Streets is drawn from.
 export function citizenStreets(floor: FloorGeometry, lots: readonly Lot[]): StreetRect[] {
   const snap = (metres: number): number => Math.round(metres / STREET_CELL_M) * STREET_CELL_M
@@ -47,7 +67,7 @@ export function citizenStreets(floor: FloorGeometry, lots: readonly Lot[]): Stre
   const east = snap(floor.x + floor.width / 2 + WORLD_APRON.east + RING_ROAD_M)
   const north = snap(floor.z - floor.depth / 2 - WORLD_APRON.north - RING_ROAD_M)
   const south = snap(floor.z + floor.depth / 2 + WORLD_APRON.south + RING_ROAD_M)
-  return streetRects(floor, lots).flatMap((street) => {
+  const town = streetRects(floor, lots).flatMap((street) => {
     const left = Math.max(west, street.x - street.width / 2)
     const right = Math.min(east, street.x + street.width / 2)
     const top = Math.max(north, street.z - street.depth / 2)
@@ -61,6 +81,7 @@ export function citizenStreets(floor: FloorGeometry, lots: readonly Lot[]): Stre
     }
     return [{ ...street, ...clipped }]
   })
+  return [...town, ...campusWalks(floor)]
 }
 
 // A smaller share sends out the first of the same citizens, on the same routes.
@@ -71,7 +92,8 @@ export function citizenRoutes(
 ): CitizenRoute[] {
   const streets = citizenStreets(floor, lots)
   const count = citizenCount(streetLength(streets), share)
-  const grid = streetGrid(streets)
+  // The campus walks cross company gates and the props along company walls: both stay closed.
+  const grid = streetGrid(streets, [...floor.zones, ...lots])
   if (count === 0 || grid.starts.length === 0) return []
   const seed = townSeed(lots)
   return Array.from({ length: count }, (_, index) => {
