@@ -447,3 +447,48 @@ it('ages quiet assistant output to idle on cached tails while retaining open too
     (await collectCodex('/codex', io, undefined, false, atMs + 60000)).sessions[0].activity
   ).toBe('running')
 })
+
+it('shows threads an app-server hosts (desktop app, IDE, plugins) while their rollout is fresh', async () => {
+  const meta = (id: string, cwd: string) =>
+    JSON.stringify({ type: 'session_meta', payload: { id, cwd } })
+  const openShell = activityRecords([{ type: 'local_shell_call', call_id: 'c1' }])
+  const io = fixtureIo({
+    '/codex/sessions/rollout-live.jsonl': `${meta('live', '/repo')}\n${openShell}`,
+    '/codex/sessions/rollout-quiet.jsonl': meta('quiet', '/repo'),
+    '/repo/.git': null
+  })
+  const stat = io.stat
+  const now = 1_000_000
+  io.stat = async (path) =>
+    path.includes('rollout-live')
+      ? { directory: false, mtimeMs: now - 10_000, size: 200 }
+      : path.includes('rollout-quiet')
+        ? { directory: false, mtimeMs: now - 600_000, size: 100 }
+        : stat(path)
+  io.exec = vi.fn(async (file: string) =>
+    file.endsWith('ps')
+      ? '43 Sat Oct 10 15:29:12 2026 /Applications/Codex.app/codex app-server'
+      : ''
+  )
+  const batch = await collectCodex('/codex', io, undefined, false, now)
+  expect(batch.sessions).toHaveLength(1)
+  expect(batch.sessions[0]).toMatchObject({
+    key: 'codex:live',
+    provider: 'codex',
+    pid: null,
+    activity: 'running',
+    projectLabel: 'repo'
+  })
+})
+
+it('shows no hosted thread when no app-server is running', async () => {
+  const io = fixtureIo({
+    '/codex/sessions/rollout-live.jsonl': JSON.stringify({
+      type: 'session_meta',
+      payload: { id: 'live', cwd: '/repo' }
+    }),
+    '/repo/.git': null
+  })
+  io.exec = vi.fn(async () => '')
+  expect((await collectCodex('/codex', io, undefined, false, 1500)).sessions).toEqual([])
+})
