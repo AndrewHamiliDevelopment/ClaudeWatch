@@ -1,3 +1,4 @@
+import { FURNITURE_SCALE } from '../../shared/office/figure-scale'
 import type { Point } from './path'
 
 export interface Slot extends Point {
@@ -49,7 +50,9 @@ export interface FloorLayout {
   elevator: Slot
 }
 
-export const LOUNGE_WIDTH = 6
+// The lounge was laid out for agents at their old size: every length of it grows with them.
+const loungeMetres = (metres: number): number => metres * FURNITURE_SCALE
+export const LOUNGE_WIDTH = loungeMetres(6)
 const LOUNGE_SEATS_PER_ROW = 4
 
 export function bounds(left: number, top: number, width: number, depth: number): Bounds {
@@ -97,7 +100,7 @@ export function planProject(sessionCount: number, teamSeats: number): ProjectPla
 }
 
 export function loungeDepth(seats: number): number {
-  return 3 + Math.ceil(seats / LOUNGE_SEATS_PER_ROW) * 2
+  return loungeMetres(3 + Math.ceil(seats / LOUNGE_SEATS_PER_ROW) * 2)
 }
 
 // `growsNorth` is for a company north of the street: its rows start at the street side, the
@@ -110,14 +113,15 @@ export function lounge(
   growsNorth: boolean
 ): LoungeLayout {
   const depth = loungeDepth(seats)
-  const rowZ = (row: number): number => (growsNorth ? top + depth - 3 - row * 2 : top + 2 + row * 2)
+  const rowZ = (row: number): number =>
+    growsNorth ? top + depth - loungeMetres(3 + row * 2) : top + loungeMetres(2 + row * 2)
   return {
     ...bounds(left, top, LOUNGE_WIDTH, depth),
     id: `${companyId}:lounge`,
     // Seats face +z like desk seats, in rows of four.
     slots: Array.from({ length: seats }, (_, index) => ({
       id: `lounge_seat_${index}`,
-      x: left + 1.125 + (index % LOUNGE_SEATS_PER_ROW) * 1.25,
+      x: left + loungeMetres(1.125 + (index % LOUNGE_SEATS_PER_ROW) * 1.25),
       z: rowZ(Math.floor(index / LOUNGE_SEATS_PER_ROW)),
       heading: 0
     }))
@@ -167,8 +171,9 @@ export function room(
       )
     : [
         slot('desk_main', geometry.x, geometry.z + 0.3),
-        slot('desk_guest_0', geometry.x - 1.15, geometry.z - 0.95),
-        slot('desk_guest_1', geometry.x + 1.15, geometry.z - 0.95)
+        // 1.25 m either side: the lead's wider figure clears both guest desks.
+        slot('desk_guest_0', geometry.x - 1.25, geometry.z - 0.95),
+        slot('desk_guest_1', geometry.x + 1.25, geometry.z - 0.95)
       ]
   return {
     ...geometry,

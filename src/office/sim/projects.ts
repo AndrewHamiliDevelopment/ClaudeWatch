@@ -88,10 +88,13 @@ export function draftCompany(members: SessionRef[], saved: LayoutMap | undefined
     }
   })
   const loungeSeats = reserveCapacity(members.reduce((n, s) => n + 1 + s.subagents.length, 0))
-  // The lounge is the last box, so it never takes a project's place.
+  // The lounge is the last box, so it never takes a project's place. Its own lengths are
+  // fractional; its plot is the next half metre up, so the grounds, the plate and every
+  // company after this one stay on the half-metre lines the path grid and the town stand on.
+  const onHalfMetre = (metres: number): number => Math.ceil(metres * 2) / 2
   const grounds = packGrounds([
     ...projects,
-    { width: LOUNGE_WIDTH, depth: loungeDepth(loungeSeats) }
+    { width: onHalfMetre(LOUNGE_WIDTH), depth: onHalfMetre(loungeDepth(loungeSeats)) }
   ])
   return {
     zone: {
