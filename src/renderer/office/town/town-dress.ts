@@ -68,7 +68,9 @@ function firstFitting<Design extends { name: string }>(
   heightOf: (design: Design) => number,
   room: number
 ): Design | undefined {
-  const turnOf = (design: Design): number => (hashOf(design.name) ^ seed) >>> 0
+  // Mixed through `draw`: neighbouring lots' seeds share their high bits, and the raw XOR then
+  // puts the same design first on nearly every lot of a street.
+  const turnOf = (design: Design): number => draw((hashOf(design.name) ^ seed) >>> 0, 0)
   const shuffled = [...pool].sort((a, b) => turnOf(a) - turnOf(b))
   const lowest = [...pool].sort((a, b) => heightOf(a) - heightOf(b)).at(0)
   return shuffled.find((design) => heightOf(design) <= room) ?? lowest
