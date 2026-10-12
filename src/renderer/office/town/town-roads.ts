@@ -33,10 +33,10 @@ const CUT_PARTS: Record<RoadAxis, readonly [WallSide, WallSide]> = {
   z: ['west', 'east']
 }
 
-export const crossAxis = (axis: RoadAxis): RoadAxis => (axis === 'x' ? 'z' : 'x')
+const crossAxis = (axis: RoadAxis): RoadAxis => (axis === 'x' ? 'z' : 'x')
 
 // How far a rectangle reaches along one coordinate.
-export function reach(rect: Rect, axis: RoadAxis): Span {
+function reach(rect: Rect, axis: RoadAxis): Span {
   const bounds = boundsOfZone(rect)
   return axis === 'x'
     ? { min: bounds.minX, max: bounds.maxX }
