@@ -103,7 +103,8 @@ const config: Config = {
         }
       },
       animation: {
-        'pulse-dot': 'pulse-dot 2s ease-in-out infinite',
+        // Stepped: a smooth pulse repaints at the display's rate for as long as a dot is on screen.
+        'pulse-dot': 'pulse-dot 2s steps(8, end) infinite',
         'slip-drop': 'slip-drop 120ms ease-out both'
       }
     }
