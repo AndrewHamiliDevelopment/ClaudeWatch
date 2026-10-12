@@ -75,15 +75,21 @@ export function placements(
       if (desk && freeDesks.delete(desk)) seated.push({ session: guest, room: main, slotId: desk })
       else waiting.push(guest)
     }
-    // A guest whose team seat still stands keeps it: a desk freeing up is no reason to get up.
-    const homeless: SessionRef[] = []
-    for (const guest of waiting) {
+    // A guest whose team seat still stands keeps it, but only up to the session's share: the map
+    // has one team seat per guest past the desks, so a seat held beyond it is a neighbour's.
+    let teamShare = Math.max(0, guests.length - GUEST_DESKS.length)
+    const keepers = new Set<string>()
+    // Subagents keep theirs before teammates, whose place is at the desks.
+    for (const guest of [...waiting].reverse()) {
       const seat = team && taken ? seatOf(guest, team) : undefined
-      if (team && taken && seat && !taken.has(seat) && team.slots.some((s) => s.id === seat)) {
-        taken.add(seat)
-        seated.push({ session: guest, room: team, slotId: seat })
-      } else homeless.push(guest)
+      if (!teamShare || !team || !taken || !seat || taken.has(seat)) continue
+      if (!team.slots.some((s) => s.id === seat)) continue
+      taken.add(seat)
+      teamShare--
+      keepers.add(guest.key)
+      seated.push({ session: guest, room: team, slotId: seat })
     }
+    const homeless = waiting.filter((guest) => !keepers.has(guest.key))
     // New arrivals and guests whose seat went take the free guest desks, then the team seats.
     homeless.sort((a, b) => Number(held.has(b.key)) - Number(held.has(a.key)))
     for (const guest of homeless) {
