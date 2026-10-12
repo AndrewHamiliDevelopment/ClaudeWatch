@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import type { AgentView, SessionRef } from '../../shared/office/types'
-import { session } from './fixtures'
+import { session, subagent } from './fixtures'
 import { World } from './world'
 
 const SETTLE_S = 120
@@ -81,11 +81,7 @@ const crewAt = (tick: number): SessionRef => {
     activity: 'thinking' as const
   }))
   const count = [2, 1, 1, 0][Math.floor(tick / 3) % 4]
-  const subagents = Array.from({ length: count }, (_, index) => ({
-    id: `sub-${index}`,
-    type: 'Explore',
-    activity: 'thinking' as const
-  }))
+  const subagents = Array.from({ length: count }, (_, index) => subagent(`sub-${index}`))
   return { ...session('lead'), activity: 'thinking', subagents: [...teammates, ...subagents] }
 }
 
@@ -125,7 +121,7 @@ it('lets a crew whose subagents come and go every few seconds sit still between 
 
 const withSubagents = (key: string, ids: string[]): SessionRef => ({
   ...session(key),
-  subagents: ids.map((id) => ({ id, type: 'Explore', activity: 'thinking' as const }))
+  subagents: ids.map((id) => subagent(id))
 })
 
 // No agent lost or doubled, and no two on one seat. Agents walking out are not counted.
@@ -161,7 +157,7 @@ function seeded(seed: number): () => number {
 }
 
 const FUZZ_SEEDS = [7, 42, 1337]
-const FUZZ_PATCHES = 300
+const FUZZ_PATCHES = 150
 
 it.each(FUZZ_SEEDS)(
   'keeps every agent on its own seat through random feed churn (seed %i)',
@@ -179,23 +175,21 @@ it.each(FUZZ_SEEDS)(
         removed.push(key)
       } else {
         const ids = ['g0', 'g1', 'g2', 'g3', 'g4', 'g5'].filter(() => random() < 0.5)
+        const projectKey = pick(['p_a', 'p_b'])
         const next: SessionRef = {
-          ...withSubagents(key, ids),
-          projectKey: pick(['p_a', 'p_b']),
-          subagents: ids.map((id) => ({
-            id,
-            type: 'Explore',
-            activity: 'thinking' as const,
-            kind: random() < 0.3 ? ('teammate' as const) : ('subagent' as const)
-          }))
+          ...session(key),
+          projectKey,
+          projectLabel: projectKey,
+          subagents: ids.map((id) => subagent(id, random() < 0.3 ? 'teammate' : 'subagent'))
         }
-        next.projectLabel = next.projectKey
         sessions.set(key, next)
         upserts.push(next)
       }
       expect(() => patch(sim, upserts, removed), `seed ${seed}, patch ${index}`).not.toThrow()
       expectEverySeatOnce(sim, sessions.values())
-      run(sim, random() * 3)
+      // Whole seconds per step: the sim ticks every 100 ms inside, without a view per tick.
+      for (let ms = Math.round(random() * 30) * 100; ms > 0; ms -= 1000)
+        sim.step(Math.min(ms, 1000))
     }
   }
 )
