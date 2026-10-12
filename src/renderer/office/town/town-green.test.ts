@@ -1,115 +1,182 @@
 import { describe, expect, it } from 'vitest'
 import type { ZoneGeometry } from '../scene-model'
 import { LIVE_FLOORS } from '../themes/floors.test-utils'
-import { hashOf } from '../themes/lot-math'
+import type { GreenPlot } from './garden-pieces'
 import { campusClaim, neededClaim } from './town-claim'
 import { campusGreen } from './town-green'
-import { GREEN_PITCH_M, ROAD_WIDTH_M } from './town-grid'
 import { townBlocks } from './town-plan'
-import { ZONE_HEIGHT_CAP_M } from './town-zones'
-import { edges, gap, overlapping, widened } from './town.test-utils'
+import { edges, overlapping, roadStrip, widened } from './town.test-utils'
 
-const HEIGHT_PER_METRE = 0.7
-const PLOT_SIDE_M = 4
+// Written out again: the belt starts inside the 10 m boulevard and is sure of 3 m more.
+const BOULEVARD_M = 10
+const RING_M = 13
+// The plaza and the campus street keep this band of the west and east sides.
+const GATE_BAND_M = 12
+const NEAR = 0.01
+
+type Side = 'north' | 'south' | 'west' | 'east'
 
 function everyZone(zones: readonly ZoneGeometry[]): ZoneGeometry[] {
   return zones.flatMap((zone) => [zone, ...everyZone(zone.children)])
 }
 
+const sideOf = (piece: GreenPlot): Side => piece.id.split(':')[1] as Side
+const isAlongX = (side: Side): boolean => side === 'north' || side === 'south'
+
 describe.each(LIVE_FLOORS)('campusGreen: %s', (_name, floor) => {
   const plan = townBlocks(campusClaim(neededClaim(floor), null), 'full')
-  const plots = campusGreen(floor, plan)
-  const zones = everyZone(floor.zones)
-  const companies = floor.zones.filter((zone) => zone.kind === 'company')
-
-  it('plants the belt and the bare plate', () => {
-    expect(plots.filter((plot) => !overlapping(plot, floor)).length).toBeGreaterThan(8)
-  })
-
-  it('names every plot after its 6 m cell and seeds it from that name', () => {
-    expect(new Set(plots.map((plot) => plot.id)).size).toBe(plots.length)
-    for (const plot of plots) {
-      const [, column, row] = plot.id.split(':').map(Number)
-      expect(plot.id).toBe(`green:${column}:${row}`)
-      expect(plot.seed).toBe(hashOf(plot.id))
-      expect(plot).toMatchObject({
-        x: (column + 0.5) * GREEN_PITCH_M,
-        z: (row + 0.5) * GREEN_PITCH_M,
-        width: PLOT_SIDE_M,
-        depth: PLOT_SIDE_M
-      })
-    }
-  })
-
-  it('keeps every plot inside the boulevard and off the campus street', () => {
-    const claim = edges(plan.claim)
-    for (const plot of plots) {
-      expect(edges(plot).west).toBeGreaterThanOrEqual(claim.west + ROAD_WIDTH_M.boulevard)
-      expect(edges(plot).east).toBeLessThanOrEqual(claim.east - ROAD_WIDTH_M.boulevard)
-      expect(edges(plot).north).toBeGreaterThanOrEqual(claim.north + ROAD_WIDTH_M.boulevard)
-      expect(edges(plot).south).toBeLessThanOrEqual(claim.south - ROAD_WIDTH_M.boulevard)
-      expect(Math.abs(plot.z) - plot.depth / 2).toBeGreaterThanOrEqual(ROAD_WIDTH_M.avenue / 2)
-    }
-  })
-
-  it('keeps every plot off the companies, their offices and rooms, and whole on or off the plate', () => {
-    for (const plot of plots) {
-      for (const solid of [...zones, ...floor.rooms]) expect(overlapping(plot, solid)).toBe(false)
-      const isOnPlate = overlapping(plot, floor)
-      if (isOnPlate) {
-        expect(edges(plot).west).toBeGreaterThanOrEqual(edges(floor).west)
-        expect(edges(plot).east).toBeLessThanOrEqual(edges(floor).east)
-        expect(edges(plot).north).toBeGreaterThanOrEqual(edges(floor).north)
-        expect(edges(plot).south).toBeLessThanOrEqual(edges(floor).south)
+  const pieces = campusGreen(floor, plan)
+  const claim = edges(plan.claim)
+  const belt = pieces.filter((piece) => piece.id.startsWith('garden:'))
+  const rows = belt.filter((piece) => piece.role !== 'feature' && piece.role !== 'corner')
+  const along = (piece: GreenPlot): number => (isAlongX(sideOf(piece)) ? piece.x : piece.z)
+  // A side's runs: north and south whole, west and east either side of the gate band.
+  const runsOf = (side: Side): { middle: number; pieces: GreenPlot[] }[] => {
+    const onSide = belt.filter((piece) => sideOf(piece) === side && piece.role !== 'corner')
+    if (isAlongX(side)) return [{ middle: (claim.west + claim.east) / 2, pieces: onSide }]
+    return [
+      {
+        middle: (claim.north + RING_M - GATE_BAND_M) / 2,
+        pieces: onSide.filter((piece) => piece.z < 0)
+      },
+      {
+        middle: (claim.south - RING_M + GATE_BAND_M) / 2,
+        pieces: onSide.filter((piece) => piece.z > 0)
       }
+    ]
+  }
+  const SIDES: readonly Side[] = ['north', 'south', 'west', 'east']
+
+  it('sets a row of trees, lamps and seats along north and south, and pieces on west and east', () => {
+    for (const side of SIDES) {
+      const roles = new Set<string>(
+        rows.filter((piece) => sideOf(piece) === side).map((p) => p.role)
+      )
+      const wanted = isAlongX(side) ? ['lamp', 'seat', 'tree'] : ['seat']
+      for (const role of wanted) expect(roles.has(role), `${side} ${role}`).toBe(true)
     }
   })
 
-  it('holds every plot under the offices, the promenades and the park cap', () => {
-    const projects = zones.filter((zone) => zone.kind === 'project')
-    expect(projects.length).toBeGreaterThan(0)
-    for (const plot of plots) {
-      expect(plot.maxHeight).toBeLessThanOrEqual(ZONE_HEIGHT_CAP_M.park)
-      for (const hidden of [...projects, ...plan.promenades])
-        expect(plot.maxHeight).toBeLessThanOrEqual(gap(plot, hidden) * HEIGHT_PER_METRE + 1e-9)
-      expect(plot.maxHeight).toBeGreaterThanOrEqual(0.4)
-      expect(plot.kind).toBe(plot.maxHeight >= 2 ? 'building' : 'prop')
-    }
+  it('keeps the garden inside the prop share of the lot cap', () => {
+    expect(pieces.length).toBeLessThanOrEqual(80)
   })
 
-  it('makes every plot a park of the nearest company, facing out to the boulevard', () => {
-    const claim = edges(plan.claim)
-    for (const plot of plots) {
-      expect(plot).toMatchObject({ zone: 'park', isLandmark: false })
-      const nearest = Math.min(...companies.map((zone) => gap(plot, zone)))
-      const tied = companies.filter((zone) => gap(plot, zone) === nearest).map((zone) => zone.id)
-      expect(plot.zoneId).toBe([...tied].sort()[0])
-      const toEdge = {
-        north: plot.z - claim.north,
-        east: claim.east - plot.x,
-        south: claim.south - plot.z,
-        west: plot.x - claim.west
+  it('mirrors every run about its own middle', () => {
+    for (const side of SIDES)
+      for (const run of runsOf(side))
+        for (const piece of run.pieces) {
+          const mirrored = 2 * run.middle - along(piece)
+          const twin = run.pieces.find(
+            (other) =>
+              other.role === piece.role &&
+              Math.abs(along(other) - mirrored) < NEAR &&
+              Math.abs(
+                (isAlongX(side) ? other.z : other.x) - (isAlongX(side) ? piece.z : piece.x)
+              ) < NEAR
+          )
+          expect(twin, `${piece.id} has no mirror`).toBeDefined()
+        }
+  })
+
+  it('matches opposite sides piece for piece', () => {
+    const plan2 = (side: Side): string[] =>
+      belt
+        .filter((piece) => sideOf(piece) === side && piece.role !== 'corner')
+        .map((piece) => `${piece.role}@${along(piece).toFixed(2)}`)
+        .sort()
+    expect(plan2('north')).toEqual(plan2('south'))
+    expect(plan2('west')).toEqual(plan2('east'))
+  })
+
+  it('pitches trees evenly, and lamps at twice that, between the trees', () => {
+    for (const side of SIDES)
+      for (const run of runsOf(side)) {
+        const at = (role: string): number[] =>
+          run.pieces
+            .filter((piece) => piece.role === role)
+            .map(along)
+            .sort((a, b) => a - b)
+        const trees = at('tree')
+        if (trees.length < 2) continue
+        const pitch = trees[1] - trees[0]
+        trees.slice(1).forEach((tree, index) => expect(tree - trees[index]).toBeCloseTo(pitch, 2))
+        const lamps = at('lamp')
+        lamps.slice(1).forEach((lamp, index) => expect(lamp - lamps[index]).toBeCloseTo(2 * pitch))
+        for (const lamp of lamps)
+          expect(trees.some((tree) => Math.abs(tree + pitch / 2 - lamp) < NEAR)).toBe(true)
       }
-      expect(toEdge[plot.facing]).toBe(Math.min(...Object.values(toEdge)))
+  })
+
+  it('makes every piece of a row the same size and height', () => {
+    for (const side of SIDES)
+      for (const role of ['tree', 'lamp', 'seat']) {
+        const row = rows.filter((piece) => sideOf(piece) === side && piece.role === role)
+        if (row.length === 0) continue
+        expect(new Set(row.map((p) => `${p.width}x${p.depth}x${p.maxHeight}`)).size).toBe(1)
+      }
+  })
+
+  it('puts a matching piece at all four corners', () => {
+    const corners = belt.filter((piece) => piece.role === 'corner')
+    expect(corners).toHaveLength(4)
+    const middle = { x: (claim.west + claim.east) / 2, z: (claim.north + claim.south) / 2 }
+    for (const corner of corners) {
+      const twinX = corners.find((other) => Math.abs(other.x - (2 * middle.x - corner.x)) < NEAR)
+      const twinZ = corners.find((other) => Math.abs(other.z - (2 * middle.z - corner.z)) < NEAR)
+      expect(twinX && twinZ).toBeDefined()
     }
   })
 
-  it('is the same green for the same floor', () => {
-    expect(campusGreen(floor, plan)).toEqual(plots)
+  it('centres one large feature on the north and south sides', () => {
+    for (const side of ['north', 'south'] as const) {
+      const features = belt.filter((piece) => sideOf(piece) === side && piece.role === 'feature')
+      expect(features).toHaveLength(1)
+      expect(features[0].x).toBeCloseTo((claim.west + claim.east) / 2)
+    }
   })
 
-  it('moves no plot when a desk column arrives: plots go or stay, each in its cell', () => {
+  it('overlaps nothing: no other piece, the plate, the street, a road or a promenade', () => {
+    const zones = everyZone(floor.zones)
+    const street = { ...plan.claim, z: 0, depth: 12 }
+    pieces.forEach((piece, index) => {
+      for (const other of pieces.slice(index + 1))
+        expect(overlapping(piece, other), `${piece.id} on ${other.id}`).toBe(false)
+      expect(overlapping(piece, street), piece.id).toBe(false)
+      for (const solid of [...zones, ...floor.rooms]) expect(overlapping(piece, solid)).toBe(false)
+      for (const walk of plan.promenades) expect(overlapping(piece, walk), piece.id).toBe(false)
+    })
+    for (const piece of belt) {
+      expect(overlapping(piece, floor), piece.id).toBe(false)
+      for (const road of plan.roads) expect(overlapping(piece, roadStrip(road))).toBe(false)
+    }
+  })
+
+  it('stays inside the boulevard', () => {
+    for (const piece of belt) {
+      const at = edges(piece)
+      expect(at.west).toBeGreaterThanOrEqual(claim.west + BOULEVARD_M)
+      expect(at.east).toBeLessThanOrEqual(claim.east - BOULEVARD_M)
+      expect(at.north).toBeGreaterThanOrEqual(claim.north + BOULEVARD_M)
+      expect(at.south).toBeLessThanOrEqual(claim.south - BOULEVARD_M)
+    }
+  })
+
+  it('leaves the bare plate as lawn', () => {
+    expect(belt.some((piece) => overlapping(piece, floor))).toBe(false)
+  })
+
+  it('is the same garden for the same floor', () => {
+    expect(campusGreen(structuredClone(floor), plan)).toEqual(pieces)
+  })
+
+  it('keeps every row and the plaza when a desk column arrives under the same claim', () => {
     const grown = widened(floor, 5)
-    const after = campusGreen(
-      grown,
-      townBlocks(campusClaim(neededClaim(grown), plan.claim), 'full')
-    )
-    const was = new Map(plots.map((plot) => [plot.id, plot]))
-    const kept = after.filter((plot) => was.has(plot.id))
-    expect(kept.length).toBeGreaterThan(plots.length / 2)
-    for (const plot of kept) {
-      const { x, z, width, depth, seed } = was.get(plot.id) ?? plot
-      expect(plot).toMatchObject({ x, z, width, depth, seed })
-    }
+    const grownPlan = townBlocks(campusClaim(neededClaim(grown), plan.claim), 'full')
+    expect(grownPlan.claim).toEqual(plan.claim)
+    const after = campusGreen(grown, grownPlan)
+    const deep = (piece: GreenPlot): boolean => piece.role === 'feature' || piece.role === 'corner'
+    expect(after.filter((piece) => !deep(piece))).toEqual(pieces.filter((p) => !deep(p)))
+    // A feature or corner the plate now reaches goes, with its twin; none moves.
+    for (const piece of after.filter(deep)) expect(pieces).toContainEqual(piece)
   })
 })

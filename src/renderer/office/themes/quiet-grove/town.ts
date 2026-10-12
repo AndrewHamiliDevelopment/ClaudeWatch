@@ -48,5 +48,13 @@ export const GROVE_TOWN: TownDress = {
   // Packed earth, a gravel path and a pale stone walk: nothing here is paved.
   roads: { carriageway: '#3B3128', sidewalk: '#8A8172', promenade: '#D8D2BF' },
   citizens: citizenFigures(QUIET_GROVE_ID),
-  vehicles: GROVE_VEHICLES
+  vehicles: GROVE_VEHICLES,
+  garden: {
+    tree: 'sapling',
+    lamp: 'stone-lantern',
+    seat: 'plank-bench',
+    feature: 'pond',
+    corner: 'pine-stand',
+    plazaPair: 'boulders'
+  }
 }

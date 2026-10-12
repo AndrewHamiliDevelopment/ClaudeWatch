@@ -3,6 +3,7 @@ import type { CitizenRoute, RoutePoint } from '../citizens/route-pose'
 import { between, draw, hashOf, type Rect } from '../themes/lot-math'
 import { reversed, roadNet, roadPath, type RoadNet } from './road-net'
 import { gatePlaza } from './town-graph'
+import { plazaStands } from './town-plaza'
 import { BLOCK_PITCH_M, ROAD_WIDTH_M } from './town-grid'
 import type { TownLot } from './town-lots'
 import type { TownPlan } from './town-plan'
@@ -13,7 +14,7 @@ import {
   type TownInput,
   type Trip
 } from './town-trips'
-import { INNER_SIDEWALK_M, closedLoop, secondsAt, sidePath } from './trip-paths'
+import { closedLoop, secondsAt, sidePath } from './trip-paths'
 
 const STROLL_M_PER_SEC = { min: 0.6, max: 1.2 }
 const AWAY_SEC = { min: 8, max: 20 }
@@ -43,14 +44,13 @@ interface Ground {
   // Where a citizen is in plain sight: the promenades, the parks and the plaza.
   open: Rect[]
   crossings: Set<string>
-  // On the boulevard's inner sidewalk in front of the gate: as near the campus as anyone comes.
-  plazaStand: Point
+  // On the promenade by the plaza's pairs and seats: as near the campus as anyone comes.
+  plazaStands: Point[]
 }
 
 function groundOf(plan: TownPlan): Ground {
   const sorted = [...plan.lots].sort((a, b) => a.id.localeCompare(b.id))
   const inZone = (zone: TownLot['zone']): TownLot[] => sorted.filter((lot) => lot.zone === zone)
-  const plaza = gatePlaza(plan.claim)
   return {
     plan,
     net: roadNet(plan, 'citizen'),
@@ -63,15 +63,16 @@ function groundOf(plan: TownPlan): Ground {
     },
     open: [...plan.promenades, plazaOf(plan.claim)],
     crossings: new Set(plan.graph.nodes.map((node) => `${node.x}:${node.z}`)),
-    plazaStand: { x: plaza.x + INNER_SIDEWALK_M, z: plaza.z }
+    plazaStands: plazaStands(plan.claim)
   }
 }
 
 // Where a citizen bound for `destination` ends up: a door, the middle of a park, or the plaza.
 function goalOf(ground: Ground, destination: Destination, pick: number): Point {
-  if (destination === 'plaza') return ground.plazaStand
+  const stand = ground.plazaStands[Math.floor(pick * ground.plazaStands.length)]
+  if (destination === 'plaza') return stand
   const lots = ground.lotsOf[destination]
-  if (lots.length === 0) return ground.plazaStand
+  if (lots.length === 0) return stand
   const lot = lots[Math.floor(pick * lots.length)]
   if (destination !== 'park') return lot.door
   // A park is walked into: where its two footpaths cross, when the claim has not cut it off.

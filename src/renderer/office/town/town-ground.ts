@@ -1,10 +1,10 @@
 import { Color } from 'three'
-import { boundsOfZone } from '../logic/zone-framing'
-import { rectOf, type Rect } from '../themes/lot-math'
+import type { Rect } from '../themes/lot-math'
 import { GROUND_Y } from '../themes/surroundings'
 import type { TownDress } from './town-dress'
 import { ROAD_WIDTH_M, SIDEWALK_M } from './town-grid'
 import type { TownPlan } from './town-plan'
+import { plazaSquare } from './town-plaza'
 import { roadPromenades, type TownRoad } from './town-roads'
 
 // Lowest first: a later layer lies over an earlier one wherever they meet.
@@ -54,11 +54,8 @@ function strip(road: TownRoad, inset: number): Rect {
 // the campus over the part of a block the claim cuts, then roads, walks and the gate plaza.
 export function groundQuads(plan: TownPlan, dress: TownDress): GroundQuad[] {
   const { roads } = dress
-  const claim = boundsOfZone(plan.claim)
-  const envelope = boundsOfZone(plan.envelope)
   // The avenue's width carried through the claim: the way in to the gate and on east.
   const campusStreet: Rect = { ...plan.claim, z: 0, depth: ROAD_WIDTH_M.avenue }
-  const plaza = rectOf(claim.minX, envelope.minX, -ROAD_WIDTH_M.avenue, ROAD_WIDTH_M.avenue)
   return [
     ...plan.blocks.map((block) => quad('pad', block, dress.looks[block.zone].ground)),
     quad('campus', plan.claim, dress.looks.park.ground),
@@ -70,7 +67,7 @@ export function groundQuads(plan: TownPlan, dress: TownDress): GroundQuad[] {
     ...roadPromenades(plan.roads, plan.claim).map((walk) =>
       quad('promenade', walk, roads.promenade)
     ),
-    quad('promenade', plaza, roads.promenade)
+    quad('promenade', plazaSquare(plan.claim), roads.promenade)
   ]
 }
 
