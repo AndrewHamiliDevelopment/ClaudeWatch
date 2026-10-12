@@ -1,5 +1,6 @@
 import { BrassRoomSign } from '../BrassKit'
 import type { OfficeTheme } from '../types'
+import { GarrisonAmbient } from './GarrisonAmbient'
 import { GarrisonCrew } from './GarrisonCrew'
 import {
   GarrisonCompanyZone,
@@ -13,6 +14,7 @@ import {
   GarrisonRoomDressing,
   GarrisonRoomFloors
 } from './GarrisonRoom'
+import { GarrisonLounge, GarrisonSurroundings } from './GarrisonSurroundings'
 import { GarrisonWalls } from './GarrisonWalls'
 import { GarrisonDistrict, GarrisonHangar, GarrisonTower } from './GarrisonWorld'
 import { GARRISON, GARRISON_PALETTE } from './palette'
@@ -53,7 +55,10 @@ export const orbitalGarrison: OfficeTheme = {
       Desk: GarrisonDesk,
       RoomDressing: GarrisonRoomDressing,
       // The door plaque is one shared textured sign in every theme.
-      RoomSign: BrassRoomSign
+      RoomSign: BrassRoomSign,
+      Lounge: GarrisonLounge,
+      Surroundings: GarrisonSurroundings,
+      Ambient: GarrisonAmbient
     }
   },
   world: { District: GarrisonDistrict, Hangar: GarrisonHangar, Tower: GarrisonTower }

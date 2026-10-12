@@ -1,7 +1,13 @@
+import { useMemo } from 'react'
+import { GROUND_Y } from '../surroundings'
 import type { FloorProps, TowerProps } from '../types'
 import { box, Parts, turned, type PartSpec, lit, SIDES } from '../parts'
 import { ThemeTower } from '../WorldArchitecture'
+import { apronLots, apronStrips, DISTRICT_OFFSET_M, HANGAR_OFFSET_M } from './apron'
 import { frameParts } from './frame-parts'
+import { RadarDish } from './GarrisonAmbient'
+import { PlacedParts } from './GarrisonSurroundings'
+import { buildLot } from './lots'
 import { GARRISON, GARRISON_PALETTE } from './palette'
 import { GARRISON_FRAMES } from './roster'
 
@@ -48,11 +54,27 @@ const COLONY: PartSpec[] = [
   ...CARRIER
 ]
 
+// The colony and its carrier to the west, and a working apron all the way round the plate: pads
+// of yard buildings, a lit runway to the north and a hazard line at the plate's edge.
 export function GarrisonDistrict({ floor }: FloorProps) {
+  const apron = useMemo(() => {
+    const builds = apronLots(floor).map((lot) => buildLot(lot, GROUND_Y))
+    return {
+      parts: [...builds.flatMap((build) => build.parts), ...apronStrips(floor)],
+      mounts: builds.flatMap((build) => build.mount ?? [])
+    }
+  }, [floor])
   return (
-    <group position={[-floor.width / 2 - 5, 0, 0]}>
-      <Parts parts={COLONY} />
-    </group>
+    <>
+      <group position={[-floor.width / 2 - DISTRICT_OFFSET_M, 0, 0]}>
+        <Parts parts={COLONY} />
+      </group>
+      <PlacedParts parts={apron.parts} />
+      {/* The district is not told the motion setting, so its dishes stand still. */}
+      {apron.mounts.map((mount) => (
+        <RadarDish key={`${mount.x}:${mount.z}`} mount={mount} isReducedMotion />
+      ))}
+    </>
   )
 }
 
@@ -79,7 +101,7 @@ const HANGAR_FRAMES = GARRISON_FRAMES.map((frame) => ({
 
 export function GarrisonHangar({ floor }: FloorProps) {
   return (
-    <group position={[floor.width / 2 + 5.5, 0, 0]} rotation={[0, -Math.PI / 2, 0]}>
+    <group position={[floor.width / 2 + HANGAR_OFFSET_M, 0, 0]} rotation={[0, -Math.PI / 2, 0]}>
       <Parts parts={HANGAR_DECK} />
       {HANGAR_FRAMES.map((frame, bay) => (
         <group
