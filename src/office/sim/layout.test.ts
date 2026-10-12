@@ -36,11 +36,13 @@ const liveBays = (layout: LayoutMap) =>
     .sort((a, b) => a - b)
 function expectClearLanes(layout: LayoutMap): void {
   const floor = layout.floors[0]
-  const plate = { x: 0, z: 0, width: floor.width, depth: floor.depth }
   for (const [first, second] of pairs(floor.zones))
     expect(lane(first, second)).toBeGreaterThanOrEqual(3)
   for (const company of floor.zones) {
-    expect(isInside(company, plate)).toBe(true)
+    // The plate has its own centre and leaves the 3 m margin around every company.
+    expect(
+      isInside({ ...company, width: company.width + 6, depth: company.depth + 6 }, floor)
+    ).toBe(true)
     const grounds = [...company.children, company.lounge!]
     for (const zone of grounds) expect(isInside(zone, company)).toBe(true)
     for (const [first, second] of pairs(grounds))
@@ -119,6 +121,46 @@ describe("a floor shaped like the owner's: one company of four projects and two 
     expect([alpha, beta, zkidz].map((company) => Math.sign(company.z))).toEqual([-1, -1, 1])
     expect([floor.width, floor.depth]).toEqual([71, 31])
   })
+  it('keeps the plate within 71 x 31 m with at least half of it company grounds', () => {
+    const floor = built().floors[0]
+    const grounds = floor.zones.reduce((total, company) => total + area(company), 0)
+    expect(floor).toMatchObject({ width: 71, depth: 31, x: 34, z: 0 })
+    expect(grounds / area(floor)).toBeGreaterThanOrEqual(0.5)
+  })
+  it("makes a lone company's plate its grounds, the street and the margins", () => {
+    const alone = sessionsOf(OWNER.filter(([company]) => company === 'zkidz'))
+    const floor = buildLayout(alone, undefined, 0).floors[0]
+    expect(sizes(floor.zones)).toEqual([[65, 11]])
+    // The gate's 3 m, 65 m of grounds, 3 m of margin; the 3 m street, 11 m of grounds, 3 m.
+    expect(floor).toMatchObject({ width: 71, depth: 17, x: 34, z: 7 })
+    expect(floor.elevator).toMatchObject({ x: 0, z: 0 })
+    expect(isInside({ ...floor.elevator, width: 3, depth: 3 }, floor)).toBe(true)
+    // The lift stands 3 m short of the company's own gateway.
+    expect(floor.zones[0].door).toEqual({ x: 3, z: 1.5 })
+  })
+  it("leaves every other company's rooms where they were when a company grows", () => {
+    const layout = built()
+    const roomsOf = (map: LayoutMap, companyKey: string) =>
+      map.floors[0].rooms.filter((room) => room.companyKey === companyKey)
+    const grownBy = (joiner: ReturnType<typeof inCompany>) =>
+      buildLayout([...sessionsOf(OWNER), joiner], layout, 1)
+    // zkidz has its side of the street to itself: a desk column or a project moves nobody else.
+    for (const grown of [grownBy(inCompany('zkidz', '3', 'x')), grownBy(inCompany('zkidz', '9'))]) {
+      expect(roomsOf(grown, 'c_zkidz')).not.toEqual(roomsOf(layout, 'c_zkidz'))
+      for (const other of ['c_alpha', 'c_beta'])
+        expect(roomsOf(grown, other)).toEqual(roomsOf(layout, other))
+    }
+    // beta is the last company in its row.
+    const last = grownBy(inCompany('beta', '1', 'x'))
+    for (const other of ['c_alpha', 'c_zkidz'])
+      expect(roomsOf(last, other)).toEqual(roomsOf(layout, other))
+    // alpha stands before beta in the same row: its desk column pushes beta 5 m, and only beta.
+    const first = grownBy(inCompany('alpha', '1', 'x'))
+    expect(roomsOf(first, 'c_zkidz')).toEqual(roomsOf(layout, 'c_zkidz'))
+    expect(roomsOf(first, 'c_beta').map((room) => [room.x, room.z])).toEqual(
+      roomsOf(layout, 'c_beta').map((room) => [room.x + 5, room.z])
+    )
+  })
   it("keeps a project's place while it and its earlier neighbours stay the same size", () => {
     const layout = built()
     const joiners = ['x', 'y'].map((seat) => inCompany('zkidz', '3', seat))
@@ -188,8 +230,9 @@ describe('nested headquarters layout', () => {
     const before = JSON.stringify(saved)
     const next = buildLayout([session('a'), session('b')], saved, 1)
     expect(next.reservations.b).toEqual(saved.reservations.b)
-    expect(placeInCompany(next, 'b')).toEqual(placeInCompany(saved, 'b'))
-    expect(next.floors[0].zones[0].x).toBe(saved.floors[0].zones[0].x)
+    // The company widens to the east for the second desk column; b's office does not move.
+    expect(next.floors[0].rooms.find((r) => r.sessionKey === 'b')).toEqual(saved.floors[0].rooms[0])
+    expect(next.floors[0].zones[0].width).toBeGreaterThan(saved.floors[0].zones[0].width)
     expect(JSON.stringify(saved)).toBe(before)
     const removed = buildLayout([session('b')], next, 2)
     expect(buildLayout([session('a'), session('b')], removed, 3).reservations.a).toEqual(

@@ -81,14 +81,18 @@ describe('headquarters geometry', () => {
     }
     expect(floor.rooms.map((room) => room.kind)).toEqual(['office', 'office', 'office'])
   })
-  it('uses the same origin-centred metre frame for zones, leaves, entrance and agents', () => {
+  it('uses the same gate-anchored metre frame for the plate, zones, leaves and agents', () => {
     const layout = buildLayout(sessions, undefined, 0)
     const floor = toFloorGeometry(layout, sessions)[0]
-    expect(floor.corridor.width).toBeGreaterThanOrEqual(3)
+    expect(floor.corridor).toEqual({ z: 0, width: 3 })
     expect(floor.elevator).toEqual({ x: 0, z: 0 })
+    // The plate carries its own centre from the sim; the gate is not in the middle of it.
+    const plate = { x: layout.floors[0].x, z: layout.floors[0].z }
+    expect({ x: floor.x, z: floor.z }).toEqual(plate)
+    expect(plate.x).not.toBe(0)
     for (const zone of floor.zones) {
-      expect(Math.abs(zone.x) + zone.width / 2).toBeLessThanOrEqual(floor.width / 2)
-      expect(Math.abs(zone.z) + zone.depth / 2).toBeLessThanOrEqual(floor.depth / 2)
+      expect(Math.abs(zone.x - plate.x) + zone.width / 2).toBeLessThanOrEqual(floor.width / 2)
+      expect(Math.abs(zone.z - plate.z) + zone.depth / 2).toBeLessThanOrEqual(floor.depth / 2)
     }
     for (const placement of placements(sessions, layout)) {
       const agent: AgentView = {

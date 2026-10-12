@@ -39,6 +39,9 @@ export interface RoomLayout extends ZoneLayout {
 export interface FloorLayout {
   id: string
   label: string
+  // The plate's centre, in the same metres as everything on it: the gate is the origin.
+  x: number
+  z: number
   width: number
   depth: number
   rooms: RoomLayout[]

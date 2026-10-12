@@ -6,6 +6,8 @@ import {
   frameBounds,
   HUD_SAFE_INSETS,
   occupiedBounds,
+  plateCentre,
+  plateLocalFloor,
   projectToScreen,
   type Bounds,
   type ScreenView
@@ -75,6 +77,51 @@ describe('occupiedBounds', () => {
     expect(occupiedBounds(rooms, new Set(['claude:a'])).minX).toBeGreaterThan(-5)
     const plate = occupiedBounds(makeFloor({ floorId: 'f', width: 20, depth: 16 }), new Set())
     expect(plate).toEqual({ minX: -10, maxX: 10, minZ: -8, maxZ: 8 })
+  })
+
+  it('frames the plate where it lies when the gate is not at its centre', () => {
+    const strip = makeFloor({ floorId: 'f', width: 71, depth: 17, x: 31, z: 7 })
+    expect(occupiedBounds(strip, new Set())).toEqual({
+      minX: -4.5,
+      maxX: 66.5,
+      minZ: -1.5,
+      maxZ: 15.5
+    })
+  })
+})
+
+describe('the plate and its theme parts', () => {
+  const strip = makeFloor({
+    floorId: 'f',
+    width: 71,
+    depth: 17,
+    x: 31,
+    z: 7,
+    corridor: { z: 0, width: 3 },
+    elevator: { x: 0, z: 0 },
+    rooms: [makeRoom({ id: 'r', x: 5, z: 6 })]
+  })
+
+  it('reads the centre off the floor, and the gate for a floor that carries none', () => {
+    expect(plateCentre(strip)).toEqual({ x: 31, z: 7 })
+    expect(plateCentre(makeFloor({ floorId: 'old' }))).toEqual({ x: 0, z: 0 })
+  })
+
+  it('hands theme parts a floor measured from the plate centre, the same size', () => {
+    const local = plateLocalFloor(strip)
+    expect(local).toMatchObject({ width: 71, depth: 17, x: 0, z: 0 })
+    expect(local.corridor).toEqual({ z: -7, width: 3 })
+    expect(local.elevator).toEqual({ x: -31, z: -7 })
+    // Drawn inside a group at the plate centre, the lift lands back on the gate.
+    const centre = plateCentre(strip)
+    expect([centre.x + local.elevator.x, centre.z + local.elevator.z]).toEqual([0, 0])
+    expect(centre.z + local.corridor.z).toBe(strip.corridor.z)
+    expect(strip.elevator).toEqual({ x: 0, z: 0 })
+  })
+
+  it('changes nothing for a plate that is centred on the gate', () => {
+    const centred = makeFloor({ floorId: 'f', elevator: { x: -8, z: 2 } })
+    expect(plateLocalFloor(centred)).toEqual({ ...centred, x: 0, z: 0 })
   })
 })
 

@@ -1,4 +1,5 @@
 import { doorSide, SIDE_NORMAL, type WallSide } from '../logic/room-layout'
+import { plateCentre } from '../logic/zone-framing'
 import type { FloorGeometry, ZoneGeometry } from '../scene-model'
 
 export interface Lot {
@@ -136,17 +137,22 @@ interface Site {
   offices: Rect[]
 }
 
+function plateOf(floor: FloorGeometry): Rect {
+  return { ...plateCentre(floor), width: floor.width, depth: floor.depth }
+}
+
 function apronOf(floor: FloorGeometry): Rect {
+  const plate = plateOf(floor)
   return rectOf(
-    -floor.width / 2 - WORLD_APRON.west,
-    floor.width / 2 + WORLD_APRON.east,
-    -floor.depth / 2 - WORLD_APRON.north,
-    floor.depth / 2 + WORLD_APRON.south
+    plate.x - plate.width / 2 - WORLD_APRON.west,
+    plate.x + plate.width / 2 + WORLD_APRON.east,
+    plate.z - plate.depth / 2 - WORLD_APRON.north,
+    plate.z + plate.depth / 2 + WORLD_APRON.south
   )
 }
 
 function surveySite(floor: FloorGeometry): Site {
-  const plate: Rect = { x: 0, z: 0, width: floor.width, depth: floor.depth }
+  const plate = plateOf(floor)
   const apron = apronOf(floor)
   const zones = flatten(floor.zones)
   const companies = floor.zones
@@ -169,7 +175,7 @@ function surveySite(floor: FloorGeometry): Site {
       ...zones,
       ...floor.rooms,
       ...doors,
-      { x: 0, z: floor.corridor.z, width: floor.width, depth: floor.corridor.width },
+      { x: plate.x, z: floor.corridor.z, width: floor.width, depth: floor.corridor.width },
       { x: floor.elevator.x, z: floor.elevator.z, width: LIFT_CLEAR_M, depth: LIFT_CLEAR_M }
     ],
     offices: projects.length > 0 ? projects : floor.rooms

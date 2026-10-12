@@ -31,11 +31,12 @@ const TARGETS: [string, number, number][] = [
   ['the south-east corner', 150, 150]
 ]
 
-function boxCorners(): Vector3[] {
+function boxCorners(scene: SceneBox = box): Vector3[] {
   return [-1, 1].flatMap((sideX) =>
     [-1, 1].flatMap((sideZ) =>
-      [box.minY, box.maxY].map(
-        (y) => new Vector3(box.x + (sideX * box.width) / 2, y, box.z + (sideZ * box.depth) / 2)
+      [scene.minY, scene.maxY].map(
+        (y) =>
+          new Vector3(scene.x + (sideX * scene.width) / 2, y, scene.z + (sideZ * scene.depth) / 2)
       )
     )
   )
@@ -72,9 +73,9 @@ function poseOf(camera: OrthographicCamera): CameraPose {
 }
 
 // What the scene does each frame with the planes it is given.
-function fitPlanes(camera: OrthographicCamera): CameraPose {
+function fitPlanes(camera: OrthographicCamera, scene: SceneBox = box): CameraPose {
   const pose = poseOf(camera)
-  const planes = clipPlanes(box, pose)
+  const planes = clipPlanes(scene, pose)
   camera.position.addScaledVector(pose.forward, -planes.pushBack)
   camera.near = planes.near
   camera.far = planes.far
@@ -131,6 +132,38 @@ describe.each([
       for (const point of groundAtViewCorners(camera, pose)) {
         expect(Math.abs(point.x - cover.x)).toBeLessThanOrEqual(cover.size / 2)
         expect(Math.abs(point.z - cover.z)).toBeLessThanOrEqual(cover.size / 2)
+      }
+    })
+  })
+})
+
+describe('clip planes around a plate that is not centred on the gate', () => {
+  const strip = makeFloor({ floorId: 'strip', width: 71, depth: 17, x: 31, z: 7 })
+  const scene: SceneBox = {
+    ...sceneExtent(strip, surroundingLots(strip)),
+    minY: GROUND_Y,
+    maxY: 30
+  }
+
+  it('sizes the scene around the plate, not around the gate', () => {
+    expect(scene.x).toBeGreaterThan(20)
+    expect(scene.x - scene.width / 2).toBeLessThan(-4.5)
+    expect(scene.x + scene.width / 2).toBeGreaterThan(66.5)
+  })
+
+  describe.each([
+    ['the gate', 0, 0],
+    ['the plate centre', 31, 7],
+    ['the far corner of the plate', 66.5, 15.5]
+  ])('looking at %s', (_target, targetX, targetZ) => {
+    it.each(ROTATIONS)('holds every corner of the scene at rotation %f', (azimuth) => {
+      for (const zoom of [WIDEST_ZOOM, BAND_ZOOM.desk]) {
+        const camera = cameraOn(targetX, targetZ, azimuth, zoom)
+        fitPlanes(camera, scene)
+        for (const corner of boxCorners(scene)) {
+          expect(depthOf(corner, camera)).toBeGreaterThanOrEqual(-1)
+          expect(depthOf(corner, camera)).toBeLessThanOrEqual(1)
+        }
       }
     })
   })

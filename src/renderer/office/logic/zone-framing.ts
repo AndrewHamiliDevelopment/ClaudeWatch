@@ -58,6 +58,24 @@ export function cardSafeArea(viewport: Viewport): {
   }
 }
 
+// The plate's centre, measured from the gate like everything else on the floor.
+export function plateCentre(floor: Pick<FloorGeometry, 'x' | 'z'>): { x: number; z: number } {
+  return { x: floor.x ?? 0, z: floor.z ?? 0 }
+}
+
+// The floor as a theme's slab, lift and district see it. They draw around their own origin from
+// the plate's size, so they are drawn in a group at the plate centre and given this copy.
+export function plateLocalFloor(floor: FloorGeometry): FloorGeometry {
+  const centre = plateCentre(floor)
+  return {
+    ...floor,
+    x: 0,
+    z: 0,
+    corridor: { ...floor.corridor, z: floor.corridor.z - centre.z },
+    elevator: { x: floor.elevator.x - centre.x, z: floor.elevator.z - centre.z }
+  }
+}
+
 export function boundsOfZone(zone: Pick<ZoneGeometry, 'x' | 'z' | 'width' | 'depth'>): Bounds {
   return {
     minX: zone.x - zone.width / 2,
@@ -109,7 +127,7 @@ export function occupiedBounds(floor: FloorGeometry, liveSessionKeys: ReadonlySe
     (room) => room.sessionKey && liveSessionKeys.has(room.sessionKey)
   )
   if (rooms.length > 0) return padBounds(union(rooms.map(boundsOfZone)), OCCUPIED_PADDING_M)
-  return boundsOfZone({ x: 0, z: 0, width: floor.width, depth: floor.depth })
+  return boundsOfZone({ ...plateCentre(floor), width: floor.width, depth: floor.depth })
 }
 
 // Orthographic isometric projection into "screen metres": x to the right, y up the screen.

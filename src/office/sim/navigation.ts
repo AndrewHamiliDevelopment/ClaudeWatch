@@ -3,7 +3,7 @@ import type { FloorLayout, ZoneLayout } from './layout'
 
 export function officeGrid(floor: FloorLayout): NavGrid {
   const cellSize = 0.25
-  const origin = { x: -floor.width / 2, z: -floor.depth / 2 }
+  const origin = { x: floor.x - floor.width / 2, z: floor.z - floor.depth / 2 }
   const blocked = new Set<string>()
   const wall = (zone: ZoneLayout) => {
     const left = zone.x - zone.width / 2,
