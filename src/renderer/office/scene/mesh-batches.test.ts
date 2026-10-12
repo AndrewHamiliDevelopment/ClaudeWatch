@@ -1,5 +1,6 @@
 import {
   BoxGeometry,
+  Color,
   Group,
   InstancedMesh,
   Matrix4,
@@ -110,4 +111,58 @@ it('leaves a textured sign in its own draw without serialising its texture', () 
   root.add(...signs)
   expect(createMeshBatches(root)).toEqual([])
   for (const toJSON of serialised) expect(toJSON).not.toHaveBeenCalled()
+})
+
+it('draws parts that differ only in colour together, each in its own colour', () => {
+  const root = new Group()
+  const box = new BoxGeometry(1, 1, 1)
+  const [red, blue, alsoRed] = ['red', 'blue', 'red'].map(
+    (color) => new Mesh(box, new MeshStandardMaterial({ color, roughness: 0.8 }))
+  )
+  root.add(red, blue, alsoRed)
+  const batches = createMeshBatches(root)
+  expect(batches).toHaveLength(1)
+  expect(batches[0].mesh.count).toBe(3)
+  const tint = new Color()
+  batches[0].mesh.getColorAt(0, tint)
+  expect(tint.getHexString()).toBe(new Color('red').getHexString())
+  batches[0].mesh.getColorAt(1, tint)
+  expect(tint.getHexString()).toBe(new Color('blue').getHexString())
+  // The batch draws through its own white copy, so the tint is not applied twice.
+  const drawn = batches[0].mesh.material as MeshStandardMaterial
+  expect(drawn.color.getHexString()).toBe('ffffff')
+  expect(red.material.color.getHexString()).toBe(new Color('red').getHexString())
+  const disposed = vi.spyOn(drawn, 'dispose')
+  releaseMeshBatches(root, batches)
+  expect(disposed).toHaveBeenCalledOnce()
+})
+
+it('keeps parts apart when their surface differs by more than colour', () => {
+  const root = new Group()
+  const box = new BoxGeometry(1, 1, 1)
+  root.add(
+    new Mesh(box, new MeshStandardMaterial({ color: 'red', roughness: 0.8 })),
+    new Mesh(box, new MeshStandardMaterial({ color: 'red', roughness: 0.2 })),
+    new Mesh(
+      box,
+      new MeshStandardMaterial({ color: 'red', emissive: 'red', emissiveIntensity: 0.9 })
+    )
+  )
+  expect(createMeshBatches(root)).toHaveLength(0)
+})
+
+it('multiplies a part that already carries a colour per instance by its material colour', () => {
+  const root = new Group()
+  const box = new BoxGeometry(1, 1, 1)
+  const authored = new InstancedMesh(box, new MeshStandardMaterial({ color: '#808080' }), 1)
+  authored.setMatrixAt(0, new Matrix4())
+  authored.setColorAt(0, new Color(1, 0, 0))
+  root.add(authored, new Mesh(box, new MeshStandardMaterial({ color: 'blue' })))
+  const batches = createMeshBatches(root)
+  expect(batches).toHaveLength(1)
+  const tint = new Color()
+  batches[0].mesh.getColorAt(0, tint)
+  const grey = new Color('#808080')
+  expect(tint.r).toBeCloseTo(grey.r)
+  expect(tint.g).toBe(0)
 })

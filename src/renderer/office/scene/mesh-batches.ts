@@ -1,4 +1,5 @@
 import {
+  Color,
   DynamicDrawUsage,
   Group,
   InstancedMesh,
@@ -11,22 +12,31 @@ import {
 
 interface SourceMesh {
   mesh: Mesh
+  material: Material
   layerMask: number
   count: number
 }
 export interface MeshBatch {
   mesh: InstancedMesh
   sources: SourceMesh[]
+  // The batch's own white copy of the material, when its parts are tinted per instance.
+  tinted: Material | null
 }
 
 // Opt-in for see-through parts that are all alike (agent shadows, steam puffs): one geometry,
 // one material, and a draw order among them that cannot matter.
 export const SHARED_BATCH = 'sharedBatch'
 
+const SHARED_KEY = 'shared:'
+
+function colorOf(material: Material): Color | null {
+  return 'color' in material && material.color instanceof Color ? material.color : null
+}
+
 function batchKey(mesh: Mesh, material: Material): string | null {
   if (!material.visible) return null
   const sharedBatch: unknown = mesh.userData[SHARED_BATCH]
-  if (typeof sharedBatch === 'string') return `shared:${sharedBatch}`
+  if (typeof sharedBatch === 'string') return `${SHARED_KEY}${sharedBatch}`
   if (material.transparent) return null
   // Textured signs and per-agent transparent effects keep their own draw and ordering. Tested
   // before serialising: a material's JSON carries its texture's image.
@@ -35,12 +45,35 @@ function batchKey(mesh: Mesh, material: Material): string | null {
   const geometry = mesh.geometry.toJSON()
   const shading = material.toJSON()
   const { uuid: geometryId, metadata: geometryMetadata, ...shape } = geometry
-  const { uuid: materialId, metadata: materialMetadata, ...surface } = shading
+  // Colour is left out of the key: it is applied per instance, so parts alike in everything
+  // else share one draw whatever their colour or theme.
+  const { uuid: materialId, metadata: materialMetadata, color, ...surface } = shading
   void geometryId
   void geometryMetadata
   void materialId
   void materialMetadata
+  void color
   return JSON.stringify([shape, surface])
+}
+
+const WHITE = new Color(1, 1, 1)
+const tint = new Color()
+const ownTint = new Color()
+
+function tintInstances(batch: InstancedMesh, sources: readonly SourceMesh[]): void {
+  let index = 0
+  for (const { mesh, material, count } of sources) {
+    const base = colorOf(material) ?? WHITE
+    for (let part = 0; part < count; part++) {
+      tint.copy(base)
+      if (mesh instanceof InstancedMesh && mesh.instanceColor) {
+        mesh.getColorAt(part, ownTint)
+        tint.multiply(ownTint)
+      }
+      batch.setColorAt(index++, tint)
+    }
+  }
+  if (batch.instanceColor) batch.instanceColor.needsUpdate = true
 }
 
 export function createMeshBatches(root: Group): MeshBatch[] {
@@ -52,27 +85,33 @@ export function createMeshBatches(root: Group): MeshBatch[] {
     const sources = groups.get(key) ?? []
     sources.push({
       mesh: object,
+      material: object.material,
       layerMask: object.layers.mask,
       count: object instanceof InstancedMesh ? object.count : 1
     })
     groups.set(key, sources)
   })
   const batches: MeshBatch[] = []
-  for (const sources of groups.values()) {
+  for (const [key, sources] of groups) {
     if (sources.length < 2) continue
-    const first = sources[0].mesh
+    const first = sources[0]
+    // A shared batch is all alike and keeps its material; the rest draw through a white copy.
+    const tinted =
+      !key.startsWith(SHARED_KEY) && colorOf(first.material) ? first.material.clone() : null
+    if (tinted) colorOf(tinted)?.copy(WHITE)
     const mesh = new InstancedMesh(
-      first.geometry,
-      first.material,
+      first.mesh.geometry,
+      tinted ?? first.material,
       sources.reduce((sum, source) => sum + source.count, 0)
     )
+    if (tinted) tintInstances(mesh, sources)
     mesh.instanceMatrix.setUsage(DynamicDrawUsage)
     mesh.frustumCulled = false
-    mesh.renderOrder = first.renderOrder
+    mesh.renderOrder = first.mesh.renderOrder
     // Controller refs still mutate the originals; only their camera layer is disabled.
     for (const source of sources) source.mesh.layers.disable(0)
     root.add(mesh)
-    batches.push({ mesh, sources })
+    batches.push({ mesh, sources, tinted })
   }
   updateMeshBatches(root, batches)
   return batches
@@ -115,5 +154,6 @@ export function releaseMeshBatches(root: Group, batches: readonly MeshBatch[]): 
     for (const source of batch.sources) source.mesh.layers.mask = source.layerMask
     root.remove(batch.mesh)
     batch.mesh.dispose()
+    batch.tinted?.dispose()
   }
 }
