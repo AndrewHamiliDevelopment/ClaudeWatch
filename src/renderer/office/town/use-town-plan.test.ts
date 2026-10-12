@@ -1,5 +1,6 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { officeSettings } from '../logic/office-settings'
 import { pinQuality } from '../quality-store'
 import type { FloorGeometry } from '../scene-model'
 import { campusClaim, neededClaim } from './town-claim'
@@ -13,6 +14,7 @@ const stored = (): unknown => JSON.parse(localStorage.getItem(CLAIM_STORAGE_KEY)
 
 beforeEach(() => {
   localStorage.clear()
+  officeSettings.reset()
   pinQuality('full')
 })
 afterEach(() => vi.restoreAllMocks())
@@ -97,10 +99,35 @@ describe('useTownPlan', () => {
   })
 
   it('plans the town for the detail level in use', () => {
+    officeSettings.setTownSize('city')
     const { result } = renderHook(() => useTownPlan(LARGE_FLOOR))
     const full = result.current.plan
     act(() => pinQuality('light'))
     expect(result.current.plan.lots.length).toBeLessThan(full.lots.length)
     expect(edges(result.current.plan.claim)).toEqual(edges(full.claim))
+  })
+
+  it('plans a village when nothing is stored', () => {
+    const { result } = renderHook(() => useTownPlan(LARGE_FLOOR))
+    expect(result.current.plan.size).toBe('village')
+  })
+
+  it('rebuilds the plan once for a size change, and not for an agent step', () => {
+    const { result, rerender } = renderHook(({ floor }) => useTownPlan(floor), {
+      initialProps: { floor: LARGE_FLOOR }
+    })
+    const village = result.current.plan
+    act(() => officeSettings.setTownSize('city'))
+    const city = result.current.plan
+    rerender({ floor: structuredClone(LARGE_FLOOR) })
+    expect(result.current.plan).toBe(city)
+    expect(city).not.toBe(village)
+    expect(city.size).toBe('city')
+    expect(edges(city.claim)).toEqual(edges(village.claim))
+    // The camera's widest zoom is the plan's extent: it grows with the town.
+    expect(edges(city.extent).east).toBeGreaterThan(edges(village.extent).east)
+    expect(edges(city.extent).west).toBeLessThan(edges(village.extent).west)
+    act(() => officeSettings.setTownSize('city'))
+    expect(result.current.plan).toBe(city)
   })
 })

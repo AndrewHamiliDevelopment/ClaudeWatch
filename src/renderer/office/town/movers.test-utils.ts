@@ -6,6 +6,7 @@ import type { Rect } from '../themes/lot-math'
 import { DEFAULT_THEME_ID, listThemes } from '../themes/registry'
 import { campusClaim, neededClaim } from './town-claim'
 import { lotOwners, townBlocks } from './town-plan'
+import type { TownSize } from './town-grid'
 import type { TownInput, Trip } from './town-trips'
 import { LARGE_FLOOR } from './town.test-utils'
 
@@ -15,8 +16,12 @@ export const MOVER_FLOORS: readonly (readonly [string, FloorGeometry])[] = [
 ]
 
 // The town a floor gets on a first start, each company dressed in a theme of its own.
-export function townOn(floor: FloorGeometry, detail: QualityLevel = 'full'): TownInput {
-  const plan = townBlocks(campusClaim(neededClaim(floor), null), detail)
+export function townOn(
+  floor: FloorGeometry,
+  detail: QualityLevel = 'full',
+  size: TownSize = 'city'
+): TownInput {
+  const plan = townBlocks(campusClaim(neededClaim(floor), null), detail, size)
   const themes = listThemes()
   const companies = floor.zones.filter((zone) => zone.kind === 'company')
   return {

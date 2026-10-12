@@ -10,6 +10,7 @@ import { SettingRow, ToggleSwitch } from '../../components/settings/controls'
 import { officeSettings, useOfficeSettings, type OfficeSettingKey } from '../logic/office-settings'
 import { levelInUse, QUALITY_PINS, type QualityPin } from '../logic/quality'
 import { pinQuality, useQualityChoice } from '../quality-store'
+import { TOWN_SIZES, type TownSize } from '../town/town-grid'
 import { BAR_BUTTON_CLASS } from './hud-styles'
 
 interface Feature {
@@ -56,6 +57,57 @@ const FEATURES: readonly Feature[] = [
       'The figure you walk through the office. Off removes it, the Walk button and its key.'
   }
 ]
+
+const TOWN_SIZE_CHOICES: Record<TownSize, { label: string; description: string }> = {
+  village: {
+    label: 'Village',
+    description: 'The campus, its garden and one ring of streets. Lightest.'
+  },
+  town: {
+    label: 'Town',
+    description: 'A wider ring of streets and more of the old town: about half again the buildings.'
+  },
+  city: {
+    label: 'City',
+    description: 'The whole town out to its tall far ring. The most to draw and to walk.'
+  }
+}
+
+// How far the town reaches round the offices; native radios, so arrows move between them.
+function TownSizeChoice({ townSize }: { townSize: TownSize }) {
+  const name = useId()
+  return (
+    <div className="py-2.5">
+      <p id={`${name}-title`} className="text-body font-semibold text-text-primary">
+        Town size
+      </p>
+      <div role="radiogroup" aria-labelledby={`${name}-title`} className="mt-1.5 space-y-1.5">
+        {TOWN_SIZES.map((size) => (
+          <label key={size} className="flex cursor-pointer items-start gap-2">
+            <input
+              type="radio"
+              name={name}
+              value={size}
+              checked={townSize === size}
+              onChange={() => officeSettings.setTownSize(size)}
+              aria-labelledby={`${name}-${size}-label`}
+              aria-describedby={`${name}-${size}`}
+              className="mt-1 accent-accent"
+            />
+            <span>
+              <span id={`${name}-${size}-label`} className="text-body text-text-primary">
+                {TOWN_SIZE_CHOICES[size].label}
+              </span>
+              <span id={`${name}-${size}`} className="block text-xs text-text-secondary">
+                {TOWN_SIZE_CHOICES[size].description}
+              </span>
+            </span>
+          </label>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 const PIN_LABEL: Record<QualityPin, string> = {
   auto: 'Auto',
@@ -112,6 +164,7 @@ export function OfficeSettingsPanel({ id, onClose }: { id: string; onClose: () =
               />
             </SettingRow>
           ))}
+          <TownSizeChoice townSize={settings.townSize} />
           <div className="py-2.5">
             <p className="text-body font-semibold text-text-primary">Detail level</p>
             <p className="mt-0.5 text-xs text-text-secondary">

@@ -3,7 +3,15 @@ import { boundsOfZone } from '../logic/zone-framing'
 import type { ZoneGeometry } from '../scene-model'
 import { contains, gapBetween, grow, rectOf, type Rect } from '../themes/lot-math'
 import { roadGraph, type RoadGraph } from './town-graph'
-import { BLOCK_PITCH_M, MIN_BELT_M, OLD_TOWN_BLOCKS, RING_M, cellRect } from './town-grid'
+import {
+  BLOCK_PITCH_M,
+  MIN_BELT_M,
+  OLD_TOWN_BLOCKS,
+  RING_M,
+  TOWN_REACH,
+  cellRect,
+  type TownSize
+} from './town-grid'
 import { townLots, type TownLot } from './town-lots'
 import { roadPromenades, townRoads, type TownRoad } from './town-roads'
 import { lotSites, parkPromenades } from './town-sites'
@@ -18,6 +26,7 @@ export interface TownBlock extends Rect {
 }
 
 export interface TownPlan {
+  size: TownSize
   claim: Rect
   // The claim less the belt: it always contains the plate, and moves only when the claim does.
   envelope: Rect
@@ -32,16 +41,14 @@ export interface TownPlan {
   graph: RoadGraph
 }
 
-// How far the town is drawn: the old town to the west, a ring on the other three sides.
-export function townExtent(claim: Rect, detail: QualityLevel): Rect {
+// How far the town is drawn: the old town to the west, a ring on the other three sides. The
+// pure planner defaults to the full town; the owner's setting picks the size in the app.
+export function townExtent(claim: Rect, detail: QualityLevel, size: TownSize = 'city'): Rect {
   const { minX, maxX, minZ, maxZ } = boundsOfZone(claim)
-  const ring = RING_M[detail]
-  return rectOf(
-    minX - OLD_TOWN_BLOCKS[detail] * BLOCK_PITCH_M,
-    maxX + ring,
-    minZ - ring,
-    maxZ + ring
-  )
+  const reach = TOWN_REACH[size]
+  const ring = Math.min(RING_M[detail], reach.ringM)
+  const oldTownBlocks = Math.min(OLD_TOWN_BLOCKS[detail], reach.oldTownBlocks)
+  return rectOf(minX - oldTownBlocks * BLOCK_PITCH_M, maxX + ring, minZ - ring, maxZ + ring)
 }
 
 function blocksOf(claim: Rect, extent: Rect): TownBlock[] {
@@ -70,13 +77,15 @@ function blocksOf(claim: Rect, extent: Rect): TownBlock[] {
   return blocks
 }
 
-// The whole town for a claim, from nothing. Pure: the same claim and level give the same plan.
-export function planTown(claim: Rect, detail: QualityLevel): TownPlan {
-  const extent = townExtent(claim, detail)
+// The whole town for a claim, from nothing. Pure: the same claim, level and size give the same
+// plan.
+export function planTown(claim: Rect, detail: QualityLevel, size: TownSize = 'city'): TownPlan {
+  const extent = townExtent(claim, detail, size)
   const roads = townRoads(claim, extent)
   const sites = lotSites(claim, extent)
   const promenades = [...roadPromenades(roads, claim), ...parkPromenades(sites)]
   return {
+    size,
     claim,
     envelope: grow(claim, -MIN_BELT_M),
     extent,
@@ -92,11 +101,11 @@ export function planTown(claim: Rect, detail: QualityLevel): TownPlan {
 const MAX_REMEMBERED_PLANS = 16
 const remembered = new Map<string, TownPlan>()
 
-// `planTown`, remembered by claim and level, so the same claim hands back the same plan.
-export function townBlocks(claim: Rect, detail: QualityLevel): TownPlan {
+// `planTown`, remembered by claim, level and size, so the same claim hands back the same plan.
+export function townBlocks(claim: Rect, detail: QualityLevel, size: TownSize = 'city'): TownPlan {
   const { minX, maxX, minZ, maxZ } = boundsOfZone(claim)
-  const key = `${minX}:${maxX}:${minZ}:${maxZ}:${detail}`
-  const plan = remembered.get(key) ?? planTown(claim, detail)
+  const key = `${minX}:${maxX}:${minZ}:${maxZ}:${detail}:${size}`
+  const plan = remembered.get(key) ?? planTown(claim, detail, size)
   // Set again on a hit, so the plan in use is the last one forgotten.
   remembered.delete(key)
   remembered.set(key, plan)

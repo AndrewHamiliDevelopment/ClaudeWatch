@@ -61,6 +61,33 @@ it('switches a feature off at once and remembers it', () => {
   expect(officeSettings.get().citizens).toBe(true)
 })
 
+it('offers three town sizes above the detail level, each saying what it changes', () => {
+  const { dialog } = open()
+  const group = screen.getByRole('radiogroup', { name: 'Town size' })
+  const sizes = within(group).getAllByRole('radio')
+  expect(sizes.map((size) => size.getAttribute('value'))).toEqual(['village', 'town', 'city'])
+  expect(within(group).getByRole('radio', { name: 'Village' })).toHaveAccessibleDescription(
+    'The campus, its garden and one ring of streets. Lightest.'
+  )
+  for (const size of sizes) expect(size).toHaveAccessibleDescription(/\w{20,}|.{40,}/)
+  expect(within(group).getByRole('radio', { name: 'Village' })).toBeChecked()
+  const detail = within(dialog).getByRole('group', { name: 'Detail level' })
+  expect(group.compareDocumentPosition(detail) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+})
+
+it('changes the town size at once and remembers it', () => {
+  open()
+  fireEvent.click(screen.getByRole('radio', { name: 'City' }))
+  expect(screen.getByRole('radio', { name: 'City' })).toBeChecked()
+  expect(screen.getByRole('radio', { name: 'Village' })).not.toBeChecked()
+  expect(officeSettings.get().townSize).toBe('city')
+  expect(JSON.parse(localStorage.getItem(OFFICE_SETTINGS_STORAGE_KEY) ?? 'null')).toMatchObject({
+    townSize: 'city'
+  })
+  fireEvent.click(screen.getByRole('button', { name: 'Restore defaults' }))
+  expect(screen.getByRole('radio', { name: 'Village' })).toBeChecked()
+})
+
 it('holds the detail level control, with the level in use marked', () => {
   open()
   const group = screen.getByRole('group', { name: 'Detail level' })
@@ -99,6 +126,10 @@ it('can be worked from the keyboard: focus lands on the title and every control 
   const switches = within(dialog).getAllByRole('switch')
   // Six switches, four levels, restore and close: native buttons, so Tab, Space and Enter work.
   expect(controls.length + switches.length).toBe(12)
+  // The sizes are native radios: one tab stop, arrow keys between them.
+  const sizes = within(dialog).getAllByRole('radio')
+  expect(sizes).toHaveLength(3)
+  for (const size of sizes) expect(size).toHaveAttribute('name', sizes[0].getAttribute('name'))
   for (const control of [...controls, ...switches]) {
     expect(control.tagName).toBe('BUTTON')
     expect(control).not.toHaveAttribute('tabindex', '-1')
