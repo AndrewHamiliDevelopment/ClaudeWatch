@@ -1,54 +1,16 @@
-import type { Vector } from '../primitives'
 import type { FloorProps, TowerProps } from '../types'
 import { box, Parts, turned, type PartSpec } from '../parts'
+import { hangarStand } from '../violet-court/apron'
+import { ApronFill, DISTRICT_SIDES, HANGAR_SIDES } from '../violet-court/LotFill'
 import { ThemeTower } from '../WorldArchitecture'
+import { GROVE_LOT_KIT } from './grove-lots'
 import { paperLantern } from './GroveRoom'
 import { GROVE, GROVE_PALETTE } from './palette'
-import { ball, spike, tube } from './spirit-features'
+import { ball, tube } from './spirit-features'
 
-// A pine: a trunk and three stacked cones.
-function pine(x: number, z: number, height: number): PartSpec[] {
-  return [
-    tube([x, height * 0.15, z], [height * 0.08, height * 0.3, height * 0.08], GROVE.bark),
-    ...[0, 1, 2].map((tier) => {
-      const width = height * (0.5 - tier * 0.12)
-      return spike([x, height * (0.42 + tier * 0.22), z], [width, height * 0.36, width], GROVE.pine)
-    })
-  ]
-}
-
-const STEPPING_STONES: Vector[] = [
-  [-0.4, -0.1, 2],
-  [0.3, -0.1, 2.9],
-  [0.9, -0.1, 3.9],
-  [0.5, -0.1, 4.9]
-]
-
-// The country beyond the clearing: rounded hills, a stream into a pond with stepping stones,
-// pines, and a lantern on the bank.
-const COUNTRYSIDE: PartSpec[] = [
-  box([0, -0.25, 0], [7, 0.2, 22], GROVE.pine),
-  ball([-1.6, -0.2, -7], [5, 3.2, 6.5], GROVE.moss),
-  ball([-2, -0.2, 7.5], [4.4, 2.4, 5.5], GROVE.moss),
-  ball([-0.4, -0.2, -2.2], [3.2, 1.5, 3.6], GROVE.fern),
-  box([0.4, -0.13, -3], [0.7, 0.05, 9], GROVE.pond),
-  tube([0.5, -0.13, 3.4], [4.2, 0.06, 5.4], GROVE.pond),
-  ...STEPPING_STONES.map((at) => ball(at, [0.6, 0.16, 0.5], GROVE.stone)),
-  ...pine(1.9, -8.5, 3.4),
-  ...pine(2.4, -6.6, 2.4),
-  ...pine(-2.3, 2.2, 3),
-  ...pine(2.3, 8.6, 3.6),
-  ...pine(1.2, 9.8, 2.2),
-  tube([2.2, 0.5, 1.2], [0.07, 1.2, 0.07], GROVE.bark),
-  ...paperLantern(2.2, 1.2, 1.2)
-]
-
+// The country beyond the clearing: ponds and rock gardens by the plate, then cabins and trees.
 export function GroveDistrict({ floor }: FloorProps) {
-  return (
-    <group position={[-floor.width / 2 - 5, 0, 0]}>
-      <Parts parts={COUNTRYSIDE} />
-    </group>
-  )
+  return <ApronFill floor={floor} kit={GROVE_LOT_KIT} sides={DISTRICT_SIDES} paving={GROVE.pine} />
 }
 
 const ROOF_PITCH = 0.5
@@ -58,7 +20,7 @@ const BED_SLOTS = [-2, -0.7, 0.7, 2]
 // The project hangar is a greenhouse: a timber frame under a pitched glass roof, with three
 // planter beds of seedlings waiting to be sent out.
 const GREENHOUSE: PartSpec[] = [
-  box([0, -0.12, 0], [6.4, 0.2, 5], GROVE.bark),
+  box([0, -0.26, 0], [6.4, 0.48, 5], GROVE.bark),
   ...[-3, 0, 3].flatMap((x) =>
     [-2.2, 2.2].map((z) => tube([x, 1.3, z], [0.16, 2.6, 0.16], GROVE.timber))
   ),
@@ -80,10 +42,14 @@ const GREENHOUSE: PartSpec[] = [
 ]
 
 export function GroveHangar({ floor }: FloorProps) {
+  const stand = hangarStand(floor)
   return (
-    <group position={[floor.width / 2 + 5.5, 0, 0]} rotation={[0, -Math.PI / 2, 0]}>
-      <Parts parts={GREENHOUSE} />
-    </group>
+    <>
+      <ApronFill floor={floor} kit={GROVE_LOT_KIT} sides={HANGAR_SIDES} paving={GROVE.pine} />
+      <group position={[stand.x, 0, stand.z]} rotation={[0, -Math.PI / 2, 0]}>
+        <Parts parts={GREENHOUSE} />
+      </group>
+    </>
   )
 }
 

@@ -25,7 +25,7 @@ export const spike = (at: Vector, size: Vector, color: string): PartSpec => ({
   color
 })
 
-const ON_ITS_SIDE: Vector = [0, 0, Math.PI / 2]
+export const ON_ITS_SIDE: Vector = [0, 0, Math.PI / 2]
 const KEEPER_BACK = -0.14
 const HELPER_BACK = -0.2
 
