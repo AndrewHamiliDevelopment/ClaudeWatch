@@ -21,10 +21,8 @@ type Side = 'north' | 'south' | 'west' | 'east'
 const SIDES: readonly Side[] = ['north', 'south', 'west', 'east']
 
 // Trees every two slots, lamps every four between them, seats in the gaps the lamps leave.
-// A wide campus spaces its slots out by whole steps: the garden is the prop share of
-// LOT_CAP (80), less the plaza, the corners and up to six features.
-const SLOT_STEP_M = 3
-const ROW_PIECE_CAP = 80 - 16 - 4 - 6
+// The garden is one instanced batch, so a wide campus keeps the same pitch: count costs nothing.
+const SLOT_M = 3
 const ROW_ALONG_M = 1.6
 const RUN_END_CLEAR_M = 1
 // The plaza's half-depth: the west side leaves it to the plaza, the east side matches.
@@ -178,13 +176,9 @@ export function campusGreen(floor: FloorGeometry, plan: TownPlan): GreenPlot[] {
     promenades: plan.promenades,
     zoneIdOf: (side) => nearestCompany(middleOf(side), site.companies)?.id ?? null
   }
-  const rowsAt = (slotM: number): GreenPlot[] =>
-    SIDES.flatMap((side) =>
-      runsOf(side, claim).flatMap((run, runIndex) => rowOf(ground, side, run, runIndex, slotM))
-    )
-  let slotM = SLOT_STEP_M
-  while (rowsAt(slotM).length > ROW_PIECE_CAP) slotM += SLOT_STEP_M
-  const rows = rowsAt(slotM)
+  const rows = SIDES.flatMap((side) =>
+    runsOf(side, claim).flatMap((run, runIndex) => rowOf(ground, side, run, runIndex, SLOT_M))
+  )
   // Features keep off the corners' places whether or not the corners have room.
   const corners = cornersOf(ground)
   const hasCorners = corners.every((corner) => hasRoom(corner, ground))

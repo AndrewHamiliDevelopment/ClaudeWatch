@@ -57,8 +57,17 @@ describe.each(LIVE_FLOORS)('campusGreen: %s', (_name, floor) => {
     }
   })
 
-  it('keeps the garden inside the prop share of the lot cap', () => {
-    expect(pieces.length).toBeLessThanOrEqual(80)
+  // One instanced batch: a piece costs nothing, a new shape a draw, so a wide campus keeps its rows.
+  it('plants a tree every 6 m along every run, however wide the campus', () => {
+    for (const side of SIDES)
+      for (const run of runsOf(side)) {
+        const trees = run.pieces
+          .filter((piece) => piece.role === 'tree')
+          .map(along)
+          .sort((a, b) => a - b)
+        for (let index = 1; index < trees.length; index++)
+          expect(trees[index] - trees[index - 1], `${side} tree pitch`).toBeCloseTo(6, 2)
+      }
   })
 
   it('mirrors every run about its own middle', () => {
