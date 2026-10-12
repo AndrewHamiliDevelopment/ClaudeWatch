@@ -11,6 +11,7 @@ import { getTheme } from '../themes/registry'
 import { GROUND_Y, lotBase } from '../themes/surroundings'
 import type { OfficeTheme } from '../themes/types'
 import { fallbackDress } from './fallback-dress'
+import { placeGardenPiece } from './garden-pieces'
 import { townSteamStacks } from './town-ambient'
 import { dressLot, type TownDress } from './town-dress'
 import type { TownLot } from './town-lots'
@@ -101,7 +102,7 @@ export function TownView(props: TownProps) {
       JSON.stringify(
         town.green.map((plot) => [
           plot.id,
-          plot.kind,
+          plot.role,
           plot.maxHeight,
           lotBase(plot, floor),
           themeIdOf(plot)
@@ -122,7 +123,7 @@ export function TownView(props: TownProps) {
   }, [lotsRevision])
   const belt = useMemo(() => {
     const placed = town.green.map((plot) =>
-      dressLot(plot, lotBase(plot, floor), dressOf(getTheme(themeIdOf(plot))))
+      placeGardenPiece(plot, lotBase(plot, floor), dressOf(getTheme(themeIdOf(plot))))
     )
     return (
       <BatchedScene revision={beltRevision} isStatic>

@@ -97,19 +97,17 @@ describe('TownView', () => {
     expect(placedLots.some(({ lot }) => lot.id === landmark?.id)).toBe(false)
   })
 
-  it('dresses each plot of the belt as a park of the company beside it', () => {
+  it('dresses every garden piece of a role alike, in the theme of the company beside it', () => {
     const { town, placedBelt } = view()
     expect(placedBelt).toHaveLength(town.green.length)
-    const parks = [north, south].flatMap((theme) =>
-      [...dressOf(theme).designs, ...dressOf(theme).props]
-        .filter((design) => design.zones.includes('park'))
-        .map((design) => design.name)
-    )
-    for (const { lot, design } of placedBelt) {
-      expect(parks, lot.id).toContain(design)
+    const designByRole = new Map<string, string>()
+    placedBelt.forEach(({ lot, design }, index) => {
       const themeId = lot.zoneId === firstCompany.id ? south.id : north.id
       expect(design.startsWith(`${themeId}:`), `${lot.id} wears ${design}`).toBe(true)
-    }
+      const key = `${themeId}:${town.green[index].role}`
+      expect(designByRole.get(key) ?? design, lot.id).toBe(design)
+      designByRole.set(key, design)
+    })
   })
 
   it('wears the fallback where a theme has drawn no town of its own', () => {
