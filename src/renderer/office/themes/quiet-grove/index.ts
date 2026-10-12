@@ -9,6 +9,7 @@ import { GroveWalls } from './GroveWalls'
 import { GroveDistrict, GroveHangar, GroveTower } from './GroveWorld'
 import { GROVE, GROVE_PALETTE } from './palette'
 import { QUIET_GROVE_ID, quietGroveRoster } from './roster'
+import { GROVE_TOWN } from './town'
 
 export const quietGrove: OfficeTheme = {
   id: QUIET_GROVE_ID,
@@ -41,5 +42,6 @@ export const quietGrove: OfficeTheme = {
       Ambient: GroveAmbient
     }
   },
-  world: { District: GroveDistrict, Hangar: GroveHangar, Tower: GroveTower }
+  world: { District: GroveDistrict, Hangar: GroveHangar, Tower: GroveTower },
+  town: GROVE_TOWN
 }

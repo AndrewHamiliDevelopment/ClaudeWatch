@@ -9,6 +9,7 @@ import { CourtWalls } from './CourtWalls'
 import { CourtDistrict, CourtHangar, CourtTower } from './CourtWorld'
 import { COURT, COURT_PALETTE } from './palette'
 import { VIOLET_COURT_ID, violetCourtRoster } from './roster'
+import { COURT_TOWN } from './town'
 
 export const violetCourt: OfficeTheme = {
   id: VIOLET_COURT_ID,
@@ -41,5 +42,6 @@ export const violetCourt: OfficeTheme = {
       Ambient: CourtAmbient
     }
   },
-  world: { District: CourtDistrict, Hangar: CourtHangar, Tower: CourtTower }
+  world: { District: CourtDistrict, Hangar: CourtHangar, Tower: CourtTower },
+  town: COURT_TOWN
 }
