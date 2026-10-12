@@ -4,9 +4,9 @@ import { GroveCompanyZone, GroveElevator, GroveProjectOffice, GroveSlab } from '
 import { GroveDesk, GroveDoorway, GroveRoomDressing, GroveRoomFloors } from './GroveRoom'
 import { GroveLounge } from './GroveLounge'
 import { GroveSpirit } from './GroveSpirit'
-import { GroveAmbient, GroveSurroundings } from './GroveSurroundings'
+import { GroveAmbient } from './GroveSurroundings'
 import { GroveWalls } from './GroveWalls'
-import { GroveDistrict, GroveHangar, GroveTower } from './GroveWorld'
+import { GroveTower } from './GroveWorld'
 import { GROVE, GROVE_PALETTE } from './palette'
 import { QUIET_GROVE_ID, quietGroveRoster } from './roster'
 import { GROVE_TOWN } from './town'
@@ -38,10 +38,9 @@ export const quietGrove: OfficeTheme = {
       // The door plaque is one shared textured sign in every theme.
       RoomSign: BrassRoomSign,
       Lounge: GroveLounge,
-      Surroundings: GroveSurroundings,
       Ambient: GroveAmbient
     }
   },
-  world: { District: GroveDistrict, Hangar: GroveHangar, Tower: GroveTower },
+  world: { Tower: GroveTower },
   town: GROVE_TOWN
 }

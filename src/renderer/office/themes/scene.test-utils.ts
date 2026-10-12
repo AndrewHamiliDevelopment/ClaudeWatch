@@ -1,4 +1,4 @@
-import { createElement, isValidElement, type ReactElement, type ReactNode } from 'react'
+import { isValidElement, type ReactElement, type ReactNode } from 'react'
 import {
   BufferGeometry,
   Group,
@@ -11,8 +11,6 @@ import {
 import { InstancedParts } from '../scene/InstancedParts'
 import { createMeshBatches, releaseMeshBatches } from '../scene/mesh-batches'
 import { makeGeometry } from './geometry-audit.test-utils'
-import { GROUND_Y } from './surroundings'
-import type { AmbientProps, OfficeTheme, SurroundingsProps } from './types'
 
 interface NodeProps {
   children?: ReactNode
@@ -117,49 +115,4 @@ export function mergedDraws(node: ReactNode): DrawCount {
   })
   releaseMeshBatches(root, batches)
   return counted
-}
-
-type Triple = [number, number, number]
-
-function boxPart(key: string, at: Triple, size: Triple, color: string) {
-  return createElement(
-    'mesh',
-    { key, position: at, scale: size },
-    createElement('boxGeometry', { args: [1, 1, 1] }),
-    createElement('meshStandardMaterial', { color })
-  )
-}
-
-// A stand-in for a theme's surroundings, so the wiring and the draw budget are proven before the
-// real ones exist: a body and a roof per building, a crate per prop and one mover.
-export function withBoxSurroundings(theme: OfficeTheme, id: string): OfficeTheme {
-  const { palette } = theme
-  const Surroundings = ({ lots }: SurroundingsProps) =>
-    createElement(
-      'group',
-      null,
-      lots.flatMap((lot) => {
-        const height = lot.maxHeight - GROUND_Y
-        const body: Triple = [lot.width, height, lot.depth]
-        const centre: Triple = [lot.x, GROUND_Y + height / 2, lot.z]
-        if (lot.kind === 'prop') return [boxPart(lot.id, centre, body, palette.brass)]
-        return [
-          boxPart(lot.id, centre, body, palette.wood),
-          boxPart(
-            `${lot.id}:roof`,
-            [lot.x, lot.maxHeight, lot.z],
-            [lot.width, 0.2, lot.depth],
-            palette.ink
-          )
-        ]
-      })
-    )
-  const Ambient = ({ lots }: AmbientProps) =>
-    createElement(
-      'mesh',
-      { position: [lots[0]?.x ?? 0, 3, lots[0]?.z ?? 0] },
-      createElement('sphereGeometry', { args: [0.4, 8, 6] }),
-      createElement('meshStandardMaterial', { color: palette.glow })
-    )
-  return { ...theme, id, kit: { ...theme.kit, zone: { ...theme.kit.zone, Surroundings, Ambient } } }
 }

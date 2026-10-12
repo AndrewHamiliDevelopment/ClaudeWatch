@@ -5,16 +5,9 @@ import { lit, Parts, type PartSpec, sphere } from '../parts'
 import type { Vector } from '../primitives'
 import { drawnTop } from '../../town/town-ambient'
 import { draw } from '../surroundings'
-import type { AmbientProps, SurroundingsProps } from '../types'
+import type { AmbientProps } from '../types'
 import { spread, type PlacedLot } from '../lot-kit'
-import { KitFill } from '../LotFill'
-import { GROVE_LOT_KIT } from './grove-lots'
 import { GROVE } from './palette'
-
-// The forest around the clearing on this theme's lots.
-export function GroveSurroundings({ floor, lots }: SurroundingsProps) {
-  return <KitFill lots={lots} floor={floor} kit={GROVE_LOT_KIT} />
-}
 
 const FIREFLY_LIMIT = 28
 const FIREFLY = { overRoof: 0.6, headroom: 0.4, bob: 0.25, turnPerSecond: 0.7 }

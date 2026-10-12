@@ -1,8 +1,8 @@
 import { describe, vi } from 'vitest'
 import { Texture } from 'three'
-import { describeWorldFill } from '../world-fill.test-utils'
-import { GROVE_LOT_KIT } from './grove-lots'
-import { quietGrove } from './index'
+import { COURT_LOT_KIT } from './court-lots'
+import { violetCourt } from './index'
+import { describeLoungeAndAmbient } from '../lounge-ambient.test-utils'
 
 vi.mock('react', async (original) => ({
   ...(await original<typeof import('react')>()),
@@ -16,6 +16,6 @@ vi.mock('../../scene/textures', () => ({
   blobShadowTexture: () => new Texture()
 }))
 
-describe('Quiet Grove world fill', () => {
-  describeWorldFill(quietGrove, GROVE_LOT_KIT, ['ambient-firefly', 'ambient-leaf'])
+describe('Violet Court lounge and ambient', () => {
+  describeLoungeAndAmbient(violetCourt, COURT_LOT_KIT, ['ambient-banner', 'ambient-patrol'])
 })

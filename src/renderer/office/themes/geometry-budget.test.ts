@@ -3,10 +3,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { makeGeometry } from './geometry-audit.test-utils'
 import { Texture } from 'three'
 import { InstancedParts } from '../scene/InstancedParts'
-import { getTheme, listThemes } from './registry'
-import { withBoxSurroundings } from './scene.test-utils'
-import { LOT_CAP, type Lot } from './surroundings'
-import { makeAgent, makeFloor } from '../__tests__/fixtures'
+import { listThemes } from './registry'
+import { makeAgent } from '../__tests__/fixtures'
 import { useRobotRig } from './rig'
 
 // Expand the real procedural JSX without a Canvas, frame loop or GPU.
@@ -78,33 +76,7 @@ function audit(
   }
 }
 
-// As many lots as a floor can ever have, half of them buildings at full height.
-const FULL_LOTS: Lot[] = Array.from({ length: LOT_CAP }, (_, index) => ({
-  id: `lot:${index}`,
-  kind: index % 2 ? 'prop' : 'building',
-  x: index * 9,
-  z: 0,
-  width: 6,
-  depth: 6,
-  maxHeight: 24,
-  seed: index,
-  zoneId: null
-}))
-const SURROUNDINGS_TRIANGLE_CEILING = 150_000
-
 describe('procedural geometry budgets', () => {
-  const boxed = withBoxSurroundings(getTheme('neo-edo-steam'), 'test-boxed')
-  for (const theme of [...listThemes(), boxed]) {
-    const { Surroundings } = theme.kit.zone
-    if (!Surroundings) continue
-    it(`${theme.id} draws a full set of lots in under 150k triangles`, () => {
-      const floor = makeFloor({ floorId: 'f1' })
-      const result = audit(createElement(Surroundings, { floor, lots: FULL_LOTS }))
-      expect(result.triangles).toBeGreaterThan(0)
-      expect(result.triangles).toBeLessThanOrEqual(SURROUNDINGS_TRIANGLE_CEILING)
-    })
-  }
-
   for (const theme of listThemes()) {
     it(`${theme.id} keeps each provider model under 2500 triangles with controller refs`, () => {
       for (const provider of ['claude', 'codex'] as const) {

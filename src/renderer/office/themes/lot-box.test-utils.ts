@@ -1,28 +1,9 @@
 import { expect } from 'vitest'
 import { Euler, Matrix4 } from 'three'
-import { makeFloor, makeZone } from '../__tests__/fixtures'
-import type { FloorGeometry } from '../scene-model'
 import type { PartSpec } from './parts'
 import type { PlacedLot } from './lot-kit'
 
 const EPSILON = 1e-6
-
-// A floor of a given size with one company in the middle, for the apron around the plate.
-export function compactFloor(width: number, depth: number): FloorGeometry {
-  const project = makeZone({ id: 'c/p', kind: 'project', x: 0, z: 0, width: 14, depth: 10 })
-  const company = makeZone({
-    id: 'c',
-    kind: 'company',
-    companyKey: 'c',
-    x: 0,
-    z: 0,
-    width: 22,
-    depth: 18,
-    door: { x: 0, z: 9 },
-    children: [project]
-  })
-  return makeFloor({ floorId: `compact-${width}`, width, depth, zones: [company] })
-}
 
 // The world-space box of one part of a placed lot, its own rotation and the lot's turn applied.
 function partBox(part: PartSpec, placed: PlacedLot) {
@@ -43,10 +24,6 @@ function partBox(part: PartSpec, placed: PlacedLot) {
     halfZ: (Math.abs(sin) * half[0] + Math.abs(cos) * half[2]) * placed.scale,
     top: placed.at[1] + (y + half[1]) * placed.scale
   }
-}
-
-export function topOf(placed: PlacedLot): number {
-  return Math.max(...placed.parts.map((part) => partBox(part, placed).top))
 }
 
 export function expectInsideLot(placed: PlacedLot): void {

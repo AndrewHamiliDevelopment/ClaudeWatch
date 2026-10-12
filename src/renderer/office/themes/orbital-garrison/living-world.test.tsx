@@ -4,14 +4,13 @@ import { Group, Texture } from 'three'
 import { groupZonesByTheme } from '../../logic/office-themes'
 import type { FloorGeometry } from '../../scene-model'
 import { FloorView } from '../../scene/FloorView'
-import { SurroundingsView, WorldView } from '../../scene/WorldView'
 import { registerTheme } from '../registry'
 import { mergedDraws } from '../scene.test-utils'
-import { surroundingLots, WORLD_APRON } from '../surroundings'
+import { WORLD_APRON } from '../surroundings'
 import type { OfficeTheme } from '../types'
 import { CIRCUIT_ALTITUDE_M, circuitPose, radarMounts } from './ambient'
 import { DISH_REACH_M } from './buildings'
-import { RadarDish, Shuttle } from './GarrisonAmbient'
+import { GarrisonAmbient, RadarDish, Shuttle } from './GarrisonAmbient'
 import { orbitalGarrison } from './index'
 import { FLOORS, officeGap } from './yard.test-utils'
 import { drawnTown } from '../../town/drawn-town.test-utils'
@@ -36,10 +35,8 @@ vi.mock('react', async (original) => ({
 vi.mock('@react-three/fiber', () => ({ useFrame: (frame: Frame) => frames.push(frame) }))
 vi.mock('../../scene/textures', () => ({ signTexture: () => new Texture() }))
 
-// The whole theme may add this many draws across its surroundings, lounge and ambient parts.
+// The whole theme may add this many draws across its lounge and ambient parts.
 const DRAW_BUDGET = 9
-// What the district, the hangar and the tower cost before the apron was filled.
-const WORLD_DRAWS_BEFORE = 19
 const WIDE = FLOORS[2]
 
 const withoutLounge: OfficeTheme = {
@@ -76,47 +73,30 @@ function moved(render: () => unknown, seconds: number) {
 }
 
 describe('the Orbital Garrison draw budget', () => {
-  it('registers surroundings, a lounge and ambient movers on its zone kit', () => {
-    const { Surroundings, Lounge, Ambient } = orbitalGarrison.kit.zone
-    expect([Surroundings, Lounge, Ambient].every((part) => part !== undefined)).toBe(true)
+  it('registers a lounge and ambient movers on its zone kit', () => {
+    const { Lounge, Ambient } = orbitalGarrison.kit.zone
+    expect([Lounge, Ambient].every((part) => part !== undefined)).toBe(true)
   })
 
   it.each(FLOORS.map((floor) => [`${floor.width} x ${floor.depth}`, floor] as const))(
     'adds at most nine draws on a %s m floor',
-    (size, floor) => {
-      const lots = surroundingLots(floor)
-      const surroundings = mergedDraws(
-        createElement(SurroundingsView, {
+    (_size, floor) => {
+      // Handed what the zoned town draws, as TownAmbient hands it.
+      const placed = drawnTown(orbitalGarrison.id, floor)
+      const ambient = mergedDraws(
+        createElement(GarrisonAmbient, {
           floor,
-          floorTheme: orbitalGarrison,
-          zoneGroups: groupZonesByTheme(floor, () => orbitalGarrison.id),
-          lots,
+          lots: placed.map((each) => each.lot),
+          placed,
           isReducedMotion: false
         })
       )
       const lounge = floorDraws(floor, orbitalGarrison) - floorDraws(floor, withoutLounge)
-      console.info(
-        `garrison ${size}: ${surroundings.draws} surroundings + ambient, ${lounge} lounge, ${surroundings.triangles} triangles on ${lots.length} lots`
-      )
-      expect(surroundings.draws).toBeGreaterThan(0)
+      expect(ambient.draws).toBeGreaterThan(0)
       expect(lounge).toBeGreaterThanOrEqual(0)
-      expect(surroundings.draws + lounge).toBeLessThanOrEqual(DRAW_BUDGET)
-      expect(surroundings.triangles).toBeLessThan(150_000)
+      expect(ambient.draws + lounge).toBeLessThanOrEqual(DRAW_BUDGET)
     }
   )
-
-  it('fills the apron without a new draw in the district', () => {
-    const world = mergedDraws(
-      createElement(WorldView, {
-        floor: WIDE,
-        theme: orbitalGarrison,
-        band: 'building',
-        floors: [{ floorId: WIDE.floorId, label: WIDE.label, agentCount: 60, attentionCount: 1 }]
-      })
-    )
-    console.info(`garrison world: ${world.draws} draws, ${world.triangles} triangles`)
-    expect(world.draws).toBeLessThanOrEqual(WORLD_DRAWS_BEFORE)
-  })
 })
 
 describe('what moves around the garrison', () => {

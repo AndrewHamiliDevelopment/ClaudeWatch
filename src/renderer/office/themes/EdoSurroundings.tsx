@@ -1,12 +1,8 @@
-import { EDO_PROPS } from './EdoProps'
 import { clamp } from '../../../shared/range'
 import type { Plot } from './lot-kit'
-import { LotFill } from './LotFill'
-import { lotBase } from './surroundings'
-import { lotContents, type DesignSet, type LotDesign } from './lot-parts'
+import type { LotDesign } from './lot-parts'
 import { EDO } from './palettes'
 import { box, cone, lit, sphere, type PartSpec } from './parts'
-import type { SurroundingsProps } from './types'
 
 const { wood, ink, paper, lacquer, glow, copper, blossom } = EDO
 
@@ -14,7 +10,7 @@ const ROOF_M = 0.4
 const STOREY_M = 2.3
 const PAGODA = { tier: 2.2, crown: 1.4, maxTiers: 8 }
 // Room left above a chimney for its steam to rise under the lot's limit.
-export const EDO_STEAM_RISE_M = 1.3
+const EDO_STEAM_RISE_M = 1.3
 
 // A tiled roof: wide eaves and a ridge, ROOF_M tall.
 const roof = (y: number, width: number, depth: number): PartSpec[] => [
@@ -120,7 +116,7 @@ function pagoda({ width, depth, height }: Plot): PartSpec[] {
 }
 
 // Where the bathhouse chimney ends, in the plot's own metres: its steam starts there.
-export function edoStackOf({ width, depth, height }: Plot): { x: number; z: number; top: number } {
+function edoStackOf({ width, depth, height }: Plot): { x: number; z: number; top: number } {
   const hall = Math.min(height - 2.2, 2.8)
   return {
     x: (width - 0.6) / 2 - 0.8,
@@ -166,22 +162,12 @@ function watchtower({ height }: Plot): PartSpec[] {
   ]
 }
 
-export const EDO_BATHHOUSE = 'bathhouse'
-
 export const EDO_BUILDINGS: readonly LotDesign[] = [
   { name: 'townhouse', minHeight: 2, parts: townhouse },
   { name: 'storehouse', minHeight: 2, parts: storehouse },
   { name: 'tea stall', minHeight: 2, parts: teaStall },
   { name: 'shrine garden', minHeight: 2, parts: shrineGarden },
   { name: 'pagoda', minHeight: 3.6, parts: pagoda },
-  { name: EDO_BATHHOUSE, minHeight: 4.5, parts: bathhouse },
+  { name: 'bathhouse', minHeight: 4.5, parts: bathhouse },
   { name: 'watchtower', minHeight: 9, parts: watchtower }
 ]
-
-export const EDO_WORLD: DesignSet = { buildings: EDO_BUILDINGS, props: EDO_PROPS }
-
-export function EdoSurroundings({ floor, lots }: SurroundingsProps) {
-  return (
-    <LotFill placed={lots.flatMap((lot) => lotContents(lot, lotBase(lot, floor), EDO_WORLD))} />
-  )
-}

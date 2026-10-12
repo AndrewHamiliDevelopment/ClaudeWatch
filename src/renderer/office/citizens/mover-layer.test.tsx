@@ -30,7 +30,7 @@ const themes = listThemes()
 const edo = getTheme('neo-edo-steam')
 
 // Each company on its own theme, in the registry's order.
-function layerOn(floor: FloorGeometry, props: { citizenShare?: number; hasVehicles?: boolean }) {
+function layerOn(floor: FloorGeometry, props: { hasVehicles?: boolean }) {
   const { plan, owners } = townOn(floor, level.inUse)
   const companyKeys = floor.zones.map((zone) => zone.companyKey)
   const zoneGroups = groupZonesByTheme(
@@ -46,7 +46,6 @@ function layerOn(floor: FloorGeometry, props: { citizenShare?: number; hasVehicl
       zoneGroups={zoneGroups}
       player={null}
       isReducedMotion={false}
-      citizenShare={props.citizenShare ?? 1}
       hasVehicles={props.hasVehicles ?? true}
     />
   )
@@ -82,9 +81,8 @@ describe.each(MOVER_FLOORS)('MoverLayer on %s', (_name, floor) => {
     expect(new Set(others)).toEqual(new Set(['meshStandardMaterial']))
   })
 
-  it('sends out a share of the citizens, and no vehicle when they are switched off', () => {
-    expect(instancesOf(layerOn(floor, { citizenShare: 0.5, hasVehicles: false }))).toBe(24)
-    expect(instancesOf(layerOn(floor, { citizenShare: 0 }))).toBe(MOVER_COUNTS.full.vehicles)
+  it('sends out no vehicle when they are switched off', () => {
+    expect(instancesOf(layerOn(floor, { hasVehicles: false }))).toBe(MOVER_COUNTS.full.citizens)
   })
 })
 

@@ -9,7 +9,6 @@ import { DESK_REACH } from '../logic/room-layout'
 import type { DeskSlot, FloorGeometry, LoungeGeometry } from '../scene-model'
 import { themeForTeam } from '../themes/registry'
 import { FloorView, loungeAsDrawn } from './FloorView'
-import { WorldView } from './WorldView'
 
 // The views are called as plain functions here, so their one hook is stood in for.
 vi.mock('react', async (original) => ({
@@ -207,32 +206,4 @@ describe.each([
     expect(company.at).toEqual([0, 0, 0])
     expect(floor.zones).toContain(company.props.zone)
   })
-
-  it('stands the district, the hangar and the tower around the plate', () => {
-    const world = WorldView({ floor, theme, floors: [], band: 'building' })
-    for (const part of [theme.world.District, theme.world.Hangar]) {
-      const found = locate(world, part)!
-      expect([found.at[0], found.at[2]]).toEqual([centre.x, centre.z])
-      expect(found.props.floor).toMatchObject({
-        width: floor.width,
-        depth: floor.depth,
-        x: 0,
-        z: 0
-      })
-    }
-    const tower = locate(world, theme.world.Tower)!
-    expect([tower.at[0], tower.at[2]]).toEqual([
-      centre.x + floor.width / 2 + 7,
-      centre.z - floor.depth / 2 - 8
-    ])
-  })
-})
-
-it('rebuilds the district when the plate moves under the same size', () => {
-  const sized = { floorId: 'f', label: 'f', plate: 0, width: 40, depth: 20 }
-  const rest = { corridor: { z: 0, width: 3 }, rooms: [], zones: [], elevator: { x: 0, z: 0 } }
-  const revisionAt = (x: number) =>
-    WorldView({ floor: { ...sized, ...rest, x, z: 0 }, theme, floors: [], band: 'floor' }).props
-      .revision
-  expect(revisionAt(10)).not.toBe(revisionAt(0))
 })

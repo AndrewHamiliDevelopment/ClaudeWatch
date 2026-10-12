@@ -5,16 +5,9 @@ import { box, lit, Parts, turned, type PartSpec, cone } from '../parts'
 import type { Vector } from '../primitives'
 import { drawnTop } from '../../town/town-ambient'
 import type { Lot } from '../surroundings'
-import type { AmbientProps, SurroundingsProps } from '../types'
-import { COURT_LOT_KIT } from './court-lots'
+import type { AmbientProps } from '../types'
 import { spread, type PlacedLot } from '../lot-kit'
-import { KitFill } from '../LotFill'
 import { COURT } from './palette'
-
-// The palace-and-academy city on this theme's lots.
-export function CourtSurroundings({ floor, lots }: SurroundingsProps) {
-  return <KitFill lots={lots} floor={floor} kit={COURT_LOT_KIT} />
-}
 
 const BANNER_LIMIT = 16
 const MAST = { minRoom: 1.5, maxHeight: 2.5 }

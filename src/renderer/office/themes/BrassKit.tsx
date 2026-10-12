@@ -1,20 +1,13 @@
 export { BrassRoomDressing } from './BrassRoomDressing'
 export { BrassWalls } from './BrassWalls'
-import { useMemo } from 'react'
 import { STEAM } from '../office-palette'
-import { apronLots } from './apron'
-import { BRASS_WORLD } from './BrassSurroundings'
-import { LotFill } from './LotFill'
-import { lotContents } from './lot-parts'
 import { Elevator } from './BrassElevator'
 import { signTexture } from '../scene/textures'
 import { doorSignPlacement, DESK_REACH } from '../logic/room-layout'
 import { Matte } from '../scene/InstancedParts'
 import { BRASS } from './palettes'
 import { Batch, Box } from './primitives'
-import { MaintenanceHangar } from './Hangar'
-import { APRON_TOP_Y, TOWN_APRON } from './town-apron'
-import { ApronPaving, ThemeTower } from './WorldArchitecture'
+import { ThemeTower } from './WorldArchitecture'
 import type { DeskProps, FloorProps, RoomProps, RoomsProps, TowerProps } from './types'
 
 export function BrassSlab({ floor }: FloorProps) {
@@ -110,20 +103,6 @@ export function BrassRoomSign({ room }: RoomProps) {
 export function BrassElevator(props: FloorProps) {
   return <Elevator {...props} />
 }
-export function BrassHangar(props: FloorProps) {
-  return <MaintenanceHangar {...props} palette={BRASS} />
-}
 export function BrassTower(props: TowerProps) {
   return <ThemeTower {...props} palette={BRASS} />
-}
-
-// An iron-yard apron of warehouses, tanks and pipe runs.
-export function BrassDistrict({ floor }: FloorProps) {
-  const lots = useMemo(() => apronLots(floor, TOWN_APRON), [floor])
-  return (
-    <group>
-      <ApronPaving floor={floor} color={STEAM.darkWood} />
-      <LotFill placed={lots.flatMap((lot) => lotContents(lot, APRON_TOP_Y, BRASS_WORLD))} />
-    </group>
-  )
 }

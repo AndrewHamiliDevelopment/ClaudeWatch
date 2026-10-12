@@ -1,4 +1,3 @@
-import { clamp } from '../../../shared/range'
 import type { CitizenRoute } from '../citizens/route-pose'
 import type { QualityLevel } from '../logic/quality'
 import { draw } from '../themes/lot-math'
@@ -34,8 +33,6 @@ export interface TownInput {
   // A company zone's id to its theme.
   themeIdByZone: ReadonlyMap<string, string>
   detail: QualityLevel
-  // A further cut of the level's citizens, 0 to 1.
-  citizenShare?: number
   hasVehicles?: boolean
 }
 
@@ -71,7 +68,6 @@ export function destinationOf(seed: number): Destination {
 // smaller level sends out the first of the same movers on the same routes.
 export function townTrips(town: TownInput): Trip[] {
   const { citizens, vehicles } = MOVER_COUNTS[town.detail]
-  const citizenCount = Math.round(citizens * clamp(town.citizenShare ?? 1, [0, 1]))
   const vehicleCount = town.hasVehicles === false ? 0 : vehicles
-  return [...citizenTrips(town, citizenCount), ...vehicleTrips(town, vehicleCount)]
+  return [...citizenTrips(town, citizens), ...vehicleTrips(town, vehicleCount)]
 }

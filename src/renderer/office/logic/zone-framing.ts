@@ -90,7 +90,7 @@ function movedZone(zone: ZoneGeometry, by: Shift): ZoneGeometry {
   }
 }
 
-// The floor as a theme's slab, lift and district see it. They draw around their own origin, so
+// The floor as a theme's slab and lift see it. They draw around their own origin, so
 // they are drawn in a group at the plate centre and given this copy, measured from there.
 export function plateLocalFloor(floor: FloorGeometry): FloorGeometry {
   const centre = { x: floor.x, z: floor.z }

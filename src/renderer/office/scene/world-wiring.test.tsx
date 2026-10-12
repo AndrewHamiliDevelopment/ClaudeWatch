@@ -1,19 +1,16 @@
 import { isValidElement, type ReactNode } from 'react'
 import { expect, it, vi } from 'vitest'
-import { makeFloor, makeZone } from '../__tests__/fixtures'
 import { BAND_ZOOM } from '../logic/camera-bands'
-import { ParkedFrames } from '../themes/ParkedFrames'
 import { Lantern } from '../themes/primitives'
 import { getTheme, themeForTeam } from '../themes/registry'
 import { ThemeTower } from '../themes/WorldArchitecture'
-import { BatchedScene } from './BatchedScene'
 import { signTexture } from './textures'
 import { LotFill } from '../themes/LotFill'
 import { GROUND_Y } from '../themes/surroundings'
 import { townLandmark } from '../town/TownView'
 import { LARGE_FLOOR, widened } from '../town/town.test-utils'
 import { townOf } from '../town/use-town-plan'
-import { TowerView, WorldView } from './WorldView'
+import { TowerView } from './WorldView'
 
 vi.mock('react', async (original) => ({
   ...(await original<typeof import('react')>()),
@@ -32,45 +29,6 @@ function elements(node: ReactNode): React.ReactElement<Record<string, unknown>>[
 
 const edo = getTheme('neo-edo-steam')
 const brass = getTheme('brass-workshop')
-
-it('merges the world layer and rebuilds the merge when the theme or the tower changes', () => {
-  const floor = makeFloor({ floorId: 'p1' })
-  const world = (theme: typeof edo, band: 'floor' | 'building') =>
-    WorldView({ floor, theme, floors: [], band })
-  expect(world(edo, 'floor').type).toBe(BatchedScene)
-  const revision = (theme: typeof edo, band: 'floor' | 'building') =>
-    (world(theme, band).props as { revision: string }).revision
-  expect(revision(edo, 'floor')).toBe(revision(edo, 'floor'))
-  expect(revision(edo, 'floor')).not.toBe(revision(edo, 'building'))
-  expect(revision(edo, 'floor')).not.toBe(revision(brass, 'floor'))
-})
-
-it('rebuilds the merge when an office moves, since apron lots are limited by the offices', () => {
-  const floorWith = (x: number) =>
-    makeFloor({ floorId: 'p1', zones: [makeZone({ id: 'c/p', kind: 'project', x })] })
-  const revision = (x: number) =>
-    (
-      WorldView({ floor: floorWith(x), theme: edo, floors: [], band: 'floor' }).props as {
-        revision: string
-      }
-    ).revision
-  expect(revision(2)).toBe(revision(2))
-  expect(revision(2)).not.toBe(revision(-4))
-})
-
-it('renders District and Hangar at floor zoom, and adds Tower only at building zoom', () => {
-  const theme = themeForTeam()
-  const props = { floor: makeFloor({ floorId: 'p1' }), theme, floors: [] }
-  const floorNodes = elements(WorldView({ ...props, band: 'floor' }))
-  expect(floorNodes.some((node) => node.type === theme.world.District)).toBe(true)
-  expect(floorNodes.some((node) => node.type === theme.world.Hangar)).toBe(true)
-  expect(floorNodes.some((node) => node.type === theme.world.Tower)).toBe(false)
-  const buildingNodes = elements(WorldView({ ...props, band: 'building' }))
-  const tower = buildingNodes.find((node) => node.type === theme.world.Tower)
-  // One floor now: the Tower is a landmark and never switches floors.
-  expect(tower).toBeDefined()
-  expect(tower?.props.onFocusFloor).toBeUndefined()
-})
 
 it('clicking a labelled tower storey focuses that project without selecting an agent', () => {
   const focus = vi.fn()
@@ -94,14 +52,6 @@ it('extends building zoom while preserving floor and desk bands', () => {
   expect(BAND_ZOOM.building).toBeLessThan(16)
   expect(BAND_ZOOM.floor).toBe(34)
   expect(BAND_ZOOM.desk).toBe(90)
-})
-
-it('populates the hangar with two decorative parked bodies and heads', () => {
-  const nodes = elements(ParkedFrames({ palette: themeForTeam().palette }))
-  const batches = nodes.filter((node) => Array.isArray(node.props.points))
-  expect(
-    batches.filter((node) => (node.props.points as object[]).length === 2).length
-  ).toBeGreaterThanOrEqual(2)
 })
 
 it('keeps tower counts readable separately from long project labels and lights attention', () => {
@@ -131,6 +81,9 @@ it('stands the tower on the civic landmark lot, in the building band alone', () 
     (node) => elements(node.props.children as ReactNode)[0]?.type === edo.world.Tower
   )
   expect(stand?.props.position).toEqual([lot.x, GROUND_Y, lot.z])
+  // One floor now: the Tower is a landmark and never switches floors.
+  const landmark = elements(stand?.props.children as ReactNode)[0]
+  expect(landmark?.props.onFocusFloor).toBeUndefined()
   expect(far.some((node) => node.type === LotFill)).toBe(false)
   expect(elements(tower('floor')).some((node) => node.type === edo.world.Tower)).toBe(false)
 })
