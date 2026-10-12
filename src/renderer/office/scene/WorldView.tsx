@@ -30,18 +30,24 @@ export function WorldView({
   const offices = officesOf(plate).map(({ x, z, width, depth }) => [x, z, width, depth])
   const placed = [floor.x, floor.z, floor.width, floor.depth]
   const revision = JSON.stringify([theme.id, hasTower, placed, offices, floors])
-  return (
-    <BatchedScene revision={revision} isStatic>
-      <group position={[floor.x, 0, floor.z]}>
-        <District floor={plate} />
-        <Hangar floor={plate} />
-        {hasTower && (
-          <group position={[tower.x, 0, tower.z]}>
-            <Tower floors={floors} />
-          </group>
-        )}
-      </group>
-    </BatchedScene>
+  // `floors` is a new array on every frame of an agent's walk; the revision says when what it
+  // holds changed, and until then React is handed the same elements and skips the district.
+  return useMemo(
+    () => (
+      <BatchedScene revision={revision} isStatic>
+        <group position={[floor.x, 0, floor.z]}>
+          <District floor={plate} />
+          <Hangar floor={plate} />
+          {hasTower && (
+            <group position={[tower.x, 0, tower.z]}>
+              <Tower floors={floors} />
+            </group>
+          )}
+        </group>
+      </BatchedScene>
+    ),
+    // `revision` stands for floors, the tower's place and whether it shows.
+    [revision, plate, District, Hangar, Tower]
   )
 }
 
@@ -96,32 +102,36 @@ export function SurroundingsView({
     [lots, zoneGroups, floorTheme.id]
   )
   const revision = useMemo(() => JSON.stringify([drawn, isReducedMotion]), [drawn, isReducedMotion])
-  // No theme here draws surroundings: no batch, and nothing to update each frame.
-  if (drawn.length === 0) return null
-  // The buildings are placed once; only the few moving things are followed frame by frame.
-  return (
-    <>
-      <BatchedScene revision={revision} isStatic>
-        {drawn.map(({ themeId, lots: themeLots }) => {
-          const { Surroundings } = getTheme(themeId).kit.zone
-          return Surroundings && <Surroundings key={themeId} floor={floor} lots={themeLots} />
-        })}
-      </BatchedScene>
-      <BatchedScene revision={revision}>
-        {drawn.map(({ themeId, lots: themeLots }) => {
-          const { Ambient } = getTheme(themeId).kit.zone
-          return (
-            Ambient && (
-              <Ambient
-                key={themeId}
-                floor={floor}
-                lots={themeLots}
-                isReducedMotion={isReducedMotion}
-              />
-            )
-          )
-        })}
-      </BatchedScene>
-    </>
+  // The buildings are placed once; only the few moving things are followed frame by frame. The
+  // same elements are handed back while nothing here changed, so React skips the whole town.
+  return useMemo(
+    () =>
+      // No theme here draws surroundings: no batch, and nothing to update each frame.
+      drawn.length === 0 ? null : (
+        <>
+          <BatchedScene revision={revision} isStatic>
+            {drawn.map(({ themeId, lots: themeLots }) => {
+              const { Surroundings } = getTheme(themeId).kit.zone
+              return Surroundings && <Surroundings key={themeId} floor={floor} lots={themeLots} />
+            })}
+          </BatchedScene>
+          <BatchedScene revision={revision}>
+            {drawn.map(({ themeId, lots: themeLots }) => {
+              const { Ambient } = getTheme(themeId).kit.zone
+              return (
+                Ambient && (
+                  <Ambient
+                    key={themeId}
+                    floor={floor}
+                    lots={themeLots}
+                    isReducedMotion={isReducedMotion}
+                  />
+                )
+              )
+            })}
+          </BatchedScene>
+        </>
+      ),
+    [drawn, revision, floor, isReducedMotion]
   )
 }
