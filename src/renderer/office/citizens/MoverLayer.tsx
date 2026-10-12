@@ -24,8 +24,6 @@ interface MoverLayerProps {
   zoneGroups: readonly ThemeZoneGroup[]
   player: Player | null | undefined
   isReducedMotion: boolean
-  // A further cut of the detail level's citizens, 0 to 1.
-  citizenShare: number
   // The settings panel's switch.
   hasVehicles: boolean
 }
@@ -55,7 +53,7 @@ function turnToward(from: number, to: number, share: number): number {
 // matrices. It asks for no frames of its own, so they move only on frames the scene draws anyway.
 export function MoverLayer(props: MoverLayerProps) {
   const { floor, plan, owners, floorTheme, zoneGroups, player, isReducedMotion } = props
-  const { citizenShare, hasVehicles } = props
+  const { hasVehicles } = props
   const { pin, chosen } = useQualityChoice()
   const detail = levelInUse(pin, chosen)
   // Keyed by what they say, not by identity: a floor change that moves no lot keeps every trip,
@@ -76,10 +74,9 @@ export function MoverLayer(props: MoverLayerProps) {
       floorThemeId: floorTheme.id,
       themeIdByZone,
       detail,
-      citizenShare,
       hasVehicles
     })
-  }, [plan, ownersKey, themesKey, floorTheme.id, detail, citizenShare, hasVehicles])
+  }, [plan, ownersKey, themesKey, floorTheme.id, detail, hasVehicles])
   const kinds = useMemo(() => moverKinds(trips), [trips])
   // Keyed by what is drawn, so trips that change with the same kinds upload nothing new.
   const kindsKey = kinds.map((kind) => kind.key).join('|')

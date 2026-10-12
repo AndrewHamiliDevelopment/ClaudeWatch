@@ -14,9 +14,9 @@ import {
   GarrisonRoomDressing,
   GarrisonRoomFloors
 } from './GarrisonRoom'
-import { GarrisonLounge, GarrisonSurroundings } from './GarrisonSurroundings'
+import { GarrisonLounge } from './GarrisonSurroundings'
 import { GarrisonWalls } from './GarrisonWalls'
-import { GarrisonDistrict, GarrisonHangar, GarrisonTower } from './GarrisonWorld'
+import { GarrisonTower } from './GarrisonWorld'
 import { GARRISON, GARRISON_PALETTE } from './palette'
 import { ORBITAL_GARRISON_ID, orbitalGarrisonRoster } from './roster'
 import { GARRISON_TOWN } from './town'
@@ -64,10 +64,9 @@ export const orbitalGarrison: OfficeTheme = {
       // The door plaque is one shared textured sign in every theme.
       RoomSign: BrassRoomSign,
       Lounge: GarrisonLounge,
-      Surroundings: GarrisonSurroundings,
       Ambient: GarrisonAmbient
     }
   },
-  world: { District: GarrisonDistrict, Hangar: GarrisonHangar, Tower: GarrisonTower },
+  world: { Tower: GarrisonTower },
   town: GARRISON_TOWN
 }

@@ -91,9 +91,8 @@ it('renders every floor surface through the theme kit', () => {
       isReducedMotion: true
     })
   )
-  // Surroundings and Ambient are drawn by SurroundingsView, outside the floor.
-  const { Surroundings, Ambient, ...floorParts } = theme.kit.zone
-  expect(Surroundings).toBeDefined()
+  // Ambient is drawn by the town's TownAmbient, outside the floor.
+  const { Ambient, ...floorParts } = theme.kit.zone
   expect(Ambient).toBeDefined()
   for (const Component of [...Object.values(theme.kit.floor), ...Object.values(floorParts)]) {
     expect(nodes.some((node) => node.type === Component)).toBe(true)

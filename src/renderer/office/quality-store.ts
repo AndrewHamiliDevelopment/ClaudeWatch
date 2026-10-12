@@ -81,7 +81,7 @@ export function useQualityChoice(): QualityChoice {
   return useSyncExternalStore(subscribeQuality, readQuality)
 }
 
-// The level in use and what it sets. Citizens read `citizenShare` from here.
+// The level in use and what it sets.
 export function useQualitySettings(): QualitySettings {
   const { pin, chosen } = useQualityChoice()
   return QUALITY_SETTINGS[levelInUse(pin, chosen)]

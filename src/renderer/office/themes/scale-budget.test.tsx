@@ -46,9 +46,8 @@ it.each([
 
 // The same theme with no world of its own: what its offices and agents cost alone.
 function bare(theme: OfficeTheme): OfficeTheme {
-  const { Lounge, Surroundings, Ambient, ...zone } = theme.kit.zone
+  const { Lounge, Ambient, ...zone } = theme.kit.zone
   void Lounge
-  void Surroundings
   void Ambient
   const stripped = { ...theme, id: `test-bare-${theme.id}`, kit: { ...theme.kit, zone } }
   registerTheme(stripped)

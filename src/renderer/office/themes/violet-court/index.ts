@@ -4,9 +4,9 @@ import { CourtCompanyZone, CourtElevator, CourtProjectOffice, CourtSlab } from '
 import { CourtLounge } from './CourtLounge'
 import { CourtPilot } from './CourtPilot'
 import { CourtDesk, CourtDoorway, CourtRoomDressing, CourtRoomFloors } from './CourtRoom'
-import { CourtAmbient, CourtSurroundings } from './CourtSurroundings'
+import { CourtAmbient } from './CourtSurroundings'
 import { CourtWalls } from './CourtWalls'
-import { CourtDistrict, CourtHangar, CourtTower } from './CourtWorld'
+import { CourtTower } from './CourtWorld'
 import { COURT, COURT_PALETTE } from './palette'
 import { VIOLET_COURT_ID, violetCourtRoster } from './roster'
 import { COURT_TOWN } from './town'
@@ -38,10 +38,9 @@ export const violetCourt: OfficeTheme = {
       // The door plaque is one shared textured sign in every theme.
       RoomSign: BrassRoomSign,
       Lounge: CourtLounge,
-      Surroundings: CourtSurroundings,
       Ambient: CourtAmbient
     }
   },
-  world: { District: CourtDistrict, Hangar: CourtHangar, Tower: CourtTower },
+  world: { Tower: CourtTower },
   town: COURT_TOWN
 }

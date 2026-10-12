@@ -46,9 +46,7 @@ describe('theme registry', () => {
       ]) {
         expect(typeof Reflect.get(theme.kit.zone, key)).toBe('function')
       }
-      for (const key of ['District', 'Hangar', 'Tower']) {
-        expect(typeof Reflect.get(theme.world, key)).toBe('function')
-      }
+      expect(typeof theme.world.Tower).toBe('function')
       for (const provider of ['claude', 'codex'] as const) {
         expect(theme.robot.skins[provider]).toMatchObject({
           body: expect.any(String),

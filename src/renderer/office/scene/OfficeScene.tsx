@@ -206,8 +206,6 @@ function OfficeScene(props: OfficeSceneProps) {
             zoneGroups={zoneGroups}
             player={player}
             isReducedMotion={isReducedMotion}
-            // The layer reads the detail level itself: a share here would cut the count twice.
-            citizenShare={1}
             hasVehicles={settings.vehicles}
           />
         )}

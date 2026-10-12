@@ -9,8 +9,15 @@ import {
   type CameraPose,
   type SceneBox
 } from '../logic/camera-bands'
-import { GROUND_Y, sceneExtent, surroundingLots } from '../themes/surroundings'
+import { GROUND_Y } from '../themes/surroundings'
+import { campusClaim, neededClaim } from '../town/town-claim'
+import { planTown } from '../town/town-plan'
+import type { FloorGeometry } from '../scene-model'
 import { makeFloor } from './fixtures'
+
+// What OfficeScene sizes the camera from: the zoned town's extent at full detail.
+const townExtentOf = (floor: FloorGeometry) =>
+  planTown(campusClaim(neededClaim(floor), null), 'full').extent
 
 const VIEWPORT = { width: 1200, height: 800 }
 const WIDEST_ZOOM = 0.5
@@ -18,7 +25,7 @@ const START_DISTANCE_M = 60
 
 const floor = makeFloor({ floorId: 'vast', width: 300, depth: 300 })
 const box: SceneBox = {
-  ...sceneExtent(floor, surroundingLots(floor)),
+  ...townExtentOf(floor),
   minY: GROUND_Y,
   maxY: 30
 }
@@ -140,7 +147,7 @@ describe.each([
 describe('clip planes around a plate that is not centred on the gate', () => {
   const strip = makeFloor({ floorId: 'strip', width: 71, depth: 17, x: 31, z: 7 })
   const scene: SceneBox = {
-    ...sceneExtent(strip, surroundingLots(strip)),
+    ...townExtentOf(strip),
     minY: GROUND_Y,
     maxY: 30
   }

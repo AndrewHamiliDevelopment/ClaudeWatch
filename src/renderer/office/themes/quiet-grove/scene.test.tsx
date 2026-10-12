@@ -7,7 +7,8 @@ import { agentsForFloor, layoutFloor } from '../../fixture/fixture-layout'
 import { groupZonesByTheme, type ThemedZone } from '../../logic/office-themes'
 import { FloorView } from '../../scene/FloorView'
 import { RobotCrew } from '../../scene/Robot'
-import { WorldView } from '../../scene/WorldView'
+import { TowerView } from '../../scene/WorldView'
+import { townOf } from '../../town/use-town-plan'
 import { getTheme } from '../registry'
 import { useRobotRig } from '../rig'
 import { quietGrove } from './index'
@@ -73,8 +74,8 @@ function measure(companyCount: number, floorThemeId: string, themeIds: readonly 
     onFly: () => undefined
   })
   const world = mergedDraws(
-    createElement(WorldView, {
-      floor,
+    createElement(TowerView, {
+      plan: townOf(floor, null, 'full').plan,
       theme: floorTheme,
       band: 'building',
       floors: [{ floorId: floor.floorId, label: floor.label, agentCount: 20, attentionCount: 2 }]

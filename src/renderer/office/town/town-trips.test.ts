@@ -54,9 +54,7 @@ describe.each(MOVER_FLOORS)('townTrips on %s', (_name, floor) => {
     })
   })
 
-  it('scales citizens by the share, and sends no vehicle when they are switched off', () => {
-    expect(citizensOf(townTrips({ ...town, citizenShare: 0.5 }))).toHaveLength(24)
-    expect(townTrips({ ...town, citizenShare: 0, hasVehicles: false })).toEqual([])
+  it('sends no vehicle when they are switched off', () => {
     expect(vehiclesOf(townTrips({ ...town, hasVehicles: false }))).toEqual([])
   })
 

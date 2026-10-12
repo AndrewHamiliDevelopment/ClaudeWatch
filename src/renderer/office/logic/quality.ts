@@ -12,12 +12,8 @@ export interface QualitySettings {
   // Frames a second while an agent or the owner's character walks.
   walkFps: number
   maxPixelRatio: number
-  // The share (0 to 1) of the outer ring of buildings that is drawn.
-  ringShare: number
   // The share of lots that may carry an ambient mover; at 0 the ambient layer is not mounted.
   ambientShare: number
-  // The share of citizens on the streets.
-  citizenShare: number
 }
 
 export const QUALITY_SETTINGS: Record<QualityLevel, QualitySettings> = {
@@ -25,25 +21,19 @@ export const QUALITY_SETTINGS: Record<QualityLevel, QualitySettings> = {
     idleFps: 20,
     walkFps: 30,
     maxPixelRatio: 1.5,
-    ringShare: 1,
-    ambientShare: 1,
-    citizenShare: 1
+    ambientShare: 1
   },
   balanced: {
     idleFps: 15,
     walkFps: 30,
     maxPixelRatio: 1.25,
-    ringShare: 0.6,
-    ambientShare: 0.5,
-    citizenShare: 0.5
+    ambientShare: 0.5
   },
   light: {
     idleFps: 10,
     walkFps: 20,
     maxPixelRatio: 1,
-    ringShare: 0.3,
-    ambientShare: 0,
-    citizenShare: 0.2
+    ambientShare: 0
   }
 }
 

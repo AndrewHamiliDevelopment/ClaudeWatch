@@ -4,17 +4,14 @@ import { ROBOT_PALETTE } from '../office-palette'
 import { BrassAmbient } from './BrassAmbient'
 import { BrassFrame } from './BrassFrame'
 import { BrassLounge } from './BrassLounge'
-import { BrassSurroundings } from './BrassSurroundings'
 import { EdoAmbient } from './EdoAmbient'
 import { EdoLounge } from './EdoLounge'
-import { EdoSurroundings } from './EdoSurroundings'
 import * as brass from './BrassKit'
 import { SamuraiFrame } from './SamuraiFrame'
 import { EdoRoomFloors, EdoSlab } from './EdoFloor'
 import { EdoWalls } from './EdoWalls'
 import { EdoDesk, EdoDoorway, EdoElevator, EdoRoomDressing, EdoRoomSign } from './EdoRoom'
-import { EdoDistrict, EdoTower } from './EdoDistrict'
-import { EdoHangar } from './Hangar'
+import { EdoTower } from './EdoDistrict'
 import { BRASS, EDO } from './palettes'
 import { BrassCompanyZone, BrassProjectOffice, EdoCompanyZone, EdoProjectOffice } from './ZoneKits'
 import type { OfficeTheme } from './types'
@@ -45,11 +42,10 @@ export const neoEdoSteam: OfficeTheme = {
       RoomDressing: EdoRoomDressing,
       RoomSign: EdoRoomSign,
       Lounge: EdoLounge,
-      Surroundings: EdoSurroundings,
       Ambient: EdoAmbient
     }
   },
-  world: { District: EdoDistrict, Hangar: EdoHangar, Tower: EdoTower }
+  world: { Tower: EdoTower }
 }
 
 export const brassWorkshop: OfficeTheme = {
@@ -78,9 +74,8 @@ export const brassWorkshop: OfficeTheme = {
       RoomDressing: brass.BrassRoomDressing,
       RoomSign: brass.BrassRoomSign,
       Lounge: BrassLounge,
-      Surroundings: BrassSurroundings,
       Ambient: BrassAmbient
     }
   },
-  world: { District: brass.BrassDistrict, Hangar: brass.BrassHangar, Tower: brass.BrassTower }
+  world: { Tower: brass.BrassTower }
 }

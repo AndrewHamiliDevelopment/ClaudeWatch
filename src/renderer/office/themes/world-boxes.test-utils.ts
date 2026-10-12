@@ -1,14 +1,15 @@
 import { createElement, type ReactNode } from 'react'
 import { Box3, Euler, Matrix4, Quaternion, Vector3 } from 'three'
 import { expect } from 'vitest'
-import { plateLocalFloor } from '../logic/zone-framing'
 import type { FloorGeometry } from '../scene-model'
 import { InstancedParts } from '../scene/InstancedParts'
 import type { InstancePlacement } from '../scene/instancing'
 import { makeGeometry } from './geometry-audit.test-utils'
 import type { Rect } from './lot-math'
 import { directChildren, type SceneElement } from './scene.test-utils'
-import { gapBetween, HEIGHT_PER_METRE, officesOf, surroundingLots } from './surroundings'
+import { gapBetween, HEIGHT_PER_METRE, officesOf } from './surroundings'
+import { drawnTown } from '../town/drawn-town.test-utils'
+import { LotFill } from './LotFill'
 import type { OfficeTheme } from './types'
 
 type Triple = [number, number, number]
@@ -78,23 +79,16 @@ function drawnBoxes(node: ReactNode, parent = new Matrix4()): DrawnBox[] {
   })
 }
 
-// What a theme draws on a floor, as the scene mounts it: the district at the plate centre and
-// measured from there, the surroundings and the lounges in the floor's own coordinates.
+// What a theme draws on a floor, as the scene mounts it: the zoned town in that theme's dress
+// and the lounges, both in the floor's own coordinates.
 export function themeBoxes(theme: OfficeTheme, floor: FloorGeometry) {
-  const { Surroundings, Lounge } = theme.kit.zone
-  const lots = surroundingLots(floor)
+  const { Lounge } = theme.kit.zone
+  const placed = drawnTown(theme.id, floor)
   const lounges = floor.zones.flatMap((zone) => (zone.lounge ? [zone.lounge] : []))
   return {
-    lots,
+    lots: placed.map((each) => each.lot),
     lounges,
-    district: drawnBoxes(
-      createElement(
-        'group',
-        { position: [floor.x, 0, floor.z] },
-        createElement(theme.world.District, { floor: plateLocalFloor(floor) })
-      )
-    ),
-    surroundings: Surroundings ? drawnBoxes(createElement(Surroundings, { floor, lots })) : [],
+    town: drawnBoxes(createElement(LotFill, { placed })),
     lounge: lounges.map((lounge) => (Lounge ? drawnBoxes(createElement(Lounge, { lounge })) : []))
   }
 }

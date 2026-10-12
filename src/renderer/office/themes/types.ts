@@ -83,12 +83,9 @@ export interface DeskProps extends RoomProps {
 export interface LoungeProps {
   lounge: LoungeGeometry
 }
-// Only the lots this theme must draw: its companies' own, and the far ring for the floor's theme.
-export interface SurroundingsProps {
+export interface AmbientProps {
   floor: FloorGeometry
   lots: readonly Lot[]
-}
-export interface AmbientProps extends SurroundingsProps {
   isReducedMotion: boolean
   // What the zoned town drew on `lots`: movers keep to the buildings actually there.
   placed?: readonly PlacedLot[]
@@ -126,8 +123,6 @@ interface ZoneKit {
   RoomSign: ComponentType<RoomProps>
   // A company's place to rest: agents whose turn is done sit at `lounge.seats`.
   Lounge?: ComponentType<LoungeProps>
-  // Buildings and props on the lots around this theme's companies. Static: it is merged once.
-  Surroundings?: ComponentType<SurroundingsProps>
   // A theme's moving things. Move them in useFrame and never invalidate: the scene paces frames.
   Ambient?: ComponentType<AmbientProps>
 }
@@ -163,8 +158,6 @@ export interface OfficeTheme {
   kit: { floor: FloorKit; zone: ZoneKit }
   // Floor-scoped: one horizon, from the floor's default theme.
   world: {
-    District: ComponentType<FloorProps>
-    Hangar: ComponentType<FloorProps>
     Tower: ComponentType<TowerProps>
   }
   // The theme's share of the zoned town, as data. Absent until the theme has drawn it.

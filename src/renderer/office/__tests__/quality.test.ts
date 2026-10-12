@@ -23,9 +23,7 @@ describe('QUALITY_SETTINGS', () => {
       expect(lighter.idleFps).toBeLessThan(heavier.idleFps)
       expect(lighter.walkFps).toBeLessThanOrEqual(heavier.walkFps)
       expect(lighter.maxPixelRatio).toBeLessThan(heavier.maxPixelRatio)
-      expect(lighter.ringShare).toBeLessThan(heavier.ringShare)
       expect(lighter.ambientShare).toBeLessThan(heavier.ambientShare)
-      expect(lighter.citizenShare).toBeLessThan(heavier.citizenShare)
     }
   })
 
@@ -33,19 +31,15 @@ describe('QUALITY_SETTINGS', () => {
     expect(QUALITY_SETTINGS.full).toMatchObject({
       walkFps: 30,
       maxPixelRatio: 1.5,
-      ringShare: 1,
-      ambientShare: 1,
-      citizenShare: 1
+      ambientShare: 1
     })
   })
 
-  it('keeps every share between 0 and 1 and never idles faster than it walks', () => {
+  it('keeps the ambient share between 0 and 1 and never idles faster than it walks', () => {
     for (const level of QUALITY_LEVELS) {
       const settings = QUALITY_SETTINGS[level]
-      for (const share of [settings.ringShare, settings.ambientShare, settings.citizenShare]) {
-        expect(share).toBeGreaterThanOrEqual(0)
-        expect(share).toBeLessThanOrEqual(1)
-      }
+      expect(settings.ambientShare).toBeGreaterThanOrEqual(0)
+      expect(settings.ambientShare).toBeLessThanOrEqual(1)
       expect(settings.idleFps).toBeLessThanOrEqual(settings.walkFps)
     }
   })

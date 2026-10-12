@@ -87,7 +87,7 @@ function tankFarm(limit: number, share: number): PartSpec[] {
   ]
 }
 
-export const RADAR_PEDESTAL_M = 0.4
+const RADAR_PEDESTAL_M = 0.4
 // How far a dish reaches above its pedestal: a radar tower leaves that much under its limit.
 export const DISH_REACH_M = 1.1
 const DISH_HEADROOM_M = RADAR_PEDESTAL_M + DISH_REACH_M
@@ -108,7 +108,7 @@ function radarTower(limit: number, share: number): PartSpec[] {
 }
 
 // Where the dish sits on a radar tower built to `limit`, above the design's own feet.
-export function radarDeckHeight(limit: number, share: number): number {
+function radarDeckHeight(limit: number, share: number): number {
   return Math.min(limit, 4.6 + share * 3) - DISH_HEADROOM_M
 }
 

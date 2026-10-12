@@ -1,16 +1,12 @@
-import { BRASS_PROPS } from './BrassProps'
 import type { Plot } from './lot-kit'
-import { LotFill } from './LotFill'
-import { lotBase } from './surroundings'
-import { lotContents, type DesignSet, type LotDesign } from './lot-parts'
+import type { LotDesign } from './lot-parts'
 import { BRASS } from './palettes'
 import { box, cone, cylinder, lit, turned, type PartSpec } from './parts'
-import type { SurroundingsProps } from './types'
 
 const { ink: iron, wood, brass, copper, glow } = BRASS
 const ON_SIDE_X: [number, number, number] = [0, 0, Math.PI / 2]
 // Room left above a smokestack for its steam to rise under the lot's limit.
-export const BRASS_STEAM_RISE_M = 1.3
+const BRASS_STEAM_RISE_M = 1.3
 const SHAFT_M = 2.6
 
 // A flat iron roof with a raised monitor, 0.4 m tall.
@@ -99,11 +95,7 @@ function boilerHouse({ width, depth, height }: Plot): PartSpec[] {
 }
 
 // Where the foundry's smokestacks end, in the plot's own metres: their steam starts there.
-export function brassStacksOf({
-  width,
-  depth,
-  height
-}: Plot): { x: number; z: number; top: number }[] {
+function brassStacksOf({ width, depth, height }: Plot): { x: number; z: number; top: number }[] {
   const hall = Math.min(height - 2.8, 3.4)
   const top = Math.min(height - BRASS_STEAM_RISE_M, hall + 4)
   return [-1, 1].map((side) => ({ x: (width - 0.6) / 2 - 0.8, z: (side * (depth - 0.6)) / 4, top }))
@@ -128,12 +120,6 @@ function foundry(plot: Plot): PartSpec[] {
   ]
 }
 
-// Where a clock tower's gears turn: on both faces of the shaft, under the clock.
-export function brassGearOf({ height }: Plot): { y: number; z: number; radius: number } {
-  const shaft = Math.min(height - 1.8, 16)
-  return { y: Math.max(shaft - 3.4, 2.4), z: SHAFT_M / 2 + 0.1, radius: 0.7 }
-}
-
 function clockTower({ width, depth, height }: Plot): PartSpec[] {
   const shaft = Math.min(height - 1.8, 16)
   const base = Math.min(width, depth) - 1
@@ -147,7 +133,6 @@ function clockTower({ width, depth, height }: Plot): PartSpec[] {
   ]
 }
 
-export const BRASS_FOUNDRY = 'foundry'
 export const BRASS_CLOCK_TOWER = 'clock tower'
 
 export const BRASS_BUILDINGS: readonly LotDesign[] = [
@@ -155,14 +140,6 @@ export const BRASS_BUILDINGS: readonly LotDesign[] = [
   { name: 'pipe yard', minHeight: 2, parts: pipeYard },
   { name: 'gasometer', minHeight: 3, parts: gasometer },
   { name: 'boiler house', minHeight: 3, parts: boilerHouse },
-  { name: BRASS_FOUNDRY, minHeight: 5, parts: foundry },
+  { name: 'foundry', minHeight: 5, parts: foundry },
   { name: BRASS_CLOCK_TOWER, minHeight: 7, parts: clockTower }
 ]
-
-export const BRASS_WORLD: DesignSet = { buildings: BRASS_BUILDINGS, props: BRASS_PROPS }
-
-export function BrassSurroundings({ floor, lots }: SurroundingsProps) {
-  return (
-    <LotFill placed={lots.flatMap((lot) => lotContents(lot, lotBase(lot, floor), BRASS_WORLD))} />
-  )
-}

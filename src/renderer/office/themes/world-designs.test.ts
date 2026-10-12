@@ -1,14 +1,19 @@
 import { Box3, Euler, Matrix4, Quaternion, Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
-import { buildFixtureFrame } from '../fixture/fixture-feed'
-import { apronLots } from './apron'
-import { BRASS_WORLD } from './BrassSurroundings'
-import { EDO_WORLD } from './EdoSurroundings'
+import { campusClaim, neededClaim } from '../town/town-claim'
+import { dressLot } from '../town/town-dress'
+import { campusGreen } from '../town/town-green'
+import { planTown } from '../town/town-plan'
+import { PAIR_FLOOR } from '../town/town.test-utils'
+import { BRASS_TOWN } from './brass-town'
+import { BRASS_PROPS } from './BrassProps'
+import { BRASS_BUILDINGS } from './BrassSurroundings'
+import { EDO_TOWN } from './edo-town'
+import { EDO_PROPS } from './EdoProps'
+import { EDO_BUILDINGS } from './EdoSurroundings'
 import type { Plot } from './lot-kit'
-import { designFor, lotContents, plotOf, PROP_PLOT } from './lot-parts'
 import type { PartSpec } from './parts'
-import { lotBase, surroundingLots } from './surroundings'
-import { APRON_TOP_Y, TOWN_APRON } from './town-apron'
+import { lotBase } from './surroundings'
 
 // The box a part fills, with its rotation applied.
 function boundsOf(part: PartSpec): Box3 {
@@ -30,13 +35,16 @@ const FOOTPRINTS = [
   { width: 7.5, depth: 6 },
   { width: 5.5, depth: 4 }
 ]
-const floor = buildFixtureFrame(0, 0).floors[0]
-const ringLots = surroundingLots(floor)
+// The spot the town draws a prop for, before it is scaled to its lot.
+const PROP_PLOT = { length: 1, reach: 0.8, height: 1.6 }
+const floor = PAIR_FLOOR
+const plan = planTown(campusClaim(neededClaim(floor), null), 'full')
+const townLots = [...plan.lots, ...campusGreen(floor, plan)]
 
 describe.each([
-  ['Neo Edo Steam', EDO_WORLD],
-  ['Brass Workshop', BRASS_WORLD]
-])('%s lot designs', (_name, set) => {
+  ['Neo Edo Steam', { buildings: EDO_BUILDINGS, props: EDO_PROPS }, EDO_TOWN],
+  ['Brass Workshop', { buildings: BRASS_BUILDINGS, props: BRASS_PROPS }, BRASS_TOWN]
+])('%s lot designs', (_name, set, dress) => {
   it('offers at least four buildings and six props, each its own design', () => {
     expect(set.buildings.length).toBeGreaterThanOrEqual(4)
     expect(set.props.length).toBeGreaterThanOrEqual(6)
@@ -105,32 +113,15 @@ describe.each([
     expect(kinds.size).toBeLessThanOrEqual(7)
   })
 
-  it.each([
-    ['the ring and the lanes', ringLots, (lot: (typeof ringLots)[0]) => lotBase(lot, floor)],
-    ['the apron', apronLots(floor, TOWN_APRON), () => APRON_TOP_Y]
-  ])('fills every lot on %s, under its limit, the same on every start', (_where, lots, baseOf) => {
-    expect(lots.length).toBeGreaterThan(20)
-    const drawn = new Set<string>()
-    for (const lot of lots) {
-      const baseY = baseOf(lot)
-      const contents = lotContents(lot, baseY, set)
-      expect(contents).toEqual(lotContents(lot, baseY, set))
-      expect(contents.length).toBeGreaterThan(0)
-      for (const placed of contents) {
-        expect(placed.parts.length).toBeGreaterThan(0)
-        const top = placed.at[1] + boundsOfAll(placed.parts).max.y * placed.scale
-        expect(top, lot.id).toBeLessThanOrEqual(lot.maxHeight + 1e-6)
-      }
-      const designs = lot.kind === 'building' ? set.buildings : set.props
-      const plot =
-        lot.kind === 'building'
-          ? plotOf(lot, baseY)
-          : { ...plotOf(lot, baseY), height: PROP_PLOT.height }
-      drawn.add(`${lot.kind}:${designFor(designs, plot).name}`)
+  it('dresses every lot of a real town, under its limit, the same on every start', () => {
+    expect(townLots.length).toBeGreaterThan(20)
+    for (const lot of townLots) {
+      const baseY = lotBase(lot, floor)
+      const placed = dressLot(lot, baseY, dress)
+      expect(placed).toEqual(dressLot(lot, baseY, dress))
+      expect(placed.parts.length).toBeGreaterThan(0)
+      const top = placed.at[1] + boundsOfAll(placed.parts).max.y * placed.scale
+      expect(top, lot.id).toBeLessThanOrEqual(lot.maxHeight + 1e-6)
     }
-    const count = (kind: string): number =>
-      [...drawn].filter((name) => name.startsWith(kind)).length
-    expect(count('building')).toBeGreaterThanOrEqual(4)
-    expect(count('prop')).toBeGreaterThanOrEqual(6)
   })
 })
