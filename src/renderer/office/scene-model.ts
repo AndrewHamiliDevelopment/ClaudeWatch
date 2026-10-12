@@ -73,9 +73,9 @@ export interface FloorGeometry {
   floorId: string
   label: string
   plate: number
-  // The plate's centre. Absent means the plate is centred on the gate; read it with plateCentre.
-  x?: number
-  z?: number
+  // The plate's centre, measured from the gate like everything else on the floor.
+  x: number
+  z: number
   width: number
   depth: number
   corridor: { z: number; width: number }

@@ -1,18 +1,19 @@
 import { createElement } from 'react'
 import { expect, it, vi } from 'vitest'
 import { Group } from 'three'
-import { makeSession } from '../../__tests__/fixtures'
-import { layoutFloor } from '../../fixture/fixture-layout'
-import { groupZonesByTheme } from '../../logic/office-themes'
-import type { FloorGeometry, LoungeGeometry } from '../../scene-model'
-import { FloorView } from '../../scene/FloorView'
-import { SurroundingsView, WorldView } from '../../scene/WorldView'
-import { registerTheme } from '../registry'
-import { everyElement, mergedDraws, type SceneElement } from '../scene.test-utils'
-import { surroundingLots, WORLD_APRON, type Lot } from '../surroundings'
-import type { OfficeTheme } from '../types'
+import { makeSession } from '../__tests__/fixtures'
+import { layoutFloor } from '../fixture/fixture-layout'
+import { groupZonesByTheme } from '../logic/office-themes'
+import type { FloorGeometry, LoungeGeometry } from '../scene-model'
+import { FloorView } from '../scene/FloorView'
+import { SurroundingsView, WorldView } from '../scene/WorldView'
+import { registerTheme } from './registry'
+import { everyElement, mergedDraws, type SceneElement } from './scene.test-utils'
+import { surroundingLots, WORLD_APRON, type Lot } from './surroundings'
+import type { OfficeTheme } from './types'
 import { frameCallbacks } from './frame-capture.test-utils'
-import { apronLots, hangarStand, towerStand } from './apron'
+import { GATE, hangarStand, towerStand } from './apron'
+import { DISTRICT_SIDES, HANGAR_SIDES, terraceLots } from './LotFill'
 import { placeLot, type LotKit, type PlacedLot } from './lot-kit'
 import { compactFloor, expectInsideLot, topOf } from './lot-box.test-utils'
 
@@ -146,7 +147,7 @@ function fillDraws(theme: OfficeTheme, floor: FloorGeometry, lots: readonly Lot[
 
 function expectApronIsFilled(kit: LotKit, width: number, depth: number): void {
   const floor = compactFloor(width, depth)
-  const apron = apronLots(floor)
+  const apron = terraceLots(floor, [...DISTRICT_SIDES, ...HANGAR_SIDES])
   const stands = [towerStand(floor), hangarStand(floor)]
   for (const lot of apron) {
     expectInsideLot(placeLot(lot, floor, kit))
@@ -174,8 +175,10 @@ function expectApronIsFilled(kit: LotKit, width: number, depth: number): void {
   for (const side of ['west', 'north', 'south']) {
     const spots = firstRow(side)
     expect(spots.length).toBeGreaterThanOrEqual(Math.floor((side === 'west' ? depth : width) / 8))
+    // The south row opens for the gate's avenue.
+    const widest = side === 'south' ? 8 + GATE.avenue : 8
     for (let index = 1; index < spots.length; index++)
-      expect(spots[index] - spots[index - 1]).toBeLessThanOrEqual(8)
+      expect(spots[index] - spots[index - 1]).toBeLessThanOrEqual(widest)
   }
   expect(firstRow('east').length).toBeGreaterThanOrEqual(Math.floor(depth / 8) - 1)
 }
@@ -212,7 +215,7 @@ export function describeWorldFill(
   it('builds low beside the plate and tall where the lot allows', () => {
     const median = (values: number[]): number =>
       [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)]
-    const besidePlate = apronLots(floor)
+    const besidePlate = terraceLots(floor, DISTRICT_SIDES)
       .filter((lot) => lot.row === 0)
       .map((lot) => topOf(placeLot(lot, floor, kit)))
     const ring = lots.filter((lot) => lot.kind === 'building').map((lot) => topOf(place(lot)))

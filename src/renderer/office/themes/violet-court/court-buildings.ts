@@ -1,6 +1,5 @@
-import { box, lit, SIDES, type PartSpec } from '../parts'
-import { ball, spike, tube } from '../quiet-grove/spirit-features'
-import type { BuildingDesign, Plot } from './lot-kit'
+import { box, lit, SIDES, type PartSpec, cone, cylinder, sphere } from '../parts'
+import type { BuildingDesign, Plot } from '../lot-kit'
 import { COURT } from './palette'
 
 const CORNERS = SIDES.flatMap((x) => SIDES.map((z) => ({ x, z })))
@@ -12,11 +11,11 @@ function parterre({ width, depth, height }: Plot): PartSpec[] {
     box([0, 0.14, 0], [width * 0.86, 0.06, depth * 0.86], COURT.violet),
     box([0, 0.175, 0], [width * 0.9, 0.03, 0.6], COURT.slate),
     box([0, 0.175, 0], [0.6, 0.03, depth * 0.9], COURT.slate),
-    tube([0, 0.27, 0], [1.4, 0.3, 1.4], COURT.marble),
-    tube([0, height / 2, 0], [0.3, height - 0.3, 0.3], COURT.marble),
-    ball([0, height - 0.2, 0], [0.4, 0.4, 0.4], COURT.violet),
+    cylinder([0, 0.27, 0], [1.4, 0.3, 1.4], COURT.marble),
+    cylinder([0, height / 2, 0], [0.3, height - 0.3, 0.3], COURT.marble),
+    sphere([0, height - 0.2, 0], [0.4, 0.4, 0.4], COURT.violet),
     ...CORNERS.map(({ x, z }) =>
-      ball([x * width * 0.34, 0.42, z * depth * 0.34], [0.7, 0.55, 0.7], COURT.violet)
+      sphere([x * width * 0.34, 0.42, z * depth * 0.34], [0.7, 0.55, 0.7], COURT.violet)
     )
   ]
 }
@@ -30,7 +29,7 @@ function colonnade({ width, depth, height }: Plot): PartSpec[] {
     box([0, 0.1, 0], [width, 0.2, depth], COURT.slate),
     ...SIDES.flatMap((side) => [
       ...COLUMN_SPOTS.map((spot) =>
-        tube(
+        cylinder(
           [spot * width, 0.2 + shaft / 2, side * depth * 0.36],
           [0.36, shaft, 0.36],
           COURT.marble
@@ -55,7 +54,7 @@ function parkedFrame(tall: number): PartSpec[] {
     ]),
     box([0, at(0.6), 0], [0.42 * tall, 0.34 * tall, 0.26 * tall], COURT.violet),
     box([0, at(0.86), 0.02], [0.14 * tall, 0.14 * tall, 0.16 * tall], COURT.ink),
-    spike([0, at(0.96), 0], [0.08 * tall, 0.1 * tall, 0.08 * tall], COURT.gold)
+    cone([0, at(0.96), 0], [0.08 * tall, 0.1 * tall, 0.08 * tall], COURT.gold)
   ]
 }
 
@@ -94,8 +93,8 @@ function academy({ width, depth, height }: Plot): PartSpec[] {
       const x = side * (width / 2 - 0.55)
       const z = depth / 2 - 0.55
       return [
-        tube([x, tower / 2, z], [0.9, tower, 0.9], COURT.marble),
-        spike([x, tower + height * 0.1, z], [1, height * 0.2, 1], COURT.gold)
+        cylinder([x, tower / 2, z], [0.9, tower, 0.9], COURT.marble),
+        cone([x, tower + height * 0.1, z], [1, height * 0.2, 1], COURT.gold)
       ]
     })
   ]
@@ -112,7 +111,7 @@ function bellTower({ width, depth, height }: Plot): PartSpec[] {
   const finial = height - finialFoot
   return [
     box([0, 0.2, 0], [span * 0.7, 0.4, span * 0.7], COURT.slate),
-    tube([0, 0.4 + shaft / 2, 0], [span * 0.36, shaft, span * 0.36], COURT.marble),
+    cylinder([0, 0.4 + shaft / 2, 0], [span * 0.36, shaft, span * 0.36], COURT.marble),
     box([0, 0.4 + shaft * 0.6, span * 0.19], [0.5, shaft * 0.3, 0.04], COURT.violet),
     box([0, 0.44 + shaft, 0], [span * 0.44, 0.08, span * 0.44], COURT.gold),
     ...CORNERS.map(({ x, z }) =>
@@ -125,8 +124,12 @@ function bellTower({ width, depth, height }: Plot): PartSpec[] {
     lit(
       box([0, belfryFloor + belfry / 2, 0], [span * 0.14, belfry * 0.6, span * 0.14], COURT.lumen)
     ),
-    ball([0, belfryFloor + belfry + dome * 0.25, 0], [span * 0.4, dome, span * 0.4], COURT.violet),
-    spike([0, finialFoot + finial / 2, 0], [0.3, finial, 0.3], COURT.gold)
+    sphere(
+      [0, belfryFloor + belfry + dome * 0.25, 0],
+      [span * 0.4, dome, span * 0.4],
+      COURT.violet
+    ),
+    cone([0, finialFoot + finial / 2, 0], [0.3, finial, 0.3], COURT.gold)
   ]
 }
 
@@ -137,7 +140,7 @@ function keep({ width, depth, height }: Plot): PartSpec[] {
     box([0, height * 0.3, 0], [width * 0.9, height * 0.6, depth * 0.9], COURT.slate),
     box([0, height * 0.72, 0], [width * 0.64, height * 0.24, depth * 0.64], COURT.ink),
     box([0, height * 0.89, 0], [width * 0.4, height * 0.1, depth * 0.4], COURT.violet),
-    spike([0, height * 0.97, 0], [span * 0.26, height * 0.06, span * 0.26], COURT.gold),
+    cone([0, height * 0.97, 0], [span * 0.26, height * 0.06, span * 0.26], COURT.gold),
     box([0, height * 0.6, 0], [width * 0.94, 0.1, depth * 0.94], COURT.gold),
     ...[0.2, 0.4].map((level) =>
       lit(box([0, height * level, 0], [width * 0.92, 0.14, depth * 0.92], COURT.lumen))
@@ -146,8 +149,8 @@ function keep({ width, depth, height }: Plot): PartSpec[] {
     ...CORNERS.flatMap(({ x, z }) => {
       const at = { x: x * (width / 2 - 0.46), z: z * (depth / 2 - 0.46) }
       return [
-        tube([at.x, height * 0.34, at.z], [0.8, height * 0.68, 0.8], COURT.marble),
-        spike([at.x, height * 0.72, at.z], [0.9, height * 0.08, 0.9], COURT.gold)
+        cylinder([at.x, height * 0.34, at.z], [0.8, height * 0.68, 0.8], COURT.marble),
+        cone([at.x, height * 0.72, at.z], [0.9, height * 0.08, 0.9], COURT.gold)
       ]
     })
   ]

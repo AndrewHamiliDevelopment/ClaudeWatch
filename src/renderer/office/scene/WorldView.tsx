@@ -1,10 +1,11 @@
 import { useMemo } from 'react'
 import type { ZoomBand } from '../logic/camera-bands'
 import type { ThemeZoneGroup } from '../logic/office-themes'
-import { plateCentre, plateLocalFloor } from '../logic/zone-framing'
+import { plateLocalFloor } from '../logic/zone-framing'
 import type { FloorGeometry } from '../scene-model'
+import { towerStand } from '../themes/apron'
 import { getTheme } from '../themes/registry'
-import type { Lot } from '../themes/surroundings'
+import { officesOf, type Lot } from '../themes/surroundings'
 import type { OfficeTheme, TowerFloor } from '../themes/types'
 import { BatchedScene } from './BatchedScene'
 
@@ -22,17 +23,20 @@ export function WorldView({
 }) {
   const { District, Hangar, Tower } = theme.world
   const hasTower = band === 'building'
-  // The district draws around its own origin from the plate's size: it goes at the plate centre.
-  const centre = plateCentre(floor)
-  const plate = plateLocalFloor(floor)
-  const revision = JSON.stringify([theme.id, hasTower, floor.width, floor.depth, centre, floors])
+  // The district draws around its own origin: it goes at the plate centre, measured from there.
+  const plate = useMemo(() => plateLocalFloor(floor), [floor])
+  const tower = towerStand(plate)
+  // Apron lots are limited by the offices they must not hide, so where those stand counts too.
+  const offices = officesOf(plate).map(({ x, z, width, depth }) => [x, z, width, depth])
+  const placed = [floor.x, floor.z, floor.width, floor.depth]
+  const revision = JSON.stringify([theme.id, hasTower, placed, offices, floors])
   return (
     <BatchedScene revision={revision}>
-      <group position={[centre.x, 0, centre.z]}>
+      <group position={[floor.x, 0, floor.z]}>
         <District floor={plate} />
         <Hangar floor={plate} />
         {hasTower && (
-          <group position={[floor.width / 2 + 7, 0, -floor.depth / 2 - 8]}>
+          <group position={[tower.x, 0, tower.z]}>
             <Tower floors={floors} />
           </group>
         )}

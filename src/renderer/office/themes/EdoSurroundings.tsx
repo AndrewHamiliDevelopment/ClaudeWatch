@@ -1,5 +1,9 @@
 import { EDO_PROPS } from './EdoProps'
-import { clamp, lotBase, LotParts, type DesignSet, type LotDesign, type Plot } from './lot-parts'
+import { clamp } from '../../../shared/range'
+import type { Plot } from './lot-kit'
+import { LotFill } from './LotFill'
+import { lotBase } from './surroundings'
+import { lotContents, type DesignSet, type LotDesign } from './lot-parts'
 import { EDO } from './palettes'
 import { box, cone, lit, sphere, type PartSpec } from './parts'
 import type { SurroundingsProps } from './types'
@@ -25,7 +29,7 @@ const screens = (y: number, width: number, depth: number, height: number): PartS
 function townhouse({ width, depth, height }: Plot): PartSpec[] {
   const w = width - 0.6
   const d = depth - 0.6
-  const storeys = clamp(Math.floor((height - ROOF_M) / STOREY_M), 1, 3)
+  const storeys = clamp(Math.floor((height - ROOF_M) / STOREY_M), [1, 3])
   const storey = Math.min(STOREY_M, (height - ROOF_M) / storeys)
   return [
     box([0, (storeys * storey) / 2, 0], [w, storeys * storey, d], wood),
@@ -95,7 +99,7 @@ function shrineGarden({ width, depth, height }: Plot): PartSpec[] {
 }
 
 function pagoda({ width, depth, height }: Plot): PartSpec[] {
-  const tiers = clamp(Math.floor((height - PAGODA.crown) / PAGODA.tier), 1, PAGODA.maxTiers)
+  const tiers = clamp(Math.floor((height - PAGODA.crown) / PAGODA.tier), [1, PAGODA.maxTiers])
   const base = Math.min(width, depth) - 1.4
   const top = tiers * PAGODA.tier
   const sideOf = (tier: number): number => base * (1 - 0.09 * tier)
@@ -177,5 +181,7 @@ export const EDO_BUILDINGS: readonly LotDesign[] = [
 export const EDO_WORLD: DesignSet = { buildings: EDO_BUILDINGS, props: EDO_PROPS }
 
 export function EdoSurroundings({ floor, lots }: SurroundingsProps) {
-  return <LotParts lots={lots} set={EDO_WORLD} baseOf={(lot) => lotBase(lot, floor)} />
+  return (
+    <LotFill placed={lots.flatMap((lot) => lotContents(lot, lotBase(lot, floor), EDO_WORLD))} />
+  )
 }

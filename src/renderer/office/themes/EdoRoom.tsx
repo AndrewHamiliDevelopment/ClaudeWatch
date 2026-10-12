@@ -60,7 +60,7 @@ export function EdoDesk({ slot }: DeskProps) {
   )
 }
 
-export function Sakura({ small = false }: { small?: boolean }) {
+function Sakura({ small = false }: { small?: boolean }) {
   return (
     <group scale={small ? 0.22 : 1}>
       <Cylinder at={[0, 1, 0]} radius={0.12} height={2} color={EDO.wood} />

@@ -2,19 +2,18 @@ import { useFrame } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
 import type { Group } from 'three'
 import type { FloorGeometry } from '../../scene-model'
-import { lit, Parts, type PartSpec } from '../parts'
+import { lit, Parts, type PartSpec, sphere } from '../parts'
 import type { Vector } from '../primitives'
-import type { Lot } from '../surroundings'
+import { draw, lotBase, type Lot } from '../surroundings'
 import type { AmbientProps, SurroundingsProps } from '../types'
-import { lotBase, share, spread } from '../violet-court/lot-kit'
-import { LotFill } from '../violet-court/LotFill'
+import { spread } from '../lot-kit'
+import { KitFill } from '../LotFill'
 import { GROVE_LOT_KIT } from './grove-lots'
 import { GROVE } from './palette'
-import { ball } from './spirit-features'
 
 // The forest around the clearing on this theme's lots.
 export function GroveSurroundings({ floor, lots }: SurroundingsProps) {
-  return <LotFill lots={lots} floor={floor} kit={GROVE_LOT_KIT} />
+  return <KitFill lots={lots} floor={floor} kit={GROVE_LOT_KIT} />
 }
 
 const FIREFLY_LIMIT = 28
@@ -24,8 +23,8 @@ const LEAF = { fromHeight: 7, headroom: 0.3, landing: 0.2, drift: 0.6, spinPerSe
 // Draws 0 to 6 of a lot's seed are spent on its place and its design.
 const DRAW = { phase: 7, pace: 8 }
 
-const FIREFLY_PARTS: PartSpec[] = [lit(ball([0, 0, 0], [0.16, 0.16, 0.16], GROVE.lumen))]
-const LEAF_PARTS: PartSpec[] = [ball([0, 0, 0], [0.32, 0.04, 0.2], GROVE.moss)]
+const FIREFLY_PARTS: PartSpec[] = [lit(sphere([0, 0, 0], [0.16, 0.16, 0.16], GROVE.lumen))]
+const LEAF_PARTS: PartSpec[] = [sphere([0, 0, 0], [0.32, 0.04, 0.2], GROVE.moss)]
 
 interface Mover {
   id: string
@@ -46,8 +45,8 @@ function moverOn(lot: Lot, floor: FloorGeometry, hover: number, headroom: number
     home: [lot.x, y, lot.z],
     reach: Math.min(lot.width, lot.depth) / 2,
     fall: y - base - LEAF.landing,
-    phase: share(lot.seed, DRAW.phase),
-    pace: 0.7 + share(lot.seed, DRAW.pace) * 0.6
+    phase: draw(lot.seed, DRAW.phase),
+    pace: 0.7 + draw(lot.seed, DRAW.pace) * 0.6
   }
 }
 

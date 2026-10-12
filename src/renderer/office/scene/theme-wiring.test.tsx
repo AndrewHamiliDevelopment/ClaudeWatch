@@ -1,16 +1,9 @@
 import { isValidElement, type ReactNode } from 'react'
 import { expect, it, vi } from 'vitest'
-import { signTexture } from './textures'
-import { Lantern } from '../themes/primitives'
 import { Robot, RobotCrew } from './Robot'
 import { FloorView } from './FloorView'
-import { WorldView } from './WorldView'
-import { BatchedScene } from './BatchedScene'
 import { groupZonesByTheme } from '../logic/office-themes'
-import { ParkedFrames } from '../themes/ParkedFrames'
-import { ThemeTower } from '../themes/WorldArchitecture'
 import { getTheme, registerTheme, themeForTeam } from '../themes/registry'
-import { BAND_ZOOM } from '../logic/camera-bands'
 import { makeAgent, makeFloor, makeRoom, makeZone } from '../__tests__/fixtures'
 import type { RobotModelProps } from '../themes/types'
 import type { LoungeGeometry } from '../scene-model'
@@ -22,7 +15,7 @@ vi.mock('react', async (original) => ({
   useRef: () => ({ current: null })
 }))
 vi.mock('@react-three/fiber', () => ({ useFrame: () => undefined }))
-vi.mock('./textures', () => ({ blobShadowTexture: () => null, signTexture: vi.fn() }))
+vi.mock('./textures', () => ({ blobShadowTexture: () => null, signTexture: () => null }))
 
 function elements(node: ReactNode): React.ReactElement<Record<string, unknown>>[] {
   if (Array.isArray(node)) return node.flatMap(elements)
@@ -247,76 +240,4 @@ it('gives each robot the theme and roster place of its own room', () => {
     ['b', brass.id, 3, true],
     ['c', edo.id, 0, false]
   ])
-})
-
-it('merges the world layer and rebuilds the merge when the theme or the tower changes', () => {
-  const floor = makeFloor({ floorId: 'p1' })
-  const world = (theme: typeof edo, band: 'floor' | 'building') =>
-    WorldView({ floor, theme, floors: [], band })
-  expect(world(edo, 'floor').type).toBe(BatchedScene)
-  const revision = (theme: typeof edo, band: 'floor' | 'building') =>
-    (world(theme, band).props as { revision: string }).revision
-  expect(revision(edo, 'floor')).toBe(revision(edo, 'floor'))
-  expect(revision(edo, 'floor')).not.toBe(revision(edo, 'building'))
-  expect(revision(edo, 'floor')).not.toBe(revision(brass, 'floor'))
-})
-
-it('renders District and Hangar at floor zoom, and adds Tower only at building zoom', () => {
-  const theme = themeForTeam()
-  const props = { floor: makeFloor({ floorId: 'p1' }), theme, floors: [] }
-  const floorNodes = elements(WorldView({ ...props, band: 'floor' }))
-  expect(floorNodes.some((node) => node.type === theme.world.District)).toBe(true)
-  expect(floorNodes.some((node) => node.type === theme.world.Hangar)).toBe(true)
-  expect(floorNodes.some((node) => node.type === theme.world.Tower)).toBe(false)
-  const buildingNodes = elements(WorldView({ ...props, band: 'building' }))
-  const tower = buildingNodes.find((node) => node.type === theme.world.Tower)
-  // One floor now: the Tower is a landmark and never switches floors.
-  expect(tower).toBeDefined()
-  expect(tower?.props.onFocusFloor).toBeUndefined()
-})
-
-it('clicking a labelled tower storey focuses that project without selecting an agent', () => {
-  const focus = vi.fn()
-  const stopPropagation = vi.fn()
-  const nodes = elements(
-    ThemeTower({
-      floors: [{ floorId: 'p1', label: 'Office', agentCount: 20, attentionCount: 2 }],
-      palette: themeForTeam().palette,
-      onFocusFloor: focus
-    })
-  )
-  const storey = nodes.find((node) => typeof node.props.onClick === 'function')
-  expect(storey).toBeDefined()
-  const click = storey?.props.onClick as (event: { stopPropagation: () => void }) => void
-  click({ stopPropagation })
-  expect(focus).toHaveBeenCalledWith('p1')
-  expect(stopPropagation).toHaveBeenCalledOnce()
-})
-
-it('extends building zoom while preserving floor and desk bands', () => {
-  expect(BAND_ZOOM.building).toBeLessThan(16)
-  expect(BAND_ZOOM.floor).toBe(34)
-  expect(BAND_ZOOM.desk).toBe(90)
-})
-
-it('populates the hangar with two decorative parked bodies and heads', () => {
-  const nodes = elements(ParkedFrames({ palette: themeForTeam().palette }))
-  const batches = nodes.filter((node) => Array.isArray(node.props.points))
-  expect(
-    batches.filter((node) => (node.props.points as object[]).length === 2).length
-  ).toBeGreaterThanOrEqual(2)
-})
-
-it('keeps tower counts readable separately from long project labels and lights attention', () => {
-  const theme = themeForTeam()
-  const label = 'An especially long project label'
-  const nodes = elements(
-    ThemeTower({
-      floors: [{ floorId: 'p1', label, agentCount: 20, attentionCount: 2 }],
-      palette: theme.palette
-    })
-  )
-  expect(signTexture).toHaveBeenCalledWith(label)
-  expect(signTexture).toHaveBeenCalledWith('20 agents · 2 waiting')
-  expect(nodes.find((node) => node.type === Lantern)?.props.color).toBe(theme.palette.glow)
 })

@@ -3,7 +3,8 @@ import { Batch } from '../primitives'
 import { Parts } from '../parts'
 import type { LoungeProps, SurroundingsProps } from '../types'
 import { UNIT_SHAPES } from '../unit-parts'
-import { baseYOf, buildLot } from './lots'
+import { lotBase } from '../surroundings'
+import { buildLot } from './lots'
 import { loungeParts } from './lounge-parts'
 import type { PlacedPart } from './placed'
 
@@ -34,7 +35,7 @@ export function PlacedParts({ parts }: { parts: readonly PlacedPart[] }) {
 // A spaceport yard on every lot: hangars, barracks, tank farms and towers, props along the walls.
 export function GarrisonSurroundings({ floor, lots }: SurroundingsProps) {
   const parts = useMemo(
-    () => lots.flatMap((lot) => buildLot(lot, baseYOf(lot, floor)).parts),
+    () => lots.flatMap((lot) => buildLot(lot, lotBase(lot, floor)).parts),
     [lots, floor]
   )
   return <PlacedParts parts={parts} />

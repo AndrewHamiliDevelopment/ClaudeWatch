@@ -1,7 +1,7 @@
-import { box, lit, SIDES, turned, type PartSpec } from '../parts'
-import type { BuildingDesign, Plot } from '../violet-court/lot-kit'
+import { box, lit, SIDES, turned, type PartSpec, cone, cylinder, sphere } from '../parts'
+import type { BuildingDesign, Plot } from '../lot-kit'
 import { GROVE } from './palette'
-import { ball, ON_ITS_SIDE, spike, tube } from './spirit-features'
+import { ON_ITS_SIDE } from './spirit-features'
 
 const CORNERS = SIDES.flatMap((x) => SIDES.map((z) => ({ x, z })))
 const ROOF_PITCH = 0.5
@@ -25,10 +25,10 @@ function pitchedRoof(top: number, length: number, run: number, color: string): P
 // A trunk under three stacked cones, `tall` metres to its tip.
 function pine(x: number, z: number, tall: number, spread: number): PartSpec[] {
   return [
-    tube([x, tall * 0.15, z], [tall * 0.07, tall * 0.3, tall * 0.07], GROVE.bark),
+    cylinder([x, tall * 0.15, z], [tall * 0.07, tall * 0.3, tall * 0.07], GROVE.bark),
     ...[0, 1, 2].map((tier) => {
       const width = spread * (1 - tier * 0.25)
-      return spike([x, tall * (0.37 + tier * 0.21), z], [width, tall * 0.34, width], GROVE.pine)
+      return cone([x, tall * (0.37 + tier * 0.21), z], [width, tall * 0.34, width], GROVE.pine)
     })
   ]
 }
@@ -39,14 +39,18 @@ function pond({ width, depth, height }: Plot): PartSpec[] {
     box([0, 0.04, 0], [width, 0.08, depth], GROVE.bark),
     box([0, 0.09, 0], [width * 0.8, 0.04, depth * 0.7], GROVE.pond),
     ...[-0.3, -0.1, 0.1, 0.3].map((step) =>
-      ball([step * width, 0.12, step * depth * 0.6], [0.7, 0.14, 0.6], GROVE.stone)
+      sphere([step * width, 0.12, step * depth * 0.6], [0.7, 0.14, 0.6], GROVE.stone)
     ),
     ...[0, 1, 2].map((reed) =>
-      tube([width * 0.36 - reed * 0.16, height / 2, -depth * 0.3], [0.05, height, 0.05], GROVE.bark)
+      cylinder(
+        [width * 0.36 - reed * 0.16, height / 2, -depth * 0.3],
+        [0.05, height, 0.05],
+        GROVE.bark
+      )
     ),
-    ball([-width * 0.38, 0.2, depth * 0.38], [1, 0.5, 0.9], GROVE.moss),
-    ball([width * 0.4, 0.18, depth * 0.36], [0.8, 0.4, 0.8], GROVE.moss),
-    lit(ball([-width * 0.16, 0.26, depth * 0.14], [0.3, 0.3, 0.3], GROVE.lumen))
+    sphere([-width * 0.38, 0.2, depth * 0.38], [1, 0.5, 0.9], GROVE.moss),
+    sphere([width * 0.4, 0.18, depth * 0.36], [0.8, 0.4, 0.8], GROVE.moss),
+    lit(sphere([-width * 0.16, 0.26, depth * 0.14], [0.3, 0.3, 0.3], GROVE.lumen))
   ]
 }
 
@@ -54,14 +58,14 @@ function pond({ width, depth, height }: Plot): PartSpec[] {
 function rockGarden({ width, depth, height }: Plot): PartSpec[] {
   return [
     box([0, 0.05, 0], [width, 0.1, depth], GROVE.bark),
-    ball([width * 0.12, height * 0.45, -depth * 0.1], [1.6, height * 0.9, 1.3], GROVE.stone),
-    ball([-width * 0.28, 0.3, -depth * 0.26], [1.1, 0.6, 0.9], GROVE.stone),
-    ball([width * 0.3, 0.2, depth * 0.28], [0.8, 0.4, 0.7], GROVE.stone),
-    ball([-width * 0.1, 0.14, depth * 0.3], [0.5, 0.28, 0.5], GROVE.stone),
-    ball([-width * 0.3, 0.16, depth * 0.12], [1.4, 0.36, 1.2], GROVE.moss),
-    ball([width * 0.32, 0.14, -depth * 0.3], [1.1, 0.3, 1], GROVE.moss),
-    tube([-width * 0.36, height * 0.3, depth * 0.38], [0.08, height * 0.6, 0.08], GROVE.bark),
-    lit(ball([-width * 0.36, height * 0.72, depth * 0.38], [0.3, 0.3, 0.3], GROVE.lumen)),
+    sphere([width * 0.12, height * 0.45, -depth * 0.1], [1.6, height * 0.9, 1.3], GROVE.stone),
+    sphere([-width * 0.28, 0.3, -depth * 0.26], [1.1, 0.6, 0.9], GROVE.stone),
+    sphere([width * 0.3, 0.2, depth * 0.28], [0.8, 0.4, 0.7], GROVE.stone),
+    sphere([-width * 0.1, 0.14, depth * 0.3], [0.5, 0.28, 0.5], GROVE.stone),
+    sphere([-width * 0.3, 0.16, depth * 0.12], [1.4, 0.36, 1.2], GROVE.moss),
+    sphere([width * 0.32, 0.14, -depth * 0.3], [1.1, 0.3, 1], GROVE.moss),
+    cylinder([-width * 0.36, height * 0.3, depth * 0.38], [0.08, height * 0.6, 0.08], GROVE.bark),
+    lit(sphere([-width * 0.36, height * 0.72, depth * 0.38], [0.3, 0.3, 0.3], GROVE.lumen)),
     ...pine(width * 0.36, -depth * 0.02, height, 0.6)
   ]
 }
@@ -74,12 +78,12 @@ function cabin({ width, depth, height }: Plot): PartSpec[] {
     box([0, 0.1, 0], [width, 0.2, depth], GROVE.bark),
     box([0, 0.2 + wall / 2, 0], [width * 0.7, wall, depth * 0.6], GROVE.timber),
     ...pitchedRoof(height - 0.02, width * 0.8, depth * 0.42, GROVE.bark),
-    tube([-width * 0.25, height / 2, -depth * 0.1], [0.4, height, 0.4], GROVE.bark),
+    cylinder([-width * 0.25, height / 2, -depth * 0.1], [0.4, height, 0.4], GROVE.bark),
     box([0, 0.65, front], [0.6, 0.9, 0.05], GROVE.bark),
     box([width * 0.2, 0.2 + wall * 0.6, front], [0.5, 0.4, 0.05], GROVE.pond),
-    lit(ball([-0.6, 1.3, front + 0.12], [0.22, 0.26, 0.22], GROVE.lumen)),
+    lit(sphere([-0.6, 1.3, front + 0.12], [0.22, 0.26, 0.22], GROVE.lumen)),
     ...SIDES.map((side) =>
-      ball([side * width * 0.4, 0.4, depth * 0.4], [0.8, 0.6, 0.7], GROVE.moss)
+      sphere([side * width * 0.4, 0.4, depth * 0.4], [0.8, 0.6, 0.7], GROVE.moss)
     )
   ]
 }
@@ -96,7 +100,7 @@ function greenhouse({ width, depth, height }: Plot): PartSpec[] {
       box([0, post, side * depth * 0.36], [width * 0.9, 0.14, 0.18], GROVE.timber),
       box([0, 0.3, side * depth * 0.16], [width * 0.7, 0.36, 0.7], GROVE.timber),
       ...[-0.25, 0, 0.25].map((spot) =>
-        ball([spot * width, 0.62, side * depth * 0.16], [0.6, 0.5, 0.6], GROVE.moss)
+        sphere([spot * width, 0.62, side * depth * 0.16], [0.6, 0.5, 0.6], GROVE.moss)
       )
     ]),
     ...pitchedRoof(height - 0.02, width * 0.86, depth * 0.44, GROVE.pond)
@@ -116,12 +120,12 @@ function mill({ width, depth, height }: Plot): PartSpec[] {
       (slab): PartSpec => ({ ...slab, at: [-width * 0.08, slab.at[1], slab.at[2]] })
     ),
     box([wheelX, 0.24, 0], [0.7, 0.08, depth * 0.9], GROVE.pond),
-    turned(tube([wheelX, axle, 0], [radius * 2, 0.3, radius * 2], GROVE.bark), ON_ITS_SIDE),
+    turned(cylinder([wheelX, axle, 0], [radius * 2, 0.3, radius * 2], GROVE.bark), ON_ITS_SIDE),
     box([wheelX + 0.18, axle, 0], [0.06, radius * 2.1, 0.2], GROVE.timber),
     box([wheelX + 0.18, axle, 0], [0.06, 0.2, radius * 2.1], GROVE.timber),
     box([-width * 0.08, 0.7, depth * 0.25 + 0.03], [0.6, 1, 0.05], GROVE.bark),
     box([-width * 0.08, 0.2 + body * 0.75, depth * 0.25 + 0.03], [0.5, 0.4, 0.05], GROVE.pond),
-    ball([-width * 0.4, 0.4, depth * 0.38], [0.8, 0.6, 0.8], GROVE.moss)
+    sphere([-width * 0.4, 0.4, depth * 0.38], [0.8, 0.6, 0.8], GROVE.moss)
   ]
 }
 
@@ -132,15 +136,15 @@ function watchtower({ width, depth, height }: Plot): PartSpec[] {
   const hut = height * 0.3
   return [
     ...CORNERS.map(({ x, z }) =>
-      tube([x * span * 0.22, deck / 2, z * span * 0.22], [0.2, deck, 0.2], GROVE.bark)
+      cylinder([x * span * 0.22, deck / 2, z * span * 0.22], [0.2, deck, 0.2], GROVE.bark)
     ),
     box([0, deck, 0], [span * 0.62, 0.14, span * 0.62], GROVE.timber),
     box([0, deck + 0.07 + hut / 2, 0], [span * 0.42, hut, span * 0.42], GROVE.timber),
     box([0, deck + hut * 0.6, span * 0.21 + 0.02], [span * 0.2, hut * 0.4, 0.04], GROVE.pond),
     box([0, height - 0.08, 0], [span * 0.7, 0.16, span * 0.7], GROVE.bark),
-    lit(ball([span * 0.28, deck + 0.4, span * 0.28], [0.28, 0.32, 0.28], GROVE.lumen)),
-    ball([span * 0.34, 0.3, -span * 0.3], [1, 0.6, 1], GROVE.moss),
-    ball([-span * 0.36, 0.2, span * 0.34], [0.7, 0.4, 0.6], GROVE.stone)
+    lit(sphere([span * 0.28, deck + 0.4, span * 0.28], [0.28, 0.32, 0.28], GROVE.lumen)),
+    sphere([span * 0.34, 0.3, -span * 0.3], [1, 0.6, 1], GROVE.moss),
+    sphere([-span * 0.36, 0.2, span * 0.34], [0.7, 0.4, 0.6], GROVE.stone)
   ]
 }
 
@@ -160,8 +164,8 @@ function pineStand({ width, depth, height }: Plot): PartSpec[] {
       const tall = height * tree.share
       return pine(tree.x * width, tree.z * depth, tall, Math.min(tall * 0.42, span * 0.44))
     }),
-    ball([0, 0.2, depth * 0.3], [1.2, 0.5, 0.9], GROVE.stone),
-    ball([width * 0.05, 0.3, -depth * 0.36], [1.4, 0.6, 1], GROVE.moss)
+    sphere([0, 0.2, depth * 0.3], [1.2, 0.5, 0.9], GROVE.stone),
+    sphere([width * 0.05, 0.3, -depth * 0.36], [1.4, 0.6, 1], GROVE.moss)
   ]
 }
 
@@ -169,19 +173,19 @@ function pineStand({ width, depth, height }: Plot): PartSpec[] {
 function greatTree({ width, depth, height }: Plot): PartSpec[] {
   const span = Math.min(width, depth)
   return [
-    tube([0, 0.3, 0], [span * 0.36, 0.6, span * 0.36], GROVE.bark),
-    tube([0, height * 0.3, 0], [span * 0.22, height * 0.6, span * 0.22], GROVE.bark),
-    ball([0, height * 0.74, 0], [span * 0.96, height * 0.5, span * 0.96], GROVE.moss),
+    cylinder([0, 0.3, 0], [span * 0.36, 0.6, span * 0.36], GROVE.bark),
+    cylinder([0, height * 0.3, 0], [span * 0.22, height * 0.6, span * 0.22], GROVE.bark),
+    sphere([0, height * 0.74, 0], [span * 0.96, height * 0.5, span * 0.96], GROVE.moss),
     ...CORNERS.map(({ x, z }) =>
-      ball(
+      sphere(
         [x * span * 0.2, height * 0.58, z * span * 0.2],
         [span * 0.55, height * 0.3, span * 0.55],
         GROVE.moss
       )
     ),
     ...SIDES.flatMap((side) => [
-      lit(ball([side * span * 0.32, height * 0.4, 0], [0.4, 0.46, 0.4], GROVE.lumen)),
-      lit(ball([0, height * 0.36, side * span * 0.32], [0.4, 0.46, 0.4], GROVE.lumen))
+      lit(sphere([side * span * 0.32, height * 0.4, 0], [0.4, 0.46, 0.4], GROVE.lumen)),
+      lit(sphere([0, height * 0.36, side * span * 0.32], [0.4, 0.46, 0.4], GROVE.lumen))
     ]),
     box([span * 0.2, height * 0.26, 0], [span * 0.3, 0.12, span * 0.3], GROVE.timber),
     box([span * 0.2, height * 0.26 + 0.5, 0], [span * 0.22, 0.9, span * 0.22], GROVE.timber),

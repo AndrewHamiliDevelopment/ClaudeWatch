@@ -1,6 +1,7 @@
+import { useMemo } from 'react'
 import type { ThemeZoneGroup } from '../logic/office-themes'
 import type { WallsMode } from '../logic/room-layout'
-import { plateCentre, plateLocalFloor } from '../logic/zone-framing'
+import { plateLocalFloor } from '../logic/zone-framing'
 import type { FloorGeometry } from '../scene-model'
 import { getTheme } from '../themes/registry'
 import type { OfficeTheme } from '../themes/types'
@@ -22,11 +23,10 @@ export function FloorView({
   const { Slab, Elevator } = floorTheme.kit.floor
   // The slab and the lift draw around their own origin: they go at the plate centre, with the
   // floor measured from there. Zones are in the sim's coordinates and stay outside the group.
-  const centre = plateCentre(floor)
-  const plate = plateLocalFloor(floor)
+  const plate = useMemo(() => plateLocalFloor(floor), [floor])
   return (
     <group>
-      <group position={[centre.x, 0, centre.z]}>
+      <group position={[floor.x, 0, floor.z]}>
         <Slab floor={plate} />
         <Elevator floor={plate} />
       </group>

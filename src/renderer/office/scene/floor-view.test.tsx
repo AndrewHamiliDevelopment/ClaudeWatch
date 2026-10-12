@@ -1,5 +1,5 @@
 import { isValidElement, type ReactNode } from 'react'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { session } from '../../../office/sim/fixtures'
 import { buildLayout } from '../../../office/sim/layout'
 import { toFloorGeometry } from '../../office-live/layout-geometry'
@@ -8,6 +8,12 @@ import type { FloorGeometry } from '../scene-model'
 import { themeForTeam } from '../themes/registry'
 import { FloorView } from './FloorView'
 import { WorldView } from './WorldView'
+
+// The views are called as plain functions here, so their one hook is stood in for.
+vi.mock('react', async (original) => ({
+  ...(await original<typeof import('react')>()),
+  useMemo: (factory: () => object) => factory()
+}))
 
 type Seed = [company: string, project: string, sessions: number][]
 const ZKIDZ: Seed = [

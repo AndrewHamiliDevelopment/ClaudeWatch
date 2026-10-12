@@ -1,9 +1,10 @@
 import { useFrame } from '@react-three/fiber'
 import { useRef } from 'react'
 import type { Group, Object3D } from 'three'
-import type { FloorGeometry } from '../scene-model'
-import { designFor, lotBase, plotOf, seeded, type LotDesign, type Plot } from './lot-parts'
-import type { Lot } from './surroundings'
+import type { Plot } from './lot-kit'
+import type { Rect } from './lot-math'
+import { designFor, plotOf, type LotDesign } from './lot-parts'
+import { draw, lotBase, type Lot } from './surroundings'
 import type { Vector } from './primitives'
 import { UnitPart } from './unit-parts'
 
@@ -49,7 +50,7 @@ export function moveSteam(root: Object3D, stacks: readonly SteamStack[], timeSec
 // The stacks on the few lots that drew `design`, picked by seed so they are the same every start.
 export function steamStacksOn(
   lots: readonly Lot[],
-  floor: Pick<FloorGeometry, 'width' | 'depth'>,
+  floor: Rect,
   buildings: readonly LotDesign[],
   design: string,
   stacksOf: (plot: Plot) => { x: number; z: number; top: number }[],
@@ -59,7 +60,7 @@ export function steamStacksOn(
     .filter((lot) => lot.kind === 'building')
     .map((lot) => ({ lot, plot: plotOf(lot, lotBase(lot, floor)) }))
     .filter(({ plot }) => designFor(buildings, plot).name === design)
-    .sort((a, b) => seeded(a.lot.seed, 70) - seeded(b.lot.seed, 70))
+    .sort((a, b) => draw(a.lot.seed, 70) - draw(b.lot.seed, 70))
     .slice(0, MAX_STACK_LOTS)
     .flatMap(({ lot, plot }) =>
       stacksOf(plot).map((stack) => ({

@@ -1,5 +1,5 @@
 import { signTexture } from '../scene/textures'
-import { APRON_PAVING } from './apron'
+import { APRON_PAVING } from './town-apron'
 import { box, Parts } from './parts'
 import { Batch, Box, Lantern } from './primitives'
 import { towerLayout } from './layout'
@@ -24,7 +24,7 @@ export function ApronPaving({ floor, color }: FloorProps & { color: string }) {
   )
 }
 
-export function Roof({ width, palette }: { width: number; palette: ThemePalette }) {
+function Roof({ width, palette }: { width: number; palette: ThemePalette }) {
   const strips = [-1, 1].flatMap((side) =>
     [0, 1, 2].map((step) => ({
       x: 0,

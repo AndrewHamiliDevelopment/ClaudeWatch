@@ -1,4 +1,4 @@
-import { HANGAR } from './apron'
+import { hangarStand } from './apron'
 import { ParkedFrames } from './ParkedFrames'
 import { Batch, Box } from './primitives'
 import { EDO } from './palettes'
@@ -9,9 +9,9 @@ export function MaintenanceHangar({
   palette = EDO
 }: FloorProps & { palette?: ThemePalette }) {
   return (
-    <group position={[floor.width / 2 + HANGAR.offsetX, 0, 0]}>
+    <group position={[hangarStand(floor).x, 0, floor.z]}>
       <ParkedFrames palette={palette} />
-      <Box at={[0, -0.12, 0]} size={[HANGAR.width, 0.2, HANGAR.depth]} color={palette.ink} />
+      <Box at={[0, -0.12, 0]} size={[6, 0.2, 7]} color={palette.ink} />
       <Batch
         color={palette.lacquer}
         points={[-2.6, 2.6].flatMap((x) => [-3, 3].map((z) => ({ x, y: 1.8, z, rotationY: 0 })))}

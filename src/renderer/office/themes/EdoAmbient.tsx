@@ -1,17 +1,15 @@
 import { useFrame } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
 import type { Group, Object3D } from 'three'
-import type { FloorGeometry } from '../scene-model'
 import { RisingSteam, steamStacksOn, type SteamStack } from './ambient-parts'
 import { EDO_BATHHOUSE, EDO_BUILDINGS, EDO_STEAM_RISE_M, edoStackOf } from './EdoSurroundings'
-import { clamp, lotBase, seeded } from './lot-parts'
+import { clamp } from '../../../shared/range'
 import { EDO } from './palettes'
 import { box, lit, Parts, type PartSpec } from './parts'
 import type { Vector } from './primitives'
-import type { Lot } from './surroundings'
+import type { Rect } from './lot-math'
+import { draw, lotBase, type Lot } from './surroundings'
 import type { AmbientProps } from './types'
-
-type Plate = Pick<FloorGeometry, 'width' | 'depth'>
 
 const MAX_DRONES = 10
 const DRONE = { speed: 0.6, street: 0.4, bob: 0.12, halfHeight: 0.3 }
@@ -33,10 +31,10 @@ export interface LanternDrone {
   start: number
 }
 
-export function lanternDrones(lots: readonly Lot[], floor: Plate): LanternDrone[] {
+export function lanternDrones(lots: readonly Lot[], floor: Rect): LanternDrone[] {
   return lots
     .filter((lot) => lot.kind === 'building')
-    .sort((a, b) => seeded(a.seed, 60) - seeded(b.seed, 60))
+    .sort((a, b) => draw(a.seed, 60) - draw(b.seed, 60))
     .slice(0, MAX_DRONES)
     .map((lot) => {
       const base = lotBase(lot, floor)
@@ -46,8 +44,8 @@ export function lanternDrones(lots: readonly Lot[], floor: Plate): LanternDrone[
         z: lot.z,
         halfWidth: lot.width / 2 + DRONE.street,
         halfDepth: lot.depth / 2 + DRONE.street,
-        y: base + clamp(lot.maxHeight - base - 0.9, 0.9, 2.6),
-        start: seeded(lot.seed, 61)
+        y: base + clamp(lot.maxHeight - base - 0.9, [0.9, 2.6]),
+        start: draw(lot.seed, 61)
       }
     })
 }
@@ -73,7 +71,7 @@ function moveDrones(root: Object3D, drones: readonly LanternDrone[], timeSec: nu
   })
 }
 
-export function edoSteamStacks(lots: readonly Lot[], floor: Plate): SteamStack[] {
+export function edoSteamStacks(lots: readonly Lot[], floor: Rect): SteamStack[] {
   return steamStacksOn(
     lots,
     floor,

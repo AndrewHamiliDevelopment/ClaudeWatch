@@ -1,9 +1,10 @@
 import { useMemo } from 'react'
+import { hangarStand } from '../apron'
 import { GROUND_Y } from '../surroundings'
 import type { FloorProps, TowerProps } from '../types'
 import { box, Parts, turned, type PartSpec, lit, SIDES } from '../parts'
 import { ThemeTower } from '../WorldArchitecture'
-import { apronLots, apronStrips, DISTRICT_OFFSET_M, HANGAR_OFFSET_M } from './apron'
+import { apronStrips, colonyStand, padLots } from './apron'
 import { frameParts } from './frame-parts'
 import { RadarDish } from './GarrisonAmbient'
 import { PlacedParts } from './GarrisonSurroundings'
@@ -58,7 +59,7 @@ const COLONY: PartSpec[] = [
 // of yard buildings, a lit runway to the north and a hazard line at the plate's edge.
 export function GarrisonDistrict({ floor }: FloorProps) {
   const apron = useMemo(() => {
-    const builds = apronLots(floor).map((lot) => buildLot(lot, GROUND_Y))
+    const builds = padLots(floor).map((lot) => buildLot(lot, GROUND_Y))
     return {
       parts: [...builds.flatMap((build) => build.parts), ...apronStrips(floor)],
       mounts: builds.flatMap((build) => build.mount ?? [])
@@ -66,7 +67,7 @@ export function GarrisonDistrict({ floor }: FloorProps) {
   }, [floor])
   return (
     <>
-      <group position={[-floor.width / 2 - DISTRICT_OFFSET_M, 0, 0]}>
+      <group position={[colonyStand(floor).x, 0, floor.z]}>
         <Parts parts={COLONY} />
       </group>
       <PlacedParts parts={apron.parts} />
@@ -101,7 +102,7 @@ const HANGAR_FRAMES = GARRISON_FRAMES.map((frame) => ({
 
 export function GarrisonHangar({ floor }: FloorProps) {
   return (
-    <group position={[floor.width / 2 + HANGAR_OFFSET_M, 0, 0]} rotation={[0, -Math.PI / 2, 0]}>
+    <group position={[hangarStand(floor).x, 0, floor.z]} rotation={[0, -Math.PI / 2, 0]}>
       <Parts parts={HANGAR_DECK} />
       {HANGAR_FRAMES.map((frame, bay) => (
         <group

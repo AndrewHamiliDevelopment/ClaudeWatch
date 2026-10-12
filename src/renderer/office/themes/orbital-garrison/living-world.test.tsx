@@ -136,9 +136,10 @@ describe('what moves around the garrison', () => {
     for (const floor of FLOORS) {
       const poses = Array.from({ length: 200 }, (_, step) => circuitPose(floor, step / 200))
       for (const pose of poses) {
-        expect(pose.z).toBeLessThan(-floor.depth / 2 - 3)
-        expect(pose.z).toBeGreaterThan(-floor.depth / 2 - WORLD_APRON.north)
-        expect(Math.abs(pose.x)).toBeLessThan(floor.width / 2)
+        const north = floor.z - floor.depth / 2
+        expect(pose.z).toBeLessThan(north - 3)
+        expect(pose.z).toBeGreaterThan(north - WORLD_APRON.north)
+        expect(Math.abs(pose.x - floor.x)).toBeLessThan(floor.width / 2)
         const gap = officeGap(floor, { x: pose.x, z: pose.z, width: 2, depth: 2 })
         expect(CIRCUIT_ALTITUDE_M + 0.5).toBeLessThanOrEqual(gap * 0.7)
       }

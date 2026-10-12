@@ -1,14 +1,9 @@
 import { makeSession } from '../../__tests__/fixtures'
 import { layoutFloor } from '../../fixture/fixture-layout'
-import type { FloorGeometry, ZoneGeometry } from '../../scene-model'
+import type { FloorGeometry } from '../../scene-model'
+import type { Rect } from '../lot-math'
+import { gapBetween, officesOf } from '../surroundings'
 import type { PlacedPart } from './placed'
-
-interface Rect {
-  x: number
-  z: number
-  width: number
-  depth: number
-}
 
 function floorWith(agentCount: number, companyCount: number): FloorGeometry {
   const sessions = Array.from({ length: agentCount }, (_, index) =>
@@ -46,20 +41,7 @@ export function boundsOf(part: PlacedPart) {
   }
 }
 
-export function gapBetween(a: Rect, b: Rect): number {
-  const dx = Math.max(0, Math.abs(a.x - b.x) - (a.width + b.width) / 2)
-  const dz = Math.max(0, Math.abs(a.z - b.z) - (a.depth + b.depth) / 2)
-  return Math.hypot(dx, dz)
-}
-
-function projects(zones: readonly ZoneGeometry[]): ZoneGeometry[] {
-  return zones.flatMap((zone) => [
-    ...(zone.kind === 'project' ? [zone] : []),
-    ...projects(zone.children)
-  ])
-}
-
 // The surroundings engine's own rule: how far a thing is from the nearest office.
 export function officeGap(floor: FloorGeometry, rect: Rect): number {
-  return Math.min(...projects(floor.zones).map((office) => gapBetween(rect, office)))
+  return Math.min(...officesOf(floor).map((office) => gapBetween(rect, office)))
 }

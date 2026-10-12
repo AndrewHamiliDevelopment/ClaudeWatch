@@ -2,19 +2,18 @@ import { useFrame } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
 import type { Group } from 'three'
 import type { FloorGeometry } from '../../scene-model'
-import { box, lit, Parts, turned, type PartSpec } from '../parts'
+import { box, lit, Parts, turned, type PartSpec, cone } from '../parts'
 import type { Vector } from '../primitives'
-import { spike } from '../quiet-grove/spirit-features'
-import type { Lot } from '../surroundings'
+import { lotBase, type Lot } from '../surroundings'
 import type { AmbientProps, SurroundingsProps } from '../types'
 import { COURT_LOT_KIT } from './court-lots'
-import { lotBase, spread } from './lot-kit'
-import { LotFill } from './LotFill'
+import { spread } from '../lot-kit'
+import { KitFill } from '../LotFill'
 import { COURT } from './palette'
 
 // The palace-and-academy city on this theme's lots.
 export function CourtSurroundings({ floor, lots }: SurroundingsProps) {
-  return <LotFill lots={lots} floor={floor} kit={COURT_LOT_KIT} />
+  return <KitFill lots={lots} floor={floor} kit={COURT_LOT_KIT} />
 }
 
 const BANNER_LIMIT = 16
@@ -62,7 +61,7 @@ const SKIFF: PartSpec[] = [
   box([0, 0.05, -0.2], [2, 0.06, 0.6], COURT.gold),
   box([0, 0.42, -0.75], [0.08, 0.5, 0.7], COURT.violet),
   lit(box([0, -0.22, 0.7], [0.3, 0.1, 0.3], COURT.lumen)),
-  turned(spike([0, 0, 1.34], [0.4, 0.5, 0.4], COURT.gold), [Math.PI / 2, 0, 0])
+  turned(cone([0, 0, 1.34], [0.4, 0.5, 0.4], COURT.gold), [Math.PI / 2, 0, 0])
 ]
 
 // The tallest lots: a skiff circles each at its footprint's edge, just under its height limit.

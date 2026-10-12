@@ -1,6 +1,19 @@
 import { doorSide, SIDE_NORMAL, type WallSide } from '../logic/room-layout'
-import { plateCentre } from '../logic/zone-framing'
 import type { FloorGeometry, ZoneGeometry } from '../scene-model'
+import {
+  between,
+  contains,
+  draw,
+  gapBetween,
+  grow,
+  hashOf,
+  overlaps,
+  rectOf,
+  type Rect
+} from './lot-math'
+
+// The one seeded pick and the one gap measure every theme shares.
+export { draw, gapBetween, hashOf }
 
 export interface Lot {
   id: string
@@ -18,8 +31,6 @@ export interface Lot {
   zoneId: string | null
 }
 
-type Rect = Pick<Lot, 'x' | 'z' | 'width' | 'depth'>
-
 // Where the ground plane lies and lots stand: under the slab and the district's lowest terrace.
 export const GROUND_Y = -0.5
 // What the floor theme's District, Hangar and Tower occupy around the plate. Lots stay off it.
@@ -30,10 +41,10 @@ const MAX_PROP_LOTS = 80
 export const LOT_CAP = MAX_BUILDING_LOTS + MAX_PROP_LOTS
 
 // A thing of height h hides 1.43 h of ground behind it at the camera's 35° elevation.
-const HEIGHT_PER_METRE = 0.7
+export const HEIGHT_PER_METRE = 0.7
 export const MAX_LOT_HEIGHT_M = 24
-const MIN_BUILDING_HEIGHT_M = 2
-const MIN_PROP_HEIGHT_M = 0.4
+// The lowest limit a lot is still worth building under, by kind.
+export const MIN_LOT_HEIGHT_M = { building: 2, prop: 0.4 }
 
 // Buildings sit one to a block, on a grid that starts at their company's centre.
 const BLOCK_M = 9
@@ -56,54 +67,6 @@ const DOOR_CLEAR_M = { ahead: 2, across: 4 }
 const LIFT_CLEAR_M = 4
 
 const SIDES: readonly WallSide[] = ['north', 'east', 'south', 'west']
-
-function rectOf(west: number, east: number, north: number, south: number): Rect {
-  return { x: (west + east) / 2, z: (north + south) / 2, width: east - west, depth: south - north }
-}
-
-function gapBetween(a: Rect, b: Rect): number {
-  const dx = Math.max(0, Math.abs(a.x - b.x) - (a.width + b.width) / 2)
-  const dz = Math.max(0, Math.abs(a.z - b.z) - (a.depth + b.depth) / 2)
-  return Math.hypot(dx, dz)
-}
-
-function overlaps(a: Rect, b: Rect): boolean {
-  return (
-    Math.abs(a.x - b.x) < (a.width + b.width) / 2 && Math.abs(a.z - b.z) < (a.depth + b.depth) / 2
-  )
-}
-
-function contains(outer: Rect, inner: Rect): boolean {
-  return (
-    Math.abs(inner.x - outer.x) + inner.width / 2 <= outer.width / 2 &&
-    Math.abs(inner.z - outer.z) + inner.depth / 2 <= outer.depth / 2
-  )
-}
-
-function grow(rect: Rect, metres: number): Rect {
-  return { ...rect, width: rect.width + metres * 2, depth: rect.depth + metres * 2 }
-}
-
-// FNV-1a: the same text gives the same number on every machine and every start.
-function hashOf(text: string): number {
-  let hash = 0x811c9dc5
-  for (let index = 0; index < text.length; index++) {
-    hash ^= text.charCodeAt(index)
-    hash = Math.imul(hash, 0x01000193)
-  }
-  return hash >>> 0
-}
-
-// The nth value in [0, 1) drawn from a lot's seed.
-function draw(seed: number, nth: number): number {
-  let mixed = (seed + Math.imul(nth + 1, 0x9e3779b9)) | 0
-  mixed = Math.imul(mixed ^ (mixed >>> 16), 0x85ebca6b)
-  mixed = Math.imul(mixed ^ (mixed >>> 13), 0xc2b2ae35)
-  return ((mixed ^ (mixed >>> 16)) >>> 0) / 0x100000000
-}
-
-const between = (range: { min: number; max: number }, share: number): number =>
-  range.min + (range.max - range.min) * share
 
 function flatten(zones: readonly ZoneGeometry[]): ZoneGeometry[] {
   return zones.flatMap((zone) => [zone, ...flatten(zone.children)])
@@ -137,12 +100,8 @@ interface Site {
   offices: Rect[]
 }
 
-function plateOf(floor: FloorGeometry): Rect {
-  return { ...plateCentre(floor), width: floor.width, depth: floor.depth }
-}
-
-function apronOf(floor: FloorGeometry): Rect {
-  const plate = plateOf(floor)
+// The band round the plate that the floor theme's District, Hangar and Tower fill.
+export function apronOf(plate: Rect): Rect {
   return rectOf(
     plate.x - plate.width / 2 - WORLD_APRON.west,
     plate.x + plate.width / 2 + WORLD_APRON.east,
@@ -151,14 +110,31 @@ function apronOf(floor: FloorGeometry): Rect {
   )
 }
 
+// What nothing may hide: the project offices, else the leaf rooms, else the bare plate.
+export function officesOf(floor: FloorGeometry): Rect[] {
+  const projects = flatten(floor.zones).filter((zone) => zone.kind === 'project')
+  if (projects.length > 0) return projects
+  return floor.rooms.length > 0 ? floor.rooms : [floor]
+}
+
+// The highest y a thing standing on `rect` may reach without hiding a desk at any map rotation.
+export function heightLimit(rect: Rect, offices: readonly Rect[]): number {
+  const nearest = Math.min(...offices.map((office) => gapBetween(rect, office)))
+  return Math.min(MAX_LOT_HEIGHT_M, nearest * HEIGHT_PER_METRE)
+}
+
+// A lot on the plate stands on the slab; every other lot stands on the ground.
+export function lotBase(lot: Rect, plate: Rect): number {
+  return contains(plate, lot) ? 0 : GROUND_Y
+}
+
 function surveySite(floor: FloorGeometry): Site {
-  const plate = plateOf(floor)
-  const apron = apronOf(floor)
+  const plate: Rect = floor
+  const apron = apronOf(plate)
   const zones = flatten(floor.zones)
   const companies = floor.zones
     .filter((zone) => zone.kind === 'company')
     .sort((a, b) => a.id.localeCompare(b.id))
-  const projects = zones.filter((zone) => zone.kind === 'project')
   const doors = [...zones, ...floor.rooms].flatMap((rect) =>
     rect.door ? [doorClearance({ ...rect, door: rect.door })] : []
   )
@@ -178,13 +154,8 @@ function surveySite(floor: FloorGeometry): Site {
       { x: plate.x, z: floor.corridor.z, width: floor.width, depth: floor.corridor.width },
       { x: floor.elevator.x, z: floor.elevator.z, width: LIFT_CLEAR_M, depth: LIFT_CLEAR_M }
     ],
-    offices: projects.length > 0 ? projects : floor.rooms
+    offices: officesOf(floor)
   }
-}
-
-function heightLimit(rect: Rect, site: Site): number {
-  const nearest = Math.min(...site.offices.map((office) => gapBetween(rect, office)))
-  return Math.min(MAX_LOT_HEIGHT_M, nearest * HEIGHT_PER_METRE)
 }
 
 function isNearestAnchor(rect: Rect, anchor: Anchor, site: Site): boolean {
@@ -220,8 +191,8 @@ function buildingCandidates(anchor: Anchor, site: Site): Lot[] {
       if (site.companies.some((zone) => gapBetween(rect, zone) < LANE_M)) continue
       if (site.blocked.some((solid) => overlaps(rect, solid))) continue
       if (!isNearestAnchor(rect, anchor, site)) continue
-      const maxHeight = heightLimit(rect, site)
-      if (maxHeight < MIN_BUILDING_HEIGHT_M) continue
+      const maxHeight = heightLimit(rect, site.offices)
+      if (maxHeight < MIN_LOT_HEIGHT_M.building) continue
       const isFarRing = !isOnPlate && gapBetween(rect, site.apron) >= FAR_RING_FROM_M
       lots.push({
         id,
@@ -264,8 +235,8 @@ function propCandidates(anchor: Anchor, site: Site): Lot[] {
         (zone) => zone.id !== anchor.id && gapBetween(rect, zone) < PROP_WALKWAY_M
       )
       if (isCrowded) continue
-      const maxHeight = heightLimit(rect, site)
-      if (maxHeight < MIN_PROP_HEIGHT_M) continue
+      const maxHeight = heightLimit(rect, site.offices)
+      if (maxHeight < MIN_LOT_HEIGHT_M.prop) continue
       lots.push({ id, kind: 'prop', ...rect, maxHeight, seed, zoneId: anchor.zoneId })
     }
   }
@@ -311,7 +282,7 @@ export function surroundingLots(floor: FloorGeometry): Lot[] {
 
 // The box around everything drawn on the ground: what the camera's planes are sized from.
 export function sceneExtent(floor: FloorGeometry, lots: readonly Lot[]): Rect {
-  const rects = [apronOf(floor), ...lots]
+  const rects: Rect[] = [apronOf(floor), ...lots]
   return rectOf(
     Math.min(...rects.map((rect) => rect.x - rect.width / 2)),
     Math.max(...rects.map((rect) => rect.x + rect.width / 2)),
