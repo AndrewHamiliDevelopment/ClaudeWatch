@@ -40,14 +40,15 @@ export function placements(
       isFinished: session.attention === 'done'
     })
     if (!session.subagents.length) continue
+    // Absent while every guest in the project fits at a desk's own guest seats.
     const team = floor.rooms.find(
       (r) =>
         r.kind === 'team' &&
         r.companyKey === session.companyKey &&
         r.projectKey === session.projectKey
-    )!
-    const taken = takenSeats.get(team.id) ?? new Set<string>()
-    takenSeats.set(team.id, taken)
+    )
+    const taken = team && (takenSeats.get(team.id) ?? new Set<string>())
+    if (team && taken) takenSeats.set(team.id, taken)
     const guests = session.subagents
       .map((subagent) => ({
         ...session,
@@ -71,11 +72,15 @@ export function placements(
     waiting.sort((a, b) => Number(held.has(a.key)) - Number(held.has(b.key)))
     for (const guest of waiting) {
       const [desk] = freeDesks
-      const seat = seatOf(guest, team)
       if (desk) {
         freeDesks.delete(desk)
         seated.push({ session: guest, room: main, slotId: desk })
-      } else if (seat && !taken.has(seat) && team.slots.some((s) => s.id === seat)) {
+        continue
+      }
+      // The map gives a team seat to every guest past the desks, so a guest here has a team.
+      if (!team || !taken) continue
+      const seat = seatOf(guest, team)
+      if (seat && !taken.has(seat) && team.slots.some((s) => s.id === seat)) {
         taken.add(seat)
         seated.push({ session: guest, room: team, slotId: seat })
       } else unseated.push({ session: guest, team })

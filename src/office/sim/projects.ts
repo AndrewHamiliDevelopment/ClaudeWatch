@@ -27,11 +27,9 @@ export interface CompanyDraft {
 const isOrdinal = (value: unknown): value is number =>
   typeof value === 'number' && Number.isInteger(value) && value >= 0
 
-// One seat per subagent past the two guest desks. placements.ts looks the team room up for any
-// session with a subagent, so one seat stays while every guest still fits at a desk.
+// One seat per subagent past the two guest desks.
 function teamSeats(crew: SessionRef[]): number {
-  const overflow = crew.reduce((count, s) => count + Math.max(0, s.subagents.length - 2), 0)
-  return crew.some((s) => s.subagents.length > 0) ? Math.max(1, overflow) : 0
+  return crew.reduce((count, s) => count + Math.max(0, s.subagents.length - 2), 0)
 }
 
 function heldBays(crew: SessionRef[], saved: LayoutMap | undefined): Map<string, number> {

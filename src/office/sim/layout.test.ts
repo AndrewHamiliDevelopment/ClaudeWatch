@@ -237,8 +237,9 @@ it('has no team area without subagents, and one only as large as the overflow ne
     return team && [team.slots.filter((slot) => slot.id !== 'door').length, team.width, team.depth]
   }
   expect(teamFor(0)).toBeUndefined()
-  // placements.ts looks the team room up for any subagent, so one seat stays while guests fit.
-  expect(teamFor(2)).toEqual([1, 4, 4])
+  // Two guests fit at the desk's own guest seats.
+  expect(teamFor(2)).toBeUndefined()
+  expect(teamFor(3)).toEqual([1, 4, 4])
   expect(teamFor(7)).toEqual([5, 6, 8])
 })
 
