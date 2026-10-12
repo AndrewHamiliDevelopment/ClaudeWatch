@@ -3,7 +3,9 @@ import { useLayoutEffect, useRef, type ReactNode } from 'react'
 import { Group } from 'three'
 import {
   createMeshBatches,
+  freezeMatrices,
   releaseMeshBatches,
+  thawMatrices,
   updateMeshBatches,
   type MeshBatch
 } from './mesh-batches'
@@ -17,12 +19,14 @@ interface BatchUpdaterProps {
 function BatchUpdater({ root, revision, isStatic }: BatchUpdaterProps) {
   const batches = useRef<MeshBatch[]>([])
   useLayoutEffect(() => {
+    if (isStatic) thawMatrices(root)
     batches.current = createMeshBatches(root)
+    if (isStatic) freezeMatrices(root)
     return () => {
       releaseMeshBatches(root, batches.current)
       batches.current = []
     }
-  }, [root, revision])
+  }, [root, revision, isStatic])
   // Mounted after the controllers so instance matrices see this frame's pose and wall height.
   // Nothing in a static batch moves: it was placed once, when the batches were built.
   useFrame(() => {

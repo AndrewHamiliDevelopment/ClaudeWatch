@@ -11,7 +11,13 @@ import {
   Texture
 } from 'three'
 import { expect, it, vi } from 'vitest'
-import { createMeshBatches, updateMeshBatches, releaseMeshBatches } from './mesh-batches'
+import {
+  createMeshBatches,
+  freezeMatrices,
+  releaseMeshBatches,
+  thawMatrices,
+  updateMeshBatches
+} from './mesh-batches'
 
 it('instances matching geometry/materials while retaining controller refs and transforms', () => {
   const root = new Group()
@@ -165,4 +171,25 @@ it('multiplies a part that already carries a colour per instance by its material
   const grey = new Color('#808080')
   expect(tint.r).toBeCloseTo(grey.r)
   expect(tint.g).toBe(0)
+})
+
+it('freezes placed parts so no frame recomputes them, and thaws them to be placed again', () => {
+  const root = new Group()
+  const street = new Group()
+  const house = new Mesh(new BoxGeometry(1, 1, 1), new MeshStandardMaterial({ color: 'red' }))
+  house.position.x = 4
+  street.add(house)
+  root.add(street)
+  root.updateWorldMatrix(true, true)
+
+  freezeMatrices(root)
+  expect(house.matrixAutoUpdate).toBe(false)
+  expect(street.matrixAutoUpdate).toBe(false)
+  house.position.x = 9
+  root.updateMatrixWorld()
+  expect(house.matrixWorld.elements[12]).toBe(4)
+
+  thawMatrices(root)
+  expect(house.matrixAutoUpdate).toBe(true)
+  expect(house.matrixWorld.elements[12]).toBe(9)
 })

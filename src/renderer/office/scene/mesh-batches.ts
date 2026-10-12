@@ -157,3 +157,21 @@ export function releaseMeshBatches(root: Group, batches: readonly MeshBatch[]): 
     batch.tinted?.dispose()
   }
 }
+
+// Parts that never move are frozen once placed: three.js otherwise recomposes every object's
+// matrix on every frame, and a town is thousands of objects.
+export function freezeMatrices(root: Object3D): void {
+  root.updateWorldMatrix(true, true)
+  root.traverse((object) => {
+    object.matrixAutoUpdate = false
+    object.matrixWorldNeedsUpdate = false
+  })
+}
+
+// Before they are placed again: positions set since the freeze are taken up here.
+export function thawMatrices(root: Object3D): void {
+  root.traverse((object) => {
+    object.matrixAutoUpdate = true
+  })
+  root.updateWorldMatrix(true, true)
+}
