@@ -1,5 +1,8 @@
 import { execFilePromise } from './platform/exec'
 import type { TerminalInfo, TerminalType } from '../renderer/lib/types'
+import type { RunScript } from '../shared/windows-console'
+import { runInteractivePowerShell } from '../shared/powershell-host'
+import { resolveWindowsTerminal } from './windows-terminals'
 
 interface TerminalSignature {
   terminalType: TerminalType
@@ -41,6 +44,11 @@ const UNKNOWN_TERMINAL: TerminalInfo = {
 export class TerminalResolver {
   private cache = new Map<number, TerminalInfo>()
 
+  constructor(
+    private readonly platform: NodeJS.Platform = process.platform,
+    private readonly runScript: RunScript = runInteractivePowerShell
+  ) {}
+
   async resolve(pid: number): Promise<TerminalInfo> {
     const cached = this.cache.get(pid)
     if (cached) {
@@ -48,7 +56,10 @@ export class TerminalResolver {
     }
 
     try {
-      const result = await this.walkChain(pid)
+      const result =
+        this.platform === 'win32'
+          ? ((await resolveWindowsTerminal(pid, this.runScript)) ?? { ...UNKNOWN_TERMINAL })
+          : await this.walkChain(pid)
       this.cache.set(pid, result)
       return result
     } catch {

@@ -1,8 +1,10 @@
 import { afterEach, expect, it } from 'vitest'
-import { appendFile, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
+import { appendFile, link, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { startTimeQuery } from '../shared/platform-process'
 import { systemIo } from './io'
+import { readProcessTable } from './process-table'
 
 const directories: string[] = []
 afterEach(async () => {
@@ -72,6 +74,21 @@ it('refuses a credential store reached through a symlink or a different letter c
   }
 })
 
+// realpath names a hard link by its own name, so only the file's link count gives it away.
+it('refuses a file with more than one name, which may be a credential store under another', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'bridge-guard-'))
+  directories.push(directory)
+  await writeFile(join(directory, '.credentials.json'), 'DO_NOT_READ')
+  await link(join(directory, '.credentials.json'), join(directory, '42.json'))
+  const path = join(directory, '42.json')
+  await expect(systemIo.readText(path)).rejects.toThrow('forbidden: credential store')
+  await expect(systemIo.readTail(path)).rejects.toThrow('forbidden: credential store')
+  await expect(systemIo.readFirstLine(path)).rejects.toThrow('forbidden: credential store')
+  await expect(systemIo.readFrom(path, 0, 64)).rejects.toThrow('forbidden: credential store')
+  await writeFile(join(directory, '43.json'), '{}')
+  expect(await systemIo.readText(join(directory, '43.json'))).toBe('{}')
+})
+
 it('reads forward from an offset in whole lines and says where to resume', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'bridge-from-'))
   directories.push(directory)
@@ -88,12 +105,32 @@ it('reads forward from an offset in whole lines and says where to resume', async
   expect(await systemIo.readFrom(path, 0, 1024)).toEqual({ text: '', nextOffset: 0 })
 })
 
-it('runs only the three programs the bridge needs', async () => {
+it('refuses a Windows credential store by its backslashed path, before touching the disk', async () => {
+  for (const path of [
+    'C:\\Users\\me\\.claude\\.credentials.json',
+    'C:\\Users\\me\\.codex\\auth.json',
+    'C:\\Users\\me\\.claude\\sessions\\42.key'
+  ]) {
+    await expect(systemIo.readText(path)).rejects.toThrow('forbidden')
+    await expect(systemIo.readFrom(path, 0, 64)).rejects.toThrow('forbidden')
+  }
+})
+
+it('runs only the programs the bridge needs', async () => {
   await expect(systemIo.exec('/bin/sh', ['-c', 'echo hi'])).rejects.toThrow('forbidden')
+  await expect(systemIo.exec('cmd.exe', ['/c', 'echo hi'])).rejects.toThrow('forbidden')
   await expect(systemIo.exec('/usr/bin/security', ['find-generic-password'])).rejects.toThrow(
     'forbidden'
   )
-  expect(await systemIo.exec('/bin/ps', ['-o', 'pid=', '-p', String(process.pid)])).toContain(
-    String(process.pid)
-  )
+  // The start-time query of this platform runs, with whatever env the bridge gives it.
+  const { file, args } = startTimeQuery(process.pid)
+  expect((await systemIo.exec(file, args)).trim()).not.toBe('')
 })
+
+it('lists this process in the table under the very start the start-time query prints', async () => {
+  const own = (await readProcessTable(systemIo)).find((row) => row.pid === process.pid)
+  const { file, args } = startTimeQuery(process.pid)
+  const start = (await systemIo.exec(file, args)).trim().replace(/\s+/g, ' ')
+  expect(own?.lstart.replace(/\s+/g, ' ')).toBe(start)
+  expect(own?.argv.length).toBeGreaterThan(0)
+}, 20_000)

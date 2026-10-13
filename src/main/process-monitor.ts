@@ -3,6 +3,7 @@ import { parseElapsedTime, getProjectName } from '../renderer/lib/utils'
 import type { PlatformDetector, RawProcessInfo } from './platform/darwin'
 import { DarwinDetector } from './platform/darwin'
 import { Win32Detector } from './platform/win32'
+import { runPowerShell } from '../shared/powershell-host'
 import type { TerminalResolver } from './terminal-resolver'
 
 const KNOWN_FLAGS = [
@@ -56,9 +57,10 @@ function determineStatus(
   return 'active'
 }
 
-function getPlatformDetector(): PlatformDetector {
-  if (process.platform === 'win32') {
-    return new Win32Detector()
+function getPlatformDetector(platform: NodeJS.Platform): PlatformDetector {
+  if (platform === 'win32') {
+    // The kept PowerShell: a cold one per poll costs about a fifth of a core.
+    return new Win32Detector({ runScript: runPowerShell })
   }
   return new DarwinDetector()
 }
@@ -86,9 +88,10 @@ export class ProcessMonitor {
     cpuIdleThreshold?: number
     detector?: PlatformDetector
     terminalResolver?: Pick<TerminalResolver, 'resolve'>
+    platform?: NodeJS.Platform
   }) {
     this.cpuIdleThreshold = options?.cpuIdleThreshold ?? 3.0
-    this.detector = options?.detector ?? getPlatformDetector()
+    this.detector = options?.detector ?? getPlatformDetector(options?.platform ?? process.platform)
     this.terminalResolver = options?.terminalResolver
   }
 
@@ -109,9 +112,12 @@ export class ProcessMonitor {
     }
 
     const instances: ClaudeInstance[] = []
+    const projectPaths = await Promise.all(
+      rawProcesses.map((proc) => this.detector.getWorkingDirectory(proc.pid))
+    )
 
-    for (const proc of rawProcesses) {
-      const projectPath = await this.detector.getWorkingDirectory(proc.pid)
+    for (const [index, proc] of rawProcesses.entries()) {
+      const projectPath = projectPaths[index]
       const projectName = projectPath ? getProjectName(projectPath) : ''
       const flags = parseFlags(proc.command)
       const sessionId = parseSessionId(proc.command)

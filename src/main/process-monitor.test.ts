@@ -1,10 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ProcessMonitor, detectSessionType } from './process-monitor'
+import type { PlatformDetector, RawProcessInfo } from './platform/darwin'
+import { runPowerShell } from '../shared/powershell-host'
 
 // We mock child_process used by platform detectors
 vi.mock('child_process', () => ({
   execFile: vi.fn()
 }))
+vi.mock('../shared/powershell-host', () => ({ runPowerShell: vi.fn() }))
 
 import { execFile } from 'child_process'
 
@@ -37,7 +40,12 @@ describe('ProcessMonitor', () => {
   describe('poll() on darwin', () => {
     it('should detect active Claude processes from ps output', async () => {
       let callCount = 0
-      mockExecFile.mockImplementation(((_bin: string, _args: unknown, cb: unknown) => {
+      mockExecFile.mockImplementation(((
+        _bin: string,
+        _args: unknown,
+        _options: unknown,
+        cb: unknown
+      ) => {
         callCount++
         if (callCount === 1) {
           // ps call
@@ -48,7 +56,7 @@ describe('ProcessMonitor', () => {
         }
       }) as typeof execFile)
 
-      const monitor = new ProcessMonitor({ cpuIdleThreshold: 1.0 })
+      const monitor = new ProcessMonitor({ cpuIdleThreshold: 1.0, platform: 'darwin' })
       const instances = await monitor.poll()
 
       expect(instances).toHaveLength(1)
@@ -64,7 +72,12 @@ describe('ProcessMonitor', () => {
 
     it('should detect idle Claude processes (low CPU + sleeping)', async () => {
       let callCount = 0
-      mockExecFile.mockImplementation(((_bin: string, _args: unknown, cb: unknown) => {
+      mockExecFile.mockImplementation(((
+        _bin: string,
+        _args: unknown,
+        _options: unknown,
+        cb: unknown
+      ) => {
         callCount++
         if (callCount === 1) {
           ;(cb as ExecCallback)(null, `${PS_HEADER}\n${PS_LINE_IDLE}\n`, '')
@@ -73,7 +86,7 @@ describe('ProcessMonitor', () => {
         }
       }) as typeof execFile)
 
-      const monitor = new ProcessMonitor({ cpuIdleThreshold: 1.0 })
+      const monitor = new ProcessMonitor({ cpuIdleThreshold: 1.0, platform: 'darwin' })
       const instances = await monitor.poll()
 
       expect(instances).toHaveLength(1)
@@ -84,10 +97,15 @@ describe('ProcessMonitor', () => {
     })
 
     it('judges by a threshold changed while running', async () => {
-      mockExecFile.mockImplementation(((_bin: string, _args: unknown, cb: unknown) => {
+      mockExecFile.mockImplementation(((
+        _bin: string,
+        _args: unknown,
+        _options: unknown,
+        cb: unknown
+      ) => {
         ;(cb as ExecCallback)(null, `${PS_HEADER}\n${PS_LINE_ACTIVE}\n`, '')
       }) as typeof execFile)
-      const monitor = new ProcessMonitor({ cpuIdleThreshold: 1.0 })
+      const monitor = new ProcessMonitor({ cpuIdleThreshold: 1.0, platform: 'darwin' })
       expect((await monitor.poll())[0].status).toBe('active')
 
       monitor.setCpuIdleThreshold(90)
@@ -95,11 +113,16 @@ describe('ProcessMonitor', () => {
     })
 
     it('should exclude Claude.app GUI and grep processes', async () => {
-      mockExecFile.mockImplementation(((_bin: string, _args: unknown, cb: unknown) => {
+      mockExecFile.mockImplementation(((
+        _bin: string,
+        _args: unknown,
+        _options: unknown,
+        cb: unknown
+      ) => {
         ;(cb as ExecCallback)(null, `${PS_HEADER}\n${PS_LINE_GUI}\n${PS_LINE_GREP}\n`, '')
       }) as typeof execFile)
 
-      const monitor = new ProcessMonitor()
+      const monitor = new ProcessMonitor({ platform: 'darwin' })
       const instances = await monitor.poll()
 
       expect(instances).toHaveLength(0)
@@ -107,7 +130,12 @@ describe('ProcessMonitor', () => {
 
     it('should handle multiple Claude processes in one poll', async () => {
       let callCount = 0
-      mockExecFile.mockImplementation(((_bin: string, _args: unknown, cb: unknown) => {
+      mockExecFile.mockImplementation(((
+        _bin: string,
+        _args: unknown,
+        _options: unknown,
+        cb: unknown
+      ) => {
         callCount++
         if (callCount === 1) {
           ;(cb as ExecCallback)(null, `${PS_HEADER}\n${PS_LINE_ACTIVE}\n${PS_LINE_IDLE}\n`, '')
@@ -118,7 +146,7 @@ describe('ProcessMonitor', () => {
         }
       }) as typeof execFile)
 
-      const monitor = new ProcessMonitor({ cpuIdleThreshold: 1.0 })
+      const monitor = new ProcessMonitor({ cpuIdleThreshold: 1.0, platform: 'darwin' })
       const instances = await monitor.poll()
 
       expect(instances).toHaveLength(2)
@@ -126,22 +154,32 @@ describe('ProcessMonitor', () => {
     })
 
     it('should return empty array when no Claude processes found', async () => {
-      mockExecFile.mockImplementation(((_bin: string, _args: unknown, cb: unknown) => {
+      mockExecFile.mockImplementation(((
+        _bin: string,
+        _args: unknown,
+        _options: unknown,
+        cb: unknown
+      ) => {
         ;(cb as ExecCallback)(null, `${PS_HEADER}\n`, '')
       }) as typeof execFile)
 
-      const monitor = new ProcessMonitor()
+      const monitor = new ProcessMonitor({ platform: 'darwin' })
       const instances = await monitor.poll()
 
       expect(instances).toEqual([])
     })
 
     it('should handle ps command failure gracefully', async () => {
-      mockExecFile.mockImplementation(((_bin: string, _args: unknown, cb: unknown) => {
+      mockExecFile.mockImplementation(((
+        _bin: string,
+        _args: unknown,
+        _options: unknown,
+        cb: unknown
+      ) => {
         ;(cb as ExecCallback)(new Error('ps failed'), '', 'ps failed')
       }) as typeof execFile)
 
-      const monitor = new ProcessMonitor()
+      const monitor = new ProcessMonitor({ platform: 'darwin' })
       const instances = await monitor.poll()
 
       expect(instances).toEqual([])
@@ -149,7 +187,12 @@ describe('ProcessMonitor', () => {
 
     it('should handle lsof failure gracefully by using empty project path', async () => {
       let callCount = 0
-      mockExecFile.mockImplementation(((_bin: string, _args: unknown, cb: unknown) => {
+      mockExecFile.mockImplementation(((
+        _bin: string,
+        _args: unknown,
+        _options: unknown,
+        cb: unknown
+      ) => {
         callCount++
         if (callCount === 1) {
           ;(cb as ExecCallback)(null, `${PS_HEADER}\n${PS_LINE_ACTIVE}\n`, '')
@@ -158,7 +201,7 @@ describe('ProcessMonitor', () => {
         }
       }) as typeof execFile)
 
-      const monitor = new ProcessMonitor()
+      const monitor = new ProcessMonitor({ platform: 'darwin' })
       const instances = await monitor.poll()
 
       expect(instances).toHaveLength(1)
@@ -168,7 +211,12 @@ describe('ProcessMonitor', () => {
     it('should parse elapsed time correctly', async () => {
       const psLineLong = '55555 R+    10.0  2.0    1:05:30 ttys004  /usr/local/bin/claude'
       let callCount = 0
-      mockExecFile.mockImplementation(((_bin: string, _args: unknown, cb: unknown) => {
+      mockExecFile.mockImplementation(((
+        _bin: string,
+        _args: unknown,
+        _options: unknown,
+        cb: unknown
+      ) => {
         callCount++
         if (callCount === 1) {
           ;(cb as ExecCallback)(null, `${PS_HEADER}\n${psLineLong}\n`, '')
@@ -177,7 +225,7 @@ describe('ProcessMonitor', () => {
         }
       }) as typeof execFile)
 
-      const monitor = new ProcessMonitor()
+      const monitor = new ProcessMonitor({ platform: 'darwin' })
       const instances = await monitor.poll()
 
       expect(instances).toHaveLength(1)
@@ -187,7 +235,12 @@ describe('ProcessMonitor', () => {
 
     it('should extract projectName from projectPath', async () => {
       let callCount = 0
-      mockExecFile.mockImplementation(((_bin: string, _args: unknown, cb: unknown) => {
+      mockExecFile.mockImplementation(((
+        _bin: string,
+        _args: unknown,
+        _options: unknown,
+        cb: unknown
+      ) => {
         callCount++
         if (callCount === 1) {
           ;(cb as ExecCallback)(null, `${PS_HEADER}\n${PS_LINE_ACTIVE}\n`, '')
@@ -200,7 +253,7 @@ describe('ProcessMonitor', () => {
         }
       }) as typeof execFile)
 
-      const monitor = new ProcessMonitor()
+      const monitor = new ProcessMonitor({ platform: 'darwin' })
       const instances = await monitor.poll()
 
       expect(instances[0].projectName).toBe('ZKidz/MacClaudeTracker')
@@ -211,7 +264,12 @@ describe('ProcessMonitor', () => {
     it('should classify R stat with high CPU as active', async () => {
       const psLine = '10000 R+    50.0  1.0       01:00 ttys001  /usr/local/bin/claude'
       let callCount = 0
-      mockExecFile.mockImplementation(((_bin: string, _args: unknown, cb: unknown) => {
+      mockExecFile.mockImplementation(((
+        _bin: string,
+        _args: unknown,
+        _options: unknown,
+        cb: unknown
+      ) => {
         callCount++
         if (callCount === 1) {
           ;(cb as ExecCallback)(null, `${PS_HEADER}\n${psLine}\n`, '')
@@ -220,7 +278,7 @@ describe('ProcessMonitor', () => {
         }
       }) as typeof execFile)
 
-      const monitor = new ProcessMonitor({ cpuIdleThreshold: 1.0 })
+      const monitor = new ProcessMonitor({ cpuIdleThreshold: 1.0, platform: 'darwin' })
       const instances = await monitor.poll()
       expect(instances[0].status).toBe('active')
     })
@@ -228,7 +286,12 @@ describe('ProcessMonitor', () => {
     it('should classify S stat with low CPU as idle', async () => {
       const psLine = '10001 S     0.5  1.0       01:00 ttys001  /usr/local/bin/claude'
       let callCount = 0
-      mockExecFile.mockImplementation(((_bin: string, _args: unknown, cb: unknown) => {
+      mockExecFile.mockImplementation(((
+        _bin: string,
+        _args: unknown,
+        _options: unknown,
+        cb: unknown
+      ) => {
         callCount++
         if (callCount === 1) {
           ;(cb as ExecCallback)(null, `${PS_HEADER}\n${psLine}\n`, '')
@@ -237,7 +300,7 @@ describe('ProcessMonitor', () => {
         }
       }) as typeof execFile)
 
-      const monitor = new ProcessMonitor({ cpuIdleThreshold: 1.0 })
+      const monitor = new ProcessMonitor({ cpuIdleThreshold: 1.0, platform: 'darwin' })
       const instances = await monitor.poll()
       expect(instances[0].status).toBe('idle')
     })
@@ -245,7 +308,12 @@ describe('ProcessMonitor', () => {
     it('should use configurable cpuIdleThreshold', async () => {
       const psLine = '10002 S     3.0  1.0       01:00 ttys001  /usr/local/bin/claude'
       let callCount = 0
-      mockExecFile.mockImplementation(((_bin: string, _args: unknown, cb: unknown) => {
+      mockExecFile.mockImplementation(((
+        _bin: string,
+        _args: unknown,
+        _options: unknown,
+        cb: unknown
+      ) => {
         callCount++
         if (callCount === 1) {
           ;(cb as ExecCallback)(null, `${PS_HEADER}\n${psLine}\n`, '')
@@ -254,7 +322,7 @@ describe('ProcessMonitor', () => {
         }
       }) as typeof execFile)
 
-      const monitor = new ProcessMonitor({ cpuIdleThreshold: 5.0 })
+      const monitor = new ProcessMonitor({ cpuIdleThreshold: 5.0, platform: 'darwin' })
       const instances = await monitor.poll()
       expect(instances[0].status).toBe('idle')
     })
@@ -264,7 +332,12 @@ describe('ProcessMonitor', () => {
     it('should treat 2.0% CPU as idle with default threshold (3.0%)', async () => {
       const psLine = '10010 S     2.0  1.0       01:00 ttys001  /usr/local/bin/claude'
       let callCount = 0
-      mockExecFile.mockImplementation(((_bin: string, _args: unknown, cb: unknown) => {
+      mockExecFile.mockImplementation(((
+        _bin: string,
+        _args: unknown,
+        _options: unknown,
+        cb: unknown
+      ) => {
         callCount++
         if (callCount === 1) {
           ;(cb as ExecCallback)(null, `${PS_HEADER}\n${psLine}\n`, '')
@@ -273,7 +346,7 @@ describe('ProcessMonitor', () => {
         }
       }) as typeof execFile)
 
-      const monitor = new ProcessMonitor()
+      const monitor = new ProcessMonitor({ platform: 'darwin' })
       const instances = await monitor.poll()
       expect(instances[0].status).toBe('idle')
     })
@@ -284,7 +357,12 @@ describe('ProcessMonitor', () => {
       const psLine =
         '20000 R+    10.0  1.0       01:00 ttys001  /usr/local/bin/claude --resume session-xyz'
       let callCount = 0
-      mockExecFile.mockImplementation(((_bin: string, _args: unknown, cb: unknown) => {
+      mockExecFile.mockImplementation(((
+        _bin: string,
+        _args: unknown,
+        _options: unknown,
+        cb: unknown
+      ) => {
         callCount++
         if (callCount === 1) {
           ;(cb as ExecCallback)(null, `${PS_HEADER}\n${psLine}\n`, '')
@@ -293,7 +371,7 @@ describe('ProcessMonitor', () => {
         }
       }) as typeof execFile)
 
-      const monitor = new ProcessMonitor()
+      const monitor = new ProcessMonitor({ platform: 'darwin' })
       const instances = await monitor.poll()
       expect(instances[0].sessionId).toBe('session-xyz')
       expect(instances[0].flags).toContain('--resume')
@@ -302,7 +380,12 @@ describe('ProcessMonitor', () => {
     it('should parse --continue flag without session ID', async () => {
       const psLine = '20001 S     0.1  1.0       01:00 ttys001  /usr/local/bin/claude --continue'
       let callCount = 0
-      mockExecFile.mockImplementation(((_bin: string, _args: unknown, cb: unknown) => {
+      mockExecFile.mockImplementation(((
+        _bin: string,
+        _args: unknown,
+        _options: unknown,
+        cb: unknown
+      ) => {
         callCount++
         if (callCount === 1) {
           ;(cb as ExecCallback)(null, `${PS_HEADER}\n${psLine}\n`, '')
@@ -311,7 +394,7 @@ describe('ProcessMonitor', () => {
         }
       }) as typeof execFile)
 
-      const monitor = new ProcessMonitor()
+      const monitor = new ProcessMonitor({ platform: 'darwin' })
       const instances = await monitor.poll()
       expect(instances[0].sessionId).toBeUndefined()
       expect(instances[0].flags).toContain('--continue')
@@ -320,7 +403,12 @@ describe('ProcessMonitor', () => {
     it('should handle no flags', async () => {
       const psLine = '20002 S     0.1  1.0       01:00 ttys001  /usr/local/bin/claude'
       let callCount = 0
-      mockExecFile.mockImplementation(((_bin: string, _args: unknown, cb: unknown) => {
+      mockExecFile.mockImplementation(((
+        _bin: string,
+        _args: unknown,
+        _options: unknown,
+        cb: unknown
+      ) => {
         callCount++
         if (callCount === 1) {
           ;(cb as ExecCallback)(null, `${PS_HEADER}\n${psLine}\n`, '')
@@ -329,11 +417,32 @@ describe('ProcessMonitor', () => {
         }
       }) as typeof execFile)
 
-      const monitor = new ProcessMonitor()
+      const monitor = new ProcessMonitor({ platform: 'darwin' })
       const instances = await monitor.poll()
       expect(instances[0].flags).toEqual([])
       expect(instances[0].sessionId).toBeUndefined()
     })
+  })
+})
+
+describe('poll() on win32', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  // A cold powershell.exe costs about a fifth of a core per 3 s poll; the kept one does not.
+  it('lists Claude Code through the kept PowerShell, starting no process', async () => {
+    // pid, start FILETIME, CPU ticks, working set, CreationDate ticks, command line in base64.
+    const command = Buffer.from('C:\\bin\\claude.exe --continue').toString('base64')
+    vi.mocked(runPowerShell).mockResolvedValue(`4242 134363332085558537 0 0 1 ${command}`)
+
+    const instances = await new ProcessMonitor({ platform: 'win32' }).poll()
+
+    expect(runPowerShell).toHaveBeenCalledOnce()
+    expect(mockExecFile).not.toHaveBeenCalled()
+    expect(instances.map((instance) => [instance.pid, instance.flags])).toEqual([
+      [4242, ['--continue']]
+    ])
   })
 })
 
@@ -344,7 +453,12 @@ describe('terminal enrichment', () => {
 
   it('should enrich poll results with terminalApp and terminalType from resolver', async () => {
     let callCount = 0
-    mockExecFile.mockImplementation(((_bin: string, _args: unknown, cb: unknown) => {
+    mockExecFile.mockImplementation(((
+      _bin: string,
+      _args: unknown,
+      _options: unknown,
+      cb: unknown
+    ) => {
       callCount++
       if (callCount === 1) {
         ;(cb as ExecCallback)(null, `${PS_HEADER}\n${PS_LINE_ACTIVE}\n`, '')
@@ -360,7 +474,7 @@ describe('terminal enrichment', () => {
       })
     }
 
-    const monitor = new ProcessMonitor({ terminalResolver: mockResolver })
+    const monitor = new ProcessMonitor({ terminalResolver: mockResolver, platform: 'darwin' })
     const instances = await monitor.poll()
 
     expect(instances).toHaveLength(1)
@@ -371,7 +485,12 @@ describe('terminal enrichment', () => {
 
   it('should leave terminalApp and terminalType undefined when no resolver is provided', async () => {
     let callCount = 0
-    mockExecFile.mockImplementation(((_bin: string, _args: unknown, cb: unknown) => {
+    mockExecFile.mockImplementation(((
+      _bin: string,
+      _args: unknown,
+      _options: unknown,
+      cb: unknown
+    ) => {
       callCount++
       if (callCount === 1) {
         ;(cb as ExecCallback)(null, `${PS_HEADER}\n${PS_LINE_ACTIVE}\n`, '')
@@ -380,12 +499,41 @@ describe('terminal enrichment', () => {
       }
     }) as typeof execFile)
 
-    const monitor = new ProcessMonitor()
+    const monitor = new ProcessMonitor({ platform: 'darwin' })
     const instances = await monitor.poll()
 
     expect(instances).toHaveLength(1)
     expect(instances[0].terminalApp).toBeUndefined()
     expect(instances[0].terminalType).toBeUndefined()
+  })
+})
+
+describe('working folders', () => {
+  const rawProcess = (pid: number): RawProcessInfo => ({
+    pid,
+    stat: 'S',
+    cpuPercent: 0,
+    memPercent: 0,
+    elapsedTime: '00:01',
+    tty: 'console',
+    command: 'claude'
+  })
+
+  it('asks for every folder at once and gives each process its own', async () => {
+    const pending = new Map<number, (folder: string) => void>()
+    const detector: PlatformDetector = {
+      getClaudeProcesses: async () => [rawProcess(1), rawProcess(2)],
+      getWorkingDirectory: (pid) => new Promise((resolve) => pending.set(pid, resolve))
+    }
+    const polled = new ProcessMonitor({ detector }).poll()
+    await vi.waitFor(() => expect([...pending.keys()]).toEqual([1, 2]))
+    pending.get(2)!('/two')
+    pending.get(1)!('/one')
+
+    expect((await polled).map((instance) => [instance.pid, instance.projectPath])).toEqual([
+      [1, '/one'],
+      [2, '/two']
+    ])
   })
 })
 

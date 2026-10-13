@@ -15,8 +15,25 @@ function fnv1a64(text: string): string {
 // Floor identity for a project. Callers pass the resolved project root (the bridge
 // resolves the git common dir); this stays pure so the renderer can import it.
 export function projectKey(projectRoot: string): string {
-  const normalised = projectRoot.length > 1 ? projectRoot.replace(/\/+$/, '') : projectRoot
-  return `p_${fnv1a64(normalised)}`
+  const root = WINDOWS_ROOT.test(projectRoot)
+    ? windowsFolderKey(projectRoot)
+    : withoutTrailingSeparators(projectRoot)
+  return `p_${fnv1a64(root)}`
+}
+
+// A drive-letter or UNC root names one folder whatever its case or slash direction; POSIX
+// roots stay byte-for-byte, so macOS keys never change.
+const WINDOWS_ROOT = /^(?:[A-Za-z]:(?:[\\/]|$)|\\\\[^\\/])/
+
+// One Windows folder, whatever its case, slash direction or trailing separator.
+export const windowsFolderKey = (path: string): string =>
+  withoutTrailingSeparators(path.replace(/\//g, '\\').toLowerCase())
+
+// A bare root keeps one separator: '/' must not hash as '', nor 'C:\' as the drive-relative 'C:'.
+function withoutTrailingSeparators(path: string): string {
+  const trimmed = path.replace(/[\\/]+$/, '')
+  if (trimmed === '' || /^[A-Za-z]:$/.test(trimmed)) return path.slice(0, trimmed.length + 1)
+  return trimmed
 }
 
 // An agent's worktree lives inside its project; the project is the folder above `.claude`.

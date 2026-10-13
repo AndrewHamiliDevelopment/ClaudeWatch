@@ -1,16 +1,25 @@
 import { execFile } from 'node:child_process'
-import { open, readdir, realpath, stat } from 'node:fs/promises'
+import { type FileHandle, open, readdir, realpath, stat } from 'node:fs/promises'
 import { basename } from 'node:path'
 import { isJsonObject } from '../shared/json-object'
-import { assertOrcaTrusted, ORCA_CLI } from '../shared/orca-bundle'
-import { PARSED_OUTPUT_ENV } from '../shared/ps'
+import { assertOrcaTrusted, ORCA_CLI, orcaCliEnv } from '../shared/orca-bundle'
+import {
+  childEnv,
+  POWERSHELL,
+  powershellScriptOf,
+  startTimeQuery
+} from '../shared/platform-process'
+import { runPowerShell } from '../shared/powershell-host'
 import { UNSAFE_IN_A_NAME } from '../shared/unsafe-text'
+import { consoleRootScript, PROCESS_LIST_SCRIPT } from '../shared/windows-console'
+import { creationTicksScript } from './liveness'
 import {
   OPENCODE_STATEMENTS,
   OpencodeDbError,
   type OpencodeQuery,
   readOpencodeDb
 } from './opencode-db'
+import { WINDOWS_PROCESS_TABLE_SCRIPT } from './process-table'
 
 interface FileInfo {
   directory: boolean
@@ -22,6 +31,10 @@ interface ForwardRead {
   text: string
   nextOffset: number
 }
+// How long a program may run before it is killed; five seconds unless the caller says.
+interface ExecOptions {
+  timeoutMs?: number
+}
 export interface BridgeIo {
   readText(path: string): Promise<string>
   readTail(path: string): Promise<string>
@@ -29,7 +42,7 @@ export interface BridgeIo {
   readFrom(path: string, offset: number, maxBytes: number): Promise<ForwardRead>
   list(path: string): Promise<string[]>
   stat(path: string): Promise<FileInfo>
-  exec(file: string, args: string[]): Promise<string>
+  exec(file: string, args: string[], options?: ExecOptions): Promise<string>
   // OpenCode's session database, read-only, through the fixed statements and nothing else.
   readOpencode<Result>(path: string, read: (query: OpencodeQuery) => Result): Promise<Result>
 }
@@ -38,8 +51,23 @@ export function isMissing(error: unknown): boolean {
   return error instanceof Error && 'code' in error && error.code === 'ENOENT'
 }
 
-async function readTail(path: string): Promise<string> {
+// A read this file's guard refused, as opposed to one the disk failed.
+export class ForbiddenError extends Error {}
+export const isForbidden = (error: unknown): boolean => error instanceof ForbiddenError
+
+// realpath names a hard link by its own name, so a credential store linked under an innocent
+// one shows only in the open file's link count.
+async function openSoleName(path: string): Promise<FileHandle> {
   const file = await open(path, 'r')
+  if ((await file.stat()).nlink > 1) {
+    await file.close()
+    throw forbidden('credential store')
+  }
+  return file
+}
+
+async function readTail(path: string): Promise<string> {
+  const file = await openSoleName(path)
   try {
     const { size } = await file.stat()
     const start = Math.max(0, size - 65536)
@@ -54,7 +82,7 @@ async function readTail(path: string): Promise<string> {
 }
 
 async function readFirstLine(path: string): Promise<string> {
-  const file = await open(path, 'r')
+  const file = await openSoleName(path)
   try {
     const cap = 256 * 1024
     const chunks: Buffer[] = []
@@ -80,7 +108,7 @@ async function readFirstLine(path: string): Promise<string> {
 }
 
 async function readFrom(path: string, offset: number, maxBytes: number): Promise<ForwardRead> {
-  const file = await open(path, 'r')
+  const file = await openSoleName(path)
   try {
     const { size } = await file.stat()
     const buffer = Buffer.alloc(Math.max(0, Math.min(maxBytes, size - offset)))
@@ -97,9 +125,43 @@ async function readFrom(path: string, offset: number, maxBytes: number): Promise
 // reach a credential store or a shell by mistake. The one program run elsewhere is codesign,
 // by the Orca bundle check, with a fixed path and fixed arguments.
 const CREDENTIAL_STORE =
-  /(^|\/)(\.credentials\.json|[\w.-]*auth\.json|\.orca-managed-claude-auth|orca-(runtime|e2ee-keypair|secret-protection)\.json|Cookies)$|\.key$/i
-const PROGRAMS = new Set(['/bin/ps', '/usr/sbin/lsof', ORCA_CLI])
-const forbidden = (what: string): Error => new Error(`forbidden: ${what}`)
+  /(^|[\\/])(\.credentials\.json|[\w.-]*auth\.json|\.orca-managed-claude-auth|orca-(runtime|e2ee-keypair|secret-protection)\.json|Cookies)$|\.key$/i
+const PROGRAMS = new Set(['/bin/ps', '/usr/sbin/lsof', POWERSHELL, ORCA_CLI])
+const forbidden = (what: string): Error => new ForbiddenError(`forbidden: ${what}`)
+// Each PowerShell script the bridge runs, built for one pid at most. A script reaches PowerShell
+// only when it is one of them exactly, so no source can read through it what the guard refuses.
+const PID_SCRIPTS: ((pid: number) => string)[] = [
+  (pid) => powershellScriptOf(startTimeQuery(pid, 'win32').args),
+  creationTicksScript,
+  consoleRootScript
+]
+// The pid sits where the scripts for pids 1 and 2 first differ; the rest must rebuild exactly.
+function isPidScript(script: string, build: (pid: number) => string): boolean {
+  const [one, two] = [build(1), build(2)]
+  let at = 0
+  while (at < one.length && one[at] === two[at]) at++
+  const pid = /^[1-9]\d*/.exec(script.slice(at))?.[0]
+  try {
+    return pid !== undefined && build(Number(pid)) === script
+  } catch {
+    return false
+  }
+}
+function bridgeScript(args: string[]): string {
+  let script: string
+  try {
+    script = powershellScriptOf(args)
+  } catch {
+    throw forbidden('program')
+  }
+  const isKnown =
+    script === WINDOWS_PROCESS_TABLE_SCRIPT ||
+    script === PROCESS_LIST_SCRIPT ||
+    PID_SCRIPTS.some((build) => isPidScript(script, build))
+  if (!isKnown) throw forbidden('program')
+  return script
+}
+const EXEC_TIMEOUT_MS = 5000
 const guarded =
   <Rest extends unknown[], Result>(read: (path: string, ...rest: Rest) => Promise<Result>) =>
   async (path: string, ...rest: Rest): Promise<Result> => {
@@ -127,7 +189,7 @@ function readOpencode<Result>(target: string, read: (query: OpencodeQuery) => Re
 // the open file, so a file that grows afterwards cannot be read past it.
 const MAX_WHOLE_FILE_BYTES = 1024 * 1024
 async function readWhole(path: string): Promise<string> {
-  const file = await open(path, 'r')
+  const file = await openSoleName(path)
   try {
     const { size } = await file.stat()
     if (size > MAX_WHOLE_FILE_BYTES) throw forbidden('file too large')
@@ -149,15 +211,18 @@ export const systemIo: BridgeIo = {
     const info = await stat(path)
     return { directory: info.isDirectory(), mtimeMs: info.mtimeMs, size: info.size }
   },
-  exec: async (file, args) => {
+  exec: async (file, args, { timeoutMs = EXEC_TIMEOUT_MS } = {}) => {
     if (!PROGRAMS.has(file)) throw forbidden('program')
     // Orca's bundle is checked before anything in it runs, as in the main process.
     if (file === ORCA_CLI) await assertOrcaTrusted()
+    if (file === POWERSHELL) return runPowerShell(bridgeScript(args), timeoutMs)
+    // Orca's CLI cannot start without APPDATA on Windows; every other program gets the minimum.
+    const env = file === ORCA_CLI ? orcaCliEnv() : childEnv()
     return new Promise((resolve, reject) => {
       execFile(
         file,
         args,
-        { env: PARSED_OUTPUT_ENV, timeout: 5000, maxBuffer: 8 * 1024 * 1024 },
+        { env, timeout: timeoutMs, maxBuffer: 8 * 1024 * 1024, windowsHide: true },
         (error, stdout) => {
           if (error) reject(error)
           else resolve(stdout)

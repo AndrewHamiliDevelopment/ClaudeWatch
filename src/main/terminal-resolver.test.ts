@@ -3,9 +3,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 vi.mock('./platform/exec', () => ({
   execFilePromise: vi.fn()
 }))
+vi.mock('../shared/powershell-host', () => ({ runInteractivePowerShell: vi.fn() }))
 
 import { execFilePromise } from './platform/exec'
 import { TerminalResolver } from './terminal-resolver'
+import { runInteractivePowerShell } from '../shared/powershell-host'
+import { processTreeScript } from '../shared/windows-console'
 
 const mockExec = vi.mocked(execFilePromise)
 
@@ -47,7 +50,7 @@ describe('TerminalResolver', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    resolver = new TerminalResolver()
+    resolver = new TerminalResolver('darwin')
   })
 
   it('resolves iTerm2 (PID → zsh → iTerm2)', async () => {
@@ -329,5 +332,101 @@ describe('TerminalResolver', () => {
     expect(result.terminalApp).toBe('Warp')
     expect(result.terminalType).toBe('warp')
     expect(result.terminalPid).toBe(400)
+  })
+})
+
+describe('TerminalResolver on Windows', () => {
+  // FILETIME strings one second apart, oldest first.
+  const at = (second: number): string => String(134363332080000000n + BigInt(second) * 10000000n)
+  const listing = (consoleRoot: number, rows: [number, number, string][]): string =>
+    JSON.stringify({
+      console: consoleRoot,
+      processes: rows.map(([pid, ppid, name], index) => ({
+        pid,
+        ppid,
+        name,
+        started: at(100 - index)
+      }))
+    })
+  const runScript = vi.fn()
+  const answer = (stdout: string): void => {
+    runScript.mockResolvedValue(stdout)
+  }
+  let resolver: TerminalResolver
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    resolver = new TerminalResolver('win32', runScript)
+  })
+
+  it('runs one fixed script through the runner it is given', async () => {
+    answer(
+      listing(0, [
+        [100, 200, 'claude.exe'],
+        [200, 1, 'Code.exe']
+      ])
+    )
+    expect(await resolver.resolve(100)).toMatchObject({ terminalType: 'vscode' })
+    expect(runScript).toHaveBeenCalledExactlyOnceWith(processTreeScript(100))
+    expect(mockExec).not.toHaveBeenCalled()
+  })
+
+  it('uses the kept PowerShell host when given no runner', async () => {
+    vi.mocked(runInteractivePowerShell).mockResolvedValue(
+      listing(0, [
+        [100, 200, 'claude.exe'],
+        [200, 1, 'WindowsTerminal.exe']
+      ])
+    )
+    expect(await new TerminalResolver('win32').resolve(100)).toMatchObject({
+      terminalApp: 'Windows Terminal'
+    })
+    expect(runInteractivePowerShell).toHaveBeenCalledExactlyOnceWith(processTreeScript(100))
+    expect(mockExec).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['WindowsTerminal.exe', 'terminal-app', 'Windows Terminal'],
+    ['Code.exe', 'vscode', 'VS Code'],
+    ['Cursor.exe', 'cursor', 'Cursor'],
+    ['wezterm-gui.exe', 'wezterm', 'WezTerm'],
+    ['alacritty.exe', 'alacritty', 'Alacritty'],
+    ['mintty.exe', 'terminal-app', 'Git Bash']
+  ])('recognises %s', async (host, terminalType, terminalApp) => {
+    answer(
+      listing(0, [
+        [100, 200, 'claude.exe'],
+        [200, 300, 'pwsh.exe'],
+        [300, 1, host]
+      ])
+    )
+    expect(await resolver.resolve(100)).toEqual({ terminalApp, terminalType, terminalPid: 300 })
+  })
+
+  it('follows the console when Git Bash’s forked shell has exited', async () => {
+    answer(
+      listing(400, [
+        [100, 200, 'claude.exe'],
+        [200, 999, 'sh.exe'],
+        [400, 500, 'bash.exe'],
+        [500, 1, 'WindowsTerminal.exe']
+      ])
+    )
+    expect(await resolver.resolve(100)).toMatchObject({
+      terminalType: 'terminal-app',
+      terminalPid: 500
+    })
+  })
+
+  it('is unknown when no host is found, or PowerShell fails', async () => {
+    answer(
+      listing(0, [
+        [100, 200, 'claude.exe'],
+        [200, 1, 'explorer.exe']
+      ])
+    )
+    expect((await resolver.resolve(100)).terminalType).toBe('unknown')
+    runScript.mockRejectedValue(new Error('timeout'))
+    expect((await resolver.resolve(101)).terminalType).toBe('unknown')
   })
 })

@@ -1,17 +1,24 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { DEFAULT_SETTINGS } from '../renderer/lib/types'
+import { DEFAULT_SETTINGS, type ClaudeInstance } from '../renderer/lib/types'
+import { session } from '../bridge/__fixtures__/helpers'
 import type { FocusResult, OfficeSnapshot } from '../shared/office/types'
 
 const { handle, app, openExternal } = vi.hoisted(() => ({
   handle: vi.fn(),
-  app: { isQuitting: false, isPackaged: false, quit: vi.fn(), setLoginItemSettings: vi.fn() },
+  app: {
+    isQuitting: false,
+    isPackaged: false,
+    quit: vi.fn(),
+    setLoginItemSettings: vi.fn(),
+    getAppPath: vi.fn(() => '/repo')
+  },
   openExternal: vi.fn()
 }))
 vi.mock('electron', () => ({ ipcMain: { handle }, app, shell: { openExternal } }))
 vi.mock('./terminal-opener', () => ({ openTerminal: vi.fn(() => ({ success: true })) }))
 import { openTerminal } from './terminal-opener'
-import { forwardUpdatesToRenderer, setupIpcHandlers } from './ipc-handlers'
-import { join } from 'path'
+import { forwardUpdatesToRenderer, isOpenableFolder, setupIpcHandlers } from './ipc-handlers'
+import { join, resolve } from 'path'
 import { pathToFileURL } from 'url'
 
 const APP_PAGE = pathToFileURL(join(__dirname, '../renderer/index.html')).href
@@ -29,8 +36,24 @@ const usage = {
   weeklyTokens: 1,
   weeklyTokenTarget: 100_000
 }
+// Absolute on the host the tests run on: C:\project on Windows.
+const PROJECT = resolve('/project')
+const CODEX_REPO = resolve('/codex-repo')
+const instanceIn = (projectPath: string): ClaudeInstance => ({
+  pid: 1234,
+  tty: 'console',
+  status: 'idle',
+  cpuPercent: 0,
+  memPercent: 0,
+  elapsedTime: '00:01',
+  elapsedSeconds: 1,
+  projectPath,
+  projectName: 'project',
+  flags: [],
+  startedAt: new Date(0)
+})
 const tracker = {
-  getInstances: vi.fn(() => []),
+  getInstances: vi.fn((): ClaudeInstance[] => []),
   getStats: vi.fn(() => stats),
   setStaleThreshold: vi.fn(),
   setCooldownSeconds: vi.fn(),
@@ -142,6 +165,25 @@ it.each([
   expect(await handlers[channel](appEvent)).toEqual(expected)
 })
 
+describe('ratelimits:setup-statusline', () => {
+  it('installs the script electron-builder ships at the root of a packaged app', async () => {
+    app.isPackaged = true
+    Object.defineProperty(process, 'resourcesPath', { value: '/res', configurable: true })
+    await handlers['ratelimits:setup-statusline'](appEvent)
+    app.isPackaged = false
+    expect(rateLimitReader.setupStatusline).toHaveBeenCalledWith(
+      join('/res', 'claudewatch-statusline.sh')
+    )
+  })
+
+  it('installs the repo copy in dev', async () => {
+    await handlers['ratelimits:setup-statusline'](appEvent)
+    expect(rateLimitReader.setupStatusline).toHaveBeenCalledWith(
+      join('/repo', 'resources', 'claudewatch-statusline.sh')
+    )
+  })
+})
+
 it('filters unknown settings keys, including nested keys', () => {
   handlers['settings:set'](appEvent, {
     theme: 'dark',
@@ -182,6 +224,58 @@ it.each(['bogus', null, 42, {}, 'toString'])('rejects terminal type %j', (type) 
   expect(handlers['terminal:open'](appEvent, '/project', type)).toEqual({ success: false })
   expect(openTerminal).not.toHaveBeenCalled()
 })
+describe('terminal:open folders', () => {
+  it('refuses a folder no tracked session is in', () => {
+    expect(handlers['terminal:open'](appEvent, resolve('/somewhere-else'))).toEqual({
+      success: false
+    })
+    expect(openTerminal).not.toHaveBeenCalled()
+  })
+
+  it('refuses a UNC folder even when a tracked session runs there', () => {
+    const share = '\\\\attacker\\share'
+    tracker.getInstances.mockReturnValueOnce([instanceIn(share)])
+    expect(handlers['terminal:open'](appEvent, share)).toEqual({ success: false })
+    expect(openTerminal).not.toHaveBeenCalled()
+  })
+
+  it("opens the folder of a session the Office shows, such as a Codex session's", () => {
+    getOfficeSnapshot.mockReturnValueOnce({
+      ...officeSnapshot,
+      sessions: [{ ...session('codex-a'), cwd: CODEX_REPO }]
+    })
+    expect(handlers['terminal:open'](appEvent, CODEX_REPO)).toEqual({ success: true })
+    expect(openTerminal).toHaveBeenCalledWith(CODEX_REPO, undefined)
+  })
+})
+
+describe('isOpenableFolder', () => {
+  const folders = [
+    'C:\\repo',
+    '\\\\host\\share\\repo',
+    '\\\\?\\C:\\repo',
+    '\\\\.\\pipe\\x',
+    '/repo'
+  ]
+
+  it('opens a tracked folder', () => {
+    expect(isOpenableFolder('C:\\repo', folders, 'win32')).toBe(true)
+    expect(isOpenableFolder('/repo', folders, 'darwin')).toBe(true)
+  })
+
+  // A UNC folder makes the terminal reach out over SMB, which hands the host an NTLM response.
+  it.each(['\\\\host\\share\\repo', '\\\\?\\C:\\repo', '\\\\.\\pipe\\x', '//host/share/repo'])(
+    'refuses %s on Windows even when a session is in it',
+    (path) => {
+      expect(isOpenableFolder(path, [...folders, path], 'win32')).toBe(false)
+    }
+  )
+
+  it('refuses a folder that is not tracked', () => {
+    expect(isOpenableFolder('C:\\other', folders, 'win32')).toBe(false)
+  })
+})
+
 it.each(['', 'relative/path', undefined, null, 42, {}])('rejects path %j', (path) => {
   expect(handlers['terminal:open'](appEvent, path)).toEqual({ success: false })
   expect(openTerminal).not.toHaveBeenCalled()
@@ -202,8 +296,9 @@ it.each([
   'screen',
   'unknown'
 ])('accepts terminal %s', (type) => {
-  expect(handlers['terminal:open'](appEvent, '/project', type)).toEqual({ success: true })
-  expect(openTerminal).toHaveBeenCalledWith('/project', type)
+  tracker.getInstances.mockReturnValueOnce([instanceIn(PROJECT)])
+  expect(handlers['terminal:open'](appEvent, PROJECT, type)).toEqual({ success: true })
+  expect(openTerminal).toHaveBeenCalledWith(PROJECT, type)
 })
 it.each([
   ['history:clear', store.clearHistory],

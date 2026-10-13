@@ -305,6 +305,55 @@ describe('OfficeInteractions', () => {
       })
     })
 
+    // The same interactions, comparing folders as `platform` does.
+    const on = (platform: NodeJS.Platform): OfficeInteractions =>
+      new OfficeInteractions({
+        snapshot: () => snapshot,
+        orca,
+        openTerminalRunning,
+        processStart,
+        raiseOrca: vi.fn(),
+        openFolder: vi.fn(),
+        platform
+      })
+
+    it('matches Windows folders as Windows does: either separator, any case', async () => {
+      const windows = on('win32')
+      snapshot.sessions = [session({ cwd: 'C:\\Repo\\app-wt\\src', projectRoot: 'C:\\Repo\\app' })]
+      for (const worktreePath of ['C:/Repo/app-wt', 'c:/repo/APP', 'C:\\Repo\\app-wt\\']) {
+        orca.handleFor.mockResolvedValueOnce(pane({ worktreePath }))
+        expect(await windows.send('claude:s1', 'hi')).toEqual({ success: true })
+      }
+      for (const worktreePath of ['C:/Repo/app-wt-other', 'D:/Repo/app', '/Repo/app']) {
+        orca.handleFor.mockResolvedValueOnce(pane({ worktreePath }))
+        expect(await windows.send('claude:s1', 'hi')).toEqual({
+          success: false,
+          reason: 'terminal-not-found'
+        })
+      }
+    })
+
+    it('keeps POSIX folders exact: case, and a backslash is part of a name', async () => {
+      const mac = on('darwin')
+      for (const worktreePath of ['/Repo/App', '\\repo\\app']) {
+        orca.handleFor.mockResolvedValueOnce(pane({ worktreePath }))
+        expect(await mac.send('claude:s1', 'hi')).toEqual({
+          success: false,
+          reason: 'terminal-not-found'
+        })
+      }
+      // Only Windows reads a drive letter: elsewhere these are two different names.
+      snapshot.sessions = [session({ cwd: 'c:\\repo\\app', projectRoot: 'c:\\repo\\app' })]
+      orca.handleFor.mockResolvedValueOnce(pane({ worktreePath: 'C:/Repo/App' }))
+      expect(await mac.send('claude:s1', 'hi')).toEqual({
+        success: false,
+        reason: 'terminal-not-found'
+      })
+      orca.handleFor.mockResolvedValueOnce(pane({ worktreePath: '/repo/' }))
+      snapshot.sessions = [session({ cwd: '/repo/app', projectRoot: '/elsewhere' })]
+      expect(await mac.send('claude:s1', 'hi')).toEqual({ success: true })
+    })
+
     it('refuses a pane where this session’s agent is no longer the running program', async () => {
       for (const agent of [null, 'codex', 'claude-something-else']) {
         orca.handleFor.mockResolvedValueOnce(pane({ agent }))
@@ -589,6 +638,15 @@ describe('OfficeInteractions', () => {
       orca.create.mockRejectedValueOnce(new Error('runtime not running'))
       expect(await interactions.start('p_app', 'claude')).toEqual({ success: true })
       expect(openTerminalRunning).toHaveBeenCalledWith('/repo/app', 'claude')
+    })
+
+    it('says why when the fallback terminal could not find the agent', async () => {
+      orca.create.mockRejectedValueOnce(new Error('runtime not running'))
+      openTerminalRunning.mockResolvedValueOnce({ success: false, reason: 'agent-not-found' })
+      expect(await interactions.start('p_app', 'codex')).toEqual({
+        success: false,
+        reason: 'agent-not-found'
+      })
     })
 
     it('refuses an unknown project or provider', async () => {

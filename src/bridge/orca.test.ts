@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { claimPanes, OrcaSource, parseOrcaEnvironment, readOrcaEnvironment } from './orca'
 import { ORCA_CLI } from '../shared/orca-bundle'
+import { POWERSHELL } from '../shared/platform-process'
+import { consoleRootScript, PROCESS_LIST_SCRIPT } from '../shared/windows-console'
 import { fixtureIo, missing, session } from './__fixtures__/helpers'
 import type { SubagentRef } from '../shared/office/types'
 
@@ -82,7 +84,7 @@ describe('Orca polling', () => {
         if (failure === 'missing') throw missing()
         return failure === 'bad-json' ? 'invalid' : '{"ok":false}'
       })
-      const source = new OrcaSource(io)
+      const source = new OrcaSource(io, 'darwin')
       expect((await source.poll(0)).ok).toBe(false)
       await source.poll(9999)
       expect(io.exec).toHaveBeenCalledTimes(1)
@@ -102,7 +104,7 @@ describe('Orca polling', () => {
   it('asks a healthy Orca at most once in five minutes, since each ask checks its whole bundle', async () => {
     const io = fixtureIo({ [ORCA_CLI]: '' })
     io.exec = vi.fn(async () => '{"ok":true,"data":[]}')
-    const source = new OrcaSource(io)
+    const source = new OrcaSource(io, 'darwin')
     expect((await source.poll(0)).ok).toBe(true)
     await source.poll(299_999)
     expect(io.exec).toHaveBeenCalledTimes(1)
@@ -116,12 +118,12 @@ describe('Orca polling', () => {
     const io = fixtureIo({ [ORCA_CLI]: '' })
     const ps = psOf('claude', 'ORCA_PANE_KEY=p')
     const exec = vi.fn(async (file: string, args: string[]) => {
-      if (!file.endsWith('orca')) return ps(file, args)
+      if (file !== ORCA_CLI) return ps(file, args)
       if (!isUp) throw missing()
       return '{"ok":true,"data":[]}'
     })
     io.exec = exec
-    const source = new OrcaSource(io)
+    const source = new OrcaSource(io, 'darwin')
     await source.poll(0)
     await source.enrich(session('a'), 1000)
     await source.poll(2000)
@@ -134,9 +136,9 @@ describe('Orca polling', () => {
     const io = fixtureIo({ [ORCA_CLI]: '' })
     const ps = psOf('claude', 'ORCA_PANE_KEY=p SECRET=hidden')
     io.exec = vi.fn(async (file, args) =>
-      file.endsWith('orca') ? '{"ok":true,"data":[]}' : ps(file, args)
+      file === ORCA_CLI ? '{"ok":true,"data":[]}' : ps(file, args)
     )
-    const source = new OrcaSource(io)
+    const source = new OrcaSource(io, 'darwin')
     expect((await source.poll(0)).ok).toBe(true)
     expect(io.exec).toHaveBeenCalledWith(ORCA_CLI, ['worktree', 'ps', '--json'])
     await source.poll(9000)
@@ -150,7 +152,7 @@ describe('Orca polling', () => {
   it('keeps jobs in terminal hosts', async () => {
     const io = fixtureIo()
     io.exec = psOf('claude', 'ORCA_PANE_KEY=p CLAUDE_JOB_DIR=/job')
-    expect(await new OrcaSource(io).enrich(session('a'))).toMatchObject({
+    expect(await new OrcaSource(io, 'darwin').enrich(session('a'))).toMatchObject({
       host: 'terminal',
       orcaPaneKey: null
     })
@@ -164,7 +166,7 @@ it('retries failed environment reads after 30 seconds', async () => {
     const io = fixtureIo()
     const ps = psOf('claude', 'ORCA_PANE_KEY=p')
     io.exec = vi.fn(ps).mockRejectedValueOnce(new Error('timeout'))
-    const source = new OrcaSource(io)
+    const source = new OrcaSource(io, 'darwin')
     expect((await source.enrich(session('a'))).orcaPaneKey).toBeNull()
     vi.setSystemTime(29999)
     await source.enrich(session('a'))
@@ -182,7 +184,7 @@ it('reads each teammate’s pane from its own process, once, and forgets it when
   io.exec = vi.fn(async (file, args) =>
     psOf('claude', `ORCA_PANE_KEY=pane-of-${args.at(-1)} SECRET=x`)(file, args)
   )
-  const source = new OrcaSource(io)
+  const source = new OrcaSource(io, 'darwin')
   const lead = { ...session('a'), subagents: [teammate('lena', 77, 5), teammate('ravi', 78, 6)] }
   const plain = { id: 'abc', type: 'Explore', activity: 'thinking' as const }
   const enriched = await source.enrich({ ...lead, subagents: [...lead.subagents, plain] })
@@ -238,4 +240,129 @@ it('lets only the earliest session keep a pane that several sessions report', ()
     ['other', 't:m'],
     ['parent', 't:l']
   ])
+})
+
+describe('Orca panes on Windows, where no process environment can be read', () => {
+  // FILETIME strings one second apart, oldest first.
+  const at = (second: number): string => String(134363332080000000n + BigInt(second) * 10000000n)
+  // Sessions 42 and 44 run under Git Bash in the Orca pane whose shell is 7; sh's parent has
+  // exited, so each one's ancestry resumes at its console.
+  const PROCESSES = [
+    { pid: 42, ppid: 43, name: 'claude.exe', started: at(50) },
+    { pid: 43, ppid: 999, name: 'sh.exe', started: at(49) },
+    { pid: 44, ppid: 999, name: 'claude.exe', started: at(51) },
+    { pid: 7, ppid: 8, name: 'bash.exe', started: at(10) },
+    { pid: 8, ppid: 1, name: 'Orca.exe', started: at(5) }
+  ]
+  const diagnostics = (sessions: { pid: number; paneKey: string }[]): string =>
+    JSON.stringify({ ok: true, result: { worktrees: [{ sessions }] } })
+
+  // PowerShell as the bridge asks it: the shared listing, or one pid's console.
+  const answerScript = (script: string, processes = PROCESSES): string =>
+    script === PROCESS_LIST_SCRIPT ? JSON.stringify({ processes }) : '7'
+  const runner = (processes = PROCESSES): ReturnType<typeof vi.fn> =>
+    vi.fn(async (script: string) => answerScript(script, processes))
+  const listings = (runScript: ReturnType<typeof vi.fn>): number =>
+    runScript.mock.calls.filter(([script]) => script === PROCESS_LIST_SCRIPT).length
+
+  const windowsIo = (panes: { pid: number; paneKey: string }[]): ReturnType<typeof fixtureIo> => {
+    const io = fixtureIo({ [ORCA_CLI]: '' })
+    io.exec = vi.fn(async (file: string, args: string[]) => {
+      if (file === POWERSHELL) return answerScript(args.at(-1) ?? '')
+      if (file === ORCA_CLI && args[0] === 'diagnostics') return diagnostics(panes)
+      if (file === ORCA_CLI) return '{"ok":true,"result":{"worktrees":[]}}'
+      throw new Error(`not allowed: ${file}`)
+    })
+    return io
+  }
+
+  it('finds the pane whose shell is the session’s console, from Orca’s own listing', async () => {
+    const io = windowsIo([
+      { pid: 5, paneKey: 'tab:other' },
+      { pid: 7, paneKey: 'tab:leaf' }
+    ])
+    expect(await new OrcaSource(io, 'win32').enrich(session('a'))).toMatchObject({
+      host: 'orca',
+      orcaPaneKey: 'tab:leaf'
+    })
+    const calls = vi.mocked(io.exec).mock.calls
+    expect(calls.map(([file]) => file)).toEqual([POWERSHELL, POWERSHELL, ORCA_CLI])
+    expect(calls.map(([, args]) => args.at(-1))).toEqual(
+      expect.arrayContaining([PROCESS_LIST_SCRIPT, consoleRootScript(42), '--json'])
+    )
+  })
+
+  it('reads the process list once per tick, however many new sessions it brings', async () => {
+    const io = windowsIo([{ pid: 7, paneKey: 'tab:leaf' }])
+    const runScript = runner()
+    const source = new OrcaSource(io, 'win32', runScript)
+    const [first, second] = await Promise.all([
+      source.enrich(session('a'), 1000),
+      source.enrich({ ...session('b'), pid: 44 }, 1000)
+    ])
+    expect([first.orcaPaneKey, second.orcaPaneKey]).toEqual(['tab:leaf', 'tab:leaf'])
+    expect(listings(runScript)).toBe(1)
+    expect(runScript).toHaveBeenCalledWith(consoleRootScript(42))
+    expect(runScript).toHaveBeenCalledWith(consoleRootScript(44))
+    await source.enrich({ ...session('c'), pid: 44, startedAtMs: 5 }, 2000)
+    expect(listings(runScript)).toBe(2)
+  })
+
+  it('does not take a process missing from the listing for one outside Orca', async () => {
+    const io = windowsIo([{ pid: 7, paneKey: 'tab:leaf' }])
+    const runScript = runner(PROCESSES.filter(({ pid }) => pid !== 42))
+    const source = new OrcaSource(io, 'win32', runScript)
+    expect((await source.enrich(session('a'), 0)).orcaPaneKey).toBeNull()
+    runScript.mockImplementation(async (script: string) => answerScript(script))
+    expect((await source.enrich(session('a'), 30_000)).orcaPaneKey).toBe('tab:leaf')
+  })
+
+  it('asks Orca nothing, and checks no signature, for a session with no Orca above it', async () => {
+    const io = windowsIo([{ pid: 7, paneKey: 'tab:leaf' }])
+    const outsideOrca = PROCESSES.map((row) =>
+      row.name === 'Orca.exe' ? { ...row, name: 'WindowsTerminal.exe' } : row
+    )
+    const source = new OrcaSource(io, 'win32', runner(outsideOrca))
+    expect(await source.enrich(session('a'))).toMatchObject({ host: 'terminal', orcaPaneKey: null })
+    expect(io.exec).not.toHaveBeenCalled()
+  })
+
+  it('leaves a session in Orca without a pane of its own where it is', async () => {
+    const io = windowsIo([{ pid: 5, paneKey: 'tab:other' }])
+    expect(await new OrcaSource(io, 'win32').enrich(session('a'))).toMatchObject({
+      host: 'terminal',
+      orcaPaneKey: null
+    })
+  })
+
+  it('asks again in 30 seconds when Orca’s listing is a failure, rather than remember no pane', async () => {
+    const io = windowsIo([{ pid: 7, paneKey: 'tab:leaf' }])
+    vi.mocked(io.exec).mockResolvedValueOnce('{"ok":false,"error":{"code":"runtime_unavailable"}}')
+    const source = new OrcaSource(io, 'win32', runner())
+    expect((await source.enrich(session('a'), 0)).orcaPaneKey).toBeNull()
+    expect((await source.enrich(session('a'), 30_000)).orcaPaneKey).toBe('tab:leaf')
+  })
+
+  it('keeps a known pane while one Orca poll fails, without asking again', async () => {
+    const io = windowsIo([{ pid: 7, paneKey: 'tab:leaf' }])
+    const source = new OrcaSource(io, 'win32', runner())
+    expect((await source.enrich(session('a'), 0)).orcaPaneKey).toBe('tab:leaf')
+    vi.mocked(io.exec).mockRejectedValueOnce(new Error('signature check timed out'))
+    expect((await source.poll(1)).ok).toBe(false)
+    vi.mocked(io.exec).mockClear()
+    expect(await source.enrich(session('a'), 2)).toMatchObject({
+      host: 'orca',
+      orcaPaneKey: 'tab:leaf'
+    })
+    expect(io.exec).not.toHaveBeenCalled()
+  })
+
+  it('asks a failing Orca again at once when a new session turns out to be in a pane', async () => {
+    const io = windowsIo([{ pid: 7, paneKey: 'tab:leaf' }])
+    const source = new OrcaSource(io, 'win32', runner())
+    vi.mocked(io.exec).mockRejectedValueOnce(new Error('runtime unavailable'))
+    expect((await source.poll(0)).ok).toBe(false)
+    expect((await source.enrich(session('a'), 1)).orcaPaneKey).toBe('tab:leaf')
+    expect((await source.poll(2)).ok).toBe(true)
+  })
 })

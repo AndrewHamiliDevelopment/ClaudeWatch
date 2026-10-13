@@ -24,6 +24,8 @@ import { setupOffice } from './office-setup'
 import { paceBridgeByWindows } from './bridge-pace'
 import { opensOfficeOnStart } from './office-window'
 import { createAccountLedger } from './accounts'
+import { dashboardChrome } from './window-chrome'
+import { closePowerShellHost, runInteractivePowerShell } from '../shared/powershell-host'
 
 // Prevent "write EIO" crashes when stdout/stderr pipe is broken
 // (e.g., launching terminal closed, or running packaged without a TTY)
@@ -45,12 +47,7 @@ function createWindow(store: SettingsStore): BrowserWindow {
     minWidth: 600,
     minHeight: 400,
     show: false,
-    frame: false,
-    transparent: true,
-    vibrancy: 'under-window',
-    visualEffectState: 'active',
-    titleBarStyle: 'hiddenInset',
-    trafficLightPosition: { x: 15, y: 15 },
+    ...dashboardChrome(),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js')
     }
@@ -101,6 +98,9 @@ function showDashboard(): void {
   }
 }
 
+// Windows attributes toasts to this id; without it a packaged app's notifications never show.
+if (process.platform === 'win32') app.setAppUserModelId('com.zkidzdev.claudewatch')
+
 // One copy only: a login item plus a manual start would otherwise run two Offices and two
 // bridges. Development runs are left alone so they can sit beside the installed app.
 const isOnlyInstance = !app.isPackaged || app.requestSingleInstanceLock()
@@ -117,7 +117,7 @@ app.whenReady().then(() => {
   app.setLoginItemSettings({ openAtLogin: settings.launchAtLogin })
 
   // Initialize terminal resolver and process monitor
-  const terminalResolver = new TerminalResolver()
+  const terminalResolver = new TerminalResolver(process.platform, runInteractivePowerShell)
   const monitor = new ProcessMonitor({
     terminalResolver,
     cpuIdleThreshold: settings.cpuIdleThreshold
@@ -286,6 +286,7 @@ app.on('before-quit', () => {
   // no tray and no window.
   app.isQuitting = true
   trayManager?.destroy()
+  closePowerShellHost()
   trayManager = null
 })
 

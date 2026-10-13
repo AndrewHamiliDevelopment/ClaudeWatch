@@ -22,7 +22,7 @@ afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
 })
 
-// A process table and the folder each pid runs in, over a real database in a temp folder.
+// A macOS process table and the folder `lsof` names for each pid, over a real database in a temp folder.
 function setup(
   fill: (db: DatabaseSync) => void,
   folders: Record<number, string> = { 42: '/repo' },
@@ -103,7 +103,7 @@ function workingSession(db: DatabaseSync): void {
 
 it('shows a running OpenCode process as a session, from its newest session in that folder', async () => {
   const { io, root } = setup(workingSession)
-  const batch = await collectOpencode(root, io, undefined, NOW)
+  const batch = await collectOpencode(root, io, undefined, NOW, 'darwin')
   expect(batch.sources).toEqual([{ id: 'opencode', ok: true, detail: 'live' }])
   expect(batch.sessions).toHaveLength(1)
   expect(batch.sessions[0]).toMatchObject({
@@ -141,6 +141,51 @@ it('shows a running OpenCode process as a session, from its newest session in th
   expect(feed).not.toContain('DO_NOT_READ')
 })
 
+// The database and its log as `stat` sees them; a test moves either one.
+function stampDatabase(io: BridgeIo): { db: number; wal: number } {
+  const stamps = { db: 1000, wal: 1000 }
+  const stat = io.stat
+  io.stat = async (path) => {
+    if (path.endsWith('opencode.db')) return { directory: false, mtimeMs: stamps.db, size: 4096 }
+    if (path.endsWith('opencode.db-wal'))
+      return { directory: false, mtimeMs: stamps.wal, size: 512 }
+    return stat(path)
+  }
+  return stamps
+}
+
+it('opens the database again only when it or its log changed, or the agents did', async () => {
+  const { io, root, opens } = setup(workingSession)
+  const stamps = stampDatabase(io)
+  const first = await collectOpencode(root, io, undefined, NOW, 'darwin')
+  const second = await collectOpencode(root, io, undefined, NOW + 1000, 'darwin')
+  expect(opens()).toBe(1)
+  expect(second.sessions.map(({ key, activity }) => [key, activity])).toEqual(
+    first.sessions.map(({ key, activity }) => [key, activity])
+  )
+  stamps.wal++
+  await collectOpencode(root, io, undefined, NOW + 2000, 'darwin')
+  expect(opens()).toBe(2)
+})
+
+it('ages a session’s state with the clock while its database stays unchanged', async () => {
+  const { io, root, opens } = setup((db) => {
+    insertSession(db, { id: 'ses_root', directory: '/repo', updatedAtMs: NOW - 1000 })
+    insertMessage(db, {
+      id: 'msg_1',
+      sessionId: 'ses_root',
+      atMs: NOW - 1000,
+      data: { role: 'user' }
+    })
+  })
+  stampDatabase(io)
+  const activity = async (atMs: number) =>
+    (await collectOpencode(root, io, undefined, atMs, 'darwin')).sessions[0].activity
+  expect(await activity(NOW)).toBe('thinking')
+  expect(await activity(NOW + 61_000)).toBe('idle')
+  expect(opens()).toBe(1)
+})
+
 it('shows a finished turn as done', async () => {
   const { io, root } = setup((db) => {
     insertSession(db, { id: 'ses_root', directory: '/repo', updatedAtMs: NOW - 2000 })
@@ -155,7 +200,7 @@ it('shows a finished turn as done', async () => {
       data: part
     })
   })
-  const { sessions } = await collectOpencode(root, io, undefined, NOW)
+  const { sessions } = await collectOpencode(root, io, undefined, NOW, 'darwin')
   expect(sessions[0]).toMatchObject({ activity: 'idle', attention: 'done', currentTool: null })
 })
 
@@ -168,7 +213,7 @@ it('shows a process whose folder has no session written since it started as idle
       tokens: TOKENS
     })
   )
-  const { sessions, sources } = await collectOpencode(root, io, undefined, NOW)
+  const { sessions, sources } = await collectOpencode(root, io, undefined, NOW, 'darwin')
   expect(sessions).toHaveLength(1)
   expect(sessions[0]).toMatchObject({
     key: `opencode:pid-42-${STARTED_AT}`,
@@ -186,7 +231,7 @@ it('gives two processes in one folder a session each, never the same one twice',
     (db) => insertSession(db, { id: 'ses_root', directory: '/repo', updatedAtMs: NOW }),
     { 42: '/repo', 43: '/repo' }
   )
-  const { sessions } = await collectOpencode(root, io, undefined, NOW)
+  const { sessions } = await collectOpencode(root, io, undefined, NOW, 'darwin')
   expect(sessions.map((session) => session.key)).toEqual([
     'opencode:ses_root',
     `opencode:pid-43-${STARTED_AT}`
@@ -202,18 +247,18 @@ it('lets the newest process claim the newest session, so an older one in the sam
     { 42: '/repo', 43: '/repo' },
     { 43: 'Sat Oct 10 15:39:12 2026' }
   )
-  const { sessions } = await collectOpencode(root, io, undefined, NOW)
+  const { sessions } = await collectOpencode(root, io, undefined, NOW, 'darwin')
   const owners = Object.fromEntries(sessions.map((session) => [session.pid, session.key]))
   expect(owners).toEqual({ 42: 'opencode:ses_A', 43: 'opencode:ses_B' })
 })
 
 it('keeps the key a process was first shown under once its first conversation lands', async () => {
   const { io, root } = setup(() => undefined)
-  const [before] = (await collectOpencode(root, io, undefined, NOW)).sessions
+  const [before] = (await collectOpencode(root, io, undefined, NOW, 'darwin')).sessions
   const db = new DatabaseSync(join(root, 'opencode.db'))
   insertSession(db, { id: 'ses_new', directory: '/repo', title: 'First', updatedAtMs: NOW })
   db.close()
-  const [after] = (await collectOpencode(root, io, undefined, NOW + 1000)).sessions
+  const [after] = (await collectOpencode(root, io, undefined, NOW + 1000, 'darwin')).sessions
   expect(after).toMatchObject({ key: before.key, sessionId: 'ses_new', name: 'First' })
   expect(before.key).toBe(`opencode:pid-42-${STARTED_AT}`)
 })
@@ -227,7 +272,7 @@ it('strips control and bidi override characters from a session title', async () 
       updatedAtMs: NOW
     })
   )
-  const [session] = (await collectOpencode(root, io, undefined, NOW)).sessions
+  const [session] = (await collectOpencode(root, io, undefined, NOW, 'darwin')).sessions
   expect(session.name).toBe('Ship the feed')
 })
 
@@ -241,7 +286,7 @@ it('keeps a child session written a moment after the tick began', async () => {
       updatedAtMs: NOW + 1500
     })
   })
-  const [session] = (await collectOpencode(root, io, undefined, NOW)).sessions
+  const [session] = (await collectOpencode(root, io, undefined, NOW, 'darwin')).sessions
   expect(session.subagents.map((agent) => agent.id)).toEqual(['ses_kid'])
 })
 
@@ -265,21 +310,21 @@ it('keeps a quiet child session while a tool it started is still running', async
       insertPart(db, { id: `prt_${id}`, messageId, sessionId: id, atMs: NOW - 300_000, data: part })
     }
   })
-  const [session] = (await collectOpencode(root, io, undefined, NOW)).sessions
+  const [session] = (await collectOpencode(root, io, undefined, NOW, 'darwin')).sessions
   expect(session.subagents).toMatchObject([{ id: 'ses_build', activity: 'running' }])
 })
 
 it('says nothing and opens nothing when OpenCode is not running', async () => {
   const { io, root, opens } = setup(workingSession, {})
-  const batch = await collectOpencode(root, io, undefined, NOW)
+  const batch = await collectOpencode(root, io, undefined, NOW, 'darwin')
   expect(batch).toEqual({ sessions: [], sources: [{ id: 'opencode', ok: true, detail: 'empty' }] })
   expect(opens()).toBe(0)
 })
 
 it('asks where an OpenCode process runs once, and skips one that runs inside an app bundle', async () => {
   const { io, root } = setup(workingSession, { 42: '/repo', 43: '/Applications/X.app/Contents' })
-  await collectOpencode(root, io, undefined, NOW)
-  const batch = await collectOpencode(root, io, undefined, NOW)
+  await collectOpencode(root, io, undefined, NOW, 'darwin')
+  const batch = await collectOpencode(root, io, undefined, NOW, 'darwin')
   expect(batch.sessions.map((session) => session.pid)).toEqual([42])
   const lsofRuns = vi.mocked(io.exec).mock.calls.filter(([file]) => file.endsWith('lsof'))
   expect(lsofRuns).toHaveLength(2)
@@ -292,7 +337,7 @@ it('keeps the other agents when one process cannot be asked where it runs', asyn
     if (file.endsWith('lsof') && args[2] === '43') throw new Error('no such process')
     return exec(file, args)
   }
-  const batch = await collectOpencode(root, io, undefined, NOW)
+  const batch = await collectOpencode(root, io, undefined, NOW, 'darwin')
   expect(batch.sessions.map((session) => session.pid)).toEqual([42])
   expect(batch.sources).toEqual([
     { id: 'opencode', ok: false, detail: 'OpenCode process read failed' }
@@ -308,7 +353,7 @@ it.each([
     workingSession(db)
     db.exec(migration)
   })
-  expect(await collectOpencode(root, io, undefined, NOW)).toEqual({
+  expect(await collectOpencode(root, io, undefined, NOW, 'darwin')).toEqual({
     sessions: [],
     sources: [
       {
@@ -322,7 +367,7 @@ it.each([
 
 it('gives a health reason and no session when OpenCode runs without a database', async () => {
   const { io, root } = setup(workingSession)
-  expect(await collectOpencode(`${root}/absent`, io, undefined, NOW)).toEqual({
+  expect(await collectOpencode(`${root}/absent`, io, undefined, NOW, 'darwin')).toEqual({
     sessions: [],
     sources: [
       { id: 'opencode', ok: false, detail: 'OpenCode is running but its database was not found' }
@@ -339,7 +384,7 @@ it('drops only the session whose data is not JSON, and says so', async () => {
     },
     { 42: '/repo', 43: '/other' }
   )
-  const batch = await collectOpencode(root, io, undefined, NOW)
+  const batch = await collectOpencode(root, io, undefined, NOW, 'darwin')
   expect(batch.sessions.map((session) => session.key)).toEqual(['opencode:ses_root'])
   expect(batch.sources).toEqual([
     { id: 'opencode', ok: false, detail: 'OpenCode session data could not be read' }

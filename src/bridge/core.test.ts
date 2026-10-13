@@ -1,11 +1,13 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { readFile } from 'node:fs/promises'
+import { posix, win32 } from 'node:path'
 import { resolveProject } from './project-root'
 import { parseTranscript } from './transcript-tail'
 import { toolCategory, toolActivity } from './tool-category'
 import { reduce, diff, emptySnapshot } from './reducer'
 import { sessionFromRegistry } from './claude'
-import { fixtureIo, registryEntry, session } from './__fixtures__/helpers'
+import { fixtureIo, gitPath, registryEntry, session } from './__fixtures__/helpers'
+import type { BridgeIo } from './io'
 
 describe('transcript', () => {
   it('pairs by id, preserves earlier open tools, and drops all content', async () => {
@@ -44,33 +46,96 @@ describe('transcript', () => {
   })
 })
 
-describe('project roots', () => {
+describe.each([
+  ['darwin', posix, '/repo', '/'],
+  ['win32', win32, 'C:\\repo', 'C:\\']
+] as const)('project roots on %s', (platform, path, repo, top) => {
+  const worktree = path.join(repo, '.claude', '.worktree', 'feature')
+  const gitdir = `gitdir: ${gitPath(path.join(repo, '.git', 'worktrees', 'feature'))}\n`
+  const resolve = (cwd: string, io: BridgeIo) => resolveProject(cwd, io, Date.now(), platform)
+
   it('walks to a normal repo', async () => {
-    const io = fixtureIo({ '/repo/.git': null })
-    expect(await resolveProject('/repo/src', io)).toEqual({ root: '/repo', worktree: null })
+    const io = fixtureIo({ [path.join(repo, '.git')]: null })
+    expect(await resolve(path.join(repo, 'src'), io)).toEqual({ root: repo, worktree: null })
   })
   it('resolves a worktree gitdir and keeps its own top directory', async () => {
-    const io = fixtureIo({
-      '/repo/.claude/.worktree/feature/.git': 'gitdir: /repo/.git/worktrees/feature\n'
-    })
-    expect(await resolveProject('/repo/.claude/.worktree/feature/src', io)).toEqual({
-      root: '/repo',
-      worktree: '/repo/.claude/.worktree/feature'
-    })
+    const io = fixtureIo({ [path.join(worktree, '.git')]: gitdir })
+    expect(await resolve(path.join(worktree, 'src'), io)).toEqual({ root: repo, worktree })
   })
   it('ignores a commondir that is not one short line, or a root that is not a directory', async () => {
-    const worktree = '/repo/.claude/.worktree/feature'
-    const files = {
-      [`${worktree}/.git`]: 'gitdir: /repo/.git/worktrees/feature\n',
-      '/repo/.git': null
-    }
-    for (const commondir of ['line one\nSECRET=hidden\n', 'x'.repeat(2000), '/not/a/folder/.git']) {
-      const io = fixtureIo({ ...files, '/repo/.git/worktrees/feature/commondir': commondir })
-      expect(await resolveProject(`${worktree}/src`, io)).toEqual({ root: '/repo', worktree })
+    const files = { [path.join(worktree, '.git')]: gitdir, [path.join(repo, '.git')]: null }
+    const notAFolder = gitPath(path.join(top, 'not', 'a', 'folder', '.git'))
+    for (const commondir of ['line one\nSECRET=hidden\n', 'x'.repeat(2000), notAFolder]) {
+      const io = fixtureIo({
+        ...files,
+        [path.join(repo, '.git', 'worktrees', 'feature', 'commondir')]: commondir
+      })
+      expect(await resolve(path.join(worktree, 'src'), io)).toEqual({ root: repo, worktree })
     }
   })
   it('uses cwd for non-repositories', async () => {
-    expect(await resolveProject('/plain', fixtureIo())).toEqual({ root: '/plain', worktree: null })
+    const plain = path.join(top, 'plain')
+    expect(await resolve(plain, fixtureIo())).toEqual({ root: plain, worktree: null })
+  })
+})
+
+describe('a Windows worktree whose git folder is on another machine', () => {
+  const onShare = (paths: string[]) => paths.filter((path) => path.startsWith('\\\\'))
+  function watched(files: Record<string, string | null>) {
+    const io = fixtureIo(files)
+    const stat = vi.spyOn(io, 'stat')
+    const readText = vi.spyOn(io, 'readText')
+    const asked = () => [...stat.mock.calls, ...readText.mock.calls].map(([path]) => path)
+    return { io, asked }
+  }
+
+  it.each([
+    '\\\\host\\share\\repo\\.git\\worktrees\\wt',
+    '//host/share/repo/.git/worktrees/wt',
+    '\\\\?\\UNC\\host\\share\\x',
+    '\\\\.\\pipe\\x'
+  ])('is its own project, and nothing at %s is asked for', async (gitdir) => {
+    const { io, asked } = watched({ 'C:\\work\\wt\\.git': `gitdir: ${gitdir}\n` })
+    expect(await resolveProject('C:\\work\\wt\\src', io, Date.now(), 'win32')).toEqual({
+      root: 'C:\\work\\wt',
+      worktree: null
+    })
+    expect(onShare(asked())).toEqual([])
+  })
+  it('does not follow a commondir that points at another machine', async () => {
+    const { io, asked } = watched({
+      'C:\\work\\wt\\.git': 'gitdir: C:/repo/.git/worktrees/wt\n',
+      'C:\\repo\\.git\\worktrees\\wt\\commondir': '\\\\host\\share\\repo\\.git\n',
+      'C:\\repo\\.git': null
+    })
+    expect(await resolveProject('C:\\work\\wt', io, Date.now(), 'win32')).toEqual({
+      root: 'C:\\repo',
+      worktree: 'C:\\work\\wt'
+    })
+    expect(onShare(asked())).toEqual([])
+  })
+  it('follows a git folder on the share the session itself works on', async () => {
+    const { io, asked } = watched({
+      '\\\\host\\share\\wt\\.git': 'gitdir: \\\\host\\share\\repo\\.git\\worktrees\\wt\n',
+      '\\\\host\\share\\repo\\.git': null
+    })
+    expect(await resolveProject('\\\\host\\share\\wt', io, Date.now(), 'win32')).toEqual({
+      root: '\\\\host\\share\\repo',
+      worktree: '\\\\host\\share\\wt'
+    })
+    expect(onShare(asked()).length).toBeGreaterThan(1)
+  })
+})
+
+describe('the fixture io', () => {
+  it('takes either separator for the other, so any platform’s paths find a fixture', async () => {
+    const io = fixtureIo({ '/claude/sessions/42.json': '{}', 'C:\\work\\repo\\.git': null })
+    expect(await io.readText('\\claude\\sessions\\42.json')).toBe('{}')
+    expect(await io.list('\\claude')).toEqual(['sessions'])
+    expect(await io.list('/claude/sessions')).toEqual(['42.json'])
+    expect((await io.stat('C:/work/repo/.git')).directory).toBe(true)
+    expect((await io.stat('C:\\work')).directory).toBe(true)
+    await expect(io.readText('/claude/sessions')).rejects.toThrow('missing')
   })
 })
 

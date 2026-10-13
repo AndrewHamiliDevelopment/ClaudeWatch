@@ -1,4 +1,3 @@
-import { basename } from 'node:path'
 import type {
   AgentActivity,
   AgentAttention,
@@ -8,16 +7,23 @@ import type {
   SourceHealth
 } from '../shared/office/types'
 import { type CodexTotal, codexTotalOf } from '../shared/accounts'
+import { programName } from '../shared/platform-process'
+import {
+  claimFolders,
+  folderKey,
+  isAppFolder,
+  unplacedConversations,
+  type WrittenConversation
+} from './process-folders'
 import { type BridgeIo, folderName, isLabel, isMissing, jsonObject, object } from './io'
 import { placementOf, resolveProject } from './project-root'
-import { findRollouts, type Rollout } from './codex-rollouts'
+import { type CodexKind, findRollouts, recentDayFolders, type Rollout } from './codex-rollouts'
 import { parseCodexUsage } from './codex-usage'
 import { NEXT_STEP_MS } from './opencode-activity'
 import { isStillWorking, OPEN_TOOL_HOLD_MS, quietFor } from './liveness'
 import { toolActivity, toolCategory } from './tool-category'
 import {
   forgetExited,
-  isInsideAppBundle,
   keyOf,
   newestFirst,
   placeholderId,
@@ -29,21 +35,29 @@ import {
 
 // A Codex app-server: the host of desktop, IDE and plugin threads.
 function isAppServer({ argv }: ProcessRow): boolean {
-  return basename(argv[0]) === 'codex' && argv.includes('app-server', 1)
+  return programName(argv[0]) === 'codex' && argv.includes('app-server', 1)
 }
 
-export function codexProcesses(rows: ProcessRow[]): { pid: number; startedAtMs: number }[] {
+const sessionCommandOf = (argv: string[]): number =>
+  argv.findIndex((arg) => /^(exec|e|resume|fork)$/.test(arg))
+
+export function codexProcesses(
+  rows: ProcessRow[]
+): { pid: number; startedAtMs: number; kind: CodexKind }[] {
   return rows
     .filter(({ argv }) => {
-      if (basename(argv[0]) !== 'codex') return false
-      const sessionCommand = argv.findIndex((arg) => /^(exec|e|resume|fork)$/.test(arg))
+      if (programName(argv[0]) !== 'codex') return false
+      const sessionCommand = sessionCommandOf(argv)
       // An exec prompt may mention a helper; only command arguments precede it.
       const commandArgs = argv.slice(1, sessionCommand < 0 ? undefined : sessionCommand)
       return !commandArgs.some((arg) =>
         /^(app-server|exec-server|mcp-server|sandbox|helper)(?:$|-)/.test(arg)
       )
     })
-    .map(({ pid, startedAtMs }) => ({ pid, startedAtMs }))
+    .map(({ pid, startedAtMs, argv }) => {
+      const command = argv[sessionCommandOf(argv)]
+      return { pid, startedAtMs, kind: command === 'exec' || command === 'e' ? 'exec' : 'terminal' }
+    })
 }
 
 const CALLS = new Set(['function_call', 'custom_tool_call', 'local_shell_call'])
@@ -102,6 +116,8 @@ export function parseCodexActivity(tail: string): {
 interface Remembered {
   // The last full walk of the session folders, and its rollouts kept fresh since.
   walk: Walk | null
+  // A live process had no rollout at the last look: its first one is looked for on every tick.
+  isWaiting: boolean
   // The usage last read from each live rollout, by session id. A long tool output pushes the
   // newest `token_count` out of the 64 KB tail, and its total still stands until the next one.
   usage: Map<string, SessionUsage>
@@ -142,10 +158,9 @@ async function currentRollouts(
   memory: Remembered,
   processes: { pid: number; startedAtMs: number }[],
   derivesAccounts: boolean,
-  now: number
+  now: number,
+  platform: NodeJS.Platform
 ): Promise<Rollout[]> {
-  // A running process's folder: its rollout is followed however long it has been quiet.
-  const liveFolders = new Set(memory.folders.values())
   const key = processes.map(({ pid, startedAtMs }) => `${pid}:${startedAtMs}`).join(',')
   const last = memory.walk
   const isDue =
@@ -155,14 +170,14 @@ async function currentRollouts(
     now < last.atMs ||
     now - last.atMs >= FULL_WALK_MS
   if (isDue) {
-    const rollouts = await findRollouts(root, io, derivesAccounts)
+    const rollouts = await findRollouts(root, io, derivesAccounts, platform)
     memory.walk = { atMs: now, processes: key, derived: derivesAccounts, rollouts }
     return rollouts
   }
   const refreshed = await Promise.all(
     last.rollouts.map(async (rollout): Promise<Rollout | null> => {
-      // Re-checked as long as a quiet thread with an open tool is held, so its next write is seen.
-      if (now - rollout.mtimeMs >= OPEN_TOOL_HOLD_MS && !liveFolders.has(rollout.cwd))
+      // Shown last tick, or still within an open tool's hold: its next write must be seen.
+      if (now - rollout.mtimeMs >= OPEN_TOOL_HOLD_MS && !memory.tails.has(rollout.path))
         return rollout
       try {
         const { mtimeMs, size } = await io.stat(rollout.path)
@@ -173,9 +188,18 @@ async function currentRollouts(
       }
     })
   )
-  last.rollouts = refreshed
-    .filter((rollout) => rollout !== null)
-    .sort((a, b) => b.mtimeMs - a.mtimeMs || a.path.localeCompare(b.path))
+  const current = new Map(
+    refreshed.flatMap((rollout) => (rollout ? [[rollout.path, rollout] as const] : []))
+  )
+  // A process waiting for its first thread finds it among the last two days' rollouts alone.
+  if (memory.isWaiting) {
+    const days = recentDayFolders(now)
+    for (const rollout of await findRollouts(root, io, derivesAccounts, platform, days))
+      current.set(rollout.path, rollout)
+  }
+  last.rollouts = [...current.values()].sort(
+    (a, b) => b.mtimeMs - a.mtimeMs || a.path.localeCompare(b.path)
+  )
   return last.rollouts
 }
 
@@ -190,9 +214,10 @@ export interface CodexBatch {
 export async function collectCodex(
   root: string,
   io: BridgeIo,
-  readProcesses = (): Promise<ProcessRow[]> => readProcessTable(io),
+  readProcesses = (): Promise<ProcessRow[]> => readProcessTable(io, platform),
   derivesAccounts = false,
-  now = Date.now()
+  now = Date.now(),
+  platform: NodeJS.Platform = process.platform
 ): Promise<CodexBatch> {
   const sessions: SessionRef[] = []
   const departed: CodexTotal[] = []
@@ -203,6 +228,7 @@ export async function collectCodex(
       io,
       (memory = {
         walk: null,
+        isWaiting: false,
         usage: new Map(),
         folders: new Map(),
         placeholders: new Map(),
@@ -219,7 +245,7 @@ export async function collectCodex(
     const isHosting = rows.some(isAppServer)
     const rollouts =
       processes.length || isHosting
-        ? await currentRollouts(root, io, memory, processes, derivesAccounts, now)
+        ? await currentRollouts(root, io, memory, processes, derivesAccounts, now, platform)
         : []
     const used = new Set<string>()
     // One session per rollout: its activity and usage from the tail, its place from `cwd`.
@@ -257,7 +283,7 @@ export async function collectCodex(
       const usage = tail?.usage ?? known.get(id) ?? null
       if (usage) known.set(id, usage)
       live.add(id)
-      const project = await resolveProject(cwd, io, now)
+      const project = await resolveProject(cwd, io, now, platform)
       const session: SessionRef = {
         key: keyOf(placeholders, owner, 'codex', rollout?.id),
         provider: 'codex',
@@ -282,16 +308,58 @@ export async function collectCodex(
       if (tail) tail.session = session
       health.detail = 'live'
     }
+    const threads: (WrittenConversation & { rollout: Rollout })[] =
+      platform === 'win32'
+        ? rollouts.flatMap((rollout) =>
+            rollout.startedBy === null || isAppFolder(rollout.cwd, platform)
+              ? []
+              : [
+                  {
+                    rollout,
+                    folder: rollout.cwd,
+                    createdAtMs: rollout.startedAtMs,
+                    writtenAtMs: rollout.mtimeMs,
+                    kind: rollout.startedBy
+                  }
+                ]
+          )
+        : []
+    claimFolders(processes, folders, threads)
+    let isWaiting = false
     for (const process of newestFirst(processes)) {
       try {
-        const cwd = await rememberedFolder(io, folders, process)
-        if (!cwd || isInsideAppBundle(cwd)) continue
-        const rollout = rollouts.find((item) => item.cwd === cwd && !used.has(item.id))
+        // On Windows the folder is the one claimed above, from the process's rollouts.
+        const cwd = await rememberedFolder(io, folders, process, platform)
+        if (cwd && isAppFolder(cwd, platform)) continue
+        const rollout = cwd
+          ? rollouts.find(
+              (item) =>
+                folderKey(item.cwd, platform) === folderKey(cwd, platform) && !used.has(item.id)
+            )
+          : undefined
+        // On macOS `lsof` has placed it already: the 30 s walk finds its first rollout soon enough.
+        if (!rollout) isWaiting ||= platform === 'win32'
+        if (!cwd) continue
         if (rollout) used.add(rollout.id)
         await show(rollout, cwd, process)
       } catch {
         health.ok = false
         health.detail = 'process read failed'
+      }
+    }
+    // A thread no process can yet be told apart for is shown as an app-server's is, without one.
+    const unclaimed = threads.filter(({ rollout }) => !used.has(rollout.id))
+    for (const { rollout } of unplacedConversations(processes, folders, unclaimed)) {
+      used.add(rollout.id)
+      try {
+        await show(rollout, rollout.cwd, {
+          pid: null,
+          startedAtMs:
+            rollout.startedAtMs ?? tails.get(rollout.path)?.session?.startedAtMs ?? rollout.mtimeMs
+        })
+      } catch {
+        health.ok = false
+        health.detail = 'rollout read failed'
       }
     }
     // The desktop app, the IDE extension and plugins run their threads inside an app-server,
@@ -303,7 +371,7 @@ export async function collectCodex(
       if (quietMs >= OPEN_TOOL_HOLD_MS) break
       const shown = tails.get(rollout.path)
       if (!isStillWorking(quietMs, HOSTED_FRESH_MS, shown?.state.currentTool != null)) continue
-      if (used.has(rollout.id) || isInsideAppBundle(rollout.cwd)) continue
+      if (used.has(rollout.id) || isAppFolder(rollout.cwd, platform)) continue
       used.add(rollout.id)
       try {
         await show(rollout, rollout.cwd, {
@@ -316,6 +384,7 @@ export async function collectCodex(
         health.detail = 'rollout read failed'
       }
     }
+    memory.isWaiting = isWaiting
     for (const id of known.keys()) if (!live.has(id)) known.delete(id)
     forgetExited(processes, folders, placeholders)
     for (const [path, { session }] of tails) {

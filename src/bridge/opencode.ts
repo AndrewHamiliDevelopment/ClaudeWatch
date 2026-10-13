@@ -1,7 +1,15 @@
-import { join } from 'node:path'
+import { join, win32 } from 'node:path'
 import type { SessionRef, SourceHealth, SubagentRef, TokenCounts } from '../shared/office/types'
 import { zeroCounts } from '../shared/office/token-counts'
+import {
+  claimFolders,
+  isAppFolder,
+  isFolderPath,
+  unplacedConversations,
+  type WrittenConversation
+} from './process-folders'
 import { type BridgeIo, displayName, folderName, isLabel } from './io'
+import { type Answers, readOrRecall } from './opencode-answers'
 import {
   OPENCODE_IDLE,
   opencodeProcesses,
@@ -16,13 +24,14 @@ import {
 } from './opencode-db'
 import {
   forgetExited,
-  isInsideAppBundle,
+  identityOf,
   keyOf,
   newestFirst,
   placeholderId,
   type ProcessRow,
   readProcessTable,
-  rememberedFolder
+  rememberedFolder,
+  type SessionOwner
 } from './process-table'
 import { placementOf, resolveProject } from './project-root'
 import { isStillWorking, OPEN_TOOL_HOLD_MS, quietFor, SUBAGENT_FRESH_MS } from './liveness'
@@ -98,7 +107,32 @@ interface Conversation {
   state: OpencodeState
   subagents: SubagentRef[]
 }
-type AgentProcess = ReturnType<typeof opencodeProcesses>[number] & { cwd: string }
+type OpencodeProcess = ReturnType<typeof opencodeProcesses>[number]
+// A session shown before its process can be told apart has no process: its pid is null.
+type AgentProcess = SessionOwner & { cwd: string }
+
+type RecentSession = WrittenConversation & { id: string }
+// Places the Windows processes still waiting for a folder, from the root sessions written since
+// the first of them started, and returns those sessions.
+function claimOpencodeFolders(
+  query: OpencodeQuery,
+  agents: OpencodeProcess[],
+  folders: Map<string, string>
+): RecentSession[] {
+  const waiting = agents.filter((process) => !folders.has(identityOf(process)))
+  if (!waiting.length) return []
+  const since = Math.min(...waiting.map(({ startedAtMs }) => startedAtMs))
+  const sessions = query('recentRootSessions', since).flatMap((row) => {
+    const { id, directory, time_created: createdAtMs, time_updated: writtenAtMs } = row
+    if (typeof id !== 'string' || typeof directory !== 'string') return []
+    if (typeof writtenAtMs !== 'number') return []
+    if (!isFolderPath(directory, 'win32') || isAppFolder(directory, 'win32')) return []
+    const created = typeof createdAtMs === 'number' ? createdAtMs : null
+    return [{ id, folder: directory, createdAtMs: created, writtenAtMs }]
+  })
+  claimFolders(agents, folders, sessions)
+  return sessions
+}
 
 // The newest session in the process's folder that it can have written: one last touched before
 // the process began belongs to an earlier run, and its name and tokens are not this agent's.
@@ -127,6 +161,8 @@ interface Remembered {
   folders: Map<string, string>
   // The placeholder key a process without a session was first shown under, by pid and start time.
   placeholders: Map<string, string>
+  // Last tick's rows, for a tick that finds the database and its agents unchanged.
+  answers: Answers | null
 }
 const remembered = new WeakMap<BridgeIo, Remembered>()
 
@@ -134,14 +170,17 @@ const remembered = new WeakMap<BridgeIo, Remembered>()
 async function locate(
   io: BridgeIo,
   folders: Map<string, string>,
-  processes: ReturnType<typeof opencodeProcesses>,
-  health: SourceHealth
-): Promise<AgentProcess[]> {
-  const running: AgentProcess[] = []
+  processes: OpencodeProcess[],
+  health: SourceHealth,
+  platform: NodeJS.Platform
+): Promise<OpencodeProcess[]> {
+  // Windows names no process's folder: each is placed from its sessions, into `folders` too.
+  if (platform === 'win32') return processes
+  const running: OpencodeProcess[] = []
   for (const process of processes) {
     try {
-      const cwd = await rememberedFolder(io, folders, process)
-      if (cwd && !isInsideAppBundle(cwd)) running.push({ ...process, cwd })
+      const cwd = await rememberedFolder(io, folders, process, platform)
+      if (cwd && !isAppFolder(cwd, platform)) running.push(process)
     } catch {
       // It may have exited since the table was read: the others are still shown.
       health.ok = false
@@ -160,39 +199,69 @@ interface OpencodeBatch {
 export async function collectOpencode(
   root: string,
   io: BridgeIo,
-  readProcesses = (): Promise<ProcessRow[]> => readProcessTable(io),
-  now = Date.now()
+  readProcesses = (): Promise<ProcessRow[]> => readProcessTable(io, platform),
+  now = Date.now(),
+  platform: NodeJS.Platform = process.platform
 ): Promise<OpencodeBatch> {
   const health: SourceHealth = { id: 'opencode', ok: true, detail: 'empty' }
   try {
     const processes = opencodeProcesses(await readProcesses())
     let memory = remembered.get(io)
-    if (!memory) remembered.set(io, (memory = { folders: new Map(), placeholders: new Map() }))
+    if (!memory) {
+      remembered.set(io, (memory = { folders: new Map(), placeholders: new Map(), answers: null }))
+    }
     const { folders, placeholders } = memory
     forgetExited(processes, folders, placeholders)
-    const running = newestFirst(await locate(io, folders, processes, health))
+    const running = newestFirst(await locate(io, folders, processes, health, platform))
     if (!running.length) return { sessions: [], sources: [health] }
 
-    const taken = new Set<string>()
-    const conversations = await io.readOpencode(join(root, 'opencode.db'), (query) =>
-      running.map((process) => {
-        try {
-          return { process, conversation: readConversation(query, process, taken, now) }
-        } catch (error) {
-          // One session's bad JSON costs that session; anything else is the whole database's.
-          if (!(error instanceof OpencodeDbError) || error.reason !== 'malformed') throw error
-          health.ok = false
-          health.detail = FAILURE_DETAIL.malformed
-          return null
+    const folderOf = (agent: OpencodeProcess): string | undefined => folders.get(identityOf(agent))
+    const agents = running.map((agent) => `${identityOf(agent)}@${folderOf(agent) ?? ''}`).join(',')
+    const { result: conversations, answers } = await readOrRecall(
+      io,
+      join(root, 'opencode.db'),
+      agents,
+      memory.answers,
+      (query) => {
+        const taken = new Set<string>()
+        const recent = platform === 'win32' ? claimOpencodeFolders(query, running, folders) : []
+        const read = (process: AgentProcess) => {
+          try {
+            return { process, conversation: readConversation(query, process, taken, now) }
+          } catch (error) {
+            // One session's bad JSON costs that session; anything else is the whole database's.
+            if (!(error instanceof OpencodeDbError) || error.reason !== 'malformed') throw error
+            health.ok = false
+            health.detail = FAILURE_DETAIL.malformed
+            return null
+          }
         }
-      })
+        const placed = running.flatMap((agent) => {
+          const cwd = folderOf(agent)
+          return cwd ? [read({ ...agent, cwd })] : []
+        })
+        // A session no process can yet be told apart for is shown with none, as it was created.
+        const unclaimed = recent.filter(({ id }) => !taken.has(id))
+        const unplaced = unplacedConversations(running, folders, unclaimed).map((session) =>
+          read({
+            pid: null,
+            startedAtMs: session.createdAtMs ?? session.writtenAtMs,
+            cwd: session.folder
+          })
+        )
+        return [...placed, ...unplaced]
+      }
     )
+    memory.answers = answers
     const sessions: SessionRef[] = []
     for (const found of conversations) {
       if (!found) continue
-      const project = await resolveProject(found.process.cwd, io, now)
-      const key = keyOf(placeholders, found.process, 'opencode', found.conversation?.session.id)
-      sessions.push(sessionOf(found.process, found.conversation, key, placementOf(project)))
+      // OpenCode records a Windows folder with forward slashes; the feed shows it as Windows does.
+      const cwd = platform === 'win32' ? win32.normalize(found.process.cwd) : found.process.cwd
+      const process = { ...found.process, cwd }
+      const project = await resolveProject(cwd, io, now, platform)
+      const key = keyOf(placeholders, process, 'opencode', found.conversation?.session.id)
+      sessions.push(sessionOf(process, found.conversation, key, placementOf(project)))
     }
     if (health.ok) health.detail = 'live'
     return { sessions, sources: [health] }

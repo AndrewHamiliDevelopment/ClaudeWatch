@@ -5,14 +5,15 @@ import { BridgeHost } from './bridge-host'
 import { OfficeWindowController } from './office-window'
 import { createAppWindow, handleTrusted } from './window-factory'
 import { PaneFocus } from './pane-focus'
-import { readOrcaEnvironment } from '../bridge/orca'
-import { createOfficeService, PS_OPTIONS } from '../office-host/office-service'
+import { createOfficeService } from '../office-host/office-service'
 import type { FocusResult, OfficeSnapshot } from '../shared/office/types'
 import { execFilePromise } from './platform/exec'
 import type { SessionTracker } from './session-tracker'
 import type { TerminalResolver } from './terminal-resolver'
 import type { SettingsStore } from './store'
 import { rememberBounds, restoreBounds } from './window-bounds'
+import { officeChrome } from './window-chrome'
+import { runInteractivePowerShell } from '../shared/powershell-host'
 import { type AccountLedger, type OfficeAccounts, withAccounts } from './accounts'
 
 type OfficeWindowStore = Pick<SettingsStore, 'getOfficeWindowBounds' | 'setOfficeWindowBounds'>
@@ -31,9 +32,7 @@ function createOfficeWindow(store: OfficeWindowStore): Electron.BrowserWindow {
     minWidth: MINIMUM_SIZE.width,
     minHeight: MINIMUM_SIZE.height,
     title: 'ClaudeWatch Office',
-    backgroundColor: '#0E0E10',
-    titleBarStyle: 'hiddenInset',
-    trafficLightPosition: { x: 15, y: 15 },
+    ...officeChrome(),
     webPreferences: { preload: join(__dirname, '../preload/office.js') }
   })
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
@@ -93,19 +92,13 @@ export function setupOffice(
     host,
     run: execFilePromise,
     terminalOf: async (pid) => (await terminalResolver.resolve(pid)).terminalType,
-    isInteractive: true
+    isInteractive: true,
+    runScript: runInteractivePowerShell
   })
   const paneFocus = new PaneFocus({
     instances: () => tracker.getInstances(),
     processStart: service.processStart,
-    // `ps -E` prints the whole environment; the reader keeps the pane key and drops the rest.
-    paneKeyOf: (pid) =>
-      readOrcaEnvironment(pid, async (args) => {
-        return (await execFilePromise('/bin/ps', args, PS_OPTIONS)).stdout
-      }).then(
-        ({ paneKey }) => paneKey,
-        () => null
-      ),
+    paneKeyOf: service.paneKeyOf,
     focusProcess: service.focusProcess
   })
 
