@@ -1,0 +1,42 @@
+name: Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+
+      - name: Build widget (macOS only)
+        run: npm run build:widget
+        continue-on-error: true
+
+      - name: List Directory files
+        run: |
+          cd $GITHUB_WORKSPACE
+          ls -lah
+
+      - name: Build Mac
+        run: |
+          cd $GITHUB_WORKSPACE
+          npm run changelog:write
+          npm run build && npx electron-builder --mac --publish never
+          ls -lah
+        continue-on-error: true
+
+      - name: Extract build artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: ${{github.workspace}}/dist
