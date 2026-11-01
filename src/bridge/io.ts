@@ -14,7 +14,7 @@ import { UNSAFE_IN_A_NAME } from '../shared/unsafe-text'
 import { consoleRootScript, PROCESS_LIST_SCRIPT } from '../shared/windows-console'
 import { creationTicksScript } from './liveness'
 import {
-  OPENCODE_STATEMENTS,
+  OPENCODE_READ_STATEMENTS,
   OpencodeDbError,
   type OpencodeQuery,
   readOpencodeDb
@@ -25,6 +25,8 @@ interface FileInfo {
   directory: boolean
   mtimeMs: number
   size: number
+  // Tells a file rewritten in place from one replaced under the same name.
+  ino?: number
 }
 // Whole lines only: `text` ends at the last newline read, and `nextOffset` is where to resume.
 interface ForwardRead {
@@ -179,7 +181,7 @@ function readOpencode<Result>(target: string, read: (query: OpencodeQuery) => Re
   if (basename(target) !== OPENCODE_DATABASE) throw forbidden('database')
   return readOpencodeDb(target, (run) =>
     read((statement, ...values) => {
-      if (!Object.hasOwn(OPENCODE_STATEMENTS, statement)) throw forbidden('statement')
+      if (!Object.hasOwn(OPENCODE_READ_STATEMENTS, statement)) throw forbidden('statement')
       return run(statement, ...values)
     })
   )
@@ -209,7 +211,7 @@ export const systemIo: BridgeIo = {
   list: (path) => readdir(path),
   stat: async (path) => {
     const info = await stat(path)
-    return { directory: info.isDirectory(), mtimeMs: info.mtimeMs, size: info.size }
+    return { directory: info.isDirectory(), mtimeMs: info.mtimeMs, size: info.size, ino: info.ino }
   },
   exec: async (file, args, { timeoutMs = EXEC_TIMEOUT_MS } = {}) => {
     if (!PROGRAMS.has(file)) throw forbidden('program')

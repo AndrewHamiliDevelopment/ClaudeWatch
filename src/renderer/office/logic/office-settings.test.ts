@@ -22,11 +22,12 @@ const ALL_OFF = {
   ambient: false,
   loungeTrips: false,
   player: false,
+  hideNames: true,
   townSize: 'village'
 }
 
 describe('parseOfficeSettings', () => {
-  it('starts with every feature on, and the town a village', () => {
+  it('starts with every feature on, and the town a city', () => {
     expect(DEFAULT_OFFICE_SETTINGS).toEqual({
       town: true,
       citizens: true,
@@ -34,7 +35,8 @@ describe('parseOfficeSettings', () => {
       ambient: true,
       loungeTrips: true,
       player: true,
-      townSize: 'village'
+      hideNames: false,
+      townSize: 'city'
     })
     expect(parseOfficeSettings(null)).toEqual(DEFAULT_OFFICE_SETTINGS)
   })
@@ -63,7 +65,7 @@ describe('parseOfficeSettings', () => {
   })
 
   it.each([['metropolis'], [true], [3], [null], ['Village']])(
-    'keeps the town a village for a stored size of %j',
+    'keeps the default city for a stored size of %j',
     (townSize) => {
       expect(parseOfficeSettings(JSON.stringify({ townSize, player: false }))).toEqual({
         ...DEFAULT_OFFICE_SETTINGS,
@@ -98,6 +100,14 @@ describe('createOfficeSettingsStore', () => {
     expect(listener).toHaveBeenCalledOnce()
     expect(saved(storage)).toEqual({ ...DEFAULT_OFFICE_SETTINGS, citizens: false })
     expect(createOfficeSettingsStore(storage).get()).toEqual(store.get())
+  })
+
+  it('keeps names hidden across a restart, off until the owner turns it on', () => {
+    const storage = memoryStorage()
+    const store = createOfficeSettingsStore(storage)
+    expect(store.get().hideNames).toBe(false)
+    store.set('hideNames', true)
+    expect(createOfficeSettingsStore(storage).get().hideNames).toBe(true)
   })
 
   it('hands back the same object while nothing changed', () => {
@@ -188,7 +198,7 @@ describe('createOfficeSettingsStore', () => {
     expect(store.get().townSize).toBe('town')
     expect(listener).toHaveBeenCalledOnce()
     store.reset()
-    expect(store.get().townSize).toBe('village')
+    expect(store.get().townSize).toBe('city')
   })
 
   it('runs without storage', () => {

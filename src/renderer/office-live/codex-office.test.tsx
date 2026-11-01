@@ -26,11 +26,21 @@ vi.mock('@react-three/fiber', () => ({ useFrame: () => undefined }))
 vi.mock('../office/scene/textures', () => ({ blobShadowTexture: () => null }))
 vi.mock('../office/webgl-support', () => ({ canCreateWebGL2: () => false }))
 
+// A live bridge stamps every session it reads; the feed shows activity only from its own record.
+const stampedBy = (sourceId: string): Pick<SessionRef, 'observation'> => ({
+  observation: { sourceId, coverage: 'own', observedAtMs: Date.now(), staleAfterMs: 10 * 60_000 }
+})
+
 function sessionsFor(host: SessionRef['host']): SessionRef[] {
   return [
-    makeSession({ ...simSession('claude:synthetic'), activity: 'editing' }),
+    makeSession({
+      ...simSession('claude:synthetic'),
+      ...stampedBy('claude'),
+      activity: 'editing'
+    }),
     makeSession({
       ...simSession('codex:synthetic'),
+      ...stampedBy('codex'),
       provider: 'codex',
       host,
       orcaPaneKey: host === 'orca' ? 'synthetic-tab:synthetic-pane' : null,
@@ -113,9 +123,15 @@ describe('Codex from the bridge feed to the Office', () => {
       })
     }
     const feed = startFeed(sessions)
-    expect(feed.frame().agents).toEqual(agents)
+    const rooms = feed.frame().floors.flatMap((floor) => floor.rooms)
+    expect(feed.frame().agents.map((agent) => agent.provider)).toEqual(['claude', 'codex'])
+    for (const agent of feed.frame().agents) {
+      const room = rooms.find((candidate) => candidate.id === agent.roomId)
+      const desk = room?.seats.find((candidate) => candidate.slotId === agent.slotId)
+      expect(agent).toMatchObject({ x: desk?.x, z: desk?.z })
+    }
     expect(feed.frame().sessions).toEqual(sessions)
-    expect(feed.frame().floors[0].rooms.filter((room) => room.sessionKey)).toHaveLength(2)
+    expect(rooms.filter((room) => room.sessionKey)).toHaveLength(2)
     feed.stop()
   })
 
@@ -143,8 +159,9 @@ describe('Codex from the bridge feed to the Office', () => {
       vi.advanceTimersByTime(1500)
       const frame = feed.frame()
       expect(frame.agents).toHaveLength(2)
-      expect(frame.floors[0].rooms.filter((room) => room.sessionKey)).toHaveLength(2)
-      const card = buildNameCards(frame, 'hq', null).find(
+      const rooms = frame.floors.flatMap((floor) => floor.rooms)
+      expect(rooms.filter((room) => room.sessionKey)).toHaveLength(2)
+      const card = buildNameCards(frame, null, null).find(
         (entry) => entry.agentKey === sessions[1].key
       )
       expect(card).toMatchObject({
@@ -158,7 +175,7 @@ describe('Codex from the bridge feed to the Office', () => {
     feed.stop()
   })
 
-  it.each(listThemes())('draws both robots, including a Codex body, in $id', (theme) => {
+  it.each(listThemes())('draws both workers with a Codex provider identity in $id', (theme) => {
     const feed = startFeed(sessionsFor('terminal'))
     // Unknown three.js tags warn under React DOM, which stands in for the canvas here.
     vi.spyOn(console, 'error').mockImplementation(() => undefined)
@@ -179,6 +196,7 @@ describe('Codex from the bridge feed to the Office', () => {
       expect(robot.querySelectorAll('meshstandardmaterial').length).toBeGreaterThan(0)
     const codex = feed.frame().agents[1]
     let bodyColor = theme.robot.skins.codex.body
+    if (theme.id === 'corporate-city') bodyColor = theme.robot.skins.codex.trim
     if (theme.roster) {
       const index = theme.roster.indexFor(codex, 0)
       expect(themeCharacter(theme.id, codex, 0)).toEqual(theme.roster.entries(null)[index])

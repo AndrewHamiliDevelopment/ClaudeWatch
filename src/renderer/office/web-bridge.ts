@@ -8,9 +8,18 @@ import {
   type PeekResult
 } from '../../shared/office/types'
 import { isFeedMessage } from '../../shared/office/feed-message'
+import { parseWorldSaveReply } from '../../shared/office/world-sync'
+import {
+  hasValidObservationMetadata,
+  hasValidPeekMetadata
+} from '../../shared/office/observation-dto'
+import { inertTerminalLines, isTerminalProvenance } from '../../shared/office/observation-terminal'
 
 // The preload's own type, read off the global it fills, so the two cannot drift apart.
-type OfficeBridgeApi = NonNullable<Window['officeBridge']>
+type OfficeBridgeApi = Omit<
+  NonNullable<Window['officeBridge']>,
+  'isVisible' | 'onVisibilityChanged'
+>
 
 const TOKEN_KEY = 'claudewatch.office.token'
 const VIEW_ONLY_KEY = 'claudewatch.office.view-only'
@@ -42,7 +51,7 @@ export function isViewOnlyPage(page: Pick<Window, 'sessionStorage'>): boolean {
 function parseFeedLine(line: string): FeedMessage | null {
   try {
     const message: unknown = JSON.parse(line)
-    return isFeedMessage(message) ? message : null
+    return isFeedMessage(message) && hasValidObservationMetadata(message) ? message : null
   } catch {
     return null
   }
@@ -68,12 +77,21 @@ function toFocusResult(reply: unknown): FocusResult {
 }
 
 function toPeekResult(reply: unknown): PeekResult {
+  if (!hasValidPeekMetadata(reply)) return { success: false, lines: [] }
   const lines = field(reply, 'lines')
   const fingerprint = field(reply, 'fingerprint')
+  const capturedAtMs = field(reply, 'capturedAtMs')
+  const targetAgentKey = field(reply, 'targetAgentKey')
+  const terminal = field(reply, 'terminal')
   return {
     ...toResult(reply),
-    lines: Array.isArray(lines) ? lines.filter((line) => typeof line === 'string') : [],
-    ...(typeof fingerprint === 'string' ? { fingerprint } : {})
+    lines: inertTerminalLines(
+      Array.isArray(lines) ? lines.filter((line) => typeof line === 'string') : []
+    ),
+    ...(typeof fingerprint === 'string' ? { fingerprint } : {}),
+    ...(typeof capturedAtMs === 'number' ? { capturedAtMs } : {}),
+    ...(typeof targetAgentKey === 'string' ? { targetAgentKey } : {}),
+    ...(isTerminalProvenance(terminal) ? { terminal } : {})
   }
 }
 
@@ -206,6 +224,8 @@ export function createWebBridge(credential: string, onLost?: () => void): Office
       toResult(await post('/api/respond', { sessionKey, decision, fingerprint })),
     peek: async (sessionKey) => toPeekResult(await post('/api/peek', { sessionKey })),
     start: async (projectKey, provider) =>
-      toResult(await post('/api/start', { projectKey, provider }))
+      toResult(await post('/api/start', { projectKey, provider })),
+    // A view-only server answers 403 with no city; that reads as a refusal like any other.
+    saveWorld: async (document) => parseWorldSaveReply(await post('/api/world', { document }))
   }
 }

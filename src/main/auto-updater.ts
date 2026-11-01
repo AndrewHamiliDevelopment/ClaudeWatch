@@ -1,11 +1,20 @@
 import { autoUpdater } from 'electron-updater'
 import { BrowserWindow } from 'electron'
 import { is } from '@electron-toolkit/utils'
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
 import type { UpdaterStatusPayload } from '../renderer/lib/types'
+
+const MISSING_WINDOWS_FEED =
+  'The latest release has no Windows update feed. Check GitHub Releases for a newer Windows build.'
 
 export class AutoUpdaterManager {
   private getWindows: (() => BrowserWindow | null)[]
   private checkInterval: NodeJS.Timeout | null = null
+  // Signed local bundles do not carry a published update feed.
+  private readonly hasUpdateConfiguration = existsSync(
+    join(process.resourcesPath ?? '', 'app-update.yml')
+  )
 
   constructor(
     getWindows: (() => BrowserWindow | null)[],
@@ -13,7 +22,7 @@ export class AutoUpdaterManager {
   ) {
     this.getWindows = getWindows
 
-    if (is.dev) return
+    if (is.dev || !this.hasUpdateConfiguration) return
 
     autoUpdater.autoDownload = false
     autoUpdater.autoInstallOnAppQuit = true
@@ -54,16 +63,14 @@ export class AutoUpdaterManager {
     })
 
     autoUpdater.on('error', (err) => {
-      if (this.isMissingWindowsRelease(err)) {
-        console.warn(`[updater] no Windows build in the latest release: ${err.message}`)
-        this.send({ status: 'not-available' })
-        return
-      }
-      this.send({ status: 'error', data: err.message })
+      this.send({
+        status: 'error',
+        data: this.isMissingWindowsRelease(err) ? MISSING_WINDOWS_FEED : err.message
+      })
     })
   }
 
-  // Releases published before Windows support carry no latest.yml; that is "no update", not a fault.
+  // A Mac-only latest release hides newer Windows builds, so "up to date" would be false (health-7).
   private isMissingWindowsRelease(err: Error & { code?: string }): boolean {
     return this.platform === 'win32' && err.code === 'ERR_UPDATER_CHANNEL_FILE_NOT_FOUND'
   }
@@ -71,19 +78,28 @@ export class AutoUpdaterManager {
   // A failure also arrives as the 'error' event, which is what the windows are told; the
   // returned promise is settled here so it is not an unhandled rejection as well.
   checkForUpdates(): void {
-    if (!is.dev) void Promise.resolve(autoUpdater.checkForUpdates()).catch(() => undefined)
+    if (is.dev) return
+    if (!this.hasUpdateConfiguration) {
+      this.send({
+        status: 'error',
+        data: 'Updates are unavailable in this local build. Reinstall to update.'
+      })
+      return
+    }
+    void Promise.resolve(autoUpdater.checkForUpdates()).catch(() => undefined)
   }
 
   downloadUpdate(): void {
-    if (!is.dev) void Promise.resolve(autoUpdater.downloadUpdate()).catch(() => undefined)
+    if (!is.dev && this.hasUpdateConfiguration)
+      void Promise.resolve(autoUpdater.downloadUpdate()).catch(() => undefined)
   }
 
   quitAndInstall(): void {
-    autoUpdater.quitAndInstall()
+    if (!is.dev && this.hasUpdateConfiguration) autoUpdater.quitAndInstall()
   }
 
   startAutoCheck(intervalMs = 4 * 60 * 60 * 1000): void {
-    if (is.dev) return
+    if (is.dev || !this.hasUpdateConfiguration) return
     setTimeout(() => this.checkForUpdates(), 10_000)
     this.checkInterval = setInterval(() => this.checkForUpdates(), intervalMs)
   }

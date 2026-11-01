@@ -11,16 +11,17 @@ import { SamuraiFrame } from './SamuraiFrame'
 import { EdoRoomFloors, EdoSlab } from './EdoFloor'
 import { EdoWalls } from './EdoWalls'
 import { EdoDesk, EdoDoorway, EdoElevator, EdoRoomDressing, EdoRoomSign } from './EdoRoom'
-import { EdoTower } from './EdoDistrict'
 import { BRASS, EDO } from './palettes'
 import { BrassCompanyZone, BrassProjectOffice, EdoCompanyZone, EdoProjectOffice } from './ZoneKits'
 import type { OfficeTheme } from './types'
+import { WORKSTATIONS } from './workstations'
 
 export const neoEdoSteam: OfficeTheme = {
   id: 'neo-edo-steam',
   label: 'Neo Edo Steam',
   description: 'A lantern-lit cedar atelier within a vast steam-powered pagoda district.',
   palette: EDO,
+  workstation: WORKSTATIONS.edo,
   town: EDO_TOWN,
   robot: {
     Model: SamuraiFrame,
@@ -44,8 +45,7 @@ export const neoEdoSteam: OfficeTheme = {
       Lounge: EdoLounge,
       Ambient: EdoAmbient
     }
-  },
-  world: { Tower: EdoTower }
+  }
 }
 
 export const brassWorkshop: OfficeTheme = {
@@ -76,6 +76,5 @@ export const brassWorkshop: OfficeTheme = {
       Lounge: BrassLounge,
       Ambient: BrassAmbient
     }
-  },
-  world: { Tower: brass.BrassTower }
+  }
 }

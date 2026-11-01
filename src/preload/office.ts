@@ -7,8 +7,25 @@ import type {
   PermissionDecision,
   ProviderId
 } from '../shared/office/types'
+import type { WorldSaveReply } from '../shared/office/world-sync'
+
+let isNativeVisible = true
+const visibilityListeners = new Set<() => void>()
+// Chromium can keep document.visibilityState visible after a native minimize.
+ipcRenderer.on('office:visibility', (_event, isVisible: unknown) => {
+  if (typeof isVisible !== 'boolean' || isVisible === isNativeVisible) return
+  isNativeVisible = isVisible
+  for (const listener of visibilityListeners) listener()
+})
 
 const officeBridge = {
+  isVisible: (): boolean => isNativeVisible,
+  onVisibilityChanged: (listener: () => void): (() => void) => {
+    visibilityListeners.add(listener)
+    return () => {
+      visibilityListeners.delete(listener)
+    }
+  },
   // Main replies by sending a hello with the current snapshot on 'office:feed'.
   ready: (): Promise<void> => ipcRenderer.invoke('office:ready'),
 
@@ -37,7 +54,11 @@ const officeBridge = {
   peek: (sessionKey: string): Promise<PeekResult> => ipcRenderer.invoke('office:peek', sessionKey),
 
   start: (projectKey: string, provider: ProviderId): Promise<InteractionResult> =>
-    ipcRenderer.invoke('office:start', projectKey, provider)
+    ipcRenderer.invoke('office:start', projectKey, provider),
+
+  // The city every Office of this user shows; main keeps it (health-13).
+  saveWorld: (document: unknown): Promise<WorldSaveReply> =>
+    ipcRenderer.invoke('office:world-save', document)
 }
 
 export type OfficeBridgeApi = typeof officeBridge

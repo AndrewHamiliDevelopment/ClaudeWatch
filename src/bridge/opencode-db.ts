@@ -1,4 +1,5 @@
-import type { DatabaseSync } from 'node:sqlite'
+import type { DatabaseSync, StatementSync } from 'node:sqlite'
+import { OPENCODE_V2_STATEMENTS } from './opencode-v2-db'
 
 // Everything the bridge may ask OpenCode's database. Each statement names its columns, its bound
 // and its index: with the index gone it fails instead of scanning a table of a million rows.
@@ -33,7 +34,8 @@ export const OPENCODE_STATEMENTS = {
     WHERE session_id = ?
     ORDER BY time_created DESC, id DESC LIMIT 1`,
   messageParts: `
-    SELECT json_extract(data, '$.type') AS type,
+    SELECT id,
+           json_extract(data, '$.type') AS type,
            json_extract(data, '$.tool') AS tool,
            json_extract(data, '$.state.status') AS status
     FROM part INDEXED BY part_message_id_id_idx
@@ -68,7 +70,8 @@ export const OPENCODE_STATEMENTS = {
     ORDER BY time_created DESC, id DESC LIMIT 1`,
   // A message holds its own parts, oldest first.
   messagePartsV2: `
-    SELECT json_extract(part.value, '$.type') AS type,
+    SELECT json_extract(part.value, '$.id') AS id,
+           json_extract(part.value, '$.type') AS type,
            json_extract(part.value, '$.name') AS tool,
            json_extract(part.value, '$.state.status') AS status
     FROM session_message INDEXED BY sqlite_autoindex_session_message_1,
@@ -77,7 +80,15 @@ export const OPENCODE_STATEMENTS = {
     ORDER BY part.key DESC LIMIT 16`
 } as const
 
-export type OpencodeStatement = keyof typeof OPENCODE_STATEMENTS
+export const OPENCODE_READ_STATEMENTS = {
+  ...OPENCODE_STATEMENTS,
+  ...OPENCODE_V2_STATEMENTS,
+  // Pre-idle V2 tables still need the process-backed compatibility reader.
+  schemaVersion: `SELECT name, has_model, EXISTS (
+      SELECT 1 FROM pragma_table_info('session_v2') WHERE name = 'time_idle'
+    ) AS has_live_state FROM (${OPENCODE_V2_STATEMENTS.schemaVersion})`
+}
+export type OpencodeStatement = keyof typeof OPENCODE_READ_STATEMENTS
 export type OpencodeRow = Record<string, unknown>
 export type OpencodeQuery = (
   statement: OpencodeStatement,
@@ -144,15 +155,18 @@ export function readOpencodeDb<Result>(
     } catch (error) {
       throw failureOf(error, 'unreadable')
     }
+    // Each statement compiles once per connection, however often it is asked (perf-4).
+    const compiled = new Map<OpencodeStatement, StatementSync>()
     // The same questions, asked of the tables the database's own OpenCode writes.
     return read((statement, ...values) => {
       const asked = isOpencode2 ? (OPENCODE_2_OF.get(statement) ?? statement) : statement
-      let prepared
+      let prepared = compiled.get(asked)
       try {
-        prepared = db.prepare(OPENCODE_STATEMENTS[asked])
+        prepared ??= db.prepare(OPENCODE_READ_STATEMENTS[asked])
       } catch (error) {
         throw failureOf(error, 'changed')
       }
+      compiled.set(asked, prepared)
       try {
         return prepared.all(...values)
       } catch (error) {

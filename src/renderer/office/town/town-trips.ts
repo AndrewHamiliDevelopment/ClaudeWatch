@@ -1,12 +1,11 @@
 import type { CitizenRoute } from '../citizens/route-pose'
-import type { ThemeZoneGroup } from '../logic/office-themes'
 import type { QualityLevel } from '../logic/quality'
 import { draw } from '../themes/lot-math'
 import { citizenTrips } from './citizen-trips'
 import type { VehicleRole } from './town-dress'
 import type { TownSize } from './town-grid'
 import type { TownPlan } from './town-plan'
-import { vehicleTrips } from './vehicle-trips'
+import { FLEET_TO_FIRST_FREIGHT, vehicleTrips } from './vehicle-trips'
 
 const DESTINATIONS = ['market', 'entertainment', 'park', 'plaza', 'civic'] as const
 export type Destination = (typeof DESTINATIONS)[number]
@@ -29,27 +28,9 @@ export interface Trip {
 
 export interface TownInput {
   plan: TownPlan
-  // Lot id to the company that dresses it (`lotOwners`).
-  owners: ReadonlyMap<string, string>
   floorThemeId: string
-  // A company zone's id to its theme.
-  themeIdByZone: ReadonlyMap<string, string>
   detail: QualityLevel
   hasVehicles?: boolean
-}
-
-// A company zone's id to the theme it wears.
-export function themeIdsByZone(groups: readonly ThemeZoneGroup[]): Map<string, string> {
-  return new Map(
-    groups.flatMap(({ themeId, companies }) =>
-      companies.map((company) => [company.id, themeId] as const)
-    )
-  )
-}
-
-// The theme a lot's movers wear: its owning company's, else the floor's.
-export function themeOfLot(town: TownInput, lotId: string): string {
-  return town.themeIdByZone.get(town.owners.get(lotId) ?? '') ?? town.floorThemeId
 }
 
 // How many movers each detail level sends out, and how many instanced draws they may cost.
@@ -62,10 +43,10 @@ export const MOVER_COUNTS: Record<
   light: { citizens: 14, vehicles: 0, citizenKinds: 3, vehicleKinds: 0 }
 }
 
-// A smaller town sends out fewer of the same movers. Seven vehicles still reach the first
-// freight cart, so a village keeps a tram, a cart and a runabout.
+// A smaller town sends out fewer of the same movers. A village still reaches the first freight
+// cart, so it keeps a tram, a cart and a runabout.
 const SIZE_MOVERS: Record<TownSize, { citizenShare: number; vehicleCap: number }> = {
-  village: { citizenShare: 0.5, vehicleCap: 7 },
+  village: { citizenShare: 0.5, vehicleCap: FLEET_TO_FIRST_FREIGHT },
   town: { citizenShare: 0.75, vehicleCap: 9 },
   city: { citizenShare: 1, vehicleCap: 12 }
 }

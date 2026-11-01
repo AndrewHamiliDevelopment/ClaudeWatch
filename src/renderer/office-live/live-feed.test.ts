@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { createCityEventLog } from './city-events'
 import { createLiveFeed, type FeedSource } from './live-feed'
 import type { FeedMessage, SessionRef } from '../../shared/office/types'
 import { createOfficeSettingsStore } from '../office/logic/office-settings'
@@ -70,19 +71,9 @@ describe('createLiveFeed', () => {
 
     expect(source.ready).toHaveBeenCalledOnce()
     const last = frames.at(-1)!
-    expect(last.floors.map((f) => f.label)).toEqual(['app'])
+    expect(last.floors.map((f) => f.label)).toEqual(['app · Floor 1'])
     expect(last.sessions.map((s) => s.key)).toEqual(['claude:a'])
     expect(last.agents.map((a) => a.agentKey)).toEqual(['claude:a'])
-  })
-
-  it('persists the layout so desks stay put across restarts', () => {
-    createLiveFeed(source, { storage: store }).subscribe(() => {})
-    listener?.({
-      type: 'hello',
-      v: 1,
-      snapshot: { rev: 1, generatedAtMs: 1, sessions: [session('claude:a')], sources: [] }
-    })
-    expect(JSON.parse(storage.get('claudewatch.office.layout')!).floors).toHaveLength(1)
   })
 
   it.each([
@@ -153,6 +144,54 @@ describe('createLiveFeed', () => {
     expect(frames.at(-1)?.accounts).toEqual(accounts)
   })
 
+  it('carries today’s totals per project to the frame, and keeps them across a patch without them', () => {
+    const frames: OfficeFrame[] = []
+    createLiveFeed(source, { storage: store }).subscribe((frame) => frames.push(frame))
+    const projectsToday = [{ projectKey: 'p_app', tokens: 2_000_000 }]
+    listener?.({
+      type: 'hello',
+      v: 1,
+      snapshot: { rev: 1, generatedAtMs: 1, sessions: [], sources: [], projectsToday }
+    })
+    vi.advanceTimersByTime(200)
+    expect(frames.at(-1)?.projectsToday).toEqual(projectsToday)
+    listener?.({ type: 'patch', v: 1, seq: 2, upserts: [session('claude:a')], removed: [] })
+    vi.advanceTimersByTime(200)
+    expect(frames.at(-1)?.projectsToday).toEqual(projectsToday)
+  })
+
+  it('tells the city event log of every feed message, stamped with the render clock', () => {
+    const events = createCityEventLog()
+    const observe = vi.spyOn(events, 'observe')
+    createLiveFeed(source, { storage: store, events }).subscribe(() => undefined)
+    const fresh = (attention: SessionRef['attention']): SessionRef => ({
+      ...session('claude:a'),
+      attention,
+      updatedAtMs: Date.now(),
+      observation: {
+        sourceId: 'claude',
+        observedAtMs: Date.now(),
+        staleAfterMs: 60_000,
+        coverage: 'own'
+      }
+    })
+    const projectsToday = [{ projectKey: 'p_app', tokens: 5 }]
+    listener?.({
+      type: 'hello',
+      v: 1,
+      snapshot: { rev: 1, generatedAtMs: 1, sessions: [fresh('none')], sources: [], projectsToday }
+    })
+    listener?.({ type: 'patch', v: 1, seq: 2, upserts: [fresh('done')], removed: [] })
+    listener?.({ type: 'patch', v: 1, seq: 2, upserts: [fresh('none')], removed: [] })
+    listener?.({ type: 'resync' })
+    expect(observe.mock.calls.map(([type, , atMs, today]) => [type, atMs, today])).toEqual([
+      ['hello', Date.now(), projectsToday],
+      ['patch', Date.now(), projectsToday],
+      ['resync', Date.now(), undefined]
+    ])
+    expect(events.active(Date.now()).map((event) => event.kind)).toEqual(['done'])
+  })
+
   it('emits only when the frame changed, not on every tick', () => {
     const frames: OfficeFrame[] = []
     createLiveFeed(source, { storage: store }).subscribe((frame) => frames.push(frame))
@@ -166,6 +205,27 @@ describe('createLiveFeed', () => {
     const settled = frames.length
     vi.advanceTimersByTime(5_000)
     expect(frames).toHaveLength(settled)
+  })
+
+  it('a frame’s structure revision moves only when the agents’ structure does', () => {
+    const frames: OfficeFrame[] = []
+    createLiveFeed(source, { storage: store }).subscribe((frame) => frames.push(frame))
+    listener?.({
+      type: 'hello',
+      v: 1,
+      snapshot: { rev: 1, generatedAtMs: 1, sessions: [session('claude:a')], sources: [] }
+    })
+    vi.advanceTimersByTime(300_000)
+    const settled = frames.at(-1)!
+    expect(settled.structureRevision).toEqual(expect.any(Number))
+    const quiet = { ...session('claude:a'), updatedAtMs: 2 }
+    listener?.({ type: 'patch', v: 1, seq: 2, upserts: [quiet], removed: [] })
+    vi.advanceTimersByTime(200)
+    expect(frames.at(-1)).not.toBe(settled)
+    expect(frames.at(-1)?.structureRevision).toBe(settled.structureRevision)
+    listener?.({ type: 'patch', v: 1, seq: 3, upserts: [session('claude:b')], removed: [] })
+    vi.advanceTimersByTime(200)
+    expect(frames.at(-1)?.structureRevision).toBeGreaterThan(settled.structureRevision ?? 0)
   })
 
   it('hands the scene the same floors until the floor itself changes', () => {
@@ -203,9 +263,10 @@ describe('createLiveFeed', () => {
       'claude:a': { floorId: 'hq', plate: 0, bay: 1, companyKey: 'c_test', projectKey: 'p_app' },
       'claude:b': { floorId: 'hq', plate: 0, bay: 0, companyKey: 'c_test', projectKey: 'p_app' }
     }
+    const frames: OfficeFrame[] = []
     const openWith = (saved: unknown): (() => void) => {
       storage.set(LAYOUT_KEY, JSON.stringify(saved))
-      const frames: OfficeFrame[] = []
+      frames.length = 0
       createLiveFeed(source, { storage: store }).subscribe((frame) => frames.push(frame))
       return () => {
         listener?.({
@@ -225,19 +286,18 @@ describe('createLiveFeed', () => {
         ])
       }
     }
-    const bayOfA = (): number => JSON.parse(storage.get(LAYOUT_KEY)!).reservations['claude:a'].bay
+    // The bay ends the room id an agent sits in.
+    const bayOfA = (): number =>
+      Number(
+        frames
+          .at(-1)
+          ?.agents.find((agent) => agent.agentKey === 'claude:a')
+          ?.roomId?.split(':')
+          .at(-1)
+      )
 
     it('is still used when it is well formed', () => {
       const hello = openWith({ version: 1, floors: [], reservations })
-      expect(hello).not.toThrow()
-      expect(bayOfA()).toBe(1)
-    })
-
-    it('is still used when it is one the office itself saved', () => {
-      openWith({ version: 1, floors: [], reservations })()
-      const written = JSON.parse(storage.get(LAYOUT_KEY)!)
-      expect(written.floors[0].zones).not.toHaveLength(0)
-      const hello = openWith(written)
       expect(hello).not.toThrow()
       expect(bayOfA()).toBe(1)
     })
@@ -262,19 +322,6 @@ describe('createLiveFeed', () => {
       expect(hello).not.toThrow()
       expect(bayOfA()).toBe(0)
     })
-  })
-
-  it('does not rewrite the stored layout when it did not change', () => {
-    const setItem = vi.spyOn(store, 'setItem')
-    createLiveFeed(source, { storage: store }).subscribe(() => {})
-    const hello: FeedMessage = {
-      type: 'hello',
-      v: 1,
-      snapshot: { rev: 1, generatedAtMs: 1, sessions: [session('claude:a')], sources: [] }
-    }
-    listener?.(hello)
-    listener?.({ ...hello, snapshot: { ...hello.snapshot, rev: 2 } })
-    expect(setItem).toHaveBeenCalledTimes(1)
   })
 
   describe('lounge trips', () => {
@@ -317,7 +364,8 @@ describe('createLiveFeed', () => {
       expect(place(frames)).toBeUndefined()
 
       settings.set('loungeTrips', true)
-      vi.advanceTimersByTime(200)
+      // Re-enabling cannot interrupt the physical walk back to the desk.
+      vi.advanceTimersByTime(LOUNGE_MS)
       expect(place(frames)).toBe('lounge')
 
       // A stopped feed no longer listens for the setting.
@@ -326,6 +374,28 @@ describe('createLiveFeed', () => {
       settings.set('loungeTrips', false)
       vi.advanceTimersByTime(1_000)
       expect(frames).toHaveLength(count)
+    })
+
+    // A walk moves only the pose store, so sitting down needs a frame of its own for the card.
+    it('sends a frame once the gamer reaches its corner seat, not only when it sets off', () => {
+      const frames: OfficeFrame[] = []
+      const feed = createLiveFeed(source, { storage: store })
+      feed.subscribe((frame) => frames.push(frame))
+      helloDone()
+      vi.advanceTimersByTime(LOUNGE_MS)
+      const last = frames.at(-1)!
+      const seats = last.floors.flatMap((floor) =>
+        floor.zones.flatMap((zone) => zone.lounge?.seats ?? [])
+      )
+      const seatGap = ({ x, z }: { x: number; z: number }): number =>
+        Math.min(...seats.map((seat) => Math.hypot(x - seat.x, z - seat.z)))
+      const setOff = frames.find((frame) => frame.agents[0].place === 'lounge')
+      expect(setOff && seatGap(setOff.agents[0])).toBeGreaterThan(1)
+      // It has sat down: the live pose is on a seat, so only the frame can be missing.
+      expect(seatGap(feed.poses.read('claude:a')!)).toBeLessThan(0.01)
+      expect(place(frames)).toBe('lounge')
+      // Sent on the step it came within reach of the seat, as the seated pose counts arrival.
+      expect(seatGap(last.agents[0])).toBeLessThan(0.2)
     })
   })
 

@@ -5,10 +5,14 @@ import type {
   InteractionResult,
   PeekResult,
   PermissionDecision,
+  ProjectTokens,
   ProviderId,
   SessionRef,
   SourceHealth
 } from '../../shared/office/types'
+import type { BodyFootprint } from '../../shared/office/body-footprints'
+import type { WorldDocumentStore } from '../office-live/world-document-store'
+import type { WorldVenue } from '../../shared/office/world-document'
 
 // All lengths in metres, floor-local, 1 unit = 1 m, Y up. Plain data: Phase 6 maps the sim's LayoutMap into it.
 // The floor-local origin is the gate, where agents walk in; the plate has its own centre
@@ -22,6 +26,8 @@ export interface DeskSlot {
 }
 
 export interface RoomGeometry {
+  worldTarget?: string
+  themeId?: string
   id: string
   sessionKey: string | null
   x: number
@@ -70,6 +76,12 @@ export interface ZoneGeometry {
 }
 
 export interface FloorGeometry {
+  streetBlocks?: { x: number; z: number; width: number; depth: number }[]
+  buildingId?: string
+  floorNumber?: number
+  elevation?: number
+  connector?: { x: number; z: number }
+  entrance?: { x: number; z: number }
   floorId: string
   label: string
   plate: number
@@ -94,9 +106,20 @@ export interface OfficeFrame {
   sources: SourceHealth[]
   // Labels only (never an address); absent when accounts are not being watched.
   accounts?: AccountRef[]
+  // Today's tokens per project from the accounts ledger; absent on a host without one.
+  projectsToday?: readonly ProjectTokens[]
+  feedReceivedAtMs?: number
+  feedRevision?: number
+  // Moves when the agents change in anything but their poses; absent from feeds that keep none.
+  structureRevision?: number
+  worldRevision?: number
+  venues?: readonly WorldVenue[]
 }
 
 export interface OfficeFeed {
+  getWorldDocumentStore?(): WorldDocumentStore | null
+  // Local renderer simulation only; no body positions are sent to a provider or backend.
+  setBodyObstacles?: (bodies: readonly BodyFootprint[]) => void
   // Set by a page that may only watch: the HUD then leaves out what would be refused.
   isViewOnly?: boolean
   subscribe(listener: (frame: OfficeFrame) => void): () => void

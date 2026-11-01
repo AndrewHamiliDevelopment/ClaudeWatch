@@ -6,6 +6,7 @@ import { createLiveFeed, type FeedSource } from '../../office-live/live-feed'
 import { officeThemes } from '../logic/office-themes'
 import { VIOLET_COURT_ID } from '../themes/violet-court/roster'
 import { fixtureLayout } from './fixture-layout'
+import { browserStorage } from '../../office-live/browser-storage'
 
 export const FIXTURE_TICK_MS = 2000
 
@@ -31,21 +32,70 @@ function seedThemes(): void {
 }
 
 // The scripted sessions arrive the way the bridge sends them, so the preview runs the same
-// sim as the app: agents walk in, walk out and go to the lounge.
+// sim as the app: agents appear at their desks, fade where they stand and play in the game corner.
 function scriptedSource(tickMs: number): FeedSource {
   return {
     ready: async () => {},
     onFeedMessage(listener) {
       let tick = 0
-      const sessions = (): SessionRef[] => fixtureSessions(tick, Date.now())
+      const sessions = (): SessionRef[] => {
+        const nowMs = Date.now()
+        return fixtureSessions(tick, nowMs).map((session) => ({
+          ...session,
+          observation: {
+            sourceId: 'preview-fixture',
+            observedAtMs: nowMs,
+            staleAfterMs: 60000,
+            coverage: 'own'
+          },
+          subagents: session.subagents.map((member) => ({
+            ...member,
+            attention: 'none',
+            observation: {
+              sourceId: 'preview-fixture',
+              observedAtMs: nowMs,
+              staleAfterMs: 60000,
+              coverage: 'own'
+            }
+          }))
+        }))
+      }
       listener({
         type: 'hello',
         v: 1,
-        snapshot: { rev: 0, generatedAtMs: Date.now(), sessions: sessions(), sources: [] }
+        snapshot: {
+          rev: 0,
+          generatedAtMs: Date.now(),
+          sessions: sessions(),
+          sources: [
+            {
+              id: 'preview-fixture',
+              ok: true,
+              detail: 'Sample data',
+              checkedAtMs: Date.now(),
+              staleAfterMs: 60000
+            }
+          ]
+        }
       })
       const timer = setInterval(() => {
         tick += 1
-        listener({ type: 'patch', v: 1, seq: tick, upserts: sessions(), removed: [] })
+        listener({
+          type: 'patch',
+          v: 1,
+          seq: tick,
+          upserts: sessions(),
+          removed: [],
+          sources: [
+            {
+              id: 'preview-fixture',
+              ok: true,
+              detail: 'Sample data',
+              checkedAtMs: Date.now(),
+              staleAfterMs: 60000
+            }
+          ]
+        })
       }, tickMs)
       return () => clearInterval(timer)
     },
@@ -57,8 +107,10 @@ function scriptedSource(tickMs: number): FeedSource {
     // The browser preview has no agents to talk to; actions succeed so the UI can be exercised.
     send: async () => ({ success: true }),
     respond: async () => ({ success: true }),
-    peek: async () => ({
+    peek: async (agentKey) => ({
       success: true,
+      capturedAtMs: Date.now(),
+      targetAgentKey: agentKey,
       fingerprint: 'preview-screen',
       lines: [
         '$ npm test',
@@ -76,6 +128,7 @@ function scriptedSource(tickMs: number): FeedSource {
 
 export function createFixtureFeed(options: { tickMs?: number } = {}): OfficeFeed {
   seedThemes()
-  // No storage: every preview starts from a fresh map.
-  return createLiveFeed(scriptedSource(options.tickMs ?? FIXTURE_TICK_MS), { storage: null })
+  return createLiveFeed(scriptedSource(options.tickMs ?? FIXTURE_TICK_MS), {
+    storage: browserStorage()
+  })
 }

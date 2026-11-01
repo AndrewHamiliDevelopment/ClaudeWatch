@@ -14,6 +14,7 @@ build/widget/
 release-notes.md
 # HTML review twins generated from docs/plans/*.md
 docs/plans/*.html
+claudedocs/reports/*.html
 # Agent worktrees and plan workspaces stay local
 .claude/.worktree/
 .superpowers/
@@ -21,3 +22,11 @@ docs/plans/*.html
 recordings/
 *.tsbuildinfo
 .claude/worktrees/
+.claude/archive/
+# Signing material stays in the keychain, never in the repo
+*.p12
+*.cer
+*.certSigningRequest
+*.pem
+*.key
+*.mobileprovision

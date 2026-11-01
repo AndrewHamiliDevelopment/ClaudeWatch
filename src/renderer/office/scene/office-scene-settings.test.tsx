@@ -7,12 +7,18 @@ import { createPlayer } from '../player/walking'
 import { pinQuality } from '../quality-store'
 import { themeForTeam } from '../themes/registry'
 import { sceneExtent } from '../themes/surroundings'
+import { distributedTown } from '../town/distributed-town'
+import { railwayReach } from '../town/railway-plan'
 import { townOf } from '../town/use-town-plan'
 import OfficeScene from './OfficeScene'
 
 // Each layer is stood in for by a marker, so what the scene mounts can be read off the page.
 // The lights and the background are three.js elements, which the DOM cannot draw.
 vi.mock('@react-three/fiber', () => ({
+  useFrame: () => undefined,
+  // The company lens asks for its invalidate.
+  useThree: (select: (state: { invalidate: () => void }) => unknown) =>
+    select({ invalidate: () => undefined }),
   Canvas: ({ children }: { children?: ReactNode }) => (
     <div>
       {Children.toArray(children).filter(
@@ -26,12 +32,12 @@ vi.mock('./BatchedScene', () => ({
 }))
 vi.mock('./Horizon', () => ({ Horizon: () => <i data-layer="ground" /> }))
 vi.mock('./FloorView', () => ({ FloorView: () => <i data-layer="floor" /> }))
+vi.mock('./BuildingWindows', () => ({ BuildingWindows: () => null }))
 vi.mock('./Robot', () => ({
   RobotCrew: ({ agents }: { agents: readonly unknown[] }) => (
     <i data-layer="agents" data-count={agents.length} />
   )
 }))
-vi.mock('./WorldView', () => ({ TowerView: () => <i data-layer="tower" /> }))
 vi.mock('../town/TownGround', () => ({ TownGround: () => <i data-layer="roads" /> }))
 vi.mock('../town/TownView', async (original) => ({
   ...(await original<typeof import('../town/TownView')>()),
@@ -40,9 +46,20 @@ vi.mock('../town/TownView', async (original) => ({
   ),
   TownAmbient: ({ share }: { share: number }) => <i data-layer="ambient" data-share={share} />
 }))
-vi.mock('./ZonePickers', () => ({ ZonePickers: () => <i data-layer="pickers" /> }))
-vi.mock('./CardProjector', () => ({ CardProjector: () => <i data-layer="cards" /> }))
+vi.mock('./ZonePickers', async (original) => ({
+  ...(await original<typeof import('./ZonePickers')>()),
+  ZonePickers: () => <i data-layer="pickers" />
+}))
+vi.mock('./CardProjector', () => ({
+  CardProjector: () => <i data-layer="cards" />,
+  OFFSCREEN: 'translate(-10000px, -10000px)'
+}))
 vi.mock('./NameCards', () => ({ NameCardLayer: () => null }))
+vi.mock('./OfficeNames', () => ({ OfficeNameLayer: () => null, OfficeNameProjector: () => null }))
+vi.mock('./WorkstationScreens', () => ({ WorkstationScreens: () => null }))
+vi.mock('./CitySigns', () => ({ CitySigns: () => null }))
+vi.mock('./LeaderCrowns', () => ({ LeaderCrowns: () => null }))
+vi.mock('./ConstructionRig', () => ({ ConstructionRig: () => null }))
 vi.mock('./CameraRig', () => ({
   CameraRig: ({ scene }: { scene: object }) => (
     <i data-layer="camera" data-scene={JSON.stringify(scene)} />
@@ -56,6 +73,9 @@ vi.mock('../player/PlayerLayer', () => ({
   PlayerLayer: ({ solids, extent }: { solids: readonly unknown[]; extent: object }) => (
     <i data-layer="player" data-solids={solids.length} data-extent={JSON.stringify(extent)} />
   )
+}))
+vi.mock('./RailwayStructures', () => ({
+  RailwayLayer: () => <i data-layer="railway" />
 }))
 vi.mock('../citizens/MoverLayer', () => ({
   MoverLayer: (props: {
@@ -79,6 +99,8 @@ const floor = makeFloor({
   rooms: [makeRoom({ id: 'r1', sessionKey: session.key })]
 })
 const agents = [makeAgent({ agentKey: session.key })]
+// One list for every render, as the feed keeps its floors while their geometry stands.
+const floors = [floor]
 
 beforeEach(() => {
   localStorage.clear()
@@ -94,6 +116,8 @@ function mount(off: readonly OfficeSettingKey[] = []) {
       floors={[{ floorId: 'f1', label: 'Main', attentionCount: 0 }]}
       sessions={[session]}
       floor={floor}
+      visibleFloors={floors}
+      allFloors={floors}
       agents={agents}
       cards={[]}
       stacks={[]}
@@ -119,10 +143,62 @@ function mount(off: readonly OfficeSettingKey[] = []) {
   return { layer, layers }
 }
 
-const TOWN = ['roads', 'town', 'tower', 'ambient']
+// The railway ring stands round the town and goes with it.
+const TOWN = ['roads', 'town', 'ambient', 'railway']
+
+it('renders real agents on all three usable storeys in the same canvas', () => {
+  const allFloors = [0, 5.5, 11].map((elevation, index) => ({
+    ...floor,
+    floorId: `building:one:${index + 1}`,
+    elevation,
+    buildingId: 'building:one',
+    floorNumber: index + 1
+  }))
+  const allAgents = allFloors.map((surface, index) =>
+    makeAgent({
+      agentKey: `claude:floor-${index}`,
+      floorId: surface.floorId,
+      ...{ physicalFloorId: surface.floorId, elevation: surface.elevation }
+    })
+  )
+  const { container } = render(
+    <OfficeScene
+      theme={themeForTeam()}
+      floors={allFloors.map((surface) => ({
+        floorId: surface.floorId,
+        label: surface.label,
+        attentionCount: 0
+      }))}
+      sessions={[]}
+      floor={allFloors[0]}
+      agents={allAgents}
+      visibleFloors={allFloors}
+      allFloors={allFloors}
+      cards={[]}
+      stacks={[]}
+      selectedAgentKey={null}
+      wallsMode="cutaway"
+      cameraRequest={null}
+      metrics={{ fps: 0, frameMs: 0, drawCalls: 0, triangles: 0 }}
+      onSelectAgent={vi.fn()}
+      onFlyToAgent={vi.fn()}
+      onFlyToZone={vi.fn()}
+      reviewableKeys={new Set()}
+      onReview={vi.fn()}
+      speakingAgentKey={null}
+    />
+  )
+  expect(container.querySelectorAll('[data-layer="floor"]')).toHaveLength(3)
+  const crews = [...container.querySelectorAll('[data-layer="agents"]')]
+  expect(crews).toHaveLength(3)
+  expect(crews.map((crew) => crew.getAttribute('data-count'))).toEqual(['1', '1', '1'])
+  for (const layer of ['camera', 'governor', 'citizens', 'metrics']) {
+    expect(container.querySelectorAll(`[data-layer="${layer}"]`)).toHaveLength(1)
+  }
+})
 const ALWAYS = ['ground', 'floor', 'agents', 'pickers', 'cards', 'camera', 'governor', 'metrics']
-// The town of a first start: a village, the default size.
-const { plan, green } = townOf(floor, null, 'full', 'village')
+// The city the scene lays round its one floor.
+const { plan } = distributedTown(townOf(floor, null, 'city'), [floor])
 
 it('mounts the whole living world while every switch is on', () => {
   const { layer, layers } = mount()
@@ -145,23 +221,16 @@ it('takes the buildings, the roads, the tower and the ambient life out when the 
 
 it('frames the whole town, to its last road, while the town is on', () => {
   const { layer } = mount()
-  expect(JSON.parse(layer('camera')?.dataset.scene ?? '{}')).toMatchObject(plan.extent)
+  // The scene box reaches the railway ring outside the town; the player keeps to the town.
+  expect(JSON.parse(layer('camera')?.dataset.scene ?? '{}')).toMatchObject(
+    railwayReach(plan.extent, plan)
+  )
   expect(JSON.parse(layer('player')?.dataset.extent ?? '{}')).toEqual(plan.extent)
 })
 
-it('frames and walks the larger town once the owner picks a city', () => {
-  officeSettings.setTownSize('city')
+it('closes the town’s lots to the player, and hands the citizens the plan', () => {
   const { layer } = mount()
-  const city = townOf(floor, null, 'full', 'city').plan
-  expect(JSON.parse(layer('camera')?.dataset.scene ?? '{}')).toMatchObject(city.extent)
-  expect(JSON.parse(layer('player')?.dataset.extent ?? '{}')).toEqual(city.extent)
-  expect(city.extent.width).toBeGreaterThan(plan.extent.width)
-})
-
-it('closes the town’s lots and the belt’s plots to the player, and hands the citizens the plan', () => {
-  const { layer } = mount()
-  const solidCount = String(plan.lots.length + green.length)
-  expect(layer('player')?.dataset.solids).toBe(solidCount)
+  expect(layer('player')?.dataset.solids).toBe(String(plan.lots.length))
   expect(layer('citizens')?.dataset.solids).toBe(String(plan.lots.length))
 })
 
@@ -169,18 +238,7 @@ it('mounts no ambient mover when ambient motion is off, and keeps the buildings'
   const { layer, layers } = mount(['ambient'])
   expect(layers()).not.toContain('ambient')
   expect(Number(layer('town')?.dataset.lots)).toBeGreaterThan(0)
-  expect(layers()).toEqual(expect.arrayContaining(['roads', 'town', 'tower']))
-})
-
-it('draws less of the town at a lighter detail level, by the plan’s own thinning', () => {
-  officeSettings.setTownSize('city')
-  pinQuality('light')
-  const { layer } = mount()
-  const full = townOf(floor, null, 'full', 'city').plan
-  expect(Number(layer('town')?.dataset.lots)).toBe(
-    townOf(floor, null, 'light', 'city').plan.lots.length
-  )
-  expect(Number(layer('town')?.dataset.lots)).toBeLessThan(full.lots.length)
+  expect(layers()).toEqual(expect.arrayContaining(['roads', 'town']))
 })
 
 it('does not mount the citizens layer when citizens are off', () => {

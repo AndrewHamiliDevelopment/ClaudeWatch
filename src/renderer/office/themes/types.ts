@@ -1,5 +1,7 @@
 import type { ComponentType, RefObject } from 'react'
-import type { Group, Mesh } from 'three'
+import type { BufferGeometry, Group, Mesh } from 'three'
+import type { RobotMood, RobotPose } from '../logic/character-pose'
+import type { SeatEase } from '../logic/seat-ease'
 import type { AgentView, ProviderId } from '../../../shared/office/types'
 import type {
   DeskSlot,
@@ -48,6 +50,27 @@ export interface RobotRig {
   eye: RefObject<Mesh | null>
   thought: RefObject<Group | null>
   puffs: readonly RefObject<Mesh | null>[]
+  leftElbow?: RefObject<Group | null>
+  rightElbow?: RefObject<Group | null>
+  leftHip?: RefObject<Group | null>
+  rightHip?: RefObject<Group | null>
+  leftKnee?: RefObject<Group | null>
+  rightKnee?: RefObject<Group | null>
+}
+
+export interface ThemePoseOptions {
+  mood: RobotMood
+  time: number
+  phase: number
+  delta: number
+  isReducedMotion: boolean
+  isMoving?: boolean
+  travelDistance?: number
+  isSubagent?: boolean
+  isInLounge?: boolean
+  seatPresence?: 'workstation' | 'lounge' | 'none'
+  // The figure's sit or stand, carried across frames and advanced by the pose adapter.
+  seat?: SeatEase
 }
 
 // Root translation, scale, hit capsule and selection remain owned by Robot's controller.
@@ -80,6 +103,13 @@ export interface ZoneProps {
 export interface DeskProps extends RoomProps {
   slot: DeskSlot
 }
+
+// Authored desk-local coordinates; the screen faces toward the seated worker (-Z).
+export interface WorkstationSpec {
+  screen: readonly [number, number, number]
+  width: number
+  height: number
+}
 export interface LoungeProps {
   lounge: LoungeGeometry
 }
@@ -95,11 +125,6 @@ export interface TowerFloor {
   label: string
   agentCount?: number
   attentionCount: number
-}
-export interface TowerProps {
-  // Unused by the office since the one-floor model; the Tower is a landmark only.
-  onFocusFloor?: (floorId: string) => void
-  floors: readonly TowerFloor[]
 }
 
 // Drawn once per floor, by the floor's default theme.
@@ -151,15 +176,17 @@ export interface OfficeTheme {
   label: string
   description: string
   palette: ThemePalette
+  workstation?: WorkstationSpec
   // Absent in a theme without a cast: its agents play no named character.
   roster?: ThemeRoster
   // Zone-scoped, like the zone kit: a robot wears the theme of its own room.
-  robot: { Model: ComponentType<RobotModelProps>; skins: Record<ProviderId, RobotSkin> }
-  kit: { floor: FloorKit; zone: ZoneKit }
-  // Floor-scoped: one horizon, from the floor's default theme.
-  world: {
-    Tower: ComponentType<TowerProps>
+  robot: {
+    Model: ComponentType<RobotModelProps>
+    skins: Record<ProviderId, RobotSkin>
+    applyPose?: (rig: RobotRig, pose: RobotPose, options: ThemePoseOptions) => void
   }
+  playerGeometry?: (palette: ThemePalette) => BufferGeometry
+  kit: { floor: FloorKit; zone: ZoneKit }
   // The theme's share of the zoned town, as data. Absent until the theme has drawn it.
   town?: TownDress
 }

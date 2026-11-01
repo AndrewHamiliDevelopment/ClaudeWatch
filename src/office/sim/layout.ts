@@ -1,12 +1,16 @@
-import type { SessionRef } from '../../shared/office/types'
+import type { AgentView, SessionRef } from '../../shared/office/types'
+import type { WorldVenue } from '../../shared/office/world-document-types'
 import { LANE, packCompanies } from './allocation'
 import { draftCompany, settleCompany } from './projects'
-import type { FloorLayout, ZoneLayout } from './rooms'
+import type { FloorLayout, Slot, ZoneLayout } from './rooms'
 export type { FloorLayout, LoungeLayout, RoomLayout, Slot, ZoneLayout } from './rooms'
 
 export interface LayoutMap {
   version: 1
   floors: FloorLayout[]
+  // Derived alongside floors; automatic adaptation never changes the saved document.
+  effectiveVenues?: readonly WorldVenue[]
+  streetBlocks?: { x: number; z: number; width: number; depth: number }[]
   reservations: Record<
     string,
     { floorId: string; plate: number; bay: number; companyKey: string; projectKey: string }
@@ -62,4 +66,25 @@ export function buildLayout(sessions: SessionRef[], saved: LayoutMap | undefined
     ],
     reservations: Object.fromEntries(drafts.flatMap((draft) => Object.entries(draft.reservations)))
   }
+}
+
+// Each map's floors by id, built on first look: a new map is a new floors array.
+const floorIndexes = new WeakMap<readonly FloorLayout[], Map<string, FloorLayout>>()
+
+// The floor and desk a view names, or undefined once the map no longer has them.
+export function deskOf(
+  floors: readonly FloorLayout[],
+  view: Pick<AgentView, 'floorId' | 'roomId' | 'slotId'>
+): { floor: FloorLayout; desk: Slot } | undefined {
+  let byId = floorIndexes.get(floors)
+  if (!byId) {
+    byId = new Map()
+    for (const floor of floors) if (!byId.has(floor.id)) byId.set(floor.id, floor)
+    floorIndexes.set(floors, byId)
+  }
+  const floor = byId.get(view.floorId)
+  const desk = floor?.rooms
+    .find((room) => room.id === view.roomId)
+    ?.slots.find((slot) => slot.id === view.slotId)
+  return floor && desk ? { floor, desk } : undefined
 }

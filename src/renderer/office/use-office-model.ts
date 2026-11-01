@@ -1,50 +1,147 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { parseAgentKey } from '../../shared/office/agent-key'
 import { buildTokenLedger } from '../deck/tokens'
+import { structuralKey } from '../office-live/pose-store'
 import { buildAgentFacts, type AgentFacts } from './hud/agent-facts'
 import { buildAttentionQueue } from './logic/attention-queue'
-import { bayForAgent, memberForAgent, sessionForAgent, summariseFloors } from './logic/floor-model'
+import { citySignalStore, type CitySignalStore } from './logic/city-signal-store'
+import { bayForAgent, summariseFloors } from './logic/floor-model'
+import { useOfficeSettings } from './logic/office-settings'
+import { createRoleBook, maskFrame, type RoleBook } from './logic/role-names'
 import { reachTarget } from './logic/interactions'
 import { buildNameCards, buildProjectStacks } from './logic/name-cards'
+import { workstationSeat } from './logic/workstation-framing'
 import { resolveTheme, type ThemeAssignments } from './logic/office-themes'
-import { buildCompanyList, buildOfficesTree } from './logic/zone-model'
+import {
+  buildCompanyList,
+  buildOfficeActivity,
+  buildOfficesTree,
+  nextActivityChangeAtMs
+} from './logic/zone-model'
 import type { OfficeFrame } from './scene-model'
-import { themeCharacter } from './themes/registry'
+import { getTheme, themeCharacter } from './themes/registry'
 
-// What the HUD and the scene show, derived from the latest frame. The feed keeps `sessions`
-// between its messages while a frame arrives for every step, so the lists follow the sessions.
+const isSameApartFromAgents = (a: OfficeFrame, b: OfficeFrame): boolean =>
+  [...new Set([...Object.keys(a), ...Object.keys(b)])].every(
+    (field) => field === 'agents' || Object.is(Reflect.get(a, field), Reflect.get(b, field))
+  )
+
+// The live feed already keyed the agents for its revision; a feed without one is keyed here.
+const structureOf = (frame: OfficeFrame): number | string =>
+  frame.structureRevision ?? structuralKey(frame.agents)
+
+// The frame as of its last structural change: a frame that only moved agents keeps it (perf-2).
+function useStructuralFrame(frame: OfficeFrame | null): OfficeFrame | null {
+  const kept = useRef<{ frame: OfficeFrame; structure: number | string } | null>(null)
+  if (!frame) return null
+  const structure = structureOf(frame)
+  const previous = kept.current
+  if (previous?.structure === structure && isSameApartFromAgents(previous.frame, frame))
+    return previous.frame
+  kept.current = { frame, structure }
+  return frame
+}
+
+// Local midnight after `atMs`, when today's spend starts over.
+function nextMidnightMs(atMs: number): number {
+  const midnight = new Date(atMs)
+  midnight.setHours(24, 0, 0, 0)
+  return midnight.getTime()
+}
+
+export interface OfficeClock {
+  // The render clock: newly received evidence is judged against it, never an older tick (trap).
+  nowMs: number
+  // Changes only when the clock wakes the root.
+  wakes: number
+}
+
+// The Office root's one timer (perf-2): it wakes when evidence next turns fresh or stale, and at
+// midnight; never on a tick, so an idle office is never woken for nothing.
+export function useOfficeClock(frame: OfficeFrame | null): OfficeClock {
+  const [wakes, setWakes] = useState(0)
+  const nowMs = Date.now()
+  const wakeAtMs = frame
+    ? Math.min(nextActivityChangeAtMs(frame, nowMs) ?? Infinity, nextMidnightMs(nowMs))
+    : null
+  // `wakes` re-arms a wake that fired early, while the next change is still the same one.
+  useEffect(() => {
+    if (wakeAtMs === null) return
+    const timer = setTimeout(() => setWakes((count) => count + 1), wakeAtMs - Date.now())
+    return () => clearTimeout(timer)
+  }, [wakeAtMs, wakes])
+  return { nowMs, wakes }
+}
+
+// The city's signals come from the real frame: they carry keys and numbers, never names. They
+// change with a frame and at each of the root clock's wakes.
+export function useCitySignalFeed(
+  frame: OfficeFrame | null,
+  clock: OfficeClock,
+  store: CitySignalStore = citySignalStore
+): void {
+  const { wakes } = clock
+  useEffect(() => {
+    if (frame) store.update(frame, Date.now())
+  }, [frame, store, wakes])
+}
+
+// The page's one role book while names are hidden, else null. One book, so the HUD, the scene
+// and the layout editor all give a company the same letter.
+export function useNameRoles(): RoleBook | null {
+  const { hideNames } = useOfficeSettings()
+  const [roles] = useState(createRoleBook)
+  return hideNames ? roles : null
+}
+
+// The frame the HUD and scene draw. With names hidden, roles replace every name here, before
+// any DOM node or sign texture; the saved city is built from the feed, upstream of this.
+export function useVisibleFrame(
+  frame: OfficeFrame | null,
+  roles: RoleBook | null
+): OfficeFrame | null {
+  return useMemo(() => (frame && roles ? maskFrame(frame, roles) : frame), [frame, roles])
+}
+
+// What the HUD and the scene show, derived from the latest frame. Lists that do not depend on
+// where agents stand follow the frame's structure, so a walking step rebuilds none of them.
 export function useOfficeLists(
   frame: OfficeFrame | null,
   floorId: string | null,
-  selectedAgentKey: string | null
+  selectedAgentKey: string | null,
+  { nowMs }: OfficeClock
 ) {
   const sessions = frame?.sessions
+  const structural = useStructuralFrame(frame)
   const queue = useMemo(() => buildAttentionQueue(sessions ?? []), [sessions])
   // The Tower stays as a landmark showing the building's totals; it no longer picks floors.
-  const towerFloors = useMemo(() => (frame ? summariseFloors(frame) : []), [frame])
-  const companies = useMemo(() => (frame ? buildOfficesTree(frame) : []), [frame])
+  const towerFloors = useMemo(() => (structural ? summariseFloors(structural) : []), [structural])
+  const companies = useMemo(() => (structural ? buildOfficesTree(structural) : []), [structural])
+  const activity = useMemo(() => buildOfficeActivity(structural, nowMs), [structural, nowMs])
   const ledger = useMemo(() => buildTokenLedger(sessions ?? []), [sessions])
   const agentFacts = useMemo(
-    () => (frame ? buildAgentFacts(frame) : new Map<string, AgentFacts>()),
-    [frame]
+    () => (structural ? buildAgentFacts(structural) : new Map<string, AgentFacts>()),
+    [structural]
   )
   const floorAgents = useMemo(
     () => (frame ? frame.agents.filter((agent) => agent.floorId === floorId) : []),
     [frame, floorId]
   )
   const cards = useMemo(
-    () => (frame && floorId ? buildNameCards(frame, floorId, selectedAgentKey) : []),
-    [frame, floorId, selectedAgentKey]
+    () => (frame ? buildNameCards(frame, null, selectedAgentKey) : []),
+    [frame, selectedAgentKey]
   )
   const stacks = useMemo(
-    () => (frame && floorId ? buildProjectStacks(frame, floorId) : []),
-    [frame, floorId]
+    () => (structural ? buildProjectStacks(structural, null) : []),
+    [structural]
   )
-  const companyList = useMemo(() => (frame ? buildCompanyList(frame) : []), [frame])
+  const companyList = useMemo(() => (structural ? buildCompanyList(structural) : []), [structural])
   return {
     sessions,
     queue,
     towerFloors,
     companies,
+    activity,
     ledger,
     agentFacts,
     floorAgents,
@@ -63,8 +160,12 @@ export function selectionOf(
   floorThemeId: string
 ) {
   const agent = frame?.agents.find((candidate) => candidate.agentKey === selectedAgentKey)
-  const session = frame && agent ? sessionForAgent(frame, agent) : undefined
-  const member = agent ? memberForAgent(session, agent.agentKey) : undefined
+  const identity = frame && agent ? parseAgentKey(agent.agentKey, frame.sessions) : null
+  const hasCurrentIdentity = Boolean(
+    agent && identity && agent.isSubagent === (identity.member !== undefined)
+  )
+  const session = hasCurrentIdentity ? identity?.session : undefined
+  const member = hasCurrentIdentity ? identity?.member : undefined
   const target = session ? reachTarget(session, member) : undefined
   const character =
     frame && agent && session
@@ -74,5 +175,11 @@ export function selectionOf(
           bayForAgent(frame, agent)
         )
       : null
-  return { agent, session, member, target, character }
+  const themeId = session ? resolveTheme(session, themeAssignments, floorThemeId) : floorThemeId
+  const workstation = getTheme(themeId).workstation
+  const floor = frame?.floors.find((candidate) => candidate.floorId === agent?.floorId)
+  const canWorkstation = Boolean(
+    session && agent && floor && workstation && workstationSeat(agent, floor)
+  )
+  return { agent, session, member, target, character, workstation, canWorkstation }
 }

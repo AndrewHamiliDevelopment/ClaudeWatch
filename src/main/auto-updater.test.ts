@@ -18,6 +18,11 @@ const mockAutoUpdater = vi.hoisted(() => {
 })
 
 const mockIsDev = vi.hoisted(() => ({ value: false }))
+const mockUpdateConfiguration = vi.hoisted(() => ({ exists: true }))
+
+vi.mock('node:fs', () => ({
+  existsSync: vi.fn(() => mockUpdateConfiguration.exists)
+}))
 
 vi.mock('electron-updater', () => ({
   autoUpdater: mockAutoUpdater
@@ -49,6 +54,7 @@ describe('AutoUpdaterManager', () => {
     vi.clearAllMocks()
     vi.useFakeTimers()
     mockIsDev.value = false
+    mockUpdateConfiguration.exists = true
   })
 
   afterEach(() => {
@@ -75,6 +81,31 @@ describe('AutoUpdaterManager', () => {
     new AutoUpdaterManager([])
 
     expect(mockAutoUpdater.on).not.toHaveBeenCalled()
+  })
+
+  it('does not register or call an updater without packaged feed configuration', () => {
+    mockUpdateConfiguration.exists = false
+    const manager = new AutoUpdaterManager([])
+
+    manager.checkForUpdates()
+    manager.downloadUpdate()
+    manager.quitAndInstall()
+
+    expect(mockAutoUpdater.on).not.toHaveBeenCalled()
+    expect(mockAutoUpdater.checkForUpdates).not.toHaveBeenCalled()
+    expect(mockAutoUpdater.downloadUpdate).not.toHaveBeenCalled()
+    expect(mockAutoUpdater.quitAndInstall).not.toHaveBeenCalled()
+  })
+
+  it('does not schedule remote checks in an unconfigured local build', () => {
+    mockUpdateConfiguration.exists = false
+    const manager = new AutoUpdaterManager([])
+
+    manager.startAutoCheck(1000)
+    vi.advanceTimersByTime(100_000)
+
+    expect(vi.getTimerCount()).toBe(0)
+    expect(mockAutoUpdater.checkForUpdates).not.toHaveBeenCalled()
   })
 
   it('forwards update-available event to BrowserWindow', () => {
@@ -163,22 +194,21 @@ describe('AutoUpdaterManager', () => {
       code: 'ERR_UPDATER_CHANNEL_FILE_NOT_FOUND'
     }
 
-    it('tells Windows there is no update and only logs the cause', () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    // A Mac-only latest release hides every newer Windows build, so "up to date" would lie (health-7).
+    it('tells Windows its update feed is missing instead of claiming it is up to date', () => {
       const win = makeMockWindow()
       new AutoUpdaterManager([() => win as unknown as Electron.BrowserWindow], 'win32')
 
       mockAutoUpdater._emit('error', missingChannelFile)
 
       expect(win.webContents.send).toHaveBeenCalledWith('updater:status', {
-        status: 'not-available'
+        status: 'error',
+        data: expect.stringContaining('no Windows update feed')
       })
       expect(win.webContents.send).not.toHaveBeenCalledWith(
         'updater:status',
-        expect.objectContaining({ status: 'error' })
+        expect.objectContaining({ status: 'not-available' })
       )
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining(missingChannelFile.message))
-      warn.mockRestore()
     })
 
     it('still reports other Windows update errors', () => {

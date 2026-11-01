@@ -15,15 +15,15 @@ import { COURT_CAST } from './violet-court/cast'
 import { violetCourtRoster } from './violet-court/roster'
 
 describe('theme registry', () => {
-  it('registers both built-ins and defaults the floor and unknown ids to Neo Edo', () => {
-    expect(DEFAULT_THEME_ID).toBe('neo-edo-steam')
+  it('preserves built-ins and the Neo Edo unknown-ID fallback while defaulting to Corporate City', () => {
+    expect(DEFAULT_THEME_ID).toBe('corporate-city')
     expect(
       listThemes()
         .map((theme) => theme.id)
         .slice(0, 2)
     ).toEqual(['neo-edo-steam', 'brass-workshop'])
     expect(getTheme('brass-workshop').id).toBe('brass-workshop')
-    expect(getTheme('missing')).toBe(getTheme(DEFAULT_THEME_ID))
+    expect(getTheme('missing')).toBe(getTheme('neo-edo-steam'))
     expect(themeForTeam()).toBe(getTheme(DEFAULT_THEME_ID))
   })
   it('provides every kit, world and provider member', () => {
@@ -46,7 +46,6 @@ describe('theme registry', () => {
       ]) {
         expect(typeof Reflect.get(theme.kit.zone, key)).toBe('function')
       }
-      expect(typeof theme.world.Tower).toBe('function')
       for (const provider of ['claude', 'codex'] as const) {
         expect(theme.robot.skins[provider]).toMatchObject({
           body: expect.any(String),
@@ -110,7 +109,8 @@ describe('theme characters', () => {
     expect(withCast.map((theme) => theme.id)).toEqual([
       'violet-court',
       'orbital-garrison',
-      'quiet-grove'
+      'quiet-grove',
+      'cyberpunk-city'
     ])
     for (const theme of withCast)
       for (const agent of agents)

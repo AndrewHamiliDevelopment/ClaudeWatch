@@ -13,7 +13,7 @@ const SWITCHES = [
   'Citizens',
   'Vehicles',
   'Ambient motion',
-  'Lounge trips',
+  'Game corner',
   'Your character'
 ]
 
@@ -32,12 +32,14 @@ function open() {
 
 const feature = (name: string): HTMLElement => screen.getByRole('switch', { name })
 
-it('offers one switch per feature, all on to begin with', () => {
+it('offers one switch per feature, all on to begin with, then Hide names, off', () => {
   open()
-  expect(screen.getAllByRole('switch').map((item) => item.getAttribute('aria-label'))).toEqual(
-    SWITCHES
-  )
+  expect(screen.getAllByRole('switch').map((item) => item.getAttribute('aria-label'))).toEqual([
+    ...SWITCHES,
+    'Hide names'
+  ])
   for (const name of SWITCHES) expect(feature(name)).toHaveAttribute('aria-checked', 'true')
+  expect(feature('Hide names')).toHaveAttribute('aria-checked', 'false')
 })
 
 it('says in a line what each feature is', () => {
@@ -47,6 +49,15 @@ it('says in a line what each feature is', () => {
     expect(description?.textContent?.length).toBeGreaterThan(20)
   }
   expect(within(dialog).getByText(/tram, a freight cart and a runabout/)).toBeInTheDocument()
+})
+
+it('keeps idle agents in the game corner under the setting a saved Off still turns off', () => {
+  const { dialog } = open()
+  expect(within(dialog).getByText('Game corner').nextElementSibling).toHaveTextContent(
+    'Idle agents walk to their office’s game corner and play. Off keeps them at their desks.'
+  )
+  fireEvent.click(feature('Game corner'))
+  expect(officeSettings.get()).toEqual({ ...DEFAULT_OFFICE_SETTINGS, loungeTrips: false })
 })
 
 it('switches a feature off at once and remembers it', () => {
@@ -67,25 +78,28 @@ it('offers three town sizes above the detail level, each saying what it changes'
   const sizes = within(group).getAllByRole('radio')
   expect(sizes.map((size) => size.getAttribute('value'))).toEqual(['village', 'town', 'city'])
   expect(within(group).getByRole('radio', { name: 'Village' })).toHaveAccessibleDescription(
-    'The campus, its garden and one ring of streets. Lightest.'
+    'The same streets with a third of the lots built; the rest are gardens. Lightest.'
+  )
+  expect(within(group).getByRole('radio', { name: 'City' })).toHaveAccessibleDescription(
+    'Every lot built, and the busiest streets. The most to draw.'
   )
   for (const size of sizes) expect(size).toHaveAccessibleDescription(/\w{20,}|.{40,}/)
-  expect(within(group).getByRole('radio', { name: 'Village' })).toBeChecked()
+  expect(within(group).getByRole('radio', { name: 'City' })).toBeChecked()
   const detail = within(dialog).getByRole('group', { name: 'Detail level' })
   expect(group.compareDocumentPosition(detail) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
 })
 
 it('changes the town size at once and remembers it', () => {
   open()
-  fireEvent.click(screen.getByRole('radio', { name: 'City' }))
-  expect(screen.getByRole('radio', { name: 'City' })).toBeChecked()
-  expect(screen.getByRole('radio', { name: 'Village' })).not.toBeChecked()
-  expect(officeSettings.get().townSize).toBe('city')
+  fireEvent.click(screen.getByRole('radio', { name: 'Village' }))
+  expect(screen.getByRole('radio', { name: 'Village' })).toBeChecked()
+  expect(screen.getByRole('radio', { name: 'City' })).not.toBeChecked()
+  expect(officeSettings.get().townSize).toBe('village')
   expect(JSON.parse(localStorage.getItem(OFFICE_SETTINGS_STORAGE_KEY) ?? 'null')).toMatchObject({
-    townSize: 'city'
+    townSize: 'village'
   })
   fireEvent.click(screen.getByRole('button', { name: 'Restore defaults' }))
-  expect(screen.getByRole('radio', { name: 'Village' })).toBeChecked()
+  expect(screen.getByRole('radio', { name: 'City' })).toBeChecked()
 })
 
 it('holds the detail level control, with the level in use marked', () => {
@@ -124,8 +138,8 @@ it('can be worked from the keyboard: focus lands on the title and every control 
   expect(screen.getByRole('heading', { name: 'Office settings' })).toHaveFocus()
   const controls = within(dialog).getAllByRole('button')
   const switches = within(dialog).getAllByRole('switch')
-  // Six switches, four levels, restore and close: native buttons, so Tab, Space and Enter work.
-  expect(controls.length + switches.length).toBe(12)
+  // Seven switches, four levels, restore and close: native buttons, so Tab, Space and Enter work.
+  expect(controls.length + switches.length).toBe(13)
   // The sizes are native radios: one tab stop, arrow keys between them.
   const sizes = within(dialog).getAllByRole('radio')
   expect(sizes).toHaveLength(3)
@@ -139,10 +153,21 @@ it('can be worked from the keyboard: focus lands on the title and every control 
 
 it('closes on Escape from anywhere inside, and from its close button', () => {
   const { onClose } = open()
-  fireEvent.keyDown(feature('Lounge trips'), { key: 'Escape' })
+  fireEvent.keyDown(feature('Game corner'), { key: 'Escape' })
   expect(onClose).toHaveBeenCalledTimes(1)
   fireEvent.click(screen.getByRole('button', { name: 'Close settings' }))
   expect(onClose).toHaveBeenCalledTimes(2)
+})
+
+it('does not offer ineffective campus-size controls for a distributed city or rewrite its saved choice', () => {
+  officeSettings.setTownSize('village')
+  const before = localStorage.getItem(OFFICE_SETTINGS_STORAGE_KEY)
+  render(<OfficeSettingsPanel id="city-settings" onClose={vi.fn()} isDistributedCity />)
+  expect(screen.queryByRole('radiogroup', { name: 'Town size' })).not.toBeInTheDocument()
+  expect(screen.getByText(/Street blocks follow your saved offices/)).toBeInTheDocument()
+  expect(screen.getByRole('group', { name: 'Detail level' })).toBeInTheDocument()
+  expect(localStorage.getItem(OFFICE_SETTINGS_STORAGE_KEY)).toBe(before)
+  expect(officeSettings.get().townSize).toBe('village')
 })
 
 it('follows a change made on another page while it is open', () => {
