@@ -11,9 +11,9 @@ const { mockUseSettings, mockUseUpdater } = vi.hoisted(() => ({
 vi.mock('../hooks/useSettings', () => ({ useSettings: mockUseSettings }))
 vi.mock('../hooks/useUpdater', () => ({ useUpdater: mockUseUpdater }))
 
-describe('Settings: weekly token target', () => {
+describe('Settings: weekly message target', () => {
   const updateSettings = vi.fn()
-  const field = (): HTMLElement => screen.getByRole('spinbutton', { name: 'Weekly token target' })
+  const field = (): HTMLElement => screen.getByRole('spinbutton', { name: 'Weekly message target' })
 
   beforeEach(() => {
     updateSettings.mockReset()
@@ -40,14 +40,14 @@ describe('Settings: weekly token target', () => {
     fireEvent.blur(field())
 
     expect(updateSettings).toHaveBeenCalledTimes(1)
-    expect(updateSettings).toHaveBeenCalledWith({ weeklyTokenTarget: 100_000 })
+    expect(updateSettings).toHaveBeenCalledWith({ weeklyTokenTarget: 100 })
   })
 
   it('saves on Enter', () => {
-    fireEvent.change(field(), { target: { value: '7500000' } })
+    fireEvent.change(field(), { target: { value: '3000' } })
     fireEvent.keyDown(field(), { key: 'Enter' })
 
-    expect(updateSettings).toHaveBeenCalledWith({ weeklyTokenTarget: 7_500_000 })
+    expect(updateSettings).toHaveBeenCalledWith({ weeklyTokenTarget: 3_000 })
   })
 
   it('puts the saved value back when the field is left empty', () => {

@@ -18,7 +18,7 @@ const pollingOptions = [
   { value: 10000, label: '10s' }
 ]
 
-const TOKENS_PER_MILLION = 1_000_000
+const MESSAGES_PER_THOUSAND = 1_000
 
 export function Settings() {
   const { settings, updateSettings, loading } = useSettings()
@@ -109,15 +109,15 @@ export function Settings() {
 
         <SettingsSection title="Usage limits">
           <SettingRow
-            label="Weekly token target"
-            description={`Track usage against ${(settings.weeklyTokenTarget / TOKENS_PER_MILLION).toFixed(1)}M tokens a week`}
+            label="Weekly message target"
+            description={`Track usage against ${(settings.weeklyTokenTarget / MESSAGES_PER_THOUSAND).toFixed(1)}K messages a week`}
           >
             <NumberSetting
-              label="Weekly token target"
+              label="Weekly message target"
               name="weekly-token-target"
               range={SETTING_RANGES.weeklyTokenTarget}
-              step={500000}
-              unit="tokens"
+              step={500}
+              unit="messages"
               value={settings.weeklyTokenTarget}
               onCommit={(weeklyTokenTarget) => updateSettings({ weeklyTokenTarget })}
             />

@@ -1,4 +1,4 @@
-import { readFile, readdir } from 'fs/promises'
+import { readFile } from 'fs/promises'
 import { homedir } from 'os'
 import { join } from 'path'
 import { BrowserWindow } from 'electron'
@@ -35,14 +35,20 @@ const EMPTY_STATS: UsageStats = {
   dataAvailable: false,
   lastUpdated: null,
   weeklyTokens: 0,
-  weeklyTokenTarget: 5_000_000
+  weeklyTokenTarget: 5_000
 }
 
-interface SessionUsageFile {
-  tokens?: number
-  messages?: number
-  started?: string
-  last_update?: string
+interface StatsCacheDailyEntry {
+  date: string
+  messageCount?: number
+  sessionCount?: number
+  toolCallCount?: number
+}
+
+interface StatsCache {
+  version?: number
+  lastComputedDate?: string
+  dailyActivity?: StatsCacheDailyEntry[]
 }
 
 export class UsageStatsReader {
@@ -51,13 +57,13 @@ export class UsageStatsReader {
   private lastData: UsageStats | null = null
   private listeners = new Set<(data: UsageStats) => void>()
   private filePath: string
-  private cachePath: string
-  private weeklyTokenTarget = 5_000_000
+  private statsCachePath: string
+  private weeklyTokenTarget = 5_000
 
   constructor(getWindows: (() => BrowserWindow | null)[]) {
     this.getWindows = getWindows
     this.filePath = join(homedir(), '.claude.json')
-    this.cachePath = join(homedir(), '.claude', 'cache')
+    this.statsCachePath = join(homedir(), '.claude', 'stats-cache.json')
   }
 
   setWeeklyTokenTarget(target: number): void {
@@ -90,10 +96,10 @@ export class UsageStatsReader {
 
   async readWeeklyTokens(): Promise<number> {
     try {
-      const files = await readdir(this.cachePath)
-      const sessionFiles = files.filter(
-        (f) => f.startsWith('session-usage-ppid-') && f.endsWith('.json')
-      )
+      const raw = await readFile(this.statsCachePath, 'utf-8')
+      const cache: StatsCache = JSON.parse(raw)
+
+      if (!cache.dailyActivity?.length) return 0
 
       // Calculate start of current week (Monday 00:00 local time)
       const now = new Date()
@@ -102,26 +108,16 @@ export class UsageStatsReader {
       const weekStart = new Date(now)
       weekStart.setDate(now.getDate() - mondayOffset)
       weekStart.setHours(0, 0, 0, 0)
-      const weekStartMs = weekStart.getTime()
+      const weekStartStr = weekStart.toISOString().slice(0, 10)
 
-      let totalTokens = 0
-
-      for (const file of sessionFiles) {
-        try {
-          const raw = await readFile(join(this.cachePath, file), 'utf-8')
-          const session: SessionUsageFile = JSON.parse(raw)
-
-          // Check if session's last_update falls within current week
-          const lastUpdate = session.last_update ? new Date(session.last_update).getTime() : 0
-          if (lastUpdate >= weekStartMs && session.tokens) {
-            totalTokens += session.tokens
-          }
-        } catch {
-          // Skip malformed files
+      let total = 0
+      for (const entry of cache.dailyActivity) {
+        if (entry.date >= weekStartStr) {
+          total += entry.messageCount ?? 0
         }
       }
 
-      return totalTokens
+      return total
     } catch {
       return 0
     }

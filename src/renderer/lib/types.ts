@@ -102,7 +102,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   },
   theme: 'dark',
   maxHistoryEntries: 100,
-  weeklyTokenTarget: 5_000_000,
+  weeklyTokenTarget: 5_000,
   staleThresholdMinutes: 30,
   watchAccounts: true
 }

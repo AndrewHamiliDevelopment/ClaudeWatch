@@ -26,7 +26,7 @@ describe('useUsage', () => {
     dataAvailable: true,
     lastUpdated: '2026-03-18T10:00:00Z',
     weeklyTokens: 0,
-    weeklyTokenTarget: 5_000_000
+    weeklyTokenTarget: 5_000
   }
 
   beforeEach(() => {

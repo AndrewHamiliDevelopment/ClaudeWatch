@@ -80,7 +80,7 @@ export function LimitLines({ usage, rateLimits }: LimitLinesProps) {
       {hasWeeklyTarget && (
         <LimitLine
           name="Week"
-          meterLabel="Weekly token target"
+          meterLabel="Weekly message target"
           percent={(usage.weeklyTokens / usage.weeklyTokenTarget) * 100}
           valueText={`${formatCompactNumber(usage.weeklyTokens)} of ${formatCompactNumber(usage.weeklyTokenTarget)}`}
         />

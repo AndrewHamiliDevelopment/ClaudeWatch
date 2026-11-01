@@ -156,7 +156,7 @@ describe('GaugeWall', () => {
     const limits = screen.getByRole('region', { name: 'Limits' })
     expect(within(limits).getByRole('meter', { name: '5-hour limit' })).toBeInTheDocument()
     expect(within(limits).getByRole('meter', { name: '7-day limit' })).toBeInTheDocument()
-    expect(within(limits).getByRole('meter', { name: 'Weekly token target' })).toHaveAttribute(
+    expect(within(limits).getByRole('meter', { name: 'Weekly message target' })).toHaveAttribute(
       'aria-valuenow',
       '82'
     )

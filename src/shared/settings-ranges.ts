@@ -10,7 +10,7 @@ export const SETTING_RANGES: Record<NumericSetting, Range> = {
   pollingIntervalMs: [500, 60_000],
   cpuIdleThreshold: [0.1, 100],
   maxHistoryEntries: [1, 10_000],
-  weeklyTokenTarget: [100_000, 100_000_000],
+  weeklyTokenTarget: [100, 100_000],
   staleThresholdMinutes: [5, 120]
 }
 export const COOLDOWN_SECONDS_RANGE: Range = [10, 120]
