@@ -31,8 +31,8 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE
           npm run changelog:write
-          npm run build && npx electron-builder --mac --publish never
-          ls -lah
+          npm run build
+          npx electron-builder --mac --publish never
         continue-on-error: true
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
